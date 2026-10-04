@@ -225,23 +225,16 @@ inline Halide::Expr plain_print(Halide::ImageParam &configuration,
                        Halide::mux(channel, {row(0), row(1), row(2)}));
 }
 
-/// The recovery half: creative scene RGB to normalized per-layer film exposure through the
-/// spectral LUT, the chromaticity evaluated at the radiance anchor and the radiance scaled back
-/// out. Domain-dependent — this is the seam a direct film-layer-exposure input replaces.
-///
-/// The LUT's domain is a cube whose chromaticity triangle encloses the spectral locus — the AP0
-/// primaries about the working white, `kRec2020ToExposureDomain` — so every real light has cells
-/// of its own, monochromatic sources included; beyond Rec.2020 the table holds the cube-edge
-/// reflectance mixed with light at the hue's dominant wavelength. The boundary below is the only
-/// one on the scene path and it sits at that triangle's edge: what it gives up is colour outside
-/// the locus, which no light can carry, rather than anything a display or a working space cannot
-/// hold — and it gives it up as purity, never as a channel, so the hue and the luminance a wide
-/// source stated are the hue and luminance the emulsion is shown.
-inline Halide::Expr recover_exposure(Halide::ImageParam &configuration,
-                                     Halide::ImageParam &exposure_lut,
-                                     Halide::Expr r, Halide::Expr g,
-                                     Halide::Expr b, Halide::Expr channel,
-                                     bool half_lut_math = false) {
+/// Where creative scene RGB samples the exposure LUT — its chromaticity in the table's domain at
+/// the radiance anchor — and the factor the sample is scaled by: the radiance it was taken out at,
+/// with the exposure gain. Independent of the table, so components exposing one scene through
+/// tables of their own share it.
+struct ExposureDomain {
+    Halide::Expr x, y, z, scale;
+};
+
+inline ExposureDomain exposure_domain(Halide::ImageParam &configuration,
+                                      Halide::Expr r, Halide::Expr g, Halide::Expr b) {
     using Halide::Expr;
     // Luminance is basis-invariant, so it is read once on the Rec.2020 components; the seam's
     // rows sum to 1, so y on the neutral axis is the same point in the table's basis.
@@ -273,11 +266,38 @@ inline Halide::Expr recover_exposure(Halide::ImageParam &configuration,
     Expr wg = Halide::max(pg, 0.0f);
     Expr wb = Halide::max(pb, 0.0f);
     Expr radiance_scale = Halide::max(Halide::max(wr, Halide::max(wg, wb)), 1.0e-6f);
+    return {wr / radiance_scale, wg / radiance_scale, wb / radiance_scale,
+            radiance_scale * configuration(FOTUFILM_CONFIG_EXPOSURE_GAIN) / 0.18f};
+}
+
+/// The exposure LUT sampled at a domain point and scaled back out.
+inline Halide::Expr domain_exposure(Halide::ImageParam &exposure_lut, const ExposureDomain &domain,
+                                    Halide::Expr channel, bool half_lut_math = false) {
     return Halide::max(
-        lut_sample(exposure_lut, wr / radiance_scale, wg / radiance_scale,
-                   wb / radiance_scale, channel, half_lut_math)
-            * (radiance_scale * configuration(FOTUFILM_CONFIG_EXPOSURE_GAIN) / 0.18f),
+        lut_sample(exposure_lut, domain.x, domain.y, domain.z, channel, half_lut_math)
+            * domain.scale,
         0.0f);
+}
+
+/// The recovery half: creative scene RGB to normalized per-layer film exposure through the
+/// spectral LUT, the chromaticity evaluated at the radiance anchor and the radiance scaled back
+/// out. Domain-dependent — this is the seam a direct film-layer-exposure input replaces.
+///
+/// The LUT's domain is a cube whose chromaticity triangle encloses the spectral locus — the AP0
+/// primaries about the working white, `kRec2020ToExposureDomain` — so every real light has cells
+/// of its own, monochromatic sources included; beyond Rec.2020 the table holds the cube-edge
+/// reflectance mixed with light at the hue's dominant wavelength. The boundary below is the only
+/// one on the scene path and it sits at that triangle's edge: what it gives up is colour outside
+/// the locus, which no light can carry, rather than anything a display or a working space cannot
+/// hold — and it gives it up as purity, never as a channel, so the hue and the luminance a wide
+/// source stated are the hue and luminance the emulsion is shown.
+inline Halide::Expr recover_exposure(Halide::ImageParam &configuration,
+                                     Halide::ImageParam &exposure_lut,
+                                     Halide::Expr r, Halide::Expr g,
+                                     Halide::Expr b, Halide::Expr channel,
+                                     bool half_lut_math = false) {
+    return domain_exposure(exposure_lut, exposure_domain(configuration, r, g, b), channel,
+                           half_lut_math);
 }
 
 inline Halide::Expr scene_exposure(Halide::ImageParam &configuration,

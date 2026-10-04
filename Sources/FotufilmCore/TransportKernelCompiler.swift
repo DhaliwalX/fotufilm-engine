@@ -67,27 +67,37 @@ public enum TransportKernelCompiler {
         var targets = [TransportRadialKernel]()
         var targetIndex = Array(repeating: Array(repeating: 0, count: bands), count: receivers)
         var shares = Array(repeating: Array(repeating: 0.0, count: bands), count: receivers)
-        var solveCache = [String: TransportSolveResult]()
         var worstUnresolved = 0.0
         var compressionBound = 0.0
-        func solve(_ solving: LayeredTransport, _ r: Int, _ band: Int) throws -> TransportSolveResult {
+        func signature(_ solving: LayeredTransport, _ r: Int, _ band: Int) -> String {
             var signature: [Double] = [Double(r), solving.recordDepthMM[r],
                              LayeredTransport.sample(solving.angularExponent[r], band),
                              LayeredTransport.sample(solving.captureProbability[r], band),
                              LayeredTransport.sample(solving.frontIndex, band),
                              LayeredTransport.sample(solving.rearIndex, band),
                              solving.rearReflectance.map { LayeredTransport.sample($0, band) } ?? -1,
-                             solving.rearPlateReflectance.map { LayeredTransport.sample($0, band) } ?? -1]
+                             solving.rearPlateReflectance.map { LayeredTransport.sample($0, band) } ?? -1,
+                             Double(angularSamples)]
             for layer in solving.layers {
                 signature += [layer.thicknessMM, LayeredTransport.sample(layer.refractiveIndex, band),
                               LayeredTransport.sample(layer.absorptionPerMM, band)]
             }
-            let key = signature.map { String($0.bitPattern) }.joined(separator: ":")
-            if let found = solveCache[key] { return found }
-            let solved = try LayeredTransportSolver.solve(solving, receiver: r, band: band,
-                                                          angularSamples: angularSamples)
-            solveCache[key] = solved
-            return solved
+            return signature.map { String($0.bitPattern) }.joined(separator: ":")
+        }
+        // Every solve the compilation reads, solved together up front.
+        var requests = [(model: LayeredTransport, receiver: Int, band: Int)]()
+        for c in 0..<receivers {
+            for band in 0..<bands { requests.append((c < 3 ? model : donorModel, like(c), band)) }
+        }
+        if let references {
+            for band in 0..<bands {
+                requests += [(references.film, 0, band), (references.lossless, 0, band), (model, 0, band)]
+            }
+        }
+        let solved = try solveAll(requests.map { (signature($0.model, $0.receiver, $0.band), $0) },
+                                  angularSamples: angularSamples)
+        func solve(_ solving: LayeredTransport, _ r: Int, _ band: Int) throws -> TransportSolveResult {
+            solved[signature(solving, r, band)]!
         }
         // An adjusted construction moves the red record's return by its physics; the other
         // records keep their ratios to red, which carry the film's masking and filter layers.
@@ -129,19 +139,27 @@ public enum TransportKernelCompiler {
         if hazeMM > 0 { compressionBound += 0.5 / Double(TransportRadialKernel.hazedNodes) }
         let support = max(targets.map { $0.quantile(0.9999) }.max() ?? 0, 1e-5)
         let distances = (1...128).map { support * pow(Double($0) / 128, 2) }
-        let vectors = targets.map { target in distances.map { target.edgeSpread(distanceMM: $0) } }
+        // Each target's edge spread and fit is its own, so they are computed side by side.
+        func parallel<T>(_ count: Int, _ body: (Int) -> T) -> [T] {
+            var results = [T?](repeating: nil, count: count)
+            results.withUnsafeMutableBufferPointer { results in
+                ParallelWork.forEach(iterations: count) { results[$0] = body($0) }
+            }
+            return results.map { $0! }
+        }
+        let vectors = parallel(targets.count) { i in distances.map { targets[i].edgeSpread(distanceMM: $0) } }
         var selected = [0]
         var fits = [[Double]](), worstError = Double.infinity
         while true {
-            fits = vectors.map { convexPairFit(basis: selected.map { vectors[$0] }, target: $0) }
-            var worstIndex = 0
-            worstError = 0
-            for i in vectors.indices {
-                let error = distances.indices.map { d in
+            fits = parallel(vectors.count) { convexPairFit(basis: selected.map { vectors[$0] }, target: vectors[$0]) }
+            let errors = parallel(vectors.count) { i in
+                distances.indices.map { d in
                     abs(vectors[i][d] - selected.indices.reduce(0) { $0 + fits[i][$1] * vectors[selected[$1]][d] })
                 }.max() ?? 0
-                if error > worstError { worstError = error; worstIndex = i }
             }
+            var worstIndex = 0
+            worstError = 0
+            for (i, error) in errors.enumerated() where error > worstError { worstError = error; worstIndex = i }
             if worstError + compressionBound <= edgeTolerance { break }
             guard selected.count < maximumComponents, !selected.contains(worstIndex) else {
                 throw TransportError.convergence("\(selected.count) radial components leave edge error \(worstError)")
@@ -151,7 +169,9 @@ public enum TransportKernelCompiler {
         var kernels = try model.coreSigmaMM.map { try TransportRadialKernel.gaussian(sigmaMM: $0) }
         // The returned light alone crosses the support, so the haze blurs the selected basis and
         // never the cores. A blur cannot raise the fitted edge error.
-        kernels += try selected.map { hazeMM > 0 ? try targets[$0].hazed(sigmaMM: hazeMM) : targets[$0] }
+        kernels += try parallel(selected.count) { i in
+            Result { hazeMM > 0 ? try targets[selected[i]].hazed(sigmaMM: hazeMM) : targets[selected[i]] }
+        }.map { try $0.get() }
         let maxShare = shares.flatMap { $0 }.max() ?? 0
         var core = Array(repeating: Array(repeating: Array(repeating: Float(0), count: bands), count: receivers),
                          count: kernels.count)
@@ -181,6 +201,40 @@ public enum TransportKernelCompiler {
                                     maximumReturnedShare: maxShare, maximumEdgeError: worstError + compressionBound,
                                     radialCompressionErrorBound: compressionBound,
                                     maximumUnresolvedPower: worstUnresolved)
+    }
+
+    /// Solved receivers, kept across compilations: an edit that moves the return, the haze or the
+    /// colour solves nothing again, and an adjusted construction keeps its film's solves.
+    private static let solvedLock = NSLock()
+    nonisolated(unsafe) private static var solvedCache = BoundedCache<String, TransportSolveResult>(limit: 2048)
+
+    /// The solves `requests` name, by signature: those not already kept are solved in parallel.
+    private static func solveAll(_ requests: [(String, (model: LayeredTransport, receiver: Int, band: Int))],
+                                 angularSamples: Int) throws -> [String: TransportSolveResult] {
+        var results = [String: TransportSolveResult]()
+        var missing = [(String, (model: LayeredTransport, receiver: Int, band: Int))]()
+        var asked = Set<String>()
+        solvedLock.lock()
+        for (key, request) in requests where asked.insert(key).inserted {
+            if let found = solvedCache.value(for: key) { results[key] = found }
+            else { missing.append((key, request)) }
+        }
+        solvedLock.unlock()
+        var fresh = [Result<TransportSolveResult, Error>?](repeating: nil, count: missing.count)
+        fresh.withUnsafeMutableBufferPointer { fresh in
+            ParallelWork.forEach(iterations: missing.count) { i in
+                let request = missing[i].1
+                fresh[i] = Result { try LayeredTransportSolver.solve(request.model, receiver: request.receiver,
+                                                                    band: request.band, angularSamples: angularSamples) }
+            }
+        }
+        solvedLock.lock(); defer { solvedLock.unlock() }
+        for (i, result) in fresh.enumerated() {
+            let value = try result!.get()
+            results[missing[i].0] = value
+            solvedCache.insert(value, for: missing[i].0)
+        }
+        return results
     }
 
     /// Light launched toward the base per unit of direct exposure: the receiver captures `p` of

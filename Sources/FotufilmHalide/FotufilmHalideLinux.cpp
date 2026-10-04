@@ -9,6 +9,9 @@
 #include "FotufilmAotFrame.h"
 #include "fotufilm_aot_negative_cpu.h"
 #include "fotufilm_aot_transport_cpu.h"
+#include "fotufilm_aot_transport_scene_cpu.h"
+#include "fotufilm_aot_transport_domain_cpu.h"
+#include "TransportFrameAot.h"
 #include "FotufilmTransport.h"
 #include <HalideBuffer.h>
 #include <HalideRuntimeCuda.h>
@@ -357,6 +360,25 @@ extern "C" int32_t fotufilm_transport_component(
                                             r[6], r[7], r[8], r[9], r[10], r[11], r[12], output);
     if (!status) std::copy_n(output.data(), int64_t(width) * height * channels, accumulated);
     return status;
+}
+
+extern "C" fotufilm_transport_frame *fotufilm_transport_frame_begin(
+    const float *scene, const float *configuration, int32_t width, int32_t height, int32_t channels,
+    int32_t backend) {
+    if (backend != 0) return nullptr;
+    return fotufilm::transport_frame::begin(fotufilm_aot_transport_domain_cpu,
+                                            fotufilm_aot_transport_scene_cpu, scene, configuration,
+                                            width, height, channels);
+}
+
+extern "C" int32_t fotufilm_transport_frame_add(fotufilm_transport_frame *frame,
+                                                const float *configuration,
+                                                const float *exposure_lut, const float *stencils) {
+    return fotufilm::transport_frame::add(frame, configuration, exposure_lut, stencils);
+}
+
+extern "C" int32_t fotufilm_transport_frame_finish(fotufilm_transport_frame *frame, float *sum) {
+    return fotufilm::transport_frame::finish(frame, sum);
 }
 
 extern "C" int32_t fotufilm_halide_available(void) { return 0; }

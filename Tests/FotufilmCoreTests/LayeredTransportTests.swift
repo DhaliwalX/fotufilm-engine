@@ -435,6 +435,60 @@ final class LayeredTransportTests: XCTestCase {
         XCTAssertThrowsError(try TransportKernelCompiler.compile(model, donorDepthMM: 1))
     }
 
+    /// A frame exposes each component from the scene as its head's light, spread, would be.
+    func testAFrameExposesEveryComponentAsItsHeadDoes() throws {
+        guard TransportBackend.cpu.isAvailable else { throw XCTSkip("Halide unavailable") }
+        let (width, height) = (61, 37)
+        var image = ImageBuffer(width: width, height: height)
+        for i in 0..<width * height { for c in 0..<3 {
+            image.planes[c][i] = Float((i * 7 + c * 13) % 23) / 23 * 0.6 + (i == 900 ? 40 : 0)
+        } }
+        for donated in [false, true] {
+            var stock = TestStocks.negative
+            if donated { stock.donorLayers = [TestStocks.donor] }
+            var options = TransportFixtures.quiet
+            options.cameraPreflash = 0.03
+            let compilation = try TransportKernelCompiler.compile(
+                TransportFixtures.stack, donorDepthMM: donated ? 0.0118 : nil)
+            let tables = try SpectralRuntime.transportExposureTables(
+                stock: stock, options: options, compilation: compilation)
+            let invocation = try FilmEngineInvocation(validating: stock, options: options,
+                                                      width: width, height: height)
+            let channels = donated ? 4 : 3, n = width * height
+            var reference = ImageBuffer(width: width, height: height)
+            if donated { reference.planes.append(Array(repeating: 0, count: n)) }
+            var components = [(head: FilmEngineInvocation, stencils: [Float])]()
+            for k in compilation.kernels.indices {
+                let table = tables.table(component: k, interpolation: 0.7)
+                var head = invocation
+                head.featureMask &= FilmEngineFeature.flare | FilmEngineFeature.diffusion
+                head.featureMask |= FilmEngineFeature.lightOut
+                head.clearTransportOptics(keepLens: true)
+                head.sharePreflash(among: compilation.kernels.count)
+                head.setTransportExposure(table)
+                let stencils = try compilation.kernels[k].transportTable(pixelPitchMM: 0.004)
+                var light = try LayeredTransportRenderer.run(image: image, invocation: head, developOnly: true)
+                if donated {
+                    var fourth = head
+                    fourth.setTransportExposure(LayeredTransportRenderer.fourthRecord(of: table))
+                    light.planes.append(try LayeredTransportRenderer.run(
+                        image: image, invocation: fourth, developOnly: true).planes[0])
+                }
+                try LayeredTransportRenderer.transport(light, stencils: stencils, into: &reference)
+                components.append((head, stencils))
+            }
+            let expected = reference.planes.flatMap { $0 }
+            for backend in [TransportBackend.cpu, .metal] where backend.isAvailable {
+                var sum = [Float](repeating: 0, count: n * channels)
+                try LayeredTransportRenderer.exposeFrame(LayeredTransportRenderer.interleaved(image),
+                    width: width, height: height, channels: channels, components: components,
+                    backend: backend, into: &sum)
+                let error = zip(expected, sum).map { abs($0 - $1) / max(abs($0), 1e-3) }.max() ?? 0
+                XCTAssertLessThan(error, 2e-5, "\(backend) donated \(donated)")
+            }
+        }
+    }
+
     func testPreflashExposesTheFilmOnce() throws {
         guard TransportBackend.cpu.isAvailable else { throw XCTSkip("Halide unavailable") }
         var stock = TestStocks.negative; stock.adjacencyStrength = 0

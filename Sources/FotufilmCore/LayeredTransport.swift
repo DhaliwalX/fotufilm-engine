@@ -221,12 +221,25 @@ public enum LayeredTransportSolver {
         let n0 = indices[sourceEdge]
         let q = LayeredTransport.sample(model.angularExponent[receiver], band)
         let capture = LayeredTransport.sample(model.captureProbability[receiver], band)
+        // Each segment's traversal count, a lane per segment (16 layers and the virtual plane at
+        // most), with an additive hash of them kept as they grow: a branch copies no storage
+        // and a merge hashes one word, then compares the counts themselves.
+        typealias Visits = SIMD32<UInt16>
+        let segmentHashes = (0..<count).map { j -> UInt64 in
+            var z = UInt64(j + 1) &* 0x9e3779b97f4a7c15
+            z = (z ^ (z >> 30)) &* 0xbf58476d1ce4e5b9
+            z = (z ^ (z >> 27)) &* 0x94d049bb133111eb
+            return z ^ (z >> 31)
+        }
         struct Packet {
             var layer: Int; var down: Bool; var r: Double; var s: Double; var p: Double
-            var returned: Bool; var events: Int; var visits: [UInt16]
+            var returned: Bool; var events: Int; var visits: Visits; var visited: UInt64
         }
         struct PathKey: Hashable {
-            let layer: Int; let down: Bool; let returned: Bool; let visits: [UInt16]
+            let layer: Int; let down: Bool; let returned: Bool; let visits: Visits; let visited: UInt64
+            func hash(into hasher: inout Hasher) {
+                hasher.combine(visited &+ UInt64(layer) << 2 &+ (down ? 2 : 0) &+ (returned ? 1 : 0))
+            }
         }
         var radii = [Double](), masses = [Double]()
         var captured = 0.0, unreturnedCapture = 0.0, absorbed = 0.0, escaped = 0.0, unresolved = 0.0
@@ -236,14 +249,16 @@ public enum LayeredTransportSolver {
             let invariant = n0 * sqrt(max(0, 1 - u * u))
             let weight = 0.5 / Double(angularSamples)
             var queue = [Packet(layer: sourceEdge, down: true, r: 0, s: weight, p: weight,
-                                returned: false, events: 0, visits: Array(repeating: 0, count: count))]
+                                returned: false, events: 0, visits: .zero, visited: 0)]
+            var nextQueue = [Packet](), lookup = [PathKey: Int]()
             while !queue.isEmpty {
-                var nextQueue = [Packet](), lookup = [PathKey: Int]()
+                nextQueue.removeAll(keepingCapacity: true); lookup.removeAll(keepingCapacity: true)
                 // Paths with the same segment traversal counts have exactly the same lateral
                 // displacement. Combine their power before further branching, without radial bins.
                 func enqueue(_ packet: Packet) {
                     let key = PathKey(layer: packet.layer, down: packet.down,
-                                      returned: packet.returned, visits: packet.visits)
+                                      returned: packet.returned, visits: packet.visits,
+                                      visited: packet.visited)
                     if let i = lookup[key] {
                         nextQueue[i].s += packet.s; nextQueue[i].p += packet.p
                     } else { lookup[key] = nextQueue.count; nextQueue.append(packet) }
@@ -255,7 +270,7 @@ public enum LayeredTransportSolver {
                     }
                     guard queue.count < 200_000 else { throw TransportError.convergence("too many optical branches") }
                     let j = packet.layer, n = indices[j]
-                    packet.visits[j] += 1
+                    packet.visits[j] += 1; packet.visited &+= segmentHashes[j]
                     let cosine = sqrt(max(0, 1 - pow(invariant / n, 2)))
                     guard cosine > 0 else { throw TransportError.convergence("invalid transmitted angle") }
                     let depth = edges[j+1] - edges[j]
@@ -299,16 +314,18 @@ public enum LayeredTransportSolver {
                     else if transmittedS + transmittedP > 0 {
                         enqueue(Packet(layer: next, down: packet.down, r: packet.r,
                                             s: transmittedS, p: transmittedP, returned: packet.returned,
-                                            events: packet.events, visits: packet.visits))
+                                            events: packet.events, visits: packet.visits,
+                                            visited: packet.visited))
                     }
                     if reflectedS + reflectedP > 0 {
                         enqueue(Packet(layer: j, down: !packet.down, r: packet.r,
                                             s: reflectedS, p: reflectedP,
                                             returned: packet.returned || next >= count,
-                                            events: packet.events, visits: packet.visits))
+                                            events: packet.events, visits: packet.visits,
+                                            visited: packet.visited))
                     }
                 }
-                queue = nextQueue
+                swap(&queue, &nextQueue)
             }
         }
         guard unresolved <= residualTolerance else {

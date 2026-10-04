@@ -209,10 +209,16 @@ int main(int argc, char **argv) {
         scan.output.compile_to_static_library((output / (prefix + "negative_cpu")).string(),
                                               {scan.input, scan.parameters},
                                               prefix + "negative_cpu", host);
-        // Layered Transport's spreading, on the CPU too.
-        TransportPipeline transport(Halide::DeviceAPI::None);
-        transport.output.compile_to_static_library((output / (prefix + "transport_cpu")).string(),
-                                                   transport.arguments(), prefix + "transport_cpu", host);
+        // Layered Transport's spreading, on the CPU too, of a component's light or of the scene.
+        for (const bool scene : {false, true}) {
+            const std::string name = prefix + (scene ? "transport_scene_cpu" : "transport_cpu");
+            TransportPipeline transport(Halide::DeviceAPI::None, scene);
+            transport.output.compile_to_static_library((output / name).string(),
+                                                       transport.arguments(), name, host);
+        }
+        TransportDomainPipeline domain(Halide::DeviceAPI::None);
+        domain.output.compile_to_static_library((output / (prefix + "transport_domain_cpu")).string(),
+                                                domain.arguments(), prefix + "transport_domain_cpu", host);
         return 0;
     }
 
@@ -264,13 +270,26 @@ int main(int argc, char **argv) {
         pipeline.output.compile_to_static_library((output / name).string(),
             {pipeline.input, pipeline.parameters}, name, scan_target);
     }
-    // Layered Transport spreads each component's light with the same pipeline as the JIT hosts.
-    for (const bool metal : {false, true}) {
-        const std::string name = metal ? "fotufilm_halide_ios_transport_metal" : "fotufilm_halide_ios_transport_cpu";
-        TransportPipeline pipeline(metal ? Halide::DeviceAPI::Metal : Halide::DeviceAPI::None);
+    // Layered Transport spreads each component's light with the same pipeline as the JIT hosts,
+    // and exposes a component from the scene for a frame kept on the device.
+    struct TransportVariant { const char *name; bool metal, scene; };
+    for (const auto &[name, metal, scene] : {
+             TransportVariant{"fotufilm_halide_ios_transport_cpu", false, false},
+             TransportVariant{"fotufilm_halide_ios_transport_metal", true, false},
+             TransportVariant{"fotufilm_halide_ios_transport_scene_cpu", false, true},
+             TransportVariant{"fotufilm_halide_ios_transport_scene_metal", true, true}}) {
+        TransportPipeline pipeline(metal ? Halide::DeviceAPI::Metal : Halide::DeviceAPI::None, scene);
         auto transport_target = target.with_feature(Halide::Target::NoRuntime).with_feature(Halide::Target::StrictFloat);
-        pipeline.output.compile_to_static_library((output / name).string(), pipeline.arguments(), name,
-                                                  transport_target);
+        pipeline.output.compile_to_static_library((output / name).string(), pipeline.arguments(),
+                                                  name, transport_target);
+    }
+    for (const bool metal : {false, true}) {
+        const std::string name = metal ? "fotufilm_halide_ios_transport_domain_metal"
+                                       : "fotufilm_halide_ios_transport_domain_cpu";
+        TransportDomainPipeline pipeline(metal ? Halide::DeviceAPI::Metal : Halide::DeviceAPI::None);
+        pipeline.output.compile_to_static_library(
+            (output / name).string(), pipeline.arguments(), name,
+            target.with_feature(Halide::Target::NoRuntime).with_feature(Halide::Target::StrictFloat));
     }
     return 0;
 }

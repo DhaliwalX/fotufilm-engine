@@ -11,6 +11,18 @@ public enum LayeredMetalTransport {
     public static func process(_ pixels: [Float], width: Int, height: Int, stock: FilmStock,
                                options: FotufilmEngine.Options, frameIndex: UInt64 = 0,
                                invocation: FilmEngineInvocation? = nil, pixelPitchMM: Double? = nil) throws -> [Float] {
+        var linear: FilmOutputTransform? = nil
+        return try process(pixels, width: width, height: height, stock: stock, options: options,
+                           frameIndex: frameIndex, invocation: invocation, pixelPitchMM: pixelPitchMM,
+                           outputTransform: &linear)
+    }
+
+    /// The same, delivering `outputTransform`'s encoding from the development itself when the
+    /// build carries it; otherwise `outputTransform` comes back nil and the result is linear.
+    public static func process(_ pixels: [Float], width: Int, height: Int, stock: FilmStock,
+                               options: FotufilmEngine.Options, frameIndex: UInt64 = 0,
+                               invocation: FilmEngineInvocation? = nil, pixelPitchMM: Double? = nil,
+                               outputTransform: inout FilmOutputTransform?) throws -> [Float] {
         guard pixels.count == width * height * 4, let model = options.transportConstruction(for: stock),
               TransportBackend.metal.isAvailable else { throw TransportError.backend("Metal transport unavailable") }
         let n = width * height
@@ -40,16 +52,52 @@ public enum LayeredMetalTransport {
                 }
             }
         }
-        let execution = TransportExecution(render: render, backend: .metal, light: light)
-        var result = try LayeredTransportRenderer.process(image: input, stock: stock, options: options,
+        let execution = TransportExecution(render: render, backend: .metal, light: light, scene: scene)
+        guard options.stage != .texture else {
+            outputTransform = nil
+            var result = try LayeredTransportRenderer.process(image: input, stock: stock, options: options,
+                model: model, frameIndex: frameIndex, execution: execution,
+                invocation: invocation, pixelPitchMM: pixelPitchMM)
+            var output = pixels
+            output.withUnsafeMutableBufferPointer { output in
+                withPlanes(&result.planes) { planes in
+                    rows(height) { range in
+                        for i in range.lowerBound * width..<range.upperBound * width {
+                            for c in 0..<3 { output[4 * i + c] = planes[c][i] }
+                        }
+                    }
+                }
+            }
+            return output
+        }
+        let exposed = try LayeredTransportRenderer.expose(image: input, stock: stock, options: options,
             model: model, frameIndex: frameIndex, execution: execution,
             invocation: invocation, pixelPitchMM: pixelPitchMM)
-        var output = pixels
-        output.withUnsafeMutableBufferPointer { output in
-            withPlanes(&result.planes) { planes in
+        // The records develop as the develop reads them, interleaved, a donor stock's fourth in
+        // the alpha; the scene's alpha is laid back over the developed frame.
+        var records = scene
+        exposed.sum.withUnsafeBufferPointer { sum in
+            records.withUnsafeMutableBufferPointer { records in
                 rows(height) { range in
                     for i in range.lowerBound * width..<range.upperBound * width {
-                        for c in 0..<3 { output[4 * i + c] = planes[c][i] }
+                        for c in 0..<exposed.channels { records[4 * i + c] = sum[c * n + i] }
+                    }
+                }
+            }
+        }
+        var continuation = exposed.continuation
+        if let transform = outputTransform, encodes(continuation.featureMask) {
+            continuation.featureMask |= FilmEngineFeature.encodeOut
+            continuation.setOutputTransform(transform)
+        } else {
+            outputTransform = nil
+        }
+        var output = try develop(records, width: width, height: height, continuation)
+        pixels.withUnsafeBufferPointer { source in
+            output.withUnsafeMutableBufferPointer { output in
+                rows(height) { range in
+                    for i in range.lowerBound * width..<range.upperBound * width {
+                        output[4 * i + 3] = source[4 * i + 3]
                     }
                 }
             }
@@ -107,6 +155,19 @@ public enum LayeredMetalTransport {
             unpack(grid, channels: 3, into: &result)
             return result
         }
+        unpack(try develop(input, width: width, height: height, supplied), channels: 4, into: &result)
+        return result
+    }
+
+    /// Whether the build develops a Layered frame's records under `mask` with its encoding.
+    public static func encodes(_ mask: Int32) -> Bool {
+        fotufilm_halide_metal_variant_exists(
+            mask | FilmEngineFeature.floatIO | FilmEngineFeature.encodeOut) == 1
+    }
+
+    /// The float develop of interleaved RGBA under an invocation.
+    private static func develop(_ input: [Float], width: Int, height: Int,
+                                _ supplied: FilmEngineInvocation) throws -> [Float] {
         var invocation = supplied
         invocation.featureMask |= FilmEngineFeature.floatIO
         if invocation.featureMask & FilmEngineFeature.flare != 0 {
@@ -115,7 +176,7 @@ public enum LayeredMetalTransport {
                     linearRGBA: $0.baseAddress!, width: width, height: height)
             }
         }
-        var output = [Float](repeating: 0, count: n * 4)
+        var output = [Float](repeating: 0, count: width * height * 4)
         let status = input.withUnsafeBufferPointer { source in
             output.withUnsafeMutableBufferPointer { destination in
                 invocation.configuration.withUnsafeBufferPointer { config in
@@ -129,8 +190,7 @@ public enum LayeredMetalTransport {
             }
         }
         guard status == 0 else { throw TransportError.backend("Metal transport stage failed (\(status))") }
-        unpack(output, channels: 4, into: &result)
-        return result
+        return output
     }
 
     private static func unpack(_ interleaved: [Float], channels: Int, into image: inout ImageBuffer) {

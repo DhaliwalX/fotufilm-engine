@@ -190,9 +190,15 @@ stride added, each scaled by its share), reconstructs every stride at the pixel
 centres and adds the result to the running exposure. A component's bands therefore
 travel as one table of up to 13 strides with stencils of radius 12 or less. The
 same pipeline runs on the CPU, on Metal (just-in-time or compiled ahead of time) and
-in the browser's SIMD WebAssembly, and they agree. Components stream one at a time,
-each with its own head render, so the lens effects stay exact per component; amount
-changes reuse cached endpoint tables.
+in the browser's SIMD WebAssembly, and they agree. Components stream one at a time.
+Without lens flare or diffusion, a component's head is the scene through its
+exposure table and the camera gate, so native hosts expose it inside the same
+pipeline: the scene's creative exposure and table coordinates are found once per
+frame, and the scene and the running sum stay on the device until the last
+component. With flare or diffusion each component takes its own head render, so the
+lens effects stay exact per component. Amount changes reuse cached endpoint tables;
+a white balance rebuilds only the tables, and a construction or halation edit reuses
+every receiver solve it does not change.
 
 ## Scope and limitations
 

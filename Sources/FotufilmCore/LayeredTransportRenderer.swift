@@ -18,20 +18,46 @@ public struct TransportExecution {
     /// The scene's light under a head invocation, written as three contiguous planes of the
     /// frame's pixel count. Optional: without it the heads go through `render`.
     public let light: ((FilmEngineInvocation, UnsafeMutablePointer<Float>) throws -> Void)?
+    /// The image as RGBA floats, when the caller holds it so; the alpha is not read.
+    public let scene: [Float]?
     public init(render: @escaping (ImageBuffer, FilmEngineInvocation, Bool) throws -> ImageBuffer,
                 backend: TransportBackend,
-                light: ((FilmEngineInvocation, UnsafeMutablePointer<Float>) throws -> Void)? = nil) {
-        self.render = render; self.backend = backend; self.light = light
+                light: ((FilmEngineInvocation, UnsafeMutablePointer<Float>) throws -> Void)? = nil,
+                scene: [Float]? = nil) {
+        self.render = render; self.backend = backend; self.light = light; self.scene = scene
     }
 }
 
 /// Planar reference integration. Optical components are streamed, never all materialized as images.
 public enum LayeredTransportRenderer {
-    private struct Prepared: Sendable {
+    private final class Prepared: @unchecked Sendable {
         let compilation: TransportCompilation
         let exposure: TransportExposureTables
+        /// Every component's stencil table at the last pixel pitch asked for.
+        private var tables: (pitch: Double, values: [[Float]])?
+        private let lock = NSLock()
+        init(compilation: TransportCompilation, exposure: TransportExposureTables) {
+            self.compilation = compilation; self.exposure = exposure
+        }
+        func transportTables(pixelPitchMM pitch: Double) throws -> [[Float]] {
+            lock.lock(); defer { lock.unlock() }
+            if let tables, tables.pitch == pitch { return tables.values }
+            let kernels = compilation.kernels
+            var results = [Result<[Float], Error>?](repeating: nil, count: kernels.count)
+            results.withUnsafeMutableBufferPointer { results in
+                ParallelWork.forEach(iterations: kernels.count) { k in
+                    results[k] = Result { try kernels[k].transportTable(pixelPitchMM: pitch) }
+                }
+            }
+            let values = try results.map { try $0!.get() }
+            tables = (pitch, values)
+            return values
+        }
     }
     private static let lock = NSLock()
+    /// Kernels by construction and halation edits; exposure tables also by the scene's light, so
+    /// a white balance or a lens filter moving builds tables without compiling kernels again.
+    nonisolated(unsafe) private static var compilations = BoundedCache<UInt64, TransportCompilation>(limit: 4)
     nonisolated(unsafe) private static var cache = BoundedCache<UInt64, Prepared>(limit: 4)
 
     private static func prepare(model film: LayeredTransport, stock: FilmStock,
@@ -39,37 +65,45 @@ public enum LayeredTransportRenderer {
         let model = try HalationReturn.applying(options.halationReturnRatio, to: film)
         let haze = options.halationHazeMM ?? stock.halationHazeMM
         let encoder = JSONEncoder(); encoder.outputFormatting = .sortedKeys
-        var key: UInt64 = 0xcbf29ce484222325
-        for byte in try encoder.encode(film) { key = (key ^ UInt64(byte)) &* 0x100000001b3 }
-        key = (key ^ UInt64((options.halationReturnRatio ?? -1).bitPattern)) &* 0x100000001b3
-        key ^= SpectralRuntime.cacheIdentifier(for: stock)
-        key ^= options.lensFilters.signature
-        for values in [options.resolvedSceneSpectrum(referenceKelvin: stock.referenceIlluminantKelvin), options.halationReturnGain,
-                       [options.sceneIlluminantKelvin ?? 0, options.halationSourceColour, haze],
+        var compiled: UInt64 = 0xcbf29ce484222325
+        for byte in try encoder.encode(film) { compiled = (compiled ^ UInt64(byte)) &* 0x100000001b3 }
+        compiled = (compiled ^ UInt64((options.halationReturnRatio ?? -1).bitPattern)) &* 0x100000001b3
+        compiled ^= SpectralRuntime.cacheIdentifier(for: stock)
+        for values in [options.halationReturnGain, [options.halationSourceColour, haze],
                        [options.antiHalationScale, options.baseThicknessScale, options.pressurePlateReflectance]] {
+            compiled = (compiled ^ UInt64(values.count)) &* 0x100000001b3
+            for value in values { compiled = (compiled ^ UInt64(value.bitPattern)) &* 0x100000001b3 }
+        }
+        var key = compiled ^ options.lensFilters.signature
+        for values in [options.resolvedSceneSpectrum(referenceKelvin: stock.referenceIlluminantKelvin),
+                       [options.sceneIlluminantKelvin ?? 0]] {
             key = (key ^ UInt64(values.count)) &* 0x100000001b3
             for value in values { key = (key ^ UInt64(value.bitPattern)) &* 0x100000001b3 }
         }
-        lock.lock(); let found = cache.value(for: key); lock.unlock()
+        lock.lock(); let found = cache.value(for: key), kernels = compilations.value(for: compiled); lock.unlock()
         if let found { return found }
-        // A donor's fourth record is solved at its own depth; one without a depth sits at green's.
-        let donorDepth = stock.donorLayers.first.map { $0.depthUM.map { Double($0) / 1000 } ?? model.recordDepthMM[1] }
-        let adjusted = try model.adjusted(antiHalation: options.antiHalationScale,
-                                          baseThickness: options.baseThicknessScale,
-                                          pressurePlate: options.pressurePlateReflectance)
-        func compile(edgeTolerance: Double) throws -> TransportCompilation {
-            try TransportKernelCompiler.compile(adjusted, returnGain: options.halationReturnGain,
-                sourceColour: options.halationSourceColour, hazeMM: Double(haze),
-                donorDepthMM: donorDepth, reference: adjusted == model ? nil : film,
-                edgeTolerance: edgeTolerance)
-        }
-        // Every film's own construction fits the renderer's components within 0.005. A strongly
-        // adjusted one may not, and takes the compiler's widest tolerance rather than failing.
-        let compilation: TransportCompilation
-        do { compilation = try compile(edgeTolerance: 0.005) }
-        catch TransportError.convergence where adjusted != model {
-            compilation = try compile(edgeTolerance: 0.02)
-        }
+        let compilation = try kernels ?? {
+            // A donor's fourth record is solved at its own depth; one without a depth sits at green's.
+            let donorDepth = stock.donorLayers.first.map { $0.depthUM.map { Double($0) / 1000 } ?? model.recordDepthMM[1] }
+            let adjusted = try model.adjusted(antiHalation: options.antiHalationScale,
+                                              baseThickness: options.baseThicknessScale,
+                                              pressurePlate: options.pressurePlateReflectance)
+            func compile(edgeTolerance: Double) throws -> TransportCompilation {
+                try TransportKernelCompiler.compile(adjusted, returnGain: options.halationReturnGain,
+                    sourceColour: options.halationSourceColour, hazeMM: Double(haze),
+                    donorDepthMM: donorDepth, reference: adjusted == model ? nil : film,
+                    edgeTolerance: edgeTolerance)
+            }
+            // Every film's own construction fits the renderer's components within 0.005. A strongly
+            // adjusted one may not, and takes the compiler's widest tolerance rather than failing.
+            let compilation: TransportCompilation
+            do { compilation = try compile(edgeTolerance: 0.005) }
+            catch TransportError.convergence where adjusted != model {
+                compilation = try compile(edgeTolerance: 0.02)
+            }
+            lock.lock(); compilations.insert(compilation, for: compiled); lock.unlock()
+            return compilation
+        }()
         let exposure = try SpectralRuntime.transportExposureTables(stock: stock, options: options,
             compilation: compilation)
         let result = Prepared(compilation: compilation, exposure: exposure)
@@ -115,11 +149,68 @@ public enum LayeredTransportRenderer {
         return TransportRenderPlan(head: head, tail: tail, components: components)
     }
 
+    /// A frame's transported exposure: the records summed over every component, planar
+    /// width * height * channels (a donor stock's fourth record last), the invocation the heads
+    /// were made from, and the one that develops the records.
+    public struct Exposure {
+        public let sum: [Float]
+        public let channels: Int
+        public let invocation: FilmEngineInvocation
+        public let continuation: FilmEngineInvocation
+    }
+
     public static func process(image: ImageBuffer, stock: FilmStock, options: FotufilmEngine.Options,
-                               model supplied: LayeredTransport, frameIndex: UInt64 = 0,
+                               model: LayeredTransport, frameIndex: UInt64 = 0,
                                execution: TransportExecution? = nil,
-                               invocation suppliedInvocation: FilmEngineInvocation? = nil,
+                               invocation: FilmEngineInvocation? = nil,
                                pixelPitchMM: Double? = nil) throws -> ImageBuffer {
+        let exposed = try expose(image: image, stock: stock, options: options, model: model,
+                                 frameIndex: frameIndex, execution: execution, invocation: invocation,
+                                 pixelPitchMM: pixelPitchMM)
+        let render = execution?.render ?? { image, invocation, developOnly in
+            try run(image: image, invocation: invocation, developOnly: developOnly)
+        }
+        let n = image.pixelCount
+        var exposure = ImageBuffer(width: image.width, height: image.height)
+        exposure.planes = (0..<exposed.channels).map { Array(exposed.sum[$0 * n..<($0 + 1) * n]) }
+        guard options.stage == .texture else { return try render(exposure, exposed.continuation, false) }
+        var continuation = exposed.continuation
+        continuation.featureMask |= FilmEngineFeature.densityOut
+        let transported = try render(exposure, continuation, false)
+        var referenceHead = exposed.invocation
+        referenceHead.featureMask &= FilmEngineFeature.flare | FilmEngineFeature.diffusion
+        referenceHead.featureMask |= FilmEngineFeature.lightOut
+        referenceHead.clearTransportOptics(keepLens: true)
+        var referenceExposure = try render(image, referenceHead, true)
+        if exposed.channels == 4 {
+            var donorHead = referenceHead
+            donorHead.setTransportExposure(Self.fourthRecord(of: exposed.invocation.spectral.exposure))
+            referenceExposure.planes.append(try render(image, donorHead, true).planes[0])
+        }
+        var reference = continuation
+        reference.featureMask &= ~(FilmEngineFeature.grain | FilmEngineFeature.adjacency
+            | FilmEngineFeature.couplerDiffusion | FilmEngineFeature.printMTF)
+        reference.configuration[Int(FOTUFILM_CONFIG_CHROMATIC_FRINGE_AMOUNT)] = 0
+        reference.configuration[Int(FOTUFILM_CONFIG_PRINT_MTF_RADIUS)] = 0
+        reference.configuration[Int(FOTUFILM_CONFIG_GRAIN_RADIUS)] = 0
+        reference.configuration[Int(FOTUFILM_CONFIG_ADJACENCY_STRENGTH)] = 0
+        reference.configuration[Int(FOTUFILM_CONFIG_COUPLER_RADIUS)] = 0
+        for c in 0..<3 { reference.configuration[FilmEngineInvocation.grainOffset+c] = 0 }
+        let baseline = try render(referenceExposure, reference, false)
+        var output = image
+        let sign: Float = stock.isReversal ? -1 : 1
+        for c in 0..<3 { for i in 0..<n {
+            output.planes[c][i] *= exp(sign * (transported.planes[c][i] - baseline.planes[c][i]) * log(10))
+        } }
+        return output
+    }
+
+    /// Runs every component of the frame's transport, up to the records' development.
+    public static func expose(image: ImageBuffer, stock: FilmStock, options: FotufilmEngine.Options,
+                              model supplied: LayeredTransport, frameIndex: UInt64 = 0,
+                              execution: TransportExecution? = nil,
+                              invocation suppliedInvocation: FilmEngineInvocation? = nil,
+                              pixelPitchMM: Double? = nil) throws -> Exposure {
         try image.validate()
         let backend = execution?.backend ?? options.transportBackend
         guard backend.isAvailable, execution != nil || HalideBackend.isAvailable else {
@@ -157,8 +248,8 @@ public enum LayeredTransportRenderer {
         // The running sum and each component, planar and contiguous as the transport takes
         // them; a donor stock's fourth record accumulates beside the three.
         var sum = [Float](repeating: 0, count: n * channels)
-        var component = [Float](repeating: 0, count: n * channels)
-        var fourth = [Float](repeating: 0, count: donated ? n * 3 : 0)
+        lazy var component = [Float](repeating: 0, count: n * channels)
+        lazy var fourth = [Float](repeating: 0, count: donated ? n * 3 : 0)
         func light(_ head: FilmEngineInvocation, into destination: UnsafeMutablePointer<Float>) throws {
             if let light = execution?.light { return try light(head, destination) }
             let planes = try render(image, head, true).planes
@@ -171,28 +262,42 @@ public enum LayeredTransportRenderer {
             return table.values.contains(where: { $0 > 0 }) ? table : nil
         }
         let active = tables.compactMap { $0 }.count
-        try component.withUnsafeMutableBufferPointer { component in
-            try sum.withUnsafeMutableBufferPointer { sum in
-                for k in prepared.compilation.kernels.indices {
-                    guard let table = tables[k] else { continue }
-                    var head = invocation
-                    head.featureMask &= FilmEngineFeature.flare | FilmEngineFeature.diffusion
-                    head.featureMask |= FilmEngineFeature.lightOut
-                    head.clearTransportOptics(keepLens: true)
-                    head.sharePreflash(among: active)
-                    head.setTransportExposure(table)
-                    try light(head, into: component.baseAddress!)
-                    if donated {
-                        head.setTransportExposure(Self.fourthRecord(of: table))
-                        try fourth.withUnsafeMutableBufferPointer {
-                            try light(head, into: $0.baseAddress!)
-                            component.baseAddress!.advanced(by: 3 * n).update(from: $0.baseAddress!, count: n)
+        func head(_ table: SpectralLUT) -> FilmEngineInvocation {
+            var head = invocation
+            head.featureMask &= FilmEngineFeature.flare | FilmEngineFeature.diffusion
+            head.featureMask |= FilmEngineFeature.lightOut
+            head.clearTransportOptics(keepLens: true)
+            head.sharePreflash(among: active)
+            head.setTransportExposure(table)
+            return head
+        }
+        let stencils = try prepared.transportTables(pixelPitchMM: pitch)
+        if invocation.featureMask & (FilmEngineFeature.flare | FilmEngineFeature.diffusion) == 0 {
+            // Every head is the scene through its table and the gate, which the transport
+            // exposes itself: the frame's components never leave the device.
+            let scene = execution?.scene ?? interleaved(image)
+            try exposeFrame(scene, width: image.width, height: image.height, channels: channels,
+                            components: prepared.compilation.kernels.indices.compactMap { k in
+                                tables[k].map { (head($0), stencils[k]) } },
+                            backend: backend, into: &sum)
+        } else {
+            try component.withUnsafeMutableBufferPointer { component in
+                try sum.withUnsafeMutableBufferPointer { sum in
+                    for k in prepared.compilation.kernels.indices {
+                        guard let table = tables[k] else { continue }
+                        var head = head(table)
+                        try light(head, into: component.baseAddress!)
+                        if donated {
+                            head.setTransportExposure(Self.fourthRecord(of: table))
+                            try fourth.withUnsafeMutableBufferPointer {
+                                try light(head, into: $0.baseAddress!)
+                                component.baseAddress!.advanced(by: 3 * n).update(from: $0.baseAddress!, count: n)
+                            }
                         }
+                        try transport(component.baseAddress!, into: sum.baseAddress!, width: image.width,
+                                      height: image.height, channels: channels, stencils: stencils[k],
+                                      backend: backend)
                     }
-                    try transport(component.baseAddress!, into: sum.baseAddress!, width: image.width,
-                                  height: image.height, channels: channels,
-                                  stencils: prepared.compilation.kernels[k].transportTable(pixelPitchMM: pitch),
-                                  backend: backend)
                 }
             }
         }
@@ -207,43 +312,64 @@ public enum LayeredTransportRenderer {
         guard valid.allSatisfy({ $0 }) else {
             throw TransportError.backend("transport produced invalid record exposure")
         }
-        var exposure = ImageBuffer(width: image.width, height: image.height)
-        exposure.planes = (0..<channels).map { Array(sum[$0 * n..<($0 + 1) * n]) }
         var continuation = invocation
         continuation.featureMask &= ~continuationClears
         continuation.clearTransportOptics(keepLens: false)
         continuation.configuration[Int(FOTUFILM_CONFIG_RECORD_INPUT)] = 1
-        if texture {
-            continuation.featureMask |= FilmEngineFeature.densityOut
-            let transported = try render(exposure, continuation, false)
-            var referenceHead = invocation
-            referenceHead.featureMask &= FilmEngineFeature.flare | FilmEngineFeature.diffusion
-            referenceHead.featureMask |= FilmEngineFeature.lightOut
-            referenceHead.clearTransportOptics(keepLens: true)
-            var referenceExposure = try render(image, referenceHead, true)
-            if donated {
-                var donorHead = referenceHead
-                donorHead.setTransportExposure(Self.fourthRecord(of: invocation.spectral.exposure))
-                referenceExposure.planes.append(try render(image, donorHead, true).planes[0])
-            }
-            var reference = continuation
-            reference.featureMask &= ~(FilmEngineFeature.grain | FilmEngineFeature.adjacency
-                | FilmEngineFeature.couplerDiffusion | FilmEngineFeature.printMTF)
-            reference.configuration[Int(FOTUFILM_CONFIG_CHROMATIC_FRINGE_AMOUNT)] = 0
-            reference.configuration[Int(FOTUFILM_CONFIG_PRINT_MTF_RADIUS)] = 0
-            reference.configuration[Int(FOTUFILM_CONFIG_GRAIN_RADIUS)] = 0
-            reference.configuration[Int(FOTUFILM_CONFIG_ADJACENCY_STRENGTH)] = 0
-            reference.configuration[Int(FOTUFILM_CONFIG_COUPLER_RADIUS)] = 0
-            for c in 0..<3 { reference.configuration[FilmEngineInvocation.grainOffset+c] = 0 }
-            let baseline = try render(referenceExposure, reference, false)
-            var output = image
-            let sign: Float = stock.isReversal ? -1 : 1
-            for c in 0..<3 { for i in 0..<image.pixelCount {
-                output.planes[c][i] *= exp(sign * (transported.planes[c][i] - baseline.planes[c][i]) * log(10))
-            } }
-            return output
+        return Exposure(sum: sum, channels: channels, invocation: invocation, continuation: continuation)
+    }
+
+    /// Sums components the transport exposes from `scene`, RGBA floats, each through its head's
+    /// configuration and exposure table, into the planar `sum`.
+    static func exposeFrame(_ scene: [Float], width: Int, height: Int, channels: Int,
+                            components: [(head: FilmEngineInvocation, stencils: [Float])],
+                            backend: TransportBackend, into sum: inout [Float]) throws {
+        let count = FilmEngineInvocation.configurationCount, d = SpectralRuntime.lutDimension
+        guard scene.count == width * height * 4, sum.count == width * height * channels,
+              components.allSatisfy({ $0.head.configuration.count == count
+                  && $0.head.spectral.exposure.values.count == d * d * d * 4 }) else {
+            throw TransportError.invalid("invalid transport frame")
         }
-        return try render(exposure, continuation, false)
+        guard let first = components.first?.head else { return }
+        guard let frame = scene.withUnsafeBufferPointer({ scene in
+            first.configuration.withUnsafeBufferPointer {
+                fotufilm_transport_frame_begin(scene.baseAddress, $0.baseAddress, Int32(width),
+                                               Int32(height), Int32(channels), backend.rawValue)
+            }
+        }) else { throw TransportError.backend("transport frame unavailable") }
+        var status: Int32 = 0
+        for (head, stencils) in components where status == 0 {
+            status = head.configuration.withUnsafeBufferPointer { configuration in
+                head.spectral.exposure.values.withUnsafeBufferPointer { lut in
+                    stencils.withUnsafeBufferPointer {
+                        fotufilm_transport_frame_add(frame, configuration.baseAddress, lut.baseAddress,
+                                                     $0.baseAddress)
+                    }
+                }
+            }
+        }
+        let finished = status == 0
+            ? sum.withUnsafeMutableBufferPointer { fotufilm_transport_frame_finish(frame, $0.baseAddress) }
+            : fotufilm_transport_frame_finish(frame, nil)
+        guard status == 0, finished == 0 else {
+            throw TransportError.backend("transport frame failed (\(status == 0 ? finished : status))")
+        }
+    }
+
+    /// The image's three planes as RGBA floats.
+    static func interleaved(_ image: ImageBuffer) -> [Float] {
+        let n = image.pixelCount
+        var scene = [Float](repeating: 1, count: n * 4)
+        withPlanes(image.planes) { r, g, b in
+            scene.withUnsafeMutableBufferPointer { scene in
+                DispatchQueue.concurrentPerform(iterations: 64) { band in
+                    for i in band * n / 64..<(band + 1) * n / 64 {
+                        scene[4 * i] = r[i]; scene[4 * i + 1] = g[i]; scene[4 * i + 2] = b[i]
+                    }
+                }
+            }
+        }
+        return scene
     }
 
     /// Adds one component, spread by its kernel's `TransportRadialKernel.transportTable`, to
@@ -280,7 +406,7 @@ public enum LayeredTransportRenderer {
     }
 
     /// A table exposing its fourth record, a donor stock's, in each of the three it renders.
-    private static func fourthRecord(of table: SpectralLUT) -> SpectralLUT {
+    static func fourthRecord(of table: SpectralLUT) -> SpectralLUT {
         var values = table.values
         for i in stride(from: 0, to: values.count, by: 4) {
             values[i] = values[i + 3]; values[i + 1] = values[i + 3]; values[i + 2] = values[i + 3]
@@ -288,7 +414,7 @@ public enum LayeredTransportRenderer {
         return SpectralLUT(dimension: table.dimension, values: values)
     }
 
-    private static func run(image: ImageBuffer, invocation: FilmEngineInvocation,
+    static func run(image: ImageBuffer, invocation: FilmEngineInvocation,
                             developOnly: Bool = false) throws -> ImageBuffer {
         if image.planes.count == 4 && !developOnly { return try runWithDonor(image: image, invocation: invocation) }
         var output = ImageBuffer(width: image.width, height: image.height)

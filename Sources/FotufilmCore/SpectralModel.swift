@@ -1806,13 +1806,70 @@ public enum SpectralRuntime {
     /// tables then carry in their fourth channel.
     static func transportExposureTables(stock: FilmStock, options: FotufilmEngine.Options,
                                         compilation: TransportCompilation) throws -> TransportExposureTables {
+        let basis = try transportExposureBasis(stock: stock, options: options,
+                                               donated: compilation.core.first?.count == 4)
+        let components = compilation.kernels.count, d = lutDimension, bands = SpectralGrid.count
+        let count = d * d * d * 4, records = basis.records
+        let coreTables = (0..<components).map { _ in UnsafeMutablePointer<Float>.allocate(capacity: count) }
+        let saturatedTables = (0..<components).map { _ in UnsafeMutablePointer<Float>.allocate(capacity: count) }
+        defer { for k in 0..<components { coreTables[k].deallocate(); saturatedTables[k].deallocate() } }
+        for k in 0..<components {
+            coreTables[k].initialize(repeating: 0, count: count)
+            saturatedTables[k].initialize(repeating: 0, count: count)
+        }
+        // Each slab of the cube writes its own entries, so the slabs fill in parallel.
+        basis.weighted.withUnsafeBufferPointer { weighted in
+            ParallelWork.forEach(iterations: d) { z in
+                for point in z * d * d..<(z + 1) * d * d {
+                    for c in 0..<records {
+                        let row = weighted.baseAddress! + (point * records + c) * bands
+                        let gain = basis.gains[point * records + c]
+                        for k in 0..<components {
+                            var a: Float = 0, b: Float = 0
+                            let core = compilation.core[k][c], saturated = compilation.saturated[k][c]
+                            for band in 0..<bands {
+                                a += row[band] * core[band]
+                                b += row[band] * saturated[band]
+                            }
+                            coreTables[k][point * 4 + c] = max(a * gain, 0)
+                            saturatedTables[k][point * 4 + c] = max(b * gain, 0)
+                        }
+                    }
+                }
+            }
+        }
+        return TransportExposureTables(
+            core: coreTables.map { SpectralLUT(dimension: d, values: Array(UnsafeBufferPointer(start: $0, count: count))) },
+            saturated: saturatedTables.map { SpectralLUT(dimension: d, values: Array(UnsafeBufferPointer(start: $0, count: count))) })
+    }
+
+    /// Each lattice point's record exposure by wavelength, before a compilation's components
+    /// partition it, with the gain reconciling it to the calibrated response: the part of the
+    /// tables no construction or halation edit reaches.
+    struct TransportExposureBasis: Sendable {
+        /// Records per point: three, or four with a donor stock's fourth.
+        let records: Int
+        /// Point by record by band.
+        let weighted: [Float]
+        /// Point by record.
+        let gains: [Float]
+    }
+    private static let basisLock = NSLock()
+    nonisolated(unsafe) private static var basisCache = BoundedCache<UInt64, TransportExposureBasis>(limit: 1)
+
+    static func transportExposureBasis(stock: FilmStock, options: FotufilmEngine.Options,
+                                       donated: Bool) throws -> TransportExposureBasis {
+        let light = options.resolvedSceneSpectrum(referenceKelvin: stock.referenceIlluminantKelvin)
+        var key = cacheIdentifier(for: stock) ^ options.lensFilters.signature ^ (donated ? 1 : 0)
+        for value in light { key = (key ^ UInt64(value.bitPattern)) &* 0x100000001b3 }
+        basisLock.lock(); let found = basisCache.value(for: key); basisLock.unlock()
+        if let found { return found }
         guard let model = MeasuredReflectanceTable.shared else {
             throw TransportError.unsupported("spectral reconstruction data is unavailable")
         }
         let reference = filmReferenceIlluminant(for: stock)
         // Match FilmEngineInvocation: an image without capture-light metadata is
         // already balanced, so its reference is the selected film's calibration.
-        let light = options.resolvedSceneSpectrum(referenceKelvin: stock.referenceIlluminantKelvin)
         let filter = options.lensFilters.isEmpty ? nil
             : spectralFilter(for: stock, stack: options.lensFilters, illuminant: light)
         let sceneY = Illuminant.luminance(light), referenceY = Illuminant.luminance(reference)
@@ -1848,58 +1905,47 @@ public enum SpectralRuntime {
             }
             return values
         }
-        let donor = compilation.core.first?.count == 4 ? stock.donorLayers.first.flatMap { layer in
+        let donor = donated ? stock.donorLayers.first.flatMap { layer in
             donorChannel(for: stock, illuminant: light, filter: filter).map { (layer, $0) }
         } : nil
-        let components = compilation.kernels.count, d = lutDimension
-        let count = d * d * d * 4
-        var core = Array(repeating: Array(repeating: Float(0), count: count), count: components)
-        var saturated = core
-        // Preparation is bounded and cached by the caller. All components share the exact same
-        // recovered spectrum and vertex calibration; amount does not enter this computation.
-        for z in 0..<d { for y in 0..<d { for x in 0..<d {
-            let point = SIMD3(Float(x), Float(y), Float(z)) / Float(d - 1)
-            let photons = spectrum(point)
-            let calibrated = domainExposure(point, stock: stock, illuminant: light, filter: filter)
-            let offset = ((z * d + y) * d + x) * 4
-            for c in 0..<3 {
-                let weighted = photons.indices.map { photons[$0] * sensitivity[c][$0] / denominator[c] }
-                let total = weighted.reduce(0, +)
-                guard total > 0 || calibrated[c] <= 1e-10 else {
-                    throw TransportError.invalid("spectral partition cannot reproduce calibrated exposure")
-                }
-                let gain = total > 0 ? calibrated[c] / total : 0
-                for k in 0..<components {
-                    var a: Float = 0, b: Float = 0
-                    for band in photons.indices {
-                        a += weighted[band] * compilation.core[k][c][band]
-                        b += weighted[band] * compilation.saturated[k][c][band]
+        let d = lutDimension, bands = SpectralGrid.count, records = donated ? 4 : 3
+        var weighted = [Float](repeating: 0, count: d * d * d * records * bands)
+        var gains = [Float](repeating: 0, count: d * d * d * records)
+        // Recovery and calibration are the same for every component: amount and construction do
+        // not enter this computation.
+        var failures = [Error?](repeating: nil, count: d)
+        weighted.withUnsafeMutableBufferPointer { weighted in
+            gains.withUnsafeMutableBufferPointer { gains in
+                failures.withUnsafeMutableBufferPointer { failures in
+                    ParallelWork.forEach(iterations: d) { z in
+                        do { for y in 0..<d { for x in 0..<d {
+                            let point = SIMD3(Float(x), Float(y), Float(z)) / Float(d - 1)
+                            let photons = spectrum(point)
+                            let calibrated = domainExposure(point, stock: stock, illuminant: light, filter: filter)
+                            let index = (z * d + y) * d + x
+                            func store(_ c: Int, _ values: [Float], _ target: Float, _ failure: String) throws {
+                                let total = values.reduce(0, +)
+                                guard total > 0 || target <= 1e-10 else { throw TransportError.invalid(failure) }
+                                gains[index * records + c] = total > 0 ? target / total : 0
+                                for band in 0..<bands { weighted[(index * records + c) * bands + band] = values[band] }
+                            }
+                            for c in 0..<3 {
+                                try store(c, photons.indices.map { photons[$0] * sensitivity[c][$0] / denominator[c] },
+                                          calibrated[c], "spectral partition cannot reproduce calibrated exposure")
+                            }
+                            if let (layer, calibratedDonor) = donor {
+                                try store(3, photons.indices.map { photons[$0] * layer.sensitivity[$0] },
+                                          calibratedDonor(point), "spectral partition cannot reproduce the donor's exposure")
+                            }
+                        } } } catch { failures[z] = error }
                     }
-                    core[k][offset+c] = max(a * gain, 0)
-                    saturated[k][offset+c] = max(b * gain, 0)
                 }
             }
-            if let (layer, calibratedDonor) = donor {
-                let weighted = photons.indices.map { photons[$0] * layer.sensitivity[$0] }
-                let total = weighted.reduce(0, +)
-                let target = calibratedDonor(point)
-                guard total > 0 || target <= 1e-10 else {
-                    throw TransportError.invalid("spectral partition cannot reproduce the donor's exposure")
-                }
-                let gain = total > 0 ? target / total : 0
-                for k in 0..<components {
-                    var a: Float = 0, b: Float = 0
-                    for band in photons.indices {
-                        a += weighted[band] * compilation.core[k][3][band]
-                        b += weighted[band] * compilation.saturated[k][3][band]
-                    }
-                    core[k][offset+3] = max(a * gain, 0)
-                    saturated[k][offset+3] = max(b * gain, 0)
-                }
-            }
-        } } }
-        return TransportExposureTables(core: core.map { SpectralLUT(dimension: d, values: $0) },
-                                       saturated: saturated.map { SpectralLUT(dimension: d, values: $0) })
+        }
+        if let failure = failures.lazy.compactMap({ $0 }).first { throw failure }
+        let basis = TransportExposureBasis(records: records, weighted: weighted, gains: gains)
+        basisLock.lock(); basisCache.insert(basis, for: key); basisLock.unlock()
+        return basis
     }
 
     /// The exposure table for a stock under a scene light, over the locus-enclosing domain.

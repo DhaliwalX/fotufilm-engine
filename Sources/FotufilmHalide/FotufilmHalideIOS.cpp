@@ -12,6 +12,11 @@
 #include "fotufilm_halide_ios_negative_metal.h"
 #include "fotufilm_halide_ios_transport_cpu.h"
 #include "fotufilm_halide_ios_transport_metal.h"
+#include "fotufilm_halide_ios_transport_scene_cpu.h"
+#include "fotufilm_halide_ios_transport_domain_cpu.h"
+#include "fotufilm_halide_ios_transport_scene_metal.h"
+#include "fotufilm_halide_ios_transport_domain_metal.h"
+#include "TransportFrameAot.h"
 #include "FotufilmTransport.h"
 #include <HalideBuffer.h>
 #include <HalideRuntimeMetal.h>
@@ -1189,6 +1194,26 @@ extern "C" int32_t fotufilm_transport_component(
                      r[10], r[11], r[12], sum);
     if (!status) status = sum.copy_to_host();
     return status;
+}
+
+extern "C" fotufilm_transport_frame *fotufilm_transport_frame_begin(
+    const float *scene, const float *configuration, int32_t width, int32_t height, int32_t channels,
+    int32_t backend) {
+    if (backend < 0 || backend > 1) return nullptr;
+    return fotufilm::transport_frame::begin(
+        backend ? fotufilm_halide_ios_transport_domain_metal : fotufilm_halide_ios_transport_domain_cpu,
+        backend ? fotufilm_halide_ios_transport_scene_metal : fotufilm_halide_ios_transport_scene_cpu,
+        scene, configuration, width, height, channels);
+}
+
+extern "C" int32_t fotufilm_transport_frame_add(fotufilm_transport_frame *frame,
+                                                const float *configuration,
+                                                const float *exposure_lut, const float *stencils) {
+    return fotufilm::transport_frame::add(frame, configuration, exposure_lut, stencils);
+}
+
+extern "C" int32_t fotufilm_transport_frame_finish(fotufilm_transport_frame *frame, float *sum) {
+    return fotufilm::transport_frame::finish(frame, sum);
 }
 
 extern "C" int32_t fotufilm_halide_available(void) { return 0; }

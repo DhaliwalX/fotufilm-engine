@@ -37,6 +37,7 @@ GENERATED = re.compile(r"fotufilm_halide_ios_[a-z0-9_]+\.(?:a|h)\Z")
 EXTRA_ARCHIVES = {f"fotufilm_halide_ios_{name}.a" for name in (
     "measure_tone", "measure_flare", "measure_flare_fast", "decode", "decode_realtime",
     "halation_fields", "negative_cpu", "negative_metal", "transport_cpu", "transport_metal",
+    "transport_scene_cpu", "transport_scene_metal", "transport_domain_cpu", "transport_domain_metal",
 )}
 
 

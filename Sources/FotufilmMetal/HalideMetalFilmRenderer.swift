@@ -601,10 +601,12 @@ public final class HalideMetalFilmRenderer {
             var source = [Float](repeating: 0, count: width*height*4)
             source.withUnsafeMutableBufferPointer { readTile(0..<height, 0..<width, $0) }
             do {
+                // The development encodes the delivery it was asked for when the build carries
+                // it; otherwise the caller encodes the linear result.
                 let result = try LayeredMetalTransport.process(source, width: width, height: height,
-                    stock: stock, options: options, frameIndex: frameIndex)
+                    stock: stock, options: options, frameIndex: frameIndex,
+                    outputTransform: &outputTransform)
                 guard shouldContinue?() != false else { return false }
-                outputTransform = nil // caller applies its requested delivery to the linear result
                 result.withUnsafeBufferPointer { writeTile(0..<height, 0..<width, $0) }
                 return true
             } catch { print(error.localizedDescription); return false }
@@ -1410,11 +1412,16 @@ public final class HalideMetalFilmRenderer {
         frameIndex: UInt64 = 0, realtime: Bool = false, exactMath: Bool = false,
         measuresGlareOnDevice: Bool = false, noFilm: Bool = false
     ) -> Bool {
-        if !noFilm && options.transportConstruction(for: stock) != nil { return false }
+        let layered = !noFilm && options.transportConstruction(for: stock) != nil
         guard let invocation = try? FilmEngineInvocation(
             validating: stock, options: options, width: width, height: height,
             frameIndex: frameIndex, noFilm: noFilm)
         else { return false }
+        // Layered Transport encodes in the development of its records.
+        if layered {
+            return options.stage != .texture && LayeredMetalTransport.encodes(
+                invocation.featureMask & ~LayeredTransportRenderer.continuationClears)
+        }
         var mask = invocation.featureMask
         mask |= FilmEngineFeature.floatIO
         if realtime { mask |= FilmEngineFeature.realtime }
