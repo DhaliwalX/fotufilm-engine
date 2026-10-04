@@ -6,6 +6,7 @@ export default function ProfileFields({ fields }) {
     active,
     exporting,
     fixedSettings,
+    layeredLocked,
     edit,
     selectedStock,
     setProfile,
@@ -22,7 +23,7 @@ export default function ProfileFields({ fields }) {
         patch({ profile: withProfileField(edit.profile, field, undefined) })
       }
       onEnd={endEdit}
-      disabled={exporting || !active || edit.halationModel === "layered"}
+      disabled={exporting || !active || layeredLocked}
     />
   );
 }

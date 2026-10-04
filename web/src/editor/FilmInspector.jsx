@@ -13,6 +13,7 @@ export default function FilmInspector() {
   const {
     edit,
     fixedSettings,
+    layeredLocked,
     selectedStock,
     exporting,
     active,
@@ -57,9 +58,7 @@ export default function FilmInspector() {
             <DisclosurePanel>
               <div className="control-stack">
                 <FormatPicker
-                  disabled={
-                    exporting || !active || edit.halationModel === "layered"
-                  }
+                  disabled={exporting || !active || layeredLocked}
                   onChange={(format) => {
                     endEdit();
                     patch({ format });
