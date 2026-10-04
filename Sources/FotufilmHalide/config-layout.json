@@ -31,8 +31,16 @@
       "doc": "Gross densities, D-min to D-max, the film grain model renders each record's tile at."
     },
     "FILM_TILE_BLOCK": {
-      "value": 64,
+      "value": 128,
       "doc": "Side, in texels, of the film blocks that each take the tile at their own hashed offset and orientation."
+    },
+    "FILM_TILE_MARGIN": {
+      "value": 64,
+      "doc": "Texels of each block's placement of the tile that reach past the block on every side, so a pixel near its edge reads its whole footprint from the one placement."
+    },
+    "FILM_TILE_SEAM": {
+      "value": 16,
+      "doc": "Half-width, in texels, of the band either side of a block edge over which the neighbouring blocks' grain cross-fades."
     }
   },
   "fields": [

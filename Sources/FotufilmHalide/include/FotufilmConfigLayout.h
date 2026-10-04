@@ -16,7 +16,13 @@ enum {
     FOTUFILM_FILM_TILE_LEVELS = 17,
     /// Side, in texels, of the film blocks that each take the tile at their own hashed offset and
     /// orientation.
-    FOTUFILM_FILM_TILE_BLOCK = 64,
+    FOTUFILM_FILM_TILE_BLOCK = 128,
+    /// Texels of each block's placement of the tile that reach past the block on every side, so a
+    /// pixel near its edge reads its whole footprint from the one placement.
+    FOTUFILM_FILM_TILE_MARGIN = 64,
+    /// Half-width, in texels, of the band either side of a block edge over which the neighbouring
+    /// blocks' grain cross-fades.
+    FOTUFILM_FILM_TILE_SEAM = 16,
 };
 
 enum {

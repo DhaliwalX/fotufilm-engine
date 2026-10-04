@@ -20,9 +20,12 @@ import FotufilmHalide
 ///
 /// **No repeat shows.** The frame is cut into blocks `tileBlockMM` a side; each block takes the
 /// tile at its own hashed offset and one of the eight flips and turns of the square, per record
-/// and per frame seed. Grain decorrelates within microns, so the block seams are invisible, and
-/// nothing repeats at the tile's period. The tiles themselves are the stock's, rendered once:
-/// another seed is another placement of the same coating, as another frame of the roll is.
+/// and per frame seed, so nothing repeats at the tile's period. A placement reaches
+/// `tileMarginMM` past its block, and across a band `tileSeamMM` either side of an edge the
+/// neighbouring blocks' grain cross-fades, renormalised so the fade keeps the grain's variance:
+/// a dye cloud is never cut along a straight line, which magnified past a few microns a pixel
+/// would show. The tiles themselves are the stock's, rendered once: another seed is another
+/// placement of the same coating, as another frame of the roll is.
 ///
 /// **The tone stays the curve's.** The mean density a footprint reads depends on its size and on
 /// where its edges fall against the texels — light averages, density does not — so for each
@@ -41,7 +44,13 @@ extension FilmGrain {
     /// Gross densities rendered per record, D-min to D-max.
     public static let tileLevels = 17
     /// Side of the film blocks that each take the tile at their own offset and orientation, mm.
-    public static let tileBlockMM: Float = 0.064
+    public static let tileBlockMM: Float = 0.128
+    /// How far each block's placement of the tile reaches past the block on every side, mm: a
+    /// pixel near an edge reads its whole footprint from one placement.
+    public static let tileMarginMM: Float = 0.064
+    /// Half-width of the band either side of a block edge across which neighbouring blocks'
+    /// grain cross-fades, mm.
+    public static let tileSeamMM: Float = 0.016
     /// The coating the tiles render: one per stock, whatever the frame's seed.
     static let tileSeed: UInt64 = 0xA11C_4057_5EED_0001
     /// Hash stream of the block placement, per record: the kernel's `kFilmTileStream`.
@@ -353,8 +362,9 @@ extension FilmGrain {
         tiles.tables(pitch: footprint) { Self.measurePitch(tiles, pitch: Double(footprint)) }
     }
 
-    /// Each level read through footprints of `pitch` texels laid as a frame lays them — through
-    /// the blocks' own placements — at `side²` footprints scattered over many blocks.
+    /// Each level read through footprints of `pitch` texels laid as a frame lays them — each
+    /// through the placement of the block its centre falls in — at `side²` footprints scattered
+    /// over many blocks.
     static func measurePitch(_ tiles: Tiles, pitch: Double, side: Int = 128) -> PitchTables {
         let pixels = (0..<(side * side)).map { i in
             (Double((i % side) * 7919 % 4096) * pitch, Double((i / side) * 104_729 % 4096) * pitch)
@@ -366,8 +376,10 @@ extension FilmGrain {
             for k in stride(from: 0, to: levels.count, by: 2) {
                 let next = min(k + 1, levels.count - 1)
                 let lights = pixels.map { p in
-                    footprintLight(levels[k], levels[next], p.0, p.0 + pitch, p.1, p.1 + pitch,
-                                   seed: 0x5A3F_1E1D, record: r)
+                    blockLight(levels[k], levels[next], p.0, p.0 + pitch, p.1, p.1 + pitch,
+                               bx: Int(((p.0 + pitch / 2) / blockTexels).rounded(.down)),
+                               by: Int(((p.1 + pitch / 2) / blockTexels).rounded(.down)),
+                               seed: 0x5A3F_1E1D, record: r)
                 }
                 fields[k] = lights.map { -log10(max(Double($0.0), 1e-9)) }
                 fields[next] = lights.map { -log10(max(Double($0.1), 1e-9)) }
@@ -410,14 +422,33 @@ extension FilmGrain {
         sumAt(sums, x1, y1) - sumAt(sums, x0, y1) - sumAt(sums, x1, y0) + sumAt(sums, x0, y0)
     }
 
+    /// Running sum at a point up to a period past the tile's far edges: the tile repeats, so
+    /// a sum reaching into the next period adds the whole columns or rows it crossed.
+    @inline(__always)
+    static func wrappedSumAt(_ sums: [Float], _ x: Double, _ y: Double) -> Double {
+        let n = Double(tileSide)
+        let px = x >= n ? x - n : x, py = y >= n ? y - n : y
+        var sum = sumAt(sums, px, py)
+        if x >= n { sum += sumAt(sums, n, py) }
+        if y >= n { sum += sumAt(sums, px, n) }
+        if x >= n && y >= n { sum += sumAt(sums, n, n) }
+        return sum
+    }
+
+    static func wrappedBoxSum(_ sums: [Float], _ x0: Double, _ x1: Double, _ y0: Double,
+                              _ y1: Double) -> Double {
+        wrappedSumAt(sums, x1, y1) - wrappedSumAt(sums, x0, y1) - wrappedSumAt(sums, x1, y0)
+            + wrappedSumAt(sums, x0, y0)
+    }
+
     /// RMS granularity through the 48 µm aperture of a periodic tile of light, as a
     /// microdensitometer reads it. The grain is far smaller than the aperture, so the aperture's
     /// light variance is the field's noise power at zero frequency over the aperture's area — the
     /// autocovariance summed over every lag it reaches, which every texel of the tile informs —
     /// and the density's is that over the light's mean, by `ln 10`. Frames lay the tile in blocks
-    /// at independent offsets, so two points a lag apart share a block, and their covariance,
-    /// only for `(1 - |dx| / B)(1 - |dy| / B)` of the pairs: each lag counts that share, and the
-    /// anchor reads the grain as the frames lay it.
+    /// at independent offsets, cross-faded at their seams, so two points a lag apart keep only
+    /// `blockSharing(dx) * blockSharing(dy)` of their covariance: each lag counts that share,
+    /// and the anchor reads the grain as the frames lay it.
     static func tileSigma48(_ light: [Float]) -> Float {
         let n = tileSide
         var total = 0.0
@@ -440,12 +471,10 @@ extension FilmGrain {
                 sums.values[rowIndex * lagSide + dx + reach] = c / Double(n * n)
             }
         }
-        let block = Double((tileBlockMM / tileTexelMM).rounded())
         var power = 0.0
         for rowIndex in 0..<lagSide {
             for column in 0..<lagSide {
-                let shared = (1 - Double(abs(rowIndex - reach)) / block)
-                    * (1 - Double(abs(column - reach)) / block)
+                let shared = blockSharing(rowIndex - reach) * blockSharing(column - reach)
                 power += sums.values[rowIndex * lagSide + column] * shared
             }
         }
@@ -486,19 +515,38 @@ extension FilmGrain {
             defer { out.deallocate() }
             let box = TileOutput(out)
             let amount = amounts[r]
+            let block = Self.blockTexels, seam = Self.seamTexels
             ParallelWork.forEach(iterations: height) { y in
-                let y0 = (Double(y) + 0.5) * pitch - 0.5 * footprint, y1 = y0 + footprint
+                let cy = (Double(y) + 0.5) * pitch
+                let y0 = cy - 0.5 * footprint, y1 = y0 + footprint
+                let by0 = Int(((cy - seam) / block).rounded(.down))
+                let by1 = Int(((cy + seam) / block).rounded(.down))
                 for x in 0..<width {
                     let gross = source[y * width + x]
                     let t = min(max((gross - lo) / max(hi - lo, 1e-6), 0), 1) * steps
                     let k = min(Int(t), Self.tileLevels - 2)
                     let w = t - Float(k)
-                    let x0 = (Double(x) + 0.5) * pitch - 0.5 * footprint, x1 = x0 + footprint
-                    let (a, b) = Self.footprintLight(levels[k], levels[k + 1], x0, x1, y0, y1,
-                                                     seed: seed, record: r)
-                    let da = -log10(max(a, 1e-9)) - meanAt[k]
-                    let db = -log10(max(b, 1e-9)) - meanAt[k + 1]
-                    box.pointer[y * width + x] = amount * Self.blend(da, db, w, rho[k])
+                    let cx = (Double(x) + 0.5) * pitch
+                    let x0 = cx - 0.5 * footprint, x1 = x0 + footprint
+                    let bx0 = Int(((cx - seam) / block).rounded(.down))
+                    let bx1 = Int(((cx + seam) / block).rounded(.down))
+                    // The blocks whose fade reaches the pixel, each read through its own
+                    // placement and weighed by the fade; the weights' norm keeps the variance.
+                    var grain = 0.0, norm = 0.0
+                    for by in by0...by1 {
+                        let wy = Self.blockWeight(cy, by)
+                        for bx in bx0...bx1 {
+                            let weight = Self.blockWeight(cx, bx) * wy
+                            guard weight > 0 else { continue }
+                            let (a, b) = Self.blockLight(levels[k], levels[k + 1], x0, x1, y0, y1,
+                                                         bx: bx, by: by, seed: seed, record: r)
+                            let da = -log10(max(a, 1e-9)) - meanAt[k]
+                            let db = -log10(max(b, 1e-9)) - meanAt[k + 1]
+                            grain += weight * Double(Self.blend(da, db, w, rho[k]))
+                            norm += weight * weight
+                        }
+                    }
+                    box.pointer[y * width + x] = amount * Float(grain / max(norm, 1e-12).squareRoot())
                 }
             }
             fluctuations[r] = Array(out)
@@ -524,45 +572,78 @@ extension FilmGrain {
         init(_ pointer: UnsafeMutableBufferPointer<Float>) { self.pointer = pointer }
     }
 
-    /// The block's placement of the tile: an offset in texels that keeps the block inside one
-    /// period, so no read wraps, and one of eight orientations, from the kernel's `pixel_hash` on
-    /// the block's column and row.
+    /// The block's placement of the tile: an offset anywhere in the period, a read past whose far
+    /// edge wraps, and one of eight orientations, from the kernel's `pixel_hash` on the block's
+    /// column and row. Offsets over the whole period keep neighbouring blocks' grain unrelated;
+    /// confined to part of it, overlapping reads of the one mean-free tile anticorrelate them.
     static func blockPlacement(seed: UInt32, record: Int, bx: Int, by: Int) -> (Double, Double, Int) {
         let stream = (tileStream &+ UInt32(record)) &* 0x9E37_79B9
         let h = pcgHash(UInt32(truncatingIfNeeded: bx)
                         ^ pcgHash(UInt32(truncatingIfNeeded: by) ^ pcgHash(seed ^ stream)))
-        let reach = UInt32(tileSide) - UInt32((tileBlockMM / tileTexelMM).rounded()) + 1
-        return (Double(h % reach), Double((h >> 8) % reach), Int((h >> 16) & 7))
+        let period = UInt32(tileSide)
+        return (Double(h % period), Double((h >> 8) % period), Int((h >> 16) & 7))
     }
 
-    /// Mean light through the film rectangle `[x0, x1) × [y0, y1)` (texels) at two levels. A
-    /// footprint reads the two blocks either way from its corner, as the kernel does: all of it
-    /// for any pixel up to a block wide, and an even sample of it past that.
-    static func footprintLight(_ a: TileLevel, _ b: TileLevel, _ x0: Double, _ x1: Double,
-                               _ y0: Double, _ y1: Double, seed: UInt32,
-                               record: Int) -> (Float, Float) {
-        let block = Double((tileBlockMM / tileTexelMM).rounded())
-        let bx0 = Int((x0 / block).rounded(.down)), by0 = Int((y0 / block).rounded(.down))
-        let bx1 = min(Int((x1 / block).rounded(.up)) - 1, bx0 + 1)
-        let by1 = min(Int((y1 / block).rounded(.up)) - 1, by0 + 1)
-        var sumA = 0.0, sumB = 0.0
-        for by in by0...by1 {
-            let v0 = max(y0, Double(by) * block) - Double(by) * block
-            let v1 = min(y1, Double(by + 1) * block) - Double(by) * block
-            for bx in bx0...bx1 {
-                let u0 = max(x0, Double(bx) * block) - Double(bx) * block
-                let u1 = min(x1, Double(bx + 1) * block) - Double(bx) * block
-                let (ox, oy, turn) = blockPlacement(seed: seed, record: record, bx: bx, by: by)
-                var (p0, p1, q0, q1) = (u0, u1, v0, v1)
-                if turn & 1 != 0 { (p0, p1) = (block - u1, block - u0) }
-                if turn & 2 != 0 { (q0, q1) = (block - v1, block - v0) }
-                if turn & 4 != 0 { (p0, p1, q0, q1) = (q0, q1, p0, p1) }
-                sumA += boxSum(a.sums, p0 + ox, p1 + ox, q0 + oy, q1 + oy)
-                sumB += boxSum(b.sums, p0 + ox, p1 + ox, q0 + oy, q1 + oy)
+    static var blockTexels: Double { Double((tileBlockMM / tileTexelMM).rounded()) }
+    static var marginTexels: Double { Double((tileMarginMM / tileTexelMM).rounded()) }
+    static var seamTexels: Double { Double((tileSeamMM / tileTexelMM).rounded()) }
+
+    /// Block `b`'s share of the point `c` texels along one axis: one inside the block, falling
+    /// linearly to zero across the seam band at each of its edges, where the neighbour's share
+    /// rises as much, so the shares along an axis sum to one.
+    @inline(__always)
+    static func blockWeight(_ c: Double, _ b: Int) -> Double {
+        let start = Double(b) * blockTexels, seam = seamTexels
+        return min(max((c - start + seam) / (2 * seam), 0), 1)
+            * min(max((start + blockTexels + seam - c) / (2 * seam), 0), 1)
+    }
+
+    /// The covariance two points `lag` texels apart along one axis keep through the blocks:
+    /// the cross-faded fields' correlation averaged over where the pair falls on a block — for
+    /// hard edges it would be `1 - |lag| / B`.
+    static func blockSharing(_ lag: Int) -> Double {
+        let index = abs(lag)
+        return index < blockSharingTable.count ? blockSharingTable[index] : 0
+    }
+
+    private static let blockSharingTable: [Double] = {
+        let block = Int(blockTexels), samples = 16
+        return (0...block).map { lag in
+            var total = 0.0
+            for i in 0..<(block * samples) {
+                let c = (Double(i) + 0.5) / Double(samples), d = c + Double(lag)
+                var shared = 0.0, normC = 0.0, normD = 0.0
+                for b in -1...(1 + (lag + block - 1) / block) {
+                    let wc = blockWeight(c, b), wd = blockWeight(d, b)
+                    shared += wc * wd
+                    normC += wc * wc
+                    normD += wd * wd
+                }
+                total += shared / (normC * normD).squareRoot()
             }
+            return total / Double(block * samples)
         }
-        let area = max((min(x1, Double(bx1 + 1) * block) - x0)
-                       * (min(y1, Double(by1 + 1) * block) - y0), 1e-6)
+    }()
+
+    /// Mean light at two levels through the film rectangle `[x0, x1) × [y0, y1)` (texels) as
+    /// block `(bx, by)`'s placement of the tile holds it: all of it for any footprint within the
+    /// placement's margin, and the part the placement reaches past that.
+    static func blockLight(_ a: TileLevel, _ b: TileLevel, _ x0: Double, _ x1: Double,
+                           _ y0: Double, _ y1: Double, bx: Int, by: Int, seed: UInt32,
+                           record: Int) -> (Float, Float) {
+        let block = blockTexels, margin = marginTexels
+        let left = Double(bx) * block, top = Double(by) * block
+        let u0 = max(x0, left - margin) - left, u1 = min(x1, left + block + margin) - left
+        let v0 = max(y0, top - margin) - top, v1 = min(y1, top + block + margin) - top
+        let area = max((u1 - u0) * (v1 - v0), 1e-6)
+        let (ox, oy, turn) = blockPlacement(seed: seed, record: record, bx: bx, by: by)
+        var (p0, p1, q0, q1) = (u0, u1, v0, v1)
+        if turn & 1 != 0 { (p0, p1) = (block - u1, block - u0) }
+        if turn & 2 != 0 { (q0, q1) = (block - v1, block - v0) }
+        if turn & 4 != 0 { (p0, p1, q0, q1) = (q0, q1, p0, p1) }
+        let (sx, sy) = (margin + ox, margin + oy)
+        let sumA = wrappedBoxSum(a.sums, p0 + sx, p1 + sx, q0 + sy, q1 + sy)
+        let sumB = wrappedBoxSum(b.sums, p0 + sx, p1 + sx, q0 + sy, q1 + sy)
         return (a.meanLight + Float(sumA / area), b.meanLight + Float(sumB / area))
     }
 
