@@ -11,30 +11,30 @@ Every film in the catalogue except Instax Mini and Instax Wide includes an infer
 construction. Select **Layered Transport** to use them. Legacy remains the default and retains its
 separate halation parameters.
 
-These constructions transfer existing estimated halo shapes into an optical
-stack; they are not measurements or recovered manufacturing recipes. Three
-effective optical depths are fitted at 450, 550 and 650 nm, interpolated in log
-space and held outside that interval. Return strengths are supplied independently.
-Colour receivers sit at measured relative depths in an 18 µm coating, a typical
-colour-negative total: blue 5.2 µm, green 9.4 µm and red 15.5 µm below the surface.
-Monochrome films use one receiver at mid-depth. Coating thicknesses and capture
-probabilities remain generic assumptions. Two-scale compact responses are reduced
-to the same second moment; Legacy's return colour matrix and extra diffusion are not
-part of this fit.
+Each construction places a film's backing at its measured density and solves the
+return from the optics. The absorber's density at 450, 550 and 650 nm is the middle
+of the measured range for its kind of backing: an antihalation undercoat or dyed
+backing 0.55 in red and blue and 0.87 in green, a remjet 0.95. It is interpolated in
+log space and held outside that interval. The red return is the launch below times
+the capture the construction returns; green and blue keep the film's ratios to red,
+which carry its masking and filter layers. Colour receivers sit at measured relative
+depths in an 18 µm coating, a typical colour-negative total: blue 5.2 µm, green
+9.4 µm and red 15.5 µm below the surface. Monochrome films use one receiver at
+mid-depth. Coating thicknesses and capture probabilities remain generic assumptions.
+Two-scale compact responses are reduced to the same second moment; Legacy's return
+colour matrix and extra diffusion are not part of this model.
 
-Most constructions use an effective undercoat and acetate support. Historical
-cinema and Kodachrome constructions use an assumed rear absorber. VISION3 uses
-an undercoat scenario while retaining its previous strength estimate. CineStill
-800T and 400D are VISION3 500T and 250D's constructions without the absorber, as
-the respools are the parent films without their backing. Nothing left in the stack
-absorbs the red light the backing did, so their red return is physical: the launch
-below times the capture the open stack returns, 27%. Green and blue keep their
-ratios to red, which carry the masking couplers' absorption on the way to the base
-and back.
-Aerocolor uses an assumed coating/undercoat split and a PET support proxy. Its
-thinner support produces a different shape from the previous acetate estimate;
-the numerical checks pass, but the fit exceeds the 0.02 normalized edge-error
-screen used for the other profiles.
+Most constructions use an effective undercoat and acetate support, and return about
+0.4% of the direct red exposure. Historical cinema and Kodachrome constructions put
+the absorber behind the support. VISION3 places an undercoat at remjet density and
+returns 0.03%. CineStill 800T and 400D are VISION3 500T and 250D's constructions
+without the absorber, as the respools are the parent films without their backing:
+nothing left in the stack absorbs the red light the backing did, and they return
+27%. Films without a measured backing family (Phoenix 200, the LomoChromes,
+Aerochrome 1443 and Infrared Color) keep their previous strength and a shape fitted
+to Legacy's estimate.
+Aerocolor splits its undercoat density evenly between the undercoat and a dyed
+backing on a PET support proxy.
 
 Aerochrome 1443, Infrared Color, the three LomoChromes and Phoenix 200 have no halo
 shape estimate. Legacy renders them with a Lambertian launch whose round-trip
