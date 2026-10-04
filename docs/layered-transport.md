@@ -25,7 +25,12 @@ part of this fit.
 Most constructions use an effective undercoat and acetate support. Historical
 cinema and Kodachrome constructions use an assumed rear absorber. VISION3 uses
 an undercoat scenario while retaining its previous strength estimate. CineStill
-uses effective attenuation in the coating without assuming a parent geometry.
+800T and 400D are VISION3 500T and 250D's constructions without the absorber, as
+the respools are the parent films without their backing. Nothing left in the stack
+absorbs the red light the backing did, so their red return is physical: the launch
+below times the capture the open stack returns, 27%. Green and blue keep their
+ratios to red, which carry the masking couplers' absorption on the way to the base
+and back.
 Aerocolor uses an assumed coating/undercoat split and a PET support proxy. Its
 thinner support produces a different shape from the previous acetate estimate;
 the numerical checks pass, but the fit exceeds the 0.02 normalized edge-error
@@ -64,10 +69,14 @@ both models; the other three apply to Layered Transport and leave Legacy unchang
 A film's return ratio is calibrated, but its construction's absorber is fitted to
 the halo's shape rather than its amount. Scaling the return by the capture alone
 would let a thinned backing return thousands of times the light. An adjusted
-construction's return therefore runs between two calibrated ends: the film's own
-ratio at its own construction, and, for the same stack without absorbers, a measured
-launch of 0.44 times its capture. The physics sets the curve between them. Removing
-the backing from a film calibrated at 0.55% returns about 12% of the direct exposure.
+construction's return therefore runs between two ends: the film's own ratio at its
+own construction, and, for the same stack without absorbers, the launch times its
+capture. The launch is the light a receiver lets through toward the base per unit
+it captures, `(1 − p)/p`, so 1 at the constructions' capture probability of 0.5.
+The physics sets the red record's curve between the ends, and the other records keep
+the film's ratios to red, which carry its masking and filter layers. Removing the
+backing from a colour negative returns about 27% of the direct red exposure, as
+CineStill's constructions do.
 A strongly adjusted construction that eight components cannot fit within the 0.005
 edge error is fitted within 0.02.
 

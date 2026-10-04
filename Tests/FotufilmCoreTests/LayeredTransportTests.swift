@@ -449,6 +449,24 @@ final class LayeredConstructionControlTests: XCTestCase {
         try LayeredTransportSolver.solve(model, receiver: 0, band: band).captured
     }
 
+    func testRemovingTheBackingKeepsTheFilmsRecordBalance() throws {
+        let stock = try XCTUnwrap(FilmStock.named("portra400"))
+        let film = try XCTUnwrap(stock.layeredTransport)
+        let open = try film.adjusted(antiHalation: 0, baseThickness: 1, pressurePlate: 0)
+        let compiled = try TransportKernelCompiler.compile(open, reference: film, edgeTolerance: 0.02)
+        let band = 54
+        // A record's returned share is its saturated partition's returned kernels (after the
+        // three cores), scaled back from the largest share.
+        func ratio(_ c: Int) -> Double {
+            let share = compiled.maximumReturnedShare * compiled.kernels.indices.dropFirst(3)
+                .reduce(0.0) { $0 + Double(compiled.saturated[$1][c][band]) }
+            return share / (1 - share)
+        }
+        XCTAssertGreaterThan(ratio(0), 0.2); XCTAssertLessThan(ratio(0), 0.35)
+        XCTAssertEqual(ratio(1) / ratio(0), film.returnedToDirect[1][0] / film.returnedToDirect[0][0],
+                       accuracy: 1e-4)
+    }
+
     func testTheFilmsOwnSettingsLeaveItsConstructionAlone() throws {
         let model = TransportFixtures.stack
         XCTAssertEqual(try model.adjusted(antiHalation: 1, baseThickness: 1, pressurePlate: 0), model)
@@ -481,20 +499,23 @@ final class LayeredConstructionControlTests: XCTestCase {
         XCTAssertLessThan(mirrored.escaped, open.escaped)
     }
 
-    func testAnAdjustedReturnRunsFromTheFilmsOwnToTheMeasuredLaunch() {
+    func testAnAdjustedReturnRunsFromTheFilmsOwnToThePhysicalLaunch() {
         let ratio = 0.0055, film = 1.6e-4, lossless = 0.27
+        let launch = TransportKernelCompiler.launch(capture: 0.5)
+        XCTAssertEqual(launch, 1)
         func scaled(_ adjusted: Double) -> Double {
             ratio * TransportKernelCompiler.adjustedReturn(filmRatio: ratio, film: film,
-                                                            adjusted: adjusted, lossless: lossless)
+                                                            adjusted: adjusted, lossless: lossless, launch: launch)
         }
         XCTAssertEqual(scaled(film), ratio, accuracy: ratio * 1e-12)
-        XCTAssertEqual(scaled(lossless), TransportKernelCompiler.measuredLaunch * lossless, accuracy: 1e-12)
+        XCTAssertEqual(scaled(lossless), launch * lossless, accuracy: 1e-12)
         var last = 0.0
         for c in stride(from: 1e-5, through: 0.27, by: 0.003) {
             XCTAssertGreaterThan(scaled(c), last); last = scaled(c)
         }
         // With nothing to remove, the return follows the capture.
-        XCTAssertEqual(TransportKernelCompiler.adjustedReturn(filmRatio: ratio, film: 0.2, adjusted: 0.3, lossless: 0.2),
+        XCTAssertEqual(TransportKernelCompiler.adjustedReturn(filmRatio: ratio, film: 0.2, adjusted: 0.3, lossless: 0.2,
+                                                              launch: launch),
                        1.5, accuracy: 1e-12)
     }
 

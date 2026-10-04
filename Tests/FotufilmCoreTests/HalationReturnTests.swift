@@ -3,8 +3,9 @@ import XCTest
 
 final class HalationReturnTests: XCTestCase {
     func testCineStillDefaultsAndRecordBalance() throws {
-        // The red return is the measured 0.03; green and blue follow the derived spectral
-        // return ratios, and the layered construction reads the same triple.
+        // Legacy's red return is 0.03; green and blue follow the derived spectral return
+        // ratios. The layered construction is the parent's without its backing, so its red
+        // return is physical, and it keeps the same record balance.
         for (id, green, blue): (String, Float, Float) in [
             ("cinestill800t", 0.00101248, 0.00000094),
             ("cinestill400d", 0.001719215, 0.0000014675),
@@ -14,8 +15,12 @@ final class HalationReturnTests: XCTestCase {
             XCTAssertEqual(stock.halationStrength[1], green, accuracy: 1e-9)
             XCTAssertEqual(stock.halationStrength[2], blue, accuracy: 1e-10)
             let construction = try XCTUnwrap(stock.layeredTransport)
-            for c in 0..<3 {
-                XCTAssertEqual(construction.returnedToDirect[c][0], Double(stock.halationStrength[c]), accuracy: 1e-8)
+            let red = construction.returnedToDirect[0][0]
+            XCTAssertGreaterThan(red, 0.25); XCTAssertLessThan(red, 0.30)
+            XCTAssertFalse(construction.layers.contains { $0.id == "effective-absorber" })
+            for c in 1..<3 {
+                XCTAssertEqual(construction.returnedToDirect[c][0] / red,
+                               Double(stock.halationStrength[c] / stock.halationStrength[0]), accuracy: 1e-6)
             }
             let raised = try HalationReturn.ratios(for: stock, overriding: 0.12)
             for c in 0..<3 { XCTAssertEqual(raised[c], stock.halationStrength[c] * 4, accuracy: 1e-8) }

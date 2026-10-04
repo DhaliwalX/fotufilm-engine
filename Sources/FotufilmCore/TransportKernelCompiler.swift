@@ -35,7 +35,8 @@ public enum TransportKernelCompiler {
     ///
     /// `hazeMM` blurs the returned light with the support's impurity scatter, a Gaussian sigma.
     /// `reference` is the film's own construction when `model` adjusts its geometry or absorbers;
-    /// see `adjustedReturn` for how the return ratios follow.
+    /// see `adjustedReturn` for how the red return follows. The other records keep the film's
+    /// ratios to red.
     public static func compile(_ model: LayeredTransport, returnGain: [Float] = [],
                                sourceColour: Float = 0, hazeMM: Double = 0, donorDepthMM: Double? = nil,
                                reference: LayeredTransport? = nil,
@@ -59,8 +60,7 @@ public enum TransportKernelCompiler {
         }
         let donorModel = try donor(model)
         let references = try reference.map { reference in
-            let lossless = try reference.adjusted(antiHalation: 0, baseThickness: 1, pressurePlate: 0)
-            return (film: [reference, try donor(reference)], lossless: [lossless, try donor(lossless)])
+            (film: reference, lossless: try reference.adjusted(antiHalation: 0, baseThickness: 1, pressurePlate: 0))
         }
         let receivers = donorDepthMM == nil ? 3 : 4
         func like(_ c: Int) -> Int { c < 3 ? c : 1 }
@@ -89,6 +89,23 @@ public enum TransportKernelCompiler {
             solveCache[key] = solved
             return solved
         }
+        // An adjusted construction moves the red record's return by its physics; the other
+        // records keep their ratios to red, which carry the film's masking and filter layers.
+        var redFactors = [Int: Double]()
+        func redFactor(_ band: Int) throws -> Double {
+            if let found = redFactors[band] { return found }
+            guard let references else { return 1 }
+            let film = try solve(references.film, 0, band)
+            let lossless = try solve(references.lossless, 0, band)
+            let adjusted = try solve(model, 0, band)
+            worstUnresolved = max(worstUnresolved, film.unresolved, lossless.unresolved)
+            let factor = adjustedReturn(
+                filmRatio: LayeredTransport.sample(references.film.returnedToDirect[0], band),
+                film: film.captured, adjusted: adjusted.captured, lossless: lossless.captured,
+                launch: launch(capture: LayeredTransport.sample(model.captureProbability[0], band)))
+            redFactors[band] = factor
+            return factor
+        }
         for c in 0..<receivers {
             let solving = c < 3 ? model : donorModel, r = like(c)
             for band in 0..<bands {
@@ -96,15 +113,7 @@ public enum TransportKernelCompiler {
                 worstUnresolved = max(worstUnresolved, solved.unresolved)
                 var ratio = LayeredTransport.sample(model.returnedToDirect[r], band)
                     * (returnGain.isEmpty ? 1 : Double(returnGain[band]))
-                if ratio > 0, let references {
-                    let side = c < 3 ? 0 : 1
-                    let film = try solve(references.film[side], r, band)
-                    let lossless = try solve(references.lossless[side], r, band)
-                    worstUnresolved = max(worstUnresolved, film.unresolved, lossless.unresolved)
-                    ratio *= adjustedReturn(
-                        filmRatio: LayeredTransport.sample(references.film[side].returnedToDirect[r], band),
-                        film: film.captured, adjusted: solved.captured, lossless: lossless.captured)
-                }
+                if ratio > 0 { ratio *= try redFactor(band) }
                 shares[c][band] = ratio / (1 + ratio)
                 if ratio > 0 && solved.kernel == nil {
                     throw TransportError.invalid("nonzero return ratio has no reflected capture")
@@ -174,25 +183,25 @@ public enum TransportKernelCompiler {
                                     maximumUnresolvedPower: worstUnresolved)
     }
 
-    /// Returned light per unit of light launched, measured where it is not hidden behind an
-    /// absorber: CineStill 800T's red return over the red capture of its construction.
-    static let measuredLaunch = 0.44
+    /// Light launched toward the base per unit of direct exposure: the receiver captures `p` of
+    /// the light crossing it, and what it lets through goes on to the base.
+    static func launch(capture p: Double) -> Double { (1 - p) / p }
 
     /// The factor an adjusted construction scales a film's return ratio by. A ratio is returned
     /// light `launch × capture`. A film's constructions place its returns' geometry, but their
     /// absorbers are fitted to the halo's shape, so `filmRatio / film` overstates the launch
     /// behind a dense one; scaling by the capture alone would let a thinned backing return
     /// thousands of times the light. The launch therefore moves, in log capture, from the film's
-    /// own at its capture to the measured launch at the capture of the same stack without
+    /// own at its capture to the physical `launch` at the capture of the same stack without
     /// absorbers. The film's construction returns its own ratio; an adjusted one, the physics
-    /// between those two calibrated ends. User gains multiply on top.
+    /// between those two ends. User gains multiply on top.
     static func adjustedReturn(filmRatio: Double, film: Double, adjusted: Double,
-                               lossless: Double) -> Double {
+                               lossless: Double, launch physical: Double) -> Double {
         guard adjusted > 0, film > 0 else { return 0 }
         guard filmRatio > 0, lossless > film * (1 + 1e-9) else { return adjusted / film }
         let launch = filmRatio / film
         let w = log(lossless / adjusted) / log(lossless / film)
-        return adjusted / film * pow(measuredLaunch / launch, 1 - w)
+        return adjusted / film * pow(physical / launch, 1 - w)
     }
 
     /// The convex pair with the smallest largest error, the measure the compiler accepts by.

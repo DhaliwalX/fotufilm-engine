@@ -349,11 +349,11 @@
   },
   "Sources/FotufilmCore/Stocks/cinestill400d.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "9df901c19d392a1806058cf2a846f6384100221290344eed0438dc64c480dba3"
+    "sha256": "814a7d8253abc0dc3471ae1bd778a6e3991d042de52bf40c02563b0924841f3f"
   },
   "Sources/FotufilmCore/Stocks/cinestill800t.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "64927e3ae620466b73abac9c23cbb3d14a6dc0dc07b59e0ef9502137c94d2ba8"
+    "sha256": "c051fe32e497958421bf7535088556540217590d06f83efb2da3fa047f2ced15"
   },
   "Sources/FotufilmCore/Stocks/delta3200.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Ilford Delta 3200 TI (2002), DD-X 9-minute vector trace density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
