@@ -31,7 +31,7 @@ export default function useFilmActions({
         ? edit.medium
         : null;
     const halationModel =
-      stocks.find((s) => s.id === id)?.layeredTransport === false
+      backend?.kind !== "native" && stocks.find((s) => s.id === id)?.layeredTransport === false
         ? "legacy"
         : edit.halationModel || "legacy";
     patch({

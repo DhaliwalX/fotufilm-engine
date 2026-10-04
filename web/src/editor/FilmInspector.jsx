@@ -22,7 +22,14 @@ export default function FilmInspector() {
     setStage,
     setDifference,
     sceneKelvin,
+    backend,
   } = useEditor();
+  // The native engine solves Layered Transport for every film and edit. The browser's sealed
+  // packs carry three records and the film's own settings.
+  const native = backend?.kind === "native";
+  const layeredOffered =
+    native ||
+    (selectedStock?.layeredTransport !== false && !sceneKelvin && !hasProfileSettings(edit));
   return (
     <>
       <Disclosure
@@ -101,10 +108,7 @@ export default function FilmInspector() {
                 value={edit.halationModel || "legacy"}
                 onChange={(halationModel) => {
                   endEdit();
-                  patch({
-                    halationModel,
-                    medium: null,
-                  });
+                  patch(native ? { halationModel } : { halationModel, medium: null });
                   setStage(null);
                   setDifference(false);
                 }}
@@ -117,16 +121,14 @@ export default function FilmInspector() {
                     value: "legacy",
                     label: "Legacy",
                   },
-                  ...(selectedStock?.layeredTransport === false ||
-                  sceneKelvin ||
-                  hasProfileSettings(edit)
-                    ? []
-                    : [
+                  ...(layeredOffered
+                    ? [
                         {
                           value: "layered",
                           label: "Layered Transport",
                         },
-                      ]),
+                      ]
+                    : []),
                 ].map((option) => (
                   <PickerItem
                     id={option.value}
@@ -144,21 +146,25 @@ export default function FilmInspector() {
                     "halationReturn",
                     "halationColour",
                     "halationSpectrum",
+                    "halationHaze",
+                    "antiHalation",
+                    "baseThickness",
+                    "pressurePlate",
                     "estimatedHalation",
                   ]}
                 />
               }
-              {hasProfileSettings(edit) && (
+              {!native && hasProfileSettings(edit) && (
                 <p className="medium-detail">
                   Custom film settings use Legacy halation.
                 </p>
               )}
-              {sceneKelvin && (
+              {!native && sceneKelvin && (
                 <p className="medium-detail">
                   Custom source illumination uses Legacy halation.
                 </p>
               )}
-              {edit.halationModel === "layered" && (
+              {layeredLocked && (
                 <p className="medium-detail">Uses the film’s defaults.</p>
               )}
             </div>
