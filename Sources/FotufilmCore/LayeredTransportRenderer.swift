@@ -3,21 +3,21 @@ import FotufilmHalide
 
 public enum TransportBackend: Int32, Sendable, Codable {
     case cpu = 0
-    /// Halide Metal JIT convolution; scene preparation and development retain the CPU reference.
+    /// The transport pipeline on Metal; scene preparation and development keep their own road.
     case metal = 1
     public var isAvailable: Bool { fotufilm_transport_available(rawValue) == 1 }
 }
 
 /// Backend injection keeps optical preparation portable while Apple hosts use their AOT
-/// scene/development kernels and Metal convolution. The reference API uses the CPU implementation.
+/// scene/development kernels. The transport itself is the Halide pipeline on `backend`.
 public struct TransportExecution {
     /// Renders an image, an invocation and whether to stop at the light. A record input with a
     /// fourth plane carries a donor stock's fourth record beside the three.
     public let render: (ImageBuffer, FilmEngineInvocation, Bool) throws -> ImageBuffer
-    public let convolve: (ImageBuffer, TransportStencil) throws -> ImageBuffer
+    public let backend: TransportBackend
     public init(render: @escaping (ImageBuffer, FilmEngineInvocation, Bool) throws -> ImageBuffer,
-                convolve: @escaping (ImageBuffer, TransportStencil) throws -> ImageBuffer) {
-        self.render = render; self.convolve = convolve
+                backend: TransportBackend) {
+        self.render = render; self.backend = backend
     }
 }
 
@@ -109,7 +109,8 @@ public enum LayeredTransportRenderer {
                                invocation suppliedInvocation: FilmEngineInvocation? = nil,
                                pixelPitchMM: Double? = nil) throws -> ImageBuffer {
         try image.validate()
-        guard execution != nil || (HalideBackend.isAvailable && options.transportBackend.isAvailable) else {
+        let backend = execution?.backend ?? options.transportBackend
+        guard backend.isAvailable, execution != nil || HalideBackend.isAvailable else {
             throw TransportError.backend("requested transport backend is unavailable")
         }
         guard image.width > 0 && image.height > 0,
@@ -139,10 +140,10 @@ public enum LayeredTransportRenderer {
             }
         }
         let pitch = pixelPitchMM ?? options.pixelPitchMM(width: image.width, height: image.height)
-        var exposure = ImageBuffer(width: image.width, height: image.height)
         let donated = !plain.donorLayers.isEmpty
-        // The donor accumulates beside the records, in a buffer of its own.
-        var donorExposure = ImageBuffer(width: donated ? image.width : 0, height: donated ? image.height : 0)
+        // The running sum; a donor stock's fourth record accumulates beside the three.
+        var exposure = ImageBuffer(width: image.width, height: image.height)
+        if donated { exposure.planes.append(Array(repeating: 0, count: image.pixelCount)) }
         let tables = prepared.compilation.kernels.indices.map { k -> SpectralLUT? in
             let table = prepared.exposure.table(component: k, interpolation: t)
             return table.values.contains(where: { $0 > 0 }) ? table : nil
@@ -155,34 +156,19 @@ public enum LayeredTransportRenderer {
             head.featureMask |= FilmEngineFeature.lightOut
             head.clearTransportOptics(keepLens: true)
             head.sharePreflash(among: active)
-            let bands = try prepared.compilation.kernels[k].stencils(pixelPitchMM: pitch)
-            func transport(_ head: FilmEngineInvocation, into target: inout ImageBuffer) throws {
-                let component = try render(image, head, true)
-                if let customConvolve = execution?.convolve {
-                    for band in bands {
-                        let filtered = try customConvolve(component, band.stencil)
-                        for c in 0..<3 { for i in 0..<image.pixelCount {
-                            target.planes[c][i] += band.weight * filtered.planes[c][i]
-                        } }
-                    }
-                } else {
-                    try accumulate(component: component, bands: bands, into: &target, backend: options.transportBackend)
-                }
-            }
             head.setTransportExposure(table)
-            try transport(head, into: &exposure)
+            var component = try render(image, head, true)
+            component.planes = Array(component.planes.prefix(3))
             if donated {
                 head.setTransportExposure(Self.fourthRecord(of: table))
-                try transport(head, into: &donorExposure)
+                component.planes.append(try render(image, head, true).planes[0])
             }
+            try transport(component, stencils: prepared.compilation.kernels[k].transportTable(pixelPitchMM: pitch),
+                          into: &exposure, backend: backend)
         }
-        guard (exposure.planes + (donated ? [donorExposure.planes[0]] : [])).allSatisfy({
-            $0.allSatisfy { $0.isFinite && $0 >= 0 } }) else {
+        guard exposure.planes.allSatisfy({ $0.allSatisfy { $0.isFinite && $0 >= 0 } }) else {
             throw TransportError.backend("transport produced invalid record exposure")
         }
-        // A donor stock's fourth record lies in the same coating and is transported with the
-        // other three. It rides into development as a fourth plane.
-        if donated { exposure.planes.append(donorExposure.planes[0]) }
         var continuation = invocation
         continuation.featureMask &= ~(FilmEngineFeature.flare | FilmEngineFeature.diffusion
             | FilmEngineFeature.mtf | FilmEngineFeature.mtfLuma | FilmEngineFeature.halation
@@ -222,86 +208,24 @@ public enum LayeredTransportRenderer {
         return try render(exposure, continuation, false)
     }
 
-    public static func convolve(_ image: ImageBuffer, stencil: TransportStencil,
-                                backend: TransportBackend = .cpu) throws -> ImageBuffer {
-        guard image.width > 0 && image.height > 0, image.planes.count == 3,
-              image.planes.allSatisfy({ $0.count == image.pixelCount && $0.allSatisfy(\.isFinite) }),
-              stencil.weights.count == (2 * stencil.radius + 1) * (2 * stencil.radius + 1) else {
-            throw TransportError.invalid("invalid image or stencil")
+    /// Adds one component, spread by its kernel's `TransportRadialKernel.transportTable`, to
+    /// `sum`. Both carry three planes, or four with a donor record.
+    public static func transport(_ component: ImageBuffer, stencils: [Float], into sum: inout ImageBuffer,
+                                 backend: TransportBackend = .cpu) throws {
+        guard component.width == sum.width, component.height == sum.height,
+              component.planes.count == sum.planes.count, stencils.count == TransportRadialKernel.transportTableCount,
+              (component.planes + sum.planes).allSatisfy({ $0.count == component.pixelCount }) else {
+            throw TransportError.invalid("invalid transport component or sum")
         }
-        var output = ImageBuffer(width: image.width, height: image.height)
-        let status = withPlanes(image.planes) { r, g, b in
-            withMutablePlanes(&output.planes) { rr, gg, bb in
-                stencil.weights.withUnsafeBufferPointer { weights in
-                    fotufilm_transport_convolve(r, g, b, rr, gg, bb,
-                        Int32(image.width), Int32(image.height), weights.baseAddress,
-                        Int32(stencil.radius), Int32(stencil.stride), backend.rawValue)
-                }
-            }
+        let input = component.planes.flatMap { $0 }
+        var accumulated = sum.planes.flatMap { $0 }
+        let status = accumulated.withUnsafeMutableBufferPointer {
+            fotufilm_transport_component(input, $0.baseAddress!, Int32(sum.width), Int32(sum.height),
+                                         Int32(sum.planes.count), stencils, backend.rawValue)
         }
-        guard status == 0 else { throw TransportError.backend("convolution failed (\(status))") }
-        return output
-    }
-
-    public static func accumulate(component: ImageBuffer, bands: [TransportWeightedStencil],
-                                  into exposure: inout ImageBuffer,
-                                  backend: TransportBackend = .cpu) throws {
-        guard component.width > 0 && component.height > 0, component.planes.count == 3,
-              component.planes.allSatisfy({ $0.count == component.pixelCount && $0.allSatisfy(\.isFinite) }),
-              exposure.width == component.width && exposure.height == component.height,
-              exposure.planes.count == 3,
-              exposure.planes.allSatisfy({ $0.count == component.pixelCount && $0.allSatisfy(\.isFinite) }),
-              bands.allSatisfy({ $0.weight.isFinite && $0.weight >= 0 }) else {
-            throw TransportError.invalid("invalid image dimensions or planes")
-        }
-        let activeBands = bands.filter { $0.weight > 0 }
-        if activeBands.isEmpty { return }
-
-        var totalWeights = 0
-        for band in activeBands {
-            guard (1...128).contains(band.stencil.radius),
-                  (1...4096).contains(band.stencil.stride),
-                  band.stencil.stride.nonzeroBitCount == 1 else {
-                throw TransportError.invalid("invalid stencil radius or stride")
-            }
-            let dim: Int = 2 * band.stencil.radius + 1
-            let expected: Int = dim * dim
-            guard band.stencil.weights.count == expected else {
-                throw TransportError.invalid("invalid stencil weights size")
-            }
-            totalWeights += band.stencil.weights.count
-        }
-
-        var flattenedWeights = [Float]()
-        flattenedWeights.reserveCapacity(totalWeights)
-        var cBands = [FotufilmTransportBand]()
-        cBands.reserveCapacity(activeBands.count)
-
-        for band in activeBands {
-            flattenedWeights.append(contentsOf: band.stencil.weights)
-            cBands.append(FotufilmTransportBand(kernel: nil,
-                                                radius: Int32(band.stencil.radius),
-                                                stride: Int32(band.stencil.stride),
-                                                weight: band.weight))
-        }
-
-        let status = withPlanes(component.planes) { r, g, b in
-            withMutablePlanes(&exposure.planes) { er, eg, eb in
-                flattenedWeights.withUnsafeBufferPointer { weightsBuf in
-                    var offset = 0
-                    for i in cBands.indices {
-                        cBands[i].kernel = weightsBuf.baseAddress! + offset
-                        offset += Int((2 * cBands[i].radius + 1) * (2 * cBands[i].radius + 1))
-                    }
-                    return cBands.withUnsafeBufferPointer { bandsBuf in
-                        fotufilm_transport_accumulate(r, g, b, er, eg, eb,
-                            Int32(component.width), Int32(component.height),
-                            bandsBuf.baseAddress, Int32(activeBands.count), backend.rawValue)
-                    }
-                }
-            }
-        }
-        guard status == 0 else { throw TransportError.backend("transport accumulate failed (\(status))") }
+        guard status == 0 else { throw TransportError.backend("transport failed (\(status))") }
+        let count = sum.pixelCount
+        for c in sum.planes.indices { sum.planes[c] = Array(accumulated[c * count..<(c + 1) * count]) }
     }
 
     /// A table exposing its fourth record, a donor stock's, in each of the three it renders.

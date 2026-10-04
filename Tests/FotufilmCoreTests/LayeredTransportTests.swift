@@ -162,64 +162,81 @@ final class LayeredTransportTests: XCTestCase {
         XCTAssertGreaterThan(bands[1].stencil.stride, 1)
     }
 
-    func testConvolutionPreservesUniformFieldsAndMetalAgrees() throws {
+    func testTransportPipelineMatchesDirectBandsAndMetalAgrees() throws {
         guard TransportBackend.cpu.isAvailable else { throw XCTSkip("Halide unavailable") }
-        let kernel = try TransportRadialKernel(radiusMM: [0.01, 0.13], mass: [0.3, 0.7])
-        let stencil = try kernel.stencil(pixelPitchMM: 0.008)
-        let field = ImageBuffer(width: 37, height: 29,
-            planes: [Float(0.02), 0.7, 40].map { Array(repeating: $0, count: 37*29) })
-        let cpu = try LayeredTransportRenderer.convolve(field, stencil: stencil)
-        for c in 0..<3 { for i in 0..<field.pixelCount {
-            XCTAssertEqual(cpu.planes[c][i], field.planes[c][i], accuracy: 0.00005)
+        // A shoulder at stride 1 and a tail on a coarse grid, on a frame no stride divides.
+        let kernel = try TransportRadialKernel(radiusMM: [0.006, 0.03, 0.4], mass: [0.6, 0.3, 0.1])
+        let pitch = 0.004, width = 77, height = 45
+        let table = try kernel.transportTable(pixelPitchMM: pitch)
+        let bands = try kernel.stencils(pixelPitchMM: pitch)
+        XCTAssertTrue(bands.contains { $0.stencil.stride >= 8 })
+        func frame(_ fill: Float) -> ImageBuffer {
+            var frame = ImageBuffer(width: width, height: height, fill: fill)
+            frame.planes.append(Array(repeating: fill, count: width * height))
+            return frame
+        }
+        var impulse = frame(0)
+        impulse.planes[0][22 * width + 38] = 10; impulse.planes[1][0] = 3
+        impulse.planes[2][width * height - 1] = 5; impulse.planes[3][10 * width + 70] = 2
+        var reference = frame(0.25)
+        for band in bands { for c in 0..<4 {
+            let filtered = Self.directBand(impulse.planes[c], width: width, height: height, stencil: band.stencil)
+            for i in filtered.indices { reference.planes[c][i] += band.weight * filtered[i] }
         } }
-        var impulse = ImageBuffer(width: 37, height: 29)
-        impulse.planes[0][14*37+18] = 10; impulse.planes[1][0] = 3
-        let reference = try LayeredTransportRenderer.convolve(impulse, stencil: stencil)
-        XCTAssertTrue(reference.planes.flatMap { $0 }.allSatisfy { $0 >= 0 && $0.isFinite })
+        var cpu = frame(0.25)
+        try LayeredTransportRenderer.transport(impulse, stencils: table, into: &cpu)
+        let cpuError = zip(reference.planes.flatMap { $0 }, cpu.planes.flatMap { $0 }).map { abs($0 - $1) }.max() ?? 0
+        XCTAssertLessThan(cpuError, 2e-6)
+        // A uniform field stays uniform, edges included.
+        let field = ImageBuffer(width: width, height: height,
+            planes: [Float(0.02), 0.7, 40].map { Array(repeating: $0, count: width * height) })
+        var spread = ImageBuffer(width: width, height: height)
+        try LayeredTransportRenderer.transport(field, stencils: table, into: &spread)
+        for c in 0..<3 { for value in spread.planes[c] { XCTAssertEqual(value, field.planes[c][0], accuracy: field.planes[c][0] * 2e-5) } }
         guard TransportBackend.metal.isAvailable else { throw XCTSkip("Metal unavailable; CPU assertions passed") }
-        let metal = try LayeredTransportRenderer.convolve(impulse, stencil: stencil, backend: .metal)
-        let error = zip(reference.planes.flatMap { $0 }, metal.planes.flatMap { $0 })
-            .map { abs($0 - $1) }.max() ?? 0
-        XCTAssertLessThan(error, 0.00002)
+        var metal = frame(0.25)
+        try LayeredTransportRenderer.transport(impulse, stencils: table, into: &metal, backend: .metal)
+        let metalError = zip(cpu.planes.flatMap { $0 }, metal.planes.flatMap { $0 }).map { abs($0 - $1) }.max() ?? 0
+        XCTAssertLessThan(metalError, 2e-6)
     }
 
-    func testMultiBandAccumulationMatchesSequentialConvolve() throws {
-        guard TransportBackend.cpu.isAvailable else { throw XCTSkip("Halide unavailable") }
-        let kernel1 = try TransportRadialKernel(radiusMM: [0.01, 0.04], mass: [0.4, 0.6])
-        let stencil1 = try kernel1.stencil(pixelPitchMM: 0.008)
-        let kernel2 = try TransportRadialKernel(radiusMM: [0.08, 0.16], mass: [0.3, 0.7])
-        let stencil2 = try kernel2.stencil(pixelPitchMM: 0.008)
-        let bands = [
-            TransportWeightedStencil(weight: 0.35, stencil: stencil1),
-            TransportWeightedStencil(weight: 0.65, stencil: stencil2)
-        ]
-
-        var impulse = ImageBuffer(width: 37, height: 29)
-        impulse.planes[0][14*37+18] = 10; impulse.planes[1][0] = 3; impulse.planes[2][10] = 5
-
-        // Sequential reference
-        var reference = ImageBuffer(width: 37, height: 29)
-        for band in bands {
-            let filtered = try LayeredTransportRenderer.convolve(impulse, stencil: band.stencil)
-            for c in 0..<3 { for i in 0..<impulse.pixelCount {
-                reference.planes[c][i] += band.weight * filtered.planes[c][i]
+    /// One band the direct way: stride x stride box averages with edge pixels repeated, the
+    /// stencil over the clamped grid, then the cubic B-spline at pixel centres.
+    private static func directBand(_ plane: [Float], width: Int, height: Int, stencil: TransportStencil) -> [Float] {
+        let s = stencil.stride, r = stencil.radius, side = 2 * r + 1
+        let gw = (width + s - 1) / s, gh = (height + s - 1) / s
+        var reduced = [Double](repeating: 0, count: gw * gh), blurred = reduced
+        for y in 0..<gh { for x in 0..<gw {
+            var sum = 0.0
+            for dy in 0..<s { for dx in 0..<s {
+                sum += Double(plane[min(y * s + dy, height - 1) * width + min(x * s + dx, width - 1)])
             } }
-        }
-
-        // Batched CPU accumulation
-        var cpuAccum = ImageBuffer(width: 37, height: 29)
-        try LayeredTransportRenderer.accumulate(component: impulse, bands: bands, into: &cpuAccum, backend: .cpu)
-        for c in 0..<3 { for i in 0..<impulse.pixelCount {
-            XCTAssertEqual(cpuAccum.planes[c][i], reference.planes[c][i], accuracy: 0.00005)
+            reduced[y * gw + x] = sum / Double(s * s)
         } }
-
-        // Batched Metal accumulation
-        guard TransportBackend.metal.isAvailable else { throw XCTSkip("Metal unavailable; CPU assertions passed") }
-        var metalAccum = ImageBuffer(width: 37, height: 29)
-        try LayeredTransportRenderer.accumulate(component: impulse, bands: bands, into: &metalAccum, backend: .metal)
-        let maxMetalDiff = zip(reference.planes.flatMap { $0 }, metalAccum.planes.flatMap { $0 })
-            .map { abs($0 - $1) }.max() ?? 0
-        XCTAssertLessThan(maxMetalDiff, 0.0001)
+        for y in 0..<gh { for x in 0..<gw {
+            var sum = 0.0
+            for dy in -r...r { for dx in -r...r {
+                sum += Double(stencil.weights[(dy + r) * side + dx + r])
+                    * reduced[min(max(y + dy, 0), gh - 1) * gw + min(max(x + dx, 0), gw - 1)]
+            } }
+            blurred[y * gw + x] = sum
+        } }
+        func at(_ x: Int, _ y: Int) -> Double { blurred[min(max(y, 0), gh - 1) * gw + min(max(x, 0), gw - 1)] }
+        func weights(_ f: Double) -> [Double] {
+            [(1 - f) * (1 - f) * (1 - f) / 6, (3 * f * f * f - 6 * f * f + 4) / 6,
+             (-3 * f * f * f + 3 * f * f + 3 * f + 1) / 6, f * f * f / 6]
+        }
+        var output = [Float](repeating: 0, count: width * height)
+        for y in 0..<height { for x in 0..<width {
+            if s == 1 { output[y * width + x] = Float(at(x, y)); continue }
+            let px = (Double(x) + 0.5) / Double(s) - 0.5, py = (Double(y) + 0.5) / Double(s) - 0.5
+            let x0 = Int(floor(px)), y0 = Int(floor(py))
+            let wx = weights(px - Double(x0)), wy = weights(py - Double(y0))
+            var value = 0.0
+            for j in 0..<4 { for i in 0..<4 { value += wy[j] * wx[i] * at(x0 + i - 1, y0 + j - 1) } }
+            output[y * width + x] = Float(value)
+        } }
+        return output
     }
 
     func testSchemaVersionIsExplicitAndRoundTrips() throws {

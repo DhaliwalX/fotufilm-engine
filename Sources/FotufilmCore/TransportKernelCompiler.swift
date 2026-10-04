@@ -1,4 +1,5 @@
 import Foundation
+import FotufilmHalide
 
 public struct TransportCompilation: Sendable {
     public let kernels: [TransportRadialKernel]
@@ -164,6 +165,32 @@ public enum TransportKernelCompiler {
 }
 
 extension TransportRadialKernel {
+    /// FOTUFILM_TRANSPORT_TABLE_FLOATS, which Swift cannot import.
+    public static let transportTableCount = Int(FOTUFILM_TRANSPORT_LEVELS)
+        * (1 + (2 * Int(FOTUFILM_TRANSPORT_STENCIL_RADIUS) + 1) * (2 * Int(FOTUFILM_TRANSPORT_STENCIL_RADIUS) + 1))
+
+    /// The transport pipeline's table for this component: its bands, one per power-of-two
+    /// stride, each stride's weights in a centred 25 x 25 slot scaled by the band's share, and
+    /// one radius per stride ahead of them. Bands landing on one stride add.
+    public func transportTable(pixelPitchMM: Double) throws -> [Float] {
+        let levels = Int(FOTUFILM_TRANSPORT_LEVELS), limit = Int(FOTUFILM_TRANSPORT_STENCIL_RADIUS)
+        let side = 2 * limit + 1
+        var table = [Float](repeating: 0, count: Self.transportTableCount)
+        for band in try stencils(pixelPitchMM: pixelPitchMM, maximumRadius: limit) {
+            let stencil = band.stencil, level = stencil.stride.trailingZeroBitCount
+            guard stencil.stride.nonzeroBitCount == 1, level < levels, (1...limit).contains(stencil.radius) else {
+                throw TransportError.unsupported("transport band outside the pipeline's strides")
+            }
+            table[level] = max(table[level], Float(stencil.radius))
+            let width = 2 * stencil.radius + 1, base = levels + level * side * side
+            for dy in -stencil.radius...stencil.radius { for dx in -stencil.radius...stencil.radius {
+                table[base + (dy + limit) * side + dx + limit]
+                    += band.weight * stencil.weights[(dy + stencil.radius) * width + dx + stencil.radius]
+            } }
+        }
+        return table
+    }
+
     /// Split narrow and broad radial bands before grid reduction. A low-energy distant tail
     /// must never force the high-energy shoulder onto that tail's coarse grid.
     public func stencils(pixelPitchMM: Double, maximumRadius: Int = 12) throws -> [TransportWeightedStencil] {
