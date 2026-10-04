@@ -45,31 +45,16 @@ public enum LayeredTransportRenderer {
         }
         lock.lock(); let found = cache.value(for: key); lock.unlock()
         if let found { return found }
+        // A donor's fourth record is solved at its own depth; one without a depth sits at green's.
+        let donorDepth = stock.donorLayers.first.map { $0.depthUM.map { Double($0) / 1000 } ?? model.recordDepthMM[1] }
         let compilation = try TransportKernelCompiler.compile(model, returnGain: options.halationReturnGain,
-            sourceColour: options.halationSourceColour, hazeMM: Double(options.halationHazeMM ?? 0))
+            sourceColour: options.halationSourceColour, hazeMM: Double(options.halationHazeMM ?? 0),
+            donorDepthMM: donorDepth)
         let exposure = try SpectralRuntime.transportExposureTables(stock: stock, options: options,
-            compilation: compilation, donorReceivers: donorReceivers(model: model, stock: stock))
+            compilation: compilation)
         let result = Prepared(compilation: compilation, exposure: exposure)
         lock.lock(); cache.insert(result, for: key); lock.unlock()
         return result
-    }
-
-    /// How a donor stock's fourth record takes the three receivers' transport: by its depth in
-    /// the coating, interpolated between the receivers either side of it and held beyond the
-    /// outermost. The construction solves three receivers; the fourth lies among them.
-    static func donorReceivers(model: LayeredTransport, stock: FilmStock) -> [Float]? {
-        guard let layer = stock.donorLayers.first else { return nil }
-        let depths = model.recordDepthMM
-        let order = depths.indices.sorted { depths[$0] < depths[$1] }
-        let depth = layer.depthUM.map { Double($0) / 1000 } ?? depths[1]
-        var weights: [Float] = [0, 0, 0]
-        if depth <= depths[order[0]] { weights[order[0]] = 1; return weights }
-        if depth >= depths[order[2]] { weights[order[2]] = 1; return weights }
-        let upper = depth < depths[order[1]] ? 1 : 2
-        let a = order[upper - 1], b = order[upper]
-        let t = depths[b] > depths[a] ? (depth - depths[a]) / (depths[b] - depths[a]) : 0
-        weights[a] = Float(1 - t); weights[b] = Float(t)
-        return weights
     }
 
     /// Solved inputs for portable AOT hosts. The browser stores these alongside its base pack.

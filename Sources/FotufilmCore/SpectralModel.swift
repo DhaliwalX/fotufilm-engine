@@ -1802,11 +1802,10 @@ public enum SpectralRuntime {
     /// Positive component tables preserve the calibrated pointwise response. Gamut continuation
     /// is performed on wavelengths; a positive per-record vertex gain reconciles that with the
     /// legacy record-level continuation at the very edge of the domain. It is not a return matrix.
-    /// `donorReceivers` weighs the three receivers' partitions into a donor stock's fourth record,
-    /// which the tables then carry in their fourth channel.
+    /// A compilation with a fourth receiver partitions a donor stock's fourth record, which the
+    /// tables then carry in their fourth channel.
     static func transportExposureTables(stock: FilmStock, options: FotufilmEngine.Options,
-                                        compilation: TransportCompilation,
-                                        donorReceivers: [Float]? = nil) throws -> TransportExposureTables {
+                                        compilation: TransportCompilation) throws -> TransportExposureTables {
         guard let model = MeasuredReflectanceTable.shared else {
             throw TransportError.unsupported("spectral reconstruction data is unavailable")
         }
@@ -1849,11 +1848,9 @@ public enum SpectralRuntime {
             }
             return values
         }
-        let donor = donorReceivers.flatMap { weights in
-            stock.donorLayers.first.flatMap { layer in
-                donorChannel(for: stock, illuminant: light, filter: filter).map { (layer, $0, weights) }
-            }
-        }
+        let donor = compilation.core.first?.count == 4 ? stock.donorLayers.first.flatMap { layer in
+            donorChannel(for: stock, illuminant: light, filter: filter).map { (layer, $0) }
+        } : nil
         let components = compilation.kernels.count, d = lutDimension
         let count = d * d * d * 4
         var core = Array(repeating: Array(repeating: Float(0), count: count), count: components)
@@ -1882,7 +1879,7 @@ public enum SpectralRuntime {
                     saturated[k][offset+c] = max(b * gain, 0)
                 }
             }
-            if let (layer, calibratedDonor, weights) = donor {
+            if let (layer, calibratedDonor) = donor {
                 let weighted = photons.indices.map { photons[$0] * layer.sensitivity[$0] }
                 let total = weighted.reduce(0, +)
                 let target = calibratedDonor(point)
@@ -1893,10 +1890,8 @@ public enum SpectralRuntime {
                 for k in 0..<components {
                     var a: Float = 0, b: Float = 0
                     for band in photons.indices {
-                        for c in 0..<3 where weights[c] > 0 {
-                            a += weights[c] * weighted[band] * compilation.core[k][c][band]
-                            b += weights[c] * weighted[band] * compilation.saturated[k][c][band]
-                        }
+                        a += weighted[band] * compilation.core[k][3][band]
+                        b += weighted[band] * compilation.saturated[k][3][band]
                     }
                     core[k][offset+3] = max(a * gain, 0)
                     saturated[k][offset+3] = max(b * gain, 0)

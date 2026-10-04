@@ -4,6 +4,7 @@ import FotufilmHalide
 public struct TransportCompilation: Sendable {
     public let kernels: [TransportRadialKernel]
     /// [basis][receiver][wavelength], positive unit partitions at amount zero and saturation.
+    /// A donor stock's fourth record is a fourth receiver.
     public let core: [[[Float]]]
     public let saturated: [[[Float]]]
     public let maximumReturnedShare: Double
@@ -27,8 +28,12 @@ public struct TransportCompilation: Sendable {
 public enum TransportKernelCompiler {
     /// Fits only convex combinations of actual solved kernels. An error limit failure is
     /// explicit; it never falls back to the legacy three-Gaussian approximation.
+    ///
+    /// `donorDepthMM` adds a donor stock's fourth record as a fourth receiver, solved at its own
+    /// depth. It is coated against the green record and sensitive on that record's short-wave
+    /// side, so it takes the green receiver's launch, capture, return and core.
     public static func compile(_ model: LayeredTransport, returnGain: [Float] = [],
-                               sourceColour: Float = 0, hazeMM: Double = 0,
+                               sourceColour: Float = 0, hazeMM: Double = 0, donorDepthMM: Double? = nil,
                                maximumComponents: Int = 8, edgeTolerance: Double = 0.005,
                                angularSamples: Int = 512) throws -> TransportCompilation {
         try model.validate()
@@ -43,17 +48,26 @@ public enum TransportKernelCompiler {
         // distributions. Reject it rather than quietly adding a Gaussian variance to a ring.
         guard hazeMM == 0 else { throw TransportError.unsupported("additional haze with layered transport") }
         let bands = SpectralGrid.count
+        // Each receiver solves as one of the construction's three: the donor as green, moved.
+        var donorModel = model
+        if let donorDepthMM {
+            donorModel.recordDepthMM[1] = donorDepthMM
+            try donorModel.validate()
+        }
+        let receivers = donorDepthMM == nil ? 3 : 4
+        func like(_ c: Int) -> Int { c < 3 ? c : 1 }
         var targets = [TransportRadialKernel]()
-        var targetIndex = Array(repeating: Array(repeating: 0, count: bands), count: 3)
-        var shares = Array(repeating: Array(repeating: 0.0, count: bands), count: 3)
+        var targetIndex = Array(repeating: Array(repeating: 0, count: bands), count: receivers)
+        var shares = Array(repeating: Array(repeating: 0.0, count: bands), count: receivers)
         var solveCache = [String: TransportSolveResult]()
         var worstUnresolved = 0.0
         var compressionBound = 0.0
-        for c in 0..<3 {
+        for c in 0..<receivers {
+            let solving = c < 3 ? model : donorModel, r = like(c)
             for band in 0..<bands {
-                var signature = [Double(c), model.recordDepthMM[c],
-                                 LayeredTransport.sample(model.angularExponent[c], band),
-                                 LayeredTransport.sample(model.captureProbability[c], band),
+                var signature = [Double(r), solving.recordDepthMM[r],
+                                 LayeredTransport.sample(model.angularExponent[r], band),
+                                 LayeredTransport.sample(model.captureProbability[r], band),
                                  LayeredTransport.sample(model.frontIndex, band),
                                  LayeredTransport.sample(model.rearIndex, band),
                                  model.rearReflectance.map { LayeredTransport.sample($0, band) } ?? -1]
@@ -65,12 +79,12 @@ public enum TransportKernelCompiler {
                 let solved: TransportSolveResult
                 if let found = solveCache[key] { solved = found }
                 else {
-                    solved = try LayeredTransportSolver.solve(model, receiver: c, band: band,
+                    solved = try LayeredTransportSolver.solve(solving, receiver: r, band: band,
                                                               angularSamples: angularSamples)
                     solveCache[key] = solved
                 }
                 worstUnresolved = max(worstUnresolved, solved.unresolved)
-                let ratio = LayeredTransport.sample(model.returnedToDirect[c], band)
+                let ratio = LayeredTransport.sample(model.returnedToDirect[r], band)
                     * (returnGain.isEmpty ? 1 : Double(returnGain[band]))
                 shares[c][band] = ratio / (1 + ratio)
                 if ratio > 0 && solved.kernel == nil {
@@ -107,13 +121,14 @@ public enum TransportKernelCompiler {
         var kernels = try model.coreSigmaMM.map { try TransportRadialKernel.gaussian(sigmaMM: $0) }
         kernels += selected.map { targets[$0] }
         let maxShare = shares.flatMap { $0 }.max() ?? 0
-        var core = Array(repeating: Array(repeating: Array(repeating: Float(0), count: bands), count: 3), count: kernels.count)
+        var core = Array(repeating: Array(repeating: Array(repeating: Float(0), count: bands), count: receivers),
+                         count: kernels.count)
         var saturated = core
-        for c in 0..<3 {
+        for c in 0..<receivers {
             for band in 0..<bands {
-                core[c][c][band] = 1
+                core[like(c)][c][band] = 1
                 let fraction = maxShare > 0 ? shares[c][band] / maxShare : 0
-                saturated[c][c][band] = Float(1 - fraction)
+                saturated[like(c)][c][band] = Float(1 - fraction)
                 for k in selected.indices {
                     saturated[k + 3][c][band] = Float(fraction * fits[targetIndex[c][band]][k])
                 }
@@ -124,8 +139,8 @@ public enum TransportKernelCompiler {
         if sourceColour > 0 {
             let t = sourceColour
             for k in kernels.indices {
-                let mean = saturated[k].flatMap { $0 }.reduce(0, +) / Float(3 * bands)
-                for c in 0..<3 { for band in 0..<bands {
+                let mean = saturated[k].prefix(3).flatMap { $0 }.reduce(0, +) / Float(3 * bands)
+                for c in 0..<receivers { for band in 0..<bands {
                     saturated[k][c][band] = (1 - t) * saturated[k][c][band] + t * mean
                 } }
             }

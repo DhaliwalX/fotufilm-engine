@@ -39,12 +39,12 @@ angular-quadrature checks. Those checks establish numerical behavior, not
 agreement with real film. Instax has no inferred candidate and retains the
 illustrative fallback described below.
 
-Donor-layer films transport their fourth record with the other three. The
-construction solves three receivers, so the donor takes their spectral partitions
-interpolated by its published depth in the coating: at 11 µm it lies between the
-green (9 µm) and red (15 µm) receivers and takes two thirds of the green partition
-and one third of the red. That interpolation is an assumption, not a solved
-fourth receiver.
+Donor-layer films transport their fourth record with the other three, solved as a
+fourth receiver at its own depth. The donor layer is coated directly beneath the green
+record, between it and the red, at a measured 11.3 µm against the green record's 9 µm
+and the red's 15 µm. It is sensitive on the green record's short-wave side, so the
+light it receives back from the base is green light: it takes the green receiver's
+launch, capture, return strength and core, and only its depth differs.
 
 The inferred fields share the film profiles' CC BY-SA 4.0 license. Aerocolor's
 generic PET optical constants use the CC0

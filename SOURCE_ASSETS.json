@@ -345,7 +345,7 @@
   },
   "Sources/FotufilmCore/Stocks/c200.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-0249E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "ca890aac7b8b235e2ad335fbfa27ba3d82f8608f456f8b0144236ba21fe0004b"
+    "sha256": "a40acb361857fb3e5a025ef269057c6468564107347f24f34305b6d10becf0cc"
   },
   "Sources/FotufilmCore/Stocks/cinestill400d.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
@@ -425,23 +425,23 @@
   },
   "Sources/FotufilmCore/Stocks/pro160ns.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-0232E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "49077f283876d52c8a398568681220261d46624df40e43f9f61104981d7ccd58"
+    "sha256": "3bc06e41af87252251f589ccea22bffa8cc80d0fafafc720e72f863cee80b4d3"
   },
   "Sources/FotufilmCore/Stocks/pro400h.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-176E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "f37145cb31a28054c6739754124e18eb03850274e801bc6e244b74046d539689"
+    "sha256": "47b53cffd838b3a75a9bce96fda266aff635e058ef62fc34e360c41908e72bc0"
   },
   "Sources/FotufilmCore/Stocks/reala500d.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm KB-111E3 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "149b2b75298470ffd735620ba046c6d03554450a7465f3dcaa4fddb3ba931ed0"
+    "sha256": "e9e61186c4f5a9f05b23ad3ed7d4a85016a18e5ca3f406ee918d75590b91cdc6"
   },
   "Sources/FotufilmCore/Stocks/superia200.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-026E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "3c263022be941e5a330fa5193b3c901f95bd2148bad77a34d085b8308a4174ce"
+    "sha256": "a7d10c3e334bbcb7212fa10139bf72408ed5fae1d9aab900249c34894b3b8ec5"
   },
   "Sources/FotufilmCore/Stocks/superia400.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-0217E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "63989d124e8b488547050fcb584328dc8a0df3e0dab3d40378b56656a5965da0"
+    "sha256": "b172f47e23a9ec54a5e3bf4910f3be43f260fceb5097ba8efb99117e51ed6e52"
   },
   "Sources/FotufilmCore/Stocks/tmax100.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer references in edgePrinting.sources; see docs/print-frame-model.md.",

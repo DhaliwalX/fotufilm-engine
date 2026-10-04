@@ -408,19 +408,28 @@ final class LayeredTransportTests: XCTestCase {
                              "the fourth record changes what develops")
     }
 
-    func testTheDonorTakesTheReceiversEitherSideOfItsDepth() {
-        var stock = TestStocks.negative
-        var model = TransportFixtures.stack
-        model.recordDepthMM = [0.015, 0.009, 0.003]
-        XCTAssertNil(LayeredTransportRenderer.donorReceivers(model: model, stock: stock))
-        var layer = TestStocks.donor
-        for (depth, expected): (Float, [Float]) in [(11, [1.0 / 3, 2.0 / 3, 0]), (9, [0, 1, 0]),
-                                                    (1, [0, 0, 1]), (20, [1, 0, 0]), (6, [0, 0.5, 0.5])] {
-            layer.depthUM = depth; stock.donorLayers = [layer]
-            let weights = LayeredTransportRenderer.donorReceivers(model: model, stock: stock) ?? []
-            XCTAssertEqual(weights.count, 3)
-            for c in 0..<3 { XCTAssertEqual(weights[c], expected[c], accuracy: 1e-6, "depth \(depth)") }
+    func testTheDonorIsSolvedAtItsOwnDepthWithGreensOptics() throws {
+        let model = TransportFixtures.stack
+        // At green's depth the donor is green's receiver exactly.
+        let atGreen = try TransportKernelCompiler.compile(model, donorDepthMM: model.recordDepthMM[1])
+        for endpoint in [atGreen.core, atGreen.saturated] {
+            XCTAssertEqual(endpoint.first?.count, 4)
+            for k in endpoint.indices { XCTAssertEqual(endpoint[k][3], endpoint[k][1]) }
         }
+        // Deeper, nearer the support, its returned light spreads less than green's but it
+        // keeps green's return strength: it is green light that reaches it.
+        let deeper = try TransportKernelCompiler.compile(model, donorDepthMM: 0.0113)
+        var differs = false
+        for b in 0..<SpectralGrid.count {
+            let values = deeper.saturated.map { $0[3][b] }
+            XCTAssertTrue(values.allSatisfy { $0 >= 0 && $0.isFinite })
+            XCTAssertEqual(values.reduce(0, +), 1, accuracy: 2e-6)
+            XCTAssertEqual(deeper.saturated[1][3][b], deeper.saturated[1][1][b], accuracy: 1e-6)
+            XCTAssertEqual(deeper.core[1][3][b], 1)
+            differs = differs || deeper.saturated.indices.contains { deeper.saturated[$0][3][b] != deeper.saturated[$0][1][b] }
+        }
+        XCTAssertTrue(differs)
+        XCTAssertThrowsError(try TransportKernelCompiler.compile(model, donorDepthMM: 1))
     }
 
     func testPreflashExposesTheFilmOnce() throws {
