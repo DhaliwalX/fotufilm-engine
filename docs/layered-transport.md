@@ -15,9 +15,12 @@ These constructions transfer existing estimated halo shapes into an optical
 stack; they are not measurements or recovered manufacturing recipes. Three
 effective optical depths are fitted at 450, 550 and 650 nm, interpolated in log
 space and held outside that interval. Return strengths are supplied independently.
-Generic coating thicknesses, receiver depths and capture probabilities remain
-assumptions. Two-scale compact responses are reduced to the same second moment;
-Legacy's return colour matrix and extra diffusion are not part of this fit.
+Colour receivers sit at measured relative depths in an 18 µm coating, a typical
+colour-negative total: blue 5.2 µm, green 9.4 µm and red 15.5 µm below the surface.
+Monochrome films use one receiver at mid-depth. Coating thicknesses and capture
+probabilities remain generic assumptions. Two-scale compact responses are reduced
+to the same second moment; Legacy's return colour matrix and extra diffusion are not
+part of this fit.
 
 Most constructions use an effective undercoat and acetate support. Historical
 cinema and Kodachrome constructions use an assumed rear absorber. VISION3 uses
@@ -41,8 +44,8 @@ illustrative fallback described below.
 
 Donor-layer films transport their fourth record with the other three, solved as a
 fourth receiver at its own depth. The donor layer is coated directly beneath the green
-record, between it and the red, at a measured 11.3 µm against the green record's 9 µm
-and the red's 15 µm. It is sensitive on the green record's short-wave side, so the
+record, between it and the red, at a measured 11.8 µm against the green record's 9.4 µm
+and the red's 15.5 µm. It is sensitive on the green record's short-wave side, so the
 light it receives back from the base is green light: it takes the green receiver's
 launch, capture, return strength and core, and only its depth differs.
 

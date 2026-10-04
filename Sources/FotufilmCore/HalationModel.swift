@@ -33,7 +33,7 @@ public extension LayeredTransport {
                 .init(id: "red-coating", thicknessMM: 0.006, refractiveIndex: [1.52], absorptionPerMM: [0.4]),
                 .init(id: "support", thicknessMM: Double(format.base.thicknessMM),
                       refractiveIndex: [Double(format.base.refractiveIndex)], absorptionPerMM: [0.2])],
-            recordDepthMM: [0.015, 0.009, 0.003], angularExponent: [[2.2], [2], [1.8]],
+            recordDepthMM: [0.0155, 0.0094, 0.0052], angularExponent: [[2.2], [2], [1.8]],
             captureProbability: [[0.35], [0.4], [0.5]],
             returnedToDirect: stock.halationStrength.map { [Double($0)] },
             coreSigmaMM: stock.emulsionDiffusionMM.map(Double.init))

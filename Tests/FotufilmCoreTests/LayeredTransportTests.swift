@@ -418,7 +418,7 @@ final class LayeredTransportTests: XCTestCase {
         }
         // Deeper, nearer the support, its returned light spreads less than green's but it
         // keeps green's return strength: it is green light that reaches it.
-        let deeper = try TransportKernelCompiler.compile(model, donorDepthMM: 0.0113)
+        let deeper = try TransportKernelCompiler.compile(model, donorDepthMM: 0.0118)
         var differs = false
         for b in 0..<SpectralGrid.count {
             let values = deeper.saturated.map { $0[3][b] }
