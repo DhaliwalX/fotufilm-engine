@@ -47,7 +47,7 @@ final class UnexposedEdgeTests: XCTestCase {
     }
 
     func testGatePenumbraIsTheShareOfTheLensPupilPastTheEdge() {
-        let radius = UnexposedEdge.gateSeparationMM / (2 * UnexposedEdge.referenceFNumber)
+        let radius = UnexposedEdge.gateRadiusMM()
         // The renderers' acos is good to 7e-5 radians, a few 1e-5 of the share.
         XCTAssertEqual(UnexposedEdge.gateTransmission(beyondMM: 0), 0.5, accuracy: 1e-4)
         XCTAssertEqual(UnexposedEdge.gateTransmission(beyondMM: -radius), 1)
@@ -60,6 +60,43 @@ final class UnexposedEdgeTests: XCTestCase {
             XCTAssertEqual(t + UnexposedEdge.gateTransmission(beyondMM: -x), 1, accuracy: 1e-4,
                            "the shadow of a straight edge is point-symmetric")
             previous = t
+        }
+    }
+
+    func testTheGatesShadowFollowsTheTakingAperture() {
+        // At the reference f/2 the shadow is the pupil's cone, the fringe adding under 1%.
+        let cone = UnexposedEdge.gateSeparationMM / (2 * UnexposedEdge.referenceFNumber)
+        XCTAssertEqual(UnexposedEdge.gateRadiusMM(), cone, accuracy: cone * 0.01)
+        XCTAssertEqual(UnexposedEdge.gateRadiusMM(fNumber: 2), UnexposedEdge.gateRadiusMM())
+        // Wide open the shadow is softer, stopped down sharper.
+        let stops: [Float] = [1.4, 2, 2.8, 4, 5.6, 8, 11, 16, 22]
+        let radii = stops.map { UnexposedEdge.gateRadiusMM(fNumber: $0) }
+        for (wider, narrower) in zip(radii, radii.dropFirst()) { XCTAssertGreaterThan(wider, narrower) }
+        // But never sharper than the edge's Fresnel fringe.
+        let fringe = (UnexposedEdge.gateWavelengthMM * UnexposedEdge.gateSeparationMM).squareRoot() / 2
+        XCTAssertEqual(UnexposedEdge.gateRadiusMM(fNumber: 128), fringe, accuracy: fringe * 0.01)
+        XCTAssertGreaterThan(UnexposedEdge.gateTransmission(beyondMM: cone / 2, fNumber: 1.4),
+                             UnexposedEdge.gateTransmission(beyondMM: cone / 2, fNumber: 2),
+                             "a faster lens throws more light past the gate's edge")
+    }
+
+    func testTheTakingApertureIsTheSamePictureOnTheGauge() throws {
+        // A full-frame camera's aperture is the 135 gate's.
+        let fullFrame = SensorFrame(longSideMM: 36, shortSideMM: 24, derivation: .focalPlane)
+        let leica = try XCTUnwrap(UnexposedEdge.TakingAperture(fNumber: 2.8, sensor: fullFrame))
+        XCTAssertEqual(leica.equivalent(on: .still35), 2.8, accuracy: 1e-4)
+        XCTAssertEqual(leica.equivalent(on: .mediumFormat120), 2.8 * 79.2 / 43.27, accuracy: 0.01,
+                       "the same picture on 6x6 takes a larger f-number")
+        // A phone's main camera, 6.765 mm at 24 mm equivalent: f/1.78 there is about f/6.3 on 135.
+        let phone = try XCTUnwrap(SensorFrame.equivalentFocal(focalLengthMM: 6.765, equivalent35mmMM: 24,
+                                                              pixelWidth: 4032, pixelHeight: 3024))
+        let iPhone = try XCTUnwrap(UnexposedEdge.TakingAperture(fNumber: 1.78, sensor: phone))
+        XCTAssertEqual(iPhone.equivalent(on: .still35), 1.78 * 24 / 6.765, accuracy: 0.01)
+        // Without a measured sensor the picture is taken to have been exposed on the gauge.
+        XCTAssertEqual(UnexposedEdge.TakingAperture(fNumber: 4, sensor: nil)?.equivalent(on: .still35), 4)
+        // A file that says nothing believable leaves the reference aperture.
+        for unreadable: Float? in [nil, 0, -2, .nan, .infinity, 400] {
+            XCTAssertNil(UnexposedEdge.TakingAperture(fNumber: unreadable, sensor: fullFrame))
         }
     }
 
@@ -102,7 +139,7 @@ final class UnexposedEdgeTests: XCTestCase {
         XCTAssertEqual(options.pixelsPerMM(width: 380, height: 254), 10)
         let gate = options.gateConfiguration(width: 380, height: 254)
         XCTAssertEqual(Array(gate[0..<4]), [10, 7, 370, 247])
-        XCTAssertEqual(gate[4], UnexposedEdge.gateRadiusMM * 10, accuracy: 1e-6)
+        XCTAssertEqual(gate[4], UnexposedEdge.gateRadiusMM() * 10, accuracy: 1e-6)
         XCTAssertEqual(options.gateCornerConfiguration(width: 380, height: 254),
                        UnexposedEdge.gateCornerRadiusMM * 10, accuracy: 1e-6)
         XCTAssertEqual(options.carrierConfiguration(width: 380, height: 254)[5], -1, "no carrier")
@@ -110,6 +147,10 @@ final class UnexposedEdgeTests: XCTestCase {
         let carrier = options.carrierConfiguration(width: 388, height: 262)
         XCTAssertEqual(Array(carrier[0..<4]), [4, 4, 384, 258], "the opening is filed out to the band")
         XCTAssertEqual(carrier[5], UnexposedEdge.carrierShadowRadiusMM * 10, accuracy: 1e-5)
+        options.unexposedEdge = .init(margins: .init(left: 10, right: 10, top: 7, bottom: 7), fNumber: 8)
+        XCTAssertEqual(options.gateConfiguration(width: 380, height: 254)[4],
+                       UnexposedEdge.gateRadiusMM(fNumber: 8) * 10, accuracy: 1e-6,
+                       "the shadow is the picture's own aperture's")
         options.unexposedEdge = nil
         XCTAssertEqual(options.gateCornerConfiguration(width: 360, height: 240), 0)
     }
@@ -133,7 +174,7 @@ final class UnexposedEdgeTests: XCTestCase {
 
     /// Develops a uniform photograph of `scene` light on a larger piece of film and returns the
     /// red record of the middle column: the band above the photograph, then its top rows.
-    private func develop(scene: Float, carrier: Bool = false,
+    private func develop(scene: Float, carrier: Bool = false, fNumber: Float? = nil,
                          _ configure: (inout FotufilmEngine.Options) -> Void = { _ in })
         throws -> (column: [Float], margins: UnexposedEdge.Margins) {
         var options = FotufilmEngine.Options()
@@ -144,7 +185,7 @@ final class UnexposedEdgeTests: XCTestCase {
         let margins = try XCTUnwrap(UnexposedEdge.Geometry.preset("120"))
             .margins(photoWidth: width, photoHeight: height,
                      pixelsPerMM: options.pixelsPerMM(width: width, height: height), carrier: carrier)
-        options.unexposedEdge = .init(margins: margins)
+        options.unexposedEdge = .init(margins: margins, fNumber: fNumber)
         let outerWidth = width + margins.left + margins.right
         let outerHeight = height + margins.top + margins.bottom
         let input = ImageBuffer(width: outerWidth, height: outerHeight, fill: scene)
@@ -168,6 +209,18 @@ final class UnexposedEdgeTests: XCTestCase {
                              bright.column[top / 2] - dark.column[top / 2])
         XCTAssertNotEqual(bright.column[top + 10], bright.column[top - 10],
                           "the photograph is exposed, the film beyond it is not")
+    }
+
+    func testAWideOpenLensSoftensTheGatesEdge() throws {
+        let open = try develop(scene: 4, fNumber: 1)
+        let stopped = try develop(scene: 4, fNumber: 22)
+        let top = open.margins.top
+        // Only the edge changes: the film far beyond the gate, and the picture well inside it,
+        // develop the same.
+        XCTAssertEqual(open.column[2], stopped.column[2], accuracy: 1e-4)
+        XCTAssertEqual(open.column[top + 15], stopped.column[top + 15], accuracy: 1e-4)
+        let edge = (top - 2...top + 1).map { abs(open.column[$0] - stopped.column[$0]) }.max() ?? 0
+        XCTAssertGreaterThan(edge, 1e-3, "the wide-open shadow crosses the edge more softly")
     }
 
     func testLayeredTransportScattersPastTheGateOnce() throws {

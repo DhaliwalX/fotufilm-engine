@@ -23,14 +23,19 @@ public enum UnexposedEdge {
         public var sceneChannelMedians: SIMD3<Float>?
         /// The photograph's Auto Levels tone reading, for the same reason.
         public var sceneToneStops: SIMD3<Float>?
+        /// The lens's f-number on this gauge (`TakingAperture.equivalent(on:)`), which sizes the
+        /// gate's shadow. Nil when the picture does not say; the shadow is then drawn at
+        /// `referenceFNumber`.
+        public var fNumber: Float?
 
         public init(margins: Margins, sceneHighlightStops: Float? = nil,
                     sceneChannelMedians: SIMD3<Float>? = nil,
-                    sceneToneStops: SIMD3<Float>? = nil) {
+                    sceneToneStops: SIMD3<Float>? = nil, fNumber: Float? = nil) {
             self.margins = margins
             self.sceneHighlightStops = sceneHighlightStops
             self.sceneChannelMedians = sceneChannelMedians
             self.sceneToneStops = sceneToneStops
+            self.fNumber = fNumber
         }
     }
 
@@ -39,13 +44,57 @@ public enum UnexposedEdge {
     /// and inner rails, roughly one support thickness. A representative figure, not a measurement
     /// of any one camera; see docs/print-frame-model.md.
     public static let gateSeparationMM: Float = 0.15
-    /// The taking aperture the gate's penumbra is drawn for. Each point of the lens's exit pupil
-    /// casts the gate edge at a different place, so the shadow's blur is the pupil's cone over
-    /// the separation: about `gateSeparationMM / fNumber` across.
+    /// The taking aperture the gate's penumbra is drawn for when the picture does not record one.
+    /// Each point of the lens's exit pupil casts the gate edge at a different place, so the
+    /// shadow's blur is the pupil's cone over the separation: about `gateSeparationMM / fNumber`
+    /// across.
     public static let referenceFNumber: Float = 2
+    /// The wavelength the gate edge's diffraction is reckoned at, mid-green.
+    public static let gateWavelengthMM: Float = 0.000_55
 
-    /// Radius of the pupil's shadow of the gate edge on the film.
-    public static var gateRadiusMM: Float { gateSeparationMM / (2 * referenceFNumber) }
+    /// Radius of the pupil's shadow of the gate edge on the film, for a lens at `fNumber` on this
+    /// gauge (nil is `referenceFNumber`). A lens wide open throws a soft shadow of the gate and one
+    /// stopped down a sharp one, but never sharper than the edge's own Fresnel fringe, about
+    /// `sqrt(λ z)` across at the separation `z`. The two widths are added in quadrature, which
+    /// approximates convolving the two profiles. At f/2 the fringe widens the shadow by under 1%;
+    /// at f/16 it is most of it.
+    public static func gateRadiusMM(fNumber: Float? = nil) -> Float {
+        let cone = gateSeparationMM / (2 * (fNumber ?? referenceFNumber))
+        let fringe = (gateWavelengthMM * gateSeparationMM).squareRoot() / 2
+        return (cone * cone + fringe * fringe).squareRoot()
+    }
+
+    /// The lens's aperture as the picture's file records it, and the frame it was recorded on.
+    public struct TakingAperture: Sendable, Equatable {
+        /// The f-number the file records.
+        public let fNumber: Float
+        /// The frame the camera exposed, where the file measured it.
+        public let sensor: SensorFrame?
+
+        /// F-numbers a photographic lens can have. EXIF writes 0 for unknown, and a value outside
+        /// this range is a record about something else.
+        static let plausibleFNumber: ClosedRange<Float> = 0.7...128
+
+        /// Fails on a missing or implausible f-number, so a file that says nothing believable
+        /// leaves the shadow at `referenceFNumber`.
+        public init?(fNumber: Float?, sensor: SensorFrame?) {
+            guard let fNumber, fNumber.isFinite, Self.plausibleFNumber.contains(fNumber) else { return nil }
+            self.fNumber = fNumber
+            self.sensor = sensor
+        }
+
+        /// The f-number that takes the same picture on `format`, with the same angle of view and
+        /// depth of field. That is the cone of light reaching that gauge's gate: the recorded
+        /// f-number scaled by the gauge's diagonal over the sensor's. A phone's f/1.8 on a 12 mm
+        /// sensor is about f/6.3 on 135. Without a measured sensor the picture is taken to have
+        /// been exposed on the gauge itself.
+        public func equivalent(on format: FilmFormat) -> Float {
+            guard let sensor else { return fNumber }
+            let diagonal = (sensor.longSideMM * sensor.longSideMM
+                + sensor.shortSideMM * sensor.shortSideMM).squareRoot()
+            return fNumber * format.normalFocalLengthMM / diagonal
+        }
+    }
 
     /// Radius of the aperture's corners. A camera gate is milled or stamped, not cut with a
     /// square punch, so its corners print rounded. A representative figure read from full-frame
@@ -82,13 +131,13 @@ public enum UnexposedEdge {
     }
 
     /// Share of the lens's light that passes the gate edge at `distanceMM` beyond it (negative
-    /// inside the aperture). The pupil is a uniform disc, so the edge's shadow is the fraction of
+    /// inside the aperture), for a lens at `fNumber`. The pupil is a uniform disc, so the edge's shadow is the fraction of
     /// that disc on the open side of a straight line, `(acos(v) - v sqrt(1 - v^2)) / pi` for `v`
     /// the distance in radii. The renderers apply the same law at `gateDistance` (`gate_transmission`),
     /// with acos by Abramowitz and Stegun 4.4.45 so that all of them compute it in the same exact
     /// arithmetic; this is that computation.
-    public static func gateTransmission(beyondMM distanceMM: Float) -> Float {
-        let u = min(max(distanceMM / gateRadiusMM, -1), 1)
+    public static func gateTransmission(beyondMM distanceMM: Float, fNumber: Float? = nil) -> Float {
+        let u = min(max(distanceMM / gateRadiusMM(fNumber: fNumber), -1), 1)
         let v = abs(u)
         let arc = (1 - v).squareRoot()
             * (1.5707288 + v * (-0.2121144 + v * (0.0742610 + v * -0.0187293)))
@@ -218,13 +267,14 @@ extension FotufilmEngine.Options {
     }
 
     /// FOTUFILM_CONFIG_GATE for a buffer of this size: on a larger piece of film, the aperture's
-    /// edges in frame pixels and the radius of the pupil's shadow of them in pixels; otherwise no
-    /// gate.
+    /// edges in frame pixels and the radius of the pupil's shadow of them in pixels, at the
+    /// picture's own aperture; otherwise no gate.
     func gateConfiguration(width: Int, height: Int) -> [Float] {
-        guard let margins = unexposedEdge?.margins else { return [0, 0, 0, 0, -1] }
+        guard let edge = unexposedEdge else { return [0, 0, 0, 0, -1] }
+        let margins = edge.margins
         return [Float(margins.left), Float(margins.top),
                 Float(width - margins.right), Float(height - margins.bottom),
-                UnexposedEdge.gateRadiusMM * pixelsPerMM(width: width, height: height)]
+                UnexposedEdge.gateRadiusMM(fNumber: edge.fNumber) * pixelsPerMM(width: width, height: height)]
     }
 
     /// FOTUFILM_CONFIG_CARRIER for a buffer of this size: on a larger piece of film with a
