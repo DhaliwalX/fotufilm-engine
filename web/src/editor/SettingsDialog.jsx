@@ -10,7 +10,6 @@ import { Switch } from "@react-spectrum/s2/Switch";
 import { Button } from "@react-spectrum/s2/Button";
 import { FILM_FORMATS } from "../generated/controls.js";
 import { editorControl } from "../editor-catalogue.js";
-import { hasProfileSettings } from "../profile-settings.js";
 import {
   APP_SETTINGS,
   resetAppSettings,
@@ -358,20 +357,13 @@ function FilmModel() {
   };
   const adjusted = FILM_MODEL.some((key) => values[key] !== APP_SETTINGS[key]);
   // The Mac app reads halation as a photo develops, so these reach the open photo as well.
-  const { active, edit, selectedStock, fixedSettings, sceneKelvin, patch, setProfile, backend } =
+  const { active, edit, selectedStock, fixedSettings, patch, setProfile, backend } =
     useEditor();
   const modelled = !!active && !!edit?.stock && !fixedSettings;
   const halationModelChanged = (model) => {
-    // The native engine solves Layered Transport for any edit; the browser's sealed packs take
-    // the film's own settings only.
-    if (backend?.kind === "native") {
-      if (modelled) patch({ halationModel: model });
-      return;
-    }
-    const layered =
-      selectedStock?.layeredTransport !== false && !sceneKelvin && !hasProfileSettings(edit);
-    if (modelled && (model !== "layered" || layered))
-      patch({ halationModel: model, medium: null });
+    // The browser's packs carry three records, so a donor stock stays on Legacy there.
+    const layered = backend?.kind === "native" || selectedStock?.layeredTransport !== false;
+    if (modelled && (model !== "layered" || layered)) patch({ halationModel: model });
   };
   const estimatedHalationChanged = (on) => {
     if (modelled) setProfile("estimatedHalation", on);
@@ -402,8 +394,8 @@ function FilmModel() {
       />
       <p className="medium-detail">
         Layered Transport simulates light moving through the film layers.
-        Films with donor layers and custom film settings use Legacy. Estimated
-        Halation Shape only affects Legacy.
+        In the browser, films with donor layers use Legacy. Estimated Halation
+        Shape only affects Legacy.
       </p>
       <h3>Color Separation</h3>
       <SettingSlider

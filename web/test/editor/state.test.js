@@ -158,14 +158,14 @@ test('foreground renders run before pending thumbnails, without overlapping heap
 })
 
 test('explicit source light cannot silently use transport components for a different illuminant', async () => {
-  const { RenderSession } = await import('../../src/render-session.js')
-  const session = new RenderSession()
-  await assert.rejects(session.render({
-    image: { raw: { sceneKelvin: 2856 } },
-    edit: { ...defaultEdit('gold200'), halationModel: 'layered', sceneLight: 'incandescent' },
-    stock: 'gold200',
-  }), /Choose Legacy/)
-  await session.dispose()
+  const { needsRuntimeProfile } = await import('../../src/render-session.js')
+  const layered = { ...defaultEdit('gold200'), halationModel: 'layered' }
+  assert.equal(needsRuntimeProfile(layered, null), false)
+  assert.equal(needsRuntimeProfile({ ...layered, sceneLight: 'incandescent' }, 2856), true)
+  assert.equal(needsRuntimeProfile({ ...layered, medium: 'screen' }, null), true)
+  assert.equal(needsRuntimeProfile({ ...layered, digitalReference: 'graded-print' }, null), true)
+  assert.equal(needsRuntimeProfile({ ...layered, profile: { halation: 0.5 } }, null), true)
+  assert.equal(needsRuntimeProfile({ ...defaultEdit('gold200'), sceneLight: 'incandescent' }, 2856), false)
 })
 
 test('film settings survive edits and validate stock-independent values', () => {

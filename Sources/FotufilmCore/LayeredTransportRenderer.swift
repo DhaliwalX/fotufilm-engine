@@ -53,7 +53,7 @@ public final class TransportScene {
         let bands = 64, valid = UnsafeMutableBufferPointer<Bool>.allocate(capacity: bands)
         defer { valid.deallocate() }
         rgba!.withUnsafeBufferPointer { pixels in
-            DispatchQueue.concurrentPerform(iterations: bands) { band in
+            ParallelWork.forEach(iterations: bands) { band in
                 var finite = true
                 for i in band * count / bands..<(band + 1) * count / bands {
                     finite = finite && pixels[4 * i].isFinite && pixels[4 * i + 1].isFinite
@@ -74,7 +74,7 @@ public final class TransportScene {
             r.withUnsafeMutableBufferPointer { r in
                 g.withUnsafeMutableBufferPointer { g in
                     b.withUnsafeMutableBufferPointer { b in
-                        DispatchQueue.concurrentPerform(iterations: 64) { band in
+                        ParallelWork.forEach(iterations: 64) { band in
                             for i in band * n / 64..<(band + 1) * n / 64 {
                                 r[i] = pixels[4 * i]; g[i] = pixels[4 * i + 1]; b[i] = pixels[4 * i + 2]
                             }
@@ -378,7 +378,7 @@ public enum LayeredTransportRenderer {
         let bands = 64, valid = UnsafeMutableBufferPointer<Bool>.allocate(capacity: bands)
         defer { valid.deallocate() }
         sum.withUnsafeBufferPointer { sum in
-            DispatchQueue.concurrentPerform(iterations: bands) { band in
+            ParallelWork.forEach(iterations: bands) { band in
                 valid[band] = sum[band * sum.count / bands..<(band + 1) * sum.count / bands]
                     .allSatisfy { $0.isFinite && $0 >= 0 }
             }
@@ -436,7 +436,7 @@ public enum LayeredTransportRenderer {
         var scene = [Float](repeating: 1, count: n * 4)
         withPlanes(image.planes) { r, g, b in
             scene.withUnsafeMutableBufferPointer { scene in
-                DispatchQueue.concurrentPerform(iterations: 64) { band in
+                ParallelWork.forEach(iterations: 64) { band in
                     for i in band * n / 64..<(band + 1) * n / 64 {
                         scene[4 * i] = r[i]; scene[4 * i + 1] = g[i]; scene[4 * i + 2] = b[i]
                     }

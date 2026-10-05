@@ -15,6 +15,23 @@ final class WebProfileRequestTests: XCTestCase {
         return try JSONDecoder().decode(WebProfileRequest.self, from: JSONSerialization.data(withJSONObject: input))
     }
 
+    /// A Layered Transport edit is prepared at its render size with any film setting and medium:
+    /// a version 4 profile carrying the transport section the sealed packs carry.
+    func testLayeredTransportProfileCarriesThePlanAtItsSize() throws {
+        let edit = try request(["halationModel": "layered", "halation": 1.5], medium: "ektacolor-edge")
+        let (stock, options) = try edit.configured()
+        let profile = try edit.prepare()
+        XCTAssertEqual(Array(profile[4..<8]), [4, 0, 0, 0])
+        let section = try WebFilmProfile.transportSection(stock: stock, options: options,
+                                                          width: 80, height: 64, sizes: [(80, 64)])
+        XCTAssertNotNil(profile.range(of: section))
+        XCTAssertEqual(Array(try request(["halationModel": "legacy"]).prepare()[4..<8]), [2, 0, 0, 0])
+        XCTAssertThrowsError(try request(["halationModel": "layered"], stock: "superia400").prepare()) {
+            XCTAssertEqual(($0 as? WebFilmProfile.Failure)?.description,
+                           WebFilmProfile.Failure.donorTransport.description)
+        }
+    }
+
     func testCMYProfileReachesReceiverAndFollowsMedium() throws {
         let values: [String: Any] = ["screenCyan": 0.25, "screenMagenta": -0.15, "screenYellow": 0.1]
         XCTAssertEqual(try request(values, medium: "screen").configured().1.screenCMY, SIMD3(0.25, -0.15, 0.1))

@@ -60,14 +60,7 @@ export default function LightInspector() {
               value={edit.sceneLight}
               onChange={(sceneLight) => {
                 endEdit();
-                patch({
-                  sceneLight,
-                  ...(sceneLight !== "unspecified"
-                    ? {
-                        halationModel: "legacy",
-                      }
-                    : {}),
-                });
+                patch({ sceneLight });
               }}
               UNSAFE_style={{
                 width: "100%",

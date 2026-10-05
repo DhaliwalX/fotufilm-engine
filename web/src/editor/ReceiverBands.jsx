@@ -10,8 +10,8 @@ const BANDS = ["screenRedBand", "screenGreenBand", "screenBlueBand"].map((field)
 
 // The peaks of the three bands Digital Reference reads a colour negative through, typed in nm.
 export default function ReceiverBands({ id }) {
-  const { active, exporting, layeredLocked, edit, setProfile, patch, endEdit } = useEditor();
-  const disabled = exporting || !active || layeredLocked;
+  const { active, exporting, edit, setProfile, patch, endEdit } = useEditor();
+  const disabled = exporting || !active;
   const moved = BANDS.some((c) => edit.profile?.[c.field] != null);
   return (
     <div className="receiver-bands" id={id}>
