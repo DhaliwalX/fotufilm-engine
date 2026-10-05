@@ -210,7 +210,7 @@ final class DigitalReferenceReceiverTests: XCTestCase {
         ReceiverBands(red: 665, green: 525, blue: 455),
     ]
 
-    func testReceiverBandsDefaultToThePaperAndMoveOnlyColourNegativeScreenTables() throws {
+    func testReceiverBandsDefaultToThePaperAndMoveOnlyColourScreenTables() throws {
         XCTAssertEqual(ReceiverBands.paper, ReceiverBands(red: 700, green: 545, blue: 470))
         XCTAssertEqual(ReceiverBands.paper.sensitivity, SpectralGrid.paperSensitivity)
         XCTAssertEqual(PrintPaper.screen.sensitivity, SpectralGrid.paperSensitivity)
@@ -229,12 +229,16 @@ final class DigitalReferenceReceiverTests: XCTestCase {
                                                              receiverBands: .paper))
         XCTAssertNotEqual(rest, SpectralRuntime.cacheIdentifier(for: stock, paper: .screen,
                                                                 receiverBands: minilab))
-        for id in ["example-monochrome-100", "example-reversal-64", "instaxmini"] {
+        for id in ["example-monochrome-100", "instaxmini"] {
             let film = try XCTUnwrap(FilmStock.named(id))
             XCTAssertEqual(SpectralRuntime.cacheIdentifier(for: film, paper: .screen),
                            SpectralRuntime.cacheIdentifier(for: film, paper: .screen,
                                                            receiverBands: minilab), id)
         }
+        let slide = try XCTUnwrap(FilmStock.named("example-reversal-64"))
+        XCTAssertNotEqual(SpectralRuntime.cacheIdentifier(for: slide, paper: .screen),
+                          SpectralRuntime.cacheIdentifier(for: slide, paper: .screen,
+                                                          receiverBands: minilab))
         for paper: PrintPaper in [.ektacolorEdge, .labScan, .negative] {
             XCTAssertEqual(SpectralRuntime.cacheIdentifier(for: stock, paper: paper),
                            SpectralRuntime.cacheIdentifier(for: stock, paper: paper,
@@ -265,6 +269,62 @@ final class DigitalReferenceReceiverTests: XCTestCase {
                                        style: style, bands: bands)
                     let y = weights.0 * rgb.x + weights.1 * rgb.y + weights.2 * rgb.z
                     XCTAssertEqual(y, tone[i], accuracy: 0.012, "\(style) \(bands) \(stop)")
+                }
+            }
+        }
+    }
+
+    /// A slide read through moved bands: greys develop as through the paper's bands at every
+    /// level and in every style, and saturated colours separate differently.
+    func testSlidesReadThroughMovedBandsHoldTheirGreysAndChangeColour() throws {
+        let greys: [Float] = [0.01, 0.05, 0.18, 0.45, 1.2]
+        // Two nearly equal saturated yellows: a scan reads them nearly equal too, where an
+        // unstable inversion would speckle.
+        let colours: [SIMD3<Float>] = [SIMD3(0.5, 0.04, 0.04), SIMD3(0.04, 0.35, 0.06),
+                                       SIMD3(0.03, 0.06, 0.45), SIMD3(0.7, 0.6, 0.02),
+                                       SIMD3(0.7, 0.6, 0.024)]
+        let patches = greys.map { SIMD3<Float>(repeating: $0) } + colours
+        let side = 8
+        var scene = ImageBuffer(width: side * patches.count, height: side)
+        for (index, patch) in patches.enumerated() {
+            for y in 0..<side { for x in (index * side)..<((index + 1) * side) {
+                for c in 0..<3 { scene.planes[c][y * scene.width + x] = patch[c] }
+            }}
+        }
+        for id in ["example-reversal-64", "velvia50"] {
+            var film = try XCTUnwrap(FilmStock.named(id), id)
+            film.emulsionDiffusionMM = [0, 0, 0]
+            film.emulsionDiffusionSecondaryMM = [0, 0, 0]
+            film.adjacencyStrength = 0
+            for style in Self.styles {
+                func render(_ bands: ReceiverBands) throws -> [SIMD3<Float>] {
+                    var options = FotufilmEngine.Options()
+                    options.paper = .screen; options.grainScale = 0; options.halationScale = 0
+                    options.flareScale = 0; options.localTone = false
+                    options.digitalReference = style; options.sceneHighlightStops = 3
+                    options.receiverBands = bands
+                    let output = try FotufilmEngine(stock: film, options: options)
+                        .processChecked(linearRGB: scene)
+                    return patches.indices.map { index in
+                        let pixel = side / 2 * scene.width + index * side + side / 2
+                        return SIMD3((0..<3).map { output.planes[$0][pixel] })
+                    }
+                }
+                let paper = try render(.paper)
+                for bands in Self.bandSets.dropFirst() {
+                    let moved = try render(bands)
+                    for index in greys.indices {
+                        XCTAssertLessThan(distance(moved[index], paper[index]), 0.004,
+                                          "\(id) \(style) \(bands) grey \(greys[index])")
+                    }
+                    let change = colours.indices.map {
+                        distance(moved[greys.count + $0], paper[greys.count + $0])
+                    }
+                    XCTAssertGreaterThan(change.max()!, 0.01, "\(id) \(style) \(bands)")
+                    let yellows = patches.count - 2
+                    XCTAssertLessThan(distance(moved[yellows], moved[yellows + 1]),
+                                      distance(paper[yellows], paper[yellows + 1]) * 2 + 0.01,
+                                      "\(id) \(style) \(bands) yellows stay together")
                 }
             }
         }

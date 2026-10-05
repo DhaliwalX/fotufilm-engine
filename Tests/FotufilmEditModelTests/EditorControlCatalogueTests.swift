@@ -354,13 +354,15 @@ final class EditorControlCatalogueTests: XCTestCase {
         }
     }
 
-    func testReceiverBandsAreOfferedOnlyForColourNegativeDigitalReference() throws {
+    func testReceiverBandsAreOfferedOnlyForColourFilmOnDigitalReference() throws {
         for field: EditorControlField in [.screenRedBand, .screenGreenBand, .screenBlueBand] {
             for style in DigitalReferenceStyle.allCases {
-                XCTAssertTrue(offers(.screen, field, try preset("example-negative-400"), style: style))
+                for id in ["example-negative-400", "example-reversal-64"] {
+                    XCTAssertTrue(offers(.screen, field, try preset(id), style: style), id)
+                }
             }
             XCTAssertFalse(offers(.screen, field, nil))
-            for id in ["example-monochrome-100", "example-reversal-64", "instaxmini"] {
+            for id in ["example-monochrome-100", "instaxmini"] {
                 XCTAssertFalse(offers(.screen, field, try preset(id)))
             }
             for paper: PrintPaper in [.ektacolorEdge, .labScan] {
@@ -409,7 +411,8 @@ final class EditorControlCatalogueTests: XCTestCase {
         XCTAssertEqual(offered.map(\.field),
                        [.printFrame, .paper, .printLight, .printCorrection, .negativeViewing,
                         .digitalReference,
-                        .screenGrade, .screenExposure, .labScanDodging, .labScanLook])
+                        .screenGrade, .screenExposure, .screenRedBand, .screenGreenBand,
+                        .screenBlueBand, .labScanDodging, .labScanLook])
         XCTAssertTrue(EditorControlCatalogue.control(.printFrame)!.availability.admits(stock: nil))
 
         let negative = try preset("example-negative-400")

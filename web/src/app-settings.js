@@ -20,6 +20,9 @@ export const APP_SETTINGS = Object.freeze({
   couplerRedGreen: null,
   couplerGreenBlue: null,
   couplerSelf: 1,
+  // Digital Reference's receiver bands a newly opened photograph starts on, `{red, green, blue}`
+  // in nm; null starts on the paper's own.
+  receiverBands: null,
   // Whether a HEIC export starts as HDR where the edit allows it.
   photoHDR: false,
   // Whether an HEVC or ProRes movie exports as HDR (HLG) where the film delivers it.
@@ -114,6 +117,12 @@ export function newPhotoEdit(base, stockIDs) {
   if (appSetting("grainModel") !== APP_SETTINGS.grainModel)
     edit.profile.grainModel = appSetting("grainModel");
   if (appSetting("estimatedHalation")) edit.profile.estimatedHalation = true;
+  const bands = appSetting("receiverBands");
+  if (bands) {
+    edit.profile.screenRedBand = bands.red;
+    edit.profile.screenGreenBand = bands.green;
+    edit.profile.screenBlueBand = bands.blue;
+  }
   for (const key of ["couplerReach", "couplerSelf"])
     if (appSetting(key) !== APP_SETTINGS[key]) edit.profile[key] = appSetting(key);
   // A pair set on its own starts the photo there; one left linked follows Separation.
