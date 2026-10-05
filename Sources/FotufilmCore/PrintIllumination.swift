@@ -6,7 +6,8 @@ extension SpectralRuntime {
     /// head cannot reach an aim, its residual must survive, not be divided away per record.
     static func printingIllumination(stock: FilmStock, paper: PrintPaper,
                                      density: [Float], dyes: [[Float]],
-                                     neutralDensity: Float = 0, densityScale: Float = 1)
+                                     neutralDensity: Float = 0, densityScale: Float = 1,
+                                     receiverBands: ReceiverBands = .paper)
         -> (lamp: [Float], referenceEnergy: SIMD3<Float>) {
         let offset = filmDensityOffset(for: stock, scale: densityScale)
         guard paper.isProjected else {
@@ -15,8 +16,8 @@ extension SpectralRuntime {
             // Digital Reference balances a single negative exposure, then uses the same lamp
             // and receiver at every density, without a selected-film curve or scene-color inverse.
             return (lamp, paperExposure(density: density, dyes: dyes, lamp: lamp,
-                paperSensitivity: paper.sensitivity, neutralDensity: neutralDensity,
-                densityOffset: offset))
+                paperSensitivity: paper.sensitivity(bands: receiverBands),
+                neutralDensity: neutralDensity, densityOffset: offset))
         }
         let aim = paper.printingAim(for: stock)
         let raw = releasePrinterLamp(density: density, dyes: dyes,

@@ -100,6 +100,8 @@ function stepKind(before, after) {
     return "Viewing Illuminant";
   if (changed(before, after, ["digitalReference"])) return "Screen Conversion";
   if (profileChanged(before, after, (field) => field === "screenGrade")) return "Paper Grade";
+  if (profileChanged(before, after, (field) => /^screen(Red|Green|Blue)Band$/.test(field)))
+    return "Receiver Bands";
   if (profileChanged(before, after, (field) => field === "screenExposure"))
     return "Screen Exposure";
   if (profileChanged(before, after, (field) => field === "enlarger" || PRINTER.test(field)))

@@ -354,6 +354,21 @@ final class EditorControlCatalogueTests: XCTestCase {
         }
     }
 
+    func testReceiverBandsAreOfferedOnlyForColourNegativeDigitalReference() throws {
+        for field: EditorControlField in [.screenRedBand, .screenGreenBand, .screenBlueBand] {
+            for style in DigitalReferenceStyle.allCases {
+                XCTAssertTrue(offers(.screen, field, try preset("example-negative-400"), style: style))
+            }
+            XCTAssertFalse(offers(.screen, field, nil))
+            for id in ["example-monochrome-100", "example-reversal-64", "instaxmini"] {
+                XCTAssertFalse(offers(.screen, field, try preset(id)))
+            }
+            for paper: PrintPaper in [.ektacolorEdge, .labScan] {
+                XCTAssertFalse(offers(paper, field, try preset("example-negative-400")))
+            }
+        }
+    }
+
     func testPaperGradeFollowsTheGradedCurveOfANegative() throws {
         let negative = try preset("example-negative-400")
         XCTAssertTrue(offers(.screen, .screenGrade, negative))
@@ -403,7 +418,8 @@ final class EditorControlCatalogueTests: XCTestCase {
                 .map(\.field),
                        [.printFrame, .paper, .printLight, .printCorrection, .negativeViewing,
                         .digitalReference,
-                        .screenGrade, .screenExposure, .screenCyan, .screenMagenta, .screenYellow,
+                        .screenGrade, .screenExposure, .screenRedBand, .screenGreenBand,
+                        .screenBlueBand, .screenCyan, .screenMagenta, .screenYellow,
                         .labScanDodging, .labScanLook])
         XCTAssertEqual(EditorControlCatalogue.controls(in: .printLamp, for: negative).map(\.field),
                        [.enlarger, .printerEnabled, .printerLamp, .printerExposure,

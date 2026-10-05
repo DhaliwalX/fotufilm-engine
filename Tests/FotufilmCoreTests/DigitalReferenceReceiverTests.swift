@@ -13,9 +13,11 @@ final class DigitalReferenceReceiverTests: XCTestCase {
                           style: DigitalReferenceStyle = .default,
                           sceneHighlightStops: Float? = nil,
                           grade: Float = 2, screenExposure: Float = 0,
-                          cmy: SIMD3<Float> = .zero) -> SIMD3<Float> {
+                          cmy: SIMD3<Float> = .zero,
+                          bands: ReceiverBands = .paper) -> SIMD3<Float> {
         let tables = SpectralRuntime.tables(for: stock, paper: .screen, digitalReference: style,
-                                            screenGrade: grade, screenExposureEV: screenExposure)
+                                            screenGrade: grade, screenExposureEV: screenExposure,
+                                            receiverBands: bands)
         let activation = SIMD3<Float>((0..<3).map { c in
             let curve = stock.curves[c]
             let density = stock.developedDensity(layer: c, logExposure: exposure[c])
@@ -178,25 +180,93 @@ final class DigitalReferenceReceiverTests: XCTestCase {
 
     func testReceiverSeparatesSmallReferenceDyeChangesAndHoldsNeutral() {
         let dyes = SpectralGrid.dyes(family: .kodakNegative)
-        func energy(_ density: SIMD3<Float>) -> SIMD3<Float> {
-            SpectralRuntime.paperExposure(density: [density.x, density.y, density.z],
-                dyes: dyes, lamp: DigitalReferenceReceiver.illuminant,
-                paperSensitivity: DigitalReferenceReceiver.sensitivity)
+        for bands in Self.bandSets {
+            let unmix = DigitalReferenceReceiver.unmix(bands)
+            func energy(_ density: SIMD3<Float>) -> SIMD3<Float> {
+                SpectralRuntime.paperExposure(density: [density.x, density.y, density.z],
+                    dyes: dyes, lamp: DigitalReferenceReceiver.illuminant,
+                    paperSensitivity: bands.sensitivity)
+            }
+            let center = SIMD3<Float>(repeating: 1)
+            let reference = energy(center)
+            for channel in 0..<3 {
+                var delta = SIMD3<Float>(repeating: 0)
+                delta[channel] = 0.002
+                let ratio = energy(center + delta) / reference
+                let reading = unmix.read(SIMD3(log10(ratio.x), log10(ratio.y), log10(ratio.z)))
+                XCTAssertLessThan(distance(reading, -delta), 2e-6,
+                                  "\(bands): band overlap must not create a shared color bias")
+            }
+            for level: Float in [-3, -0.5, 0, 0.5, 3] {
+                let neutral = SIMD3<Float>(repeating: level)
+                XCTAssertLessThan(distance(unmix.read(neutral), neutral), 1e-6)
+            }
         }
-        let center = SIMD3<Float>(repeating: 1)
-        let reference = energy(center)
-        for channel in 0..<3 {
-            var delta = SIMD3<Float>(repeating: 0)
-            delta[channel] = 0.002
-            let ratio = energy(center + delta) / reference
-            let reading = DigitalReferenceReceiver.read(SIMD3(
-                log10(ratio.x), log10(ratio.y), log10(ratio.z)))
-            XCTAssertLessThan(distance(reading, -delta), 2e-6,
-                              "receiver band overlap must not create a shared color bias")
+    }
+
+    /// The paper's bands, a minilab scanner's and a narrowband RGB light's.
+    private static let bandSets: [ReceiverBands] = [
+        .paper, ReceiverBands(red: 630, green: 545, blue: 465),
+        ReceiverBands(red: 665, green: 525, blue: 455),
+    ]
+
+    func testReceiverBandsDefaultToThePaperAndMoveOnlyColourNegativeScreenTables() throws {
+        XCTAssertEqual(ReceiverBands.paper, ReceiverBands(red: 700, green: 545, blue: 470))
+        XCTAssertEqual(ReceiverBands.paper.sensitivity, SpectralGrid.paperSensitivity)
+        XCTAssertEqual(PrintPaper.screen.sensitivity, SpectralGrid.paperSensitivity)
+        // A moved band keeps the measured shape: its peak lands where it was placed.
+        let minilab = Self.bandSets[1]
+        for band in 0..<3 {
+            let sensitivity = minilab.sensitivity[band]
+            let peak = sensitivity.indices.max { sensitivity[$0] < sensitivity[$1] }!
+            XCTAssertEqual(SpectralGrid.wavelengths[peak], minilab[band], accuracy: 2.5)
         }
-        for level: Float in [-3, -0.5, 0, 0.5, 3] {
-            let neutral = SIMD3<Float>(repeating: level)
-            XCTAssertLessThan(distance(DigitalReferenceReceiver.read(neutral), neutral), 1e-6)
+        XCTAssertEqual(ReceiverBands(red: 900, green: .nan, blue: 300).clamped,
+                       ReceiverBands(red: 740, green: 545, blue: 400))
+
+        let rest = SpectralRuntime.cacheIdentifier(for: stock, paper: .screen)
+        XCTAssertEqual(rest, SpectralRuntime.cacheIdentifier(for: stock, paper: .screen,
+                                                             receiverBands: .paper))
+        XCTAssertNotEqual(rest, SpectralRuntime.cacheIdentifier(for: stock, paper: .screen,
+                                                                receiverBands: minilab))
+        for id in ["example-monochrome-100", "example-reversal-64", "instaxmini"] {
+            let film = try XCTUnwrap(FilmStock.named(id))
+            XCTAssertEqual(SpectralRuntime.cacheIdentifier(for: film, paper: .screen),
+                           SpectralRuntime.cacheIdentifier(for: film, paper: .screen,
+                                                           receiverBands: minilab), id)
+        }
+        for paper: PrintPaper in [.ektacolorEdge, .labScan, .negative] {
+            XCTAssertEqual(SpectralRuntime.cacheIdentifier(for: stock, paper: paper),
+                           SpectralRuntime.cacheIdentifier(for: stock, paper: paper,
+                                                           receiverBands: minilab), "\(paper)")
+        }
+    }
+
+    func testMovedReceiverBandsHoldTheGreysAndChangeColour() {
+        let red = SIMD3<Float>(0.3, -0.2, -0.2)
+        for style in Self.styles {
+            let paperRed = positive(stock, exposure: red, style: style)
+            for bands in Self.bandSets.dropFirst() {
+                for stops: Float in [-6, -3, -1, 0, 1, 3, 5] {
+                    let exposure = SIMD3<Float>(repeating: stops * log10(2))
+                    let grey = positive(stock, exposure: exposure, style: style, bands: bands)
+                    XCTAssertLessThan(distance(grey, positive(stock, exposure: exposure, style: style)),
+                                      0.004, "\(style) \(bands) \(stops): greys print as on the paper's bands")
+                }
+                XCTAssertGreaterThan(distance(positive(stock, exposure: red, style: style,
+                                                       bands: bands), paperRed), 0.002,
+                                     "\(style) \(bands): moved bands read colour differently")
+                let tone = SpectralRuntime.neutralToneScale(stops: [-2, 0, 2], stock: stock,
+                    paper: .screen, printCorrection: 0, digitalReference: style,
+                    receiverBands: bands)
+                let weights = ColorScience.displayP3LuminanceWeights
+                for (i, stop) in [Float(-2), 0, 2].enumerated() {
+                    let rgb = positive(stock, exposure: SIMD3(repeating: stop * log10(2)),
+                                       style: style, bands: bands)
+                    let y = weights.0 * rgb.x + weights.1 * rgb.y + weights.2 * rgb.z
+                    XCTAssertEqual(y, tone[i], accuracy: 0.012, "\(style) \(bands) \(stop)")
+                }
+            }
         }
     }
 

@@ -38,7 +38,8 @@ public enum WebProfileCatalogue {
 
     private struct Medium: Encodable {
         let viewingLights: [ControlsManifest.Choice]
-        let enlarger, correction, screenConversion, screenGrade, screenCMY, labScan, negative: Bool
+        let enlarger, correction, screenConversion, screenGrade, screenCMY, receiverBands, labScan,
+            negative: Bool
     }
     private struct Stock: Encodable {
         let available: [String]
@@ -74,6 +75,7 @@ public enum WebProfileCatalogue {
                     screenConversion: offers(.screenExposure),
                     screenGrade: offers(.screenGrade),
                     screenCMY: offers(.screenCyan),
+                    receiverBands: offers(.screenRedBand),
                     labScan: offers(.labScanLook),
                     negative: offers(.negativeViewing)))
             })

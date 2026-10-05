@@ -248,6 +248,10 @@ public struct FotufilmEngine {
         /// mid-grey at 18% and the film base at display black. Reference Exposure, positives and
         /// other media ignore it.
         public var screenGrade: Float = 2
+        /// The peaks of the three bands Digital Reference reads a colour negative's dyes through,
+        /// in nanometres. The paper's own measured bands by default; each placed elsewhere slides
+        /// that band's measured shape along the spectrum. Other media and films ignore it.
+        public var receiverBands: ReceiverBands = .paper
         /// The exposure of the screen conversion, in stops on top of the chosen style: positive
         /// lightens, the way a scanner's exposure does. On a negative it is the printer's exposure
         /// with the sign a screen expects; on a positive it is the scanner's gain. On Lab Scan it

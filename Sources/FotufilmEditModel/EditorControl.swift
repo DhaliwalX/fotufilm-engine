@@ -26,6 +26,7 @@ public enum EditorControlField: String, CaseIterable, Sendable, Codable {
     case lensDistortion, lensVignetting, lensRedCyan, lensBlueYellow
 
     case screenCyan, screenMagenta, screenYellow
+    case screenRedBand, screenGreenBand, screenBlueBand
     case labScanDodging, labScanLook
     case paper, digitalReference, screenGrade, screenExposure, printFrame, printLight, enlarger, printCorrection,
          negativeViewing, gradeSpace
@@ -125,6 +126,7 @@ public enum EditorControlUnit: String, Sendable, Equatable, Codable {
     case opticalDensity
     case micrometers
     case millimetres
+    case nanometres
     case none
 
     public static let offStops = -6.0
@@ -148,6 +150,7 @@ public enum EditorControlUnit: String, Sendable, Equatable, Codable {
         case .opticalDensity: return String(format: "%.2f OD", shown(value, places: 2))
         case .micrometers: return String(format: "%.0f µm", shown(value, places: 0))
         case .millimetres: return String(format: "%.0f mm", shown(value, places: 0))
+        case .nanometres: return String(format: "%.0f nm", shown(value, places: 0))
         case .none: return ""
         }
     }

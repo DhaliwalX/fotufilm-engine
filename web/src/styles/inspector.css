@@ -372,6 +372,42 @@
     padding-block: 12px 4px;
     min-width: 0;
   }
+  /* The output medium with its settings button, which opens the medium's own settings below. */
+  .medium-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    min-width: 0;
+  }
+  .medium-row > :first-child {
+    flex: 1;
+    min-width: 0;
+  }
+  .medium-settings {
+    color: var(--muted);
+  }
+  .medium-settings.open {
+    color: var(--accent);
+  }
+  .receiver-bands {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: -8px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: var(--page);
+  }
+  .receiver-band {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 11px;
+  }
+  .receiver-bands > button {
+    align-self: flex-start;
+  }
   .inspector-section {
     padding: 10px 0;
   }

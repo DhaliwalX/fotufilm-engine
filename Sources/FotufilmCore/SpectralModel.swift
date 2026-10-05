@@ -374,10 +374,12 @@ public enum SpectralRuntime {
                               digitalReference: DigitalReferenceStyle = .default,
                               screenGrade: Float = 2,
                               screenExposureEV: Float = 0,
-                              labScanLook: Float = 1)
+                              labScanLook: Float = 1,
+                              receiverBands: ReceiverBands = .paper)
         -> SpectralPipelineTables {
         let paper = paper.resolved(for: stock)
         let labScanLook = effectiveLabScanLook(labScanLook, paper: paper)
+        let receiverBands = effectiveReceiverBands(receiverBands, stock: stock, paper: paper)
         let printer = PrinterProfile.resolved(printer, stock: stock, paper: paper)
         let bleachBypass = retainedSilverFraction(bleachBypass, stock: stock)
         let screenGrade = effectiveScreenGrade(screenGrade, stock: stock, paper: paper,
@@ -391,7 +393,7 @@ public enum SpectralRuntime {
                                   printViewingKelvin: printViewingKelvin, callier: callier,
                                   printer: printer, digitalReference: digitalReference,
                                   screenGrade: screenGrade, screenExposureEV: screenExposureEV,
-                                  labScanLook: labScanLook)
+                                  labScanLook: labScanLook, receiverBands: receiverBands)
         lock.lock()
         while true {
             if let found = cache.value(for: key) {
@@ -411,7 +413,7 @@ public enum SpectralRuntime {
                                 printViewingKelvin: printViewingKelvin, callier: callier,
                                 printer: printer, digitalReference: digitalReference,
                                 screenGrade: screenGrade, screenExposureEV: screenExposureEV,
-                                labScanLook: labScanLook)
+                                labScanLook: labScanLook, receiverBands: receiverBands)
 
         lock.lock()
         cache.insert(built, for: key)
@@ -484,7 +486,8 @@ public enum SpectralRuntime {
                                        digitalReference: DigitalReferenceStyle = .default,
                                        screenGrade: Float = 2,
                                        screenExposureEV: Float = 0,
-                                       labScanLook: Float = 1)
+                                       labScanLook: Float = 1,
+                                       receiverBands: ReceiverBands = .paper)
         -> UInt64 {
         let paper = paper.resolved(for: stock)
         var h = stock.spectralProfile.signature
@@ -538,6 +541,10 @@ public enum SpectralRuntime {
         // Lab Scan's finish is baked into its output table; hashed only away from the full finish.
         let look = effectiveLabScanLook(labScanLook, paper: paper)
         if look != 1 { add(look + 2048) }
+        // Digital Reference's bands reshape its colour negatives' print table; hashed only away
+        // from the paper's own.
+        let bands = effectiveReceiverBands(receiverBands, stock: stock, paper: paper)
+        if bands != .paper { for band in 0..<3 { add(bands[band] + 4096) } }
         // Hashed only away from their off positions, so every identity that existed before
         // these levers is exactly the identity it was.
         let bleach = retainedSilverFraction(bleachBypass, stock: stock)
@@ -572,7 +579,8 @@ public enum SpectralRuntime {
                                     digitalReference: DigitalReferenceStyle = .default,
                                     screenGrade: Float = 2,
                                     screenExposureEV: Float = 0,
-                                    labScanLook: Float = 1)
+                                    labScanLook: Float = 1,
+                                    receiverBands: ReceiverBands = .paper)
         -> SpectralPipelineTables {
         // Output characterization is fixed at the stock's reference light. The invocation
         // replaces this exposure table with the scene spectrum after calibration is built.
@@ -635,7 +643,6 @@ public enum SpectralRuntime {
                     DigitalReferenceReceiver.stretchShadows(read[$0], scale: shadowScale) })
             }
         } else {
-            let paperSensitivity = paper.sensitivity
             let dMin = stock.curves.map(\.dMin)
             let basis = stock.isReversal ? neutralDensityBasis(for: stock) : nil
             func aligned(_ density: [Float]) -> [Float] { basis?(density) ?? density }
@@ -649,56 +656,64 @@ public enum SpectralRuntime {
             // silver's on the silver the bleach left behind. The mid-grey scales with the rest,
             // so the re-timing below holds it and the head shows as contrast.
             let silverCallier = callier == 1 ? Float(1) : Enlarger.silverCallierCoefficient
-            let illumination = printingIllumination(
-                stock: stock, paper: paper, density: midDensity.map { $0 * callier },
-                dyes: stock.spectralProfile.imageDyeDensity,
-                neutralDensity: silverCallier * retainedSilverDensity(
-                    midDensity, dMin: dMin, fraction: bleachBypass), densityScale: callier)
-            let lamp = printer?.filteredSpectrum ?? illumination.lamp
-            // Keep the simulated printer's reference setup fixed when its lamp or filters move.
-            // Other media retain their existing printing illumination and calibration.
-            let midEnergy = printer == nil ? illumination.referenceEnergy : paperExposure(
-                density: midDensity.map { $0 * callier },
-                stock: stock,
-                lamp: PrinterProfile.simulatedTungsten.filteredSpectrum,
-                paperSensitivity: paperSensitivity,
-                neutralDensity: silverCallier * retainedSilverDensity(
-                    midDensity, dMin: dMin, fraction: bleachBypass), densityScale: callier)
-            // Release film removes only the common lamp scale against its setup energy
-            // targets; an unreachable timing residual survives. On reflection paper the
-            // mid-energy ratio also approximates
-            // the enlarger's per-stock filtration. A
-            // reference-anchored medium is profiled once instead: the frame is
-            // still auto-exposed (green stays the stock's own), but red and
-            // blue keep the distance this stock's mask and mid-scale colour
-            // put between themselves and the reference's — the cast a real
-            // minilab leaves in the file.
-            let castOffset = referenceCastOffset(midEnergy: midEnergy,
-                                                 stock: stock, paper: paper)
+            // The relative log energy each record receives through `bands`, against mid-grey.
+            func energyReader(_ bands: ReceiverBands) -> ([Float]) -> SIMD3<Float> {
+                let paperSensitivity = paper.sensitivity(bands: bands)
+                let illumination = printingIllumination(
+                    stock: stock, paper: paper, density: midDensity.map { $0 * callier },
+                    dyes: stock.spectralProfile.imageDyeDensity,
+                    neutralDensity: silverCallier * retainedSilverDensity(
+                        midDensity, dMin: dMin, fraction: bleachBypass), densityScale: callier,
+                    receiverBands: bands)
+                let lamp = printer?.filteredSpectrum ?? illumination.lamp
+                // Keep the simulated printer's reference setup fixed when its lamp or filters move.
+                // Other media retain their existing printing illumination and calibration.
+                let midEnergy = printer == nil ? illumination.referenceEnergy : paperExposure(
+                    density: midDensity.map { $0 * callier },
+                    stock: stock,
+                    lamp: PrinterProfile.simulatedTungsten.filteredSpectrum,
+                    paperSensitivity: paperSensitivity,
+                    neutralDensity: silverCallier * retainedSilverDensity(
+                        midDensity, dMin: dMin, fraction: bleachBypass), densityScale: callier)
+                // Release film removes only the common lamp scale against its setup energy
+                // targets; an unreachable timing residual survives. On reflection paper the
+                // mid-energy ratio also approximates
+                // the enlarger's per-stock filtration. A
+                // reference-anchored medium is profiled once instead: the frame is
+                // still auto-exposed (green stays the stock's own), but red and
+                // blue keep the distance this stock's mask and mid-scale colour
+                // put between themselves and the reference's — the cast a real
+                // minilab leaves in the file.
+                let castOffset = referenceCastOffset(midEnergy: midEnergy,
+                                                     stock: stock, paper: paper)
+                return { density in
+                    let energy = paperExposure(density: aligned(density).map { $0 * callier },
+                                               stock: stock,
+                                               lamp: lamp, paperSensitivity: paperSensitivity,
+                                               neutralDensity: silverCallier * retainedSilverDensity(
+                                                   density, dMin: dMin,
+                                                   fraction: bleachBypass), densityScale: callier)
+                    return SIMD3<Float>(
+                        log10(max(energy.x, 1e-12) / max(midEnergy.x, 1e-12)),
+                        log10(max(energy.y, 1e-12) / max(midEnergy.y, 1e-12)),
+                        log10(max(energy.z, 1e-12) / max(midEnergy.z, 1e-12))) + castOffset
+                }
+            }
+            let relativeEnergy = energyReader(receiverBands)
             // Digital Reference at a reference exposure carries the film base to display
             // black by stretching only the shadow side of the read, so the stock's highlight
             // contrast stays its own. The graded styles level the whole read in the kernel.
             let shadowScale = screenShadowScale(stock: stock, paper: paper,
                                                 digitalReference: digitalReference)
-            func relativeEnergy(_ density: [Float]) -> SIMD3<Float> {
-                let energy = paperExposure(density: aligned(density).map { $0 * callier },
-                                           stock: stock,
-                                           lamp: lamp, paperSensitivity: paperSensitivity,
-                                           neutralDensity: silverCallier * retainedSilverDensity(
-                                               density, dMin: dMin,
-                                               fraction: bleachBypass), densityScale: callier)
-                return SIMD3<Float>(
-                    log10(max(energy.x, 1e-12) / max(midEnergy.x, 1e-12)),
-                    log10(max(energy.y, 1e-12) / max(midEnergy.y, 1e-12)),
-                    log10(max(energy.z, 1e-12) / max(midEnergy.z, 1e-12))) + castOffset
-            }
+            let screenRead = paper == .screen ? screenReader(
+                stock: stock, bands: receiverBands, relativeEnergy: relativeEnergy,
+                paperRelativeEnergy: { energyReader(.paper) }) : relativeEnergy
             let toeBalance = screenToeBalance(
                 stock: stock, digitalReference: paper == .screen ? digitalReference : .gradedPrint,
-                read: { DigitalReferenceReceiver.read(relativeEnergy($0)) })
+                read: screenRead)
             printing = buildDensityLUT(stock: stock) { density in
-                let relative = relativeEnergy(density)
-                guard paper == .screen else { return relative }
-                let read = toeBalance(DigitalReferenceReceiver.read(relative))
+                guard paper == .screen else { return relativeEnergy(density) }
+                let read = toeBalance(screenRead(density))
                 return SIMD3((0..<3).map {
                     DigitalReferenceReceiver.stretchShadows(read[$0], scale: shadowScale) })
             }
@@ -2123,6 +2138,15 @@ public enum SpectralRuntime {
         return look.isFinite ? min(max(look, 0), 1) : 1
     }
 
+    /// The bands a table reads through: the stated ones, in range, where Digital Reference reads a
+    /// colour negative's dyes, and the paper's own everywhere else so nothing else's identity moves.
+    static func effectiveReceiverBands(_ bands: ReceiverBands, stock: FilmStock,
+                                       paper: PrintPaper) -> ReceiverBands {
+        guard paper == .screen, !stock.isReversal, !stock.isMonochrome,
+              !stock.isReflectionPrint else { return .paper }
+        return bands.clamped
+    }
+
     /// The screen exposure the paper slots carry, as a log exposure added to every read.
     static func screenExposureShift(_ stops: Float, stock: FilmStock, paper: PrintPaper,
                                     digitalReference: DigitalReferenceStyle,
@@ -2159,6 +2183,25 @@ public enum SpectralRuntime {
             }
             return samples
         })
+    }
+
+    /// Digital Reference's read of a colour negative's developed densities: each record's relative
+    /// energy through `bands`, unmixed. Moved bands read the film's greys at their own per-record
+    /// contrast, which would print as a cast growing away from mid-grey; a scanner is calibrated on
+    /// the film's greys, so they are carried onto the paper bands' read of the same neutral wedge.
+    /// Greys then print as on the paper's bands, and only colours read through the moved ones.
+    static func screenReader(stock: FilmStock, bands: ReceiverBands,
+                             relativeEnergy: @escaping ([Float]) -> SIMD3<Float>,
+                             paperRelativeEnergy: () -> ([Float]) -> SIMD3<Float>)
+        -> ([Float]) -> SIMD3<Float> {
+        let unmix = DigitalReferenceReceiver.unmix(bands)
+        let read = { (density: [Float]) in unmix.read(relativeEnergy(density)) }
+        guard bands != .paper else { return read }
+        let paperUnmix = DigitalReferenceReceiver.unmix(.paper)
+        let paperEnergy = paperRelativeEnergy()
+        let neutral = ReceiverNeutralCalibration(stock: stock, read: read,
+                                                 paperRead: { paperUnmix.read(paperEnergy($0)) })
+        return { neutral(read($0)) }
     }
 
     static func screenShadowScale(stock: FilmStock, paper: PrintPaper,
@@ -2495,8 +2538,10 @@ extension SpectralRuntime {
                                  sceneHighlightStops: Float? = nil,
                                  screenGrade: Float = 2,
                                  screenExposureEV: Float = 0,
-                                 screenCMY: SIMD3<Float> = .zero) -> [Float] {
+                                 screenCMY: SIMD3<Float> = .zero,
+                                 receiverBands: ReceiverBands = .paper) -> [Float] {
         let paper = paper.resolved(for: stock)
+        let receiverBands = effectiveReceiverBands(receiverBands, stock: stock, paper: paper)
         let callier = callierCoefficient(callier, stock: stock, paper: paper)
         let grade = effectiveScreenGrade(screenGrade, stock: stock, paper: paper,
                                          digitalReference: digitalReference)
@@ -2557,15 +2602,35 @@ extension SpectralRuntime {
             }
         }
 
-        let paperSensitivity = paper.sensitivity
         let basis = stock.isReversal ? neutralDensityBasis(for: stock) : nil
         func aligned(_ density: [Float]) -> [Float] { basis?(density) ?? density }
         let midDensity = aligned((0..<3).map { stock.developedDensity(layer: $0, logExposure: 0) })
-        let illumination = printingIllumination(stock: stock, paper: paper,
-            density: midDensity.map { $0 * callier }, dyes: stock.spectralProfile.imageDyeDensity,
-            densityScale: callier)
-        let lamp = illumination.lamp
-        let midEnergy = illumination.referenceEnergy
+        func energyReader(_ bands: ReceiverBands) -> ([Float]) -> SIMD3<Float> {
+            let paperSensitivity = paper.sensitivity(bands: bands)
+            let illumination = printingIllumination(stock: stock, paper: paper,
+                density: midDensity.map { $0 * callier }, dyes: stock.spectralProfile.imageDyeDensity,
+                densityScale: callier, receiverBands: bands)
+            let lamp = illumination.lamp
+            let midEnergy = illumination.referenceEnergy
+            // The same reference cast the printing LUT carries — this
+            // mirror walks a neutral wedge, and on a profiled medium a
+            // neutral wedge does not print neutral.
+            let castOffset = referenceCastOffset(midEnergy: midEnergy, stock: stock, paper: paper)
+            return { density in
+                let energy = paperExposure(density: aligned(density).map { $0 * callier },
+                                           stock: stock,
+                                           lamp: lamp, paperSensitivity: paperSensitivity,
+                                           densityScale: callier)
+                return SIMD3<Float>(
+                    log10(max(energy.x, 1e-12) / max(midEnergy.x, 1e-12)),
+                    log10(max(energy.y, 1e-12) / max(midEnergy.y, 1e-12)),
+                    log10(max(energy.z, 1e-12) / max(midEnergy.z, 1e-12))) + castOffset
+            }
+        }
+        let relativeEnergy = energyReader(receiverBands)
+        let screenRead = screenReader(stock: stock, bands: receiverBands,
+                                      relativeEnergy: relativeEnergy,
+                                      paperRelativeEnergy: { energyReader(.paper) })
         let neutralMid = neutralDensity(stock, 0)
         let curves = paper.printCurves(for: stock, digitalReference: digitalReference)
         var xMids = paper.printExposureMidpoints(for: stock, digitalReference: digitalReference)
@@ -2573,25 +2638,11 @@ extension SpectralRuntime {
                                                   paper: paper)
         let shadowScale = screenShadowScale(stock: stock, paper: paper,
                                             digitalReference: digitalReference)
-        func relativeEnergy(_ density: [Float]) -> SIMD3<Float> {
-            let energy = paperExposure(density: aligned(density).map { $0 * callier },
-                                       stock: stock,
-                                       lamp: lamp, paperSensitivity: paperSensitivity, densityScale: callier)
-            // The same reference cast the printing LUT carries — this
-            // mirror walks a neutral wedge, and on a profiled medium a
-            // neutral wedge does not print neutral.
-            return SIMD3<Float>(
-                log10(max(energy.x, 1e-12) / max(midEnergy.x, 1e-12)),
-                log10(max(energy.y, 1e-12) / max(midEnergy.y, 1e-12)),
-                log10(max(energy.z, 1e-12) / max(midEnergy.z, 1e-12)))
-                + referenceCastOffset(midEnergy: midEnergy, stock: stock,
-                                      paper: paper)
-        }
         let toeBalance = screenToeBalance(
             stock: stock,
             digitalReference: paper == .screen && !paper.readsLayersDirectly(for: stock)
                 ? digitalReference : .gradedPrint,
-            read: { DigitalReferenceReceiver.read(relativeEnergy($0)) })
+            read: screenRead)
         if paper == .screen {
             // The same levels the kernel applies through its mid-point and contrast slots.
             let levels = DigitalReferenceReceiver.levels(
@@ -2618,7 +2669,7 @@ extension SpectralRuntime {
             } else {
                 relative = relativeEnergy(density)
                 if paper == .screen {
-                    let read = toeBalance(DigitalReferenceReceiver.read(relative))
+                    let read = toeBalance(screenRead(density))
                     relative = SIMD3((0..<3).map {
                         DigitalReferenceReceiver.stretchShadows(read[$0], scale: shadowScale) })
                 }
@@ -3260,6 +3311,45 @@ final class MeasuredReflectanceTable: @unchecked Sendable {
 /// own read ascending from mid-grey to the base against green's minus its own there. The balance
 /// fades in over the toe, from `start` of the way to the base, so the mid-shadows keep the stock's
 /// own layer balance and only a thin frame's lifted base and deep toe are neutralised.
+/// Per record, moved receiver bands' read of a stock's neutral wedge against the paper bands' read
+/// of the same step, rising; a read between steps is interpolated and one past the wedge keeps the
+/// offset of its end.
+struct ReceiverNeutralCalibration {
+    let wedges: [[SIMD2<Float>]]
+
+    init(stock: FilmStock, read: ([Float]) -> SIMD3<Float>, paperRead: ([Float]) -> SIMD3<Float>) {
+        // From past the film base to well past any highlight, in log exposure over mid-grey.
+        let steps = (0...384).map { i -> (SIMD3<Float>, SIMD3<Float>) in
+            let logExposure = -8 + 12 * Float(i) / 384
+            let density = (0..<3).map { stock.developedDensity(layer: $0, logExposure: logExposure) }
+            return (read(density), paperRead(density))
+        }
+        wedges = (0..<3).map { channel in
+            var samples: [SIMD2<Float>] = []
+            for (moved, reference) in steps.sorted(by: { $0.0[channel] < $1.0[channel] })
+            where samples.last.map({ moved[channel] > $0.x + 1e-5 }) ?? true {
+                samples.append(SIMD2(moved[channel], reference[channel]))
+            }
+            return samples
+        }
+    }
+
+    func callAsFunction(_ read: SIMD3<Float>) -> SIMD3<Float> {
+        SIMD3((0..<3).map { channel in
+            let samples = wedges[channel]
+            let v = read[channel]
+            guard let first = samples.first, let last = samples.last, samples.count > 1 else {
+                return v
+            }
+            if v <= first.x { return v + first.y - first.x }
+            if v >= last.x { return v + last.y - last.x }
+            let upper = samples.firstIndex { $0.x >= v } ?? samples.count - 1
+            let a = samples[upper - 1], b = samples[upper]
+            return a.y + (b.y - a.y) * (v - a.x) / (b.x - a.x)
+        })
+    }
+}
+
 struct ScreenToeBalance {
     let wedges: [[SIMD2<Float>]]?
     static let start: Float = 0.5

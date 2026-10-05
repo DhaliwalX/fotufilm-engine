@@ -99,8 +99,75 @@ public enum DigitalReferenceStyle: String, CaseIterable, Sendable, Identifiable,
     var usesGradedCurve: Bool { self != .referenceExposure }
 }
 
+/// The three bands Digital Reference reads a colour negative's dyes through, each named by the
+/// wavelength it peaks at. The default is the measured RA-4 paper's own bands; another peak slides
+/// that band's measured shape along the spectrum, keeping its width.
+public struct ReceiverBands: Hashable, Sendable, Codable {
+    public var red: Float
+    public var green: Float
+    public var blue: Float
+
+    public init(red: Float, green: Float, blue: Float) {
+        self.red = red
+        self.green = green
+        self.blue = blue
+    }
+
+    /// Where the measured paper bands peak on the spectral grid.
+    public static let paper: ReceiverBands = {
+        let peaks = SpectralGrid.paperSensitivity.map { band in
+            SpectralGrid.wavelengths[band.indices.max { band[$0] < band[$1] } ?? 0]
+        }
+        return ReceiverBands(red: peaks[0], green: peaks[1], blue: peaks[2])
+    }()
+
+    /// The peaks each band can be placed at, in nanometres, so every band stays in its own part
+    /// of the spectrum.
+    public static let ranges: [ClosedRange<Float>] = [600...740, 500...600, 400...500]
+
+    public subscript(band: Int) -> Float {
+        get { band == 0 ? red : band == 1 ? green : blue }
+        set {
+            switch band {
+            case 0: red = newValue
+            case 1: green = newValue
+            default: blue = newValue
+            }
+        }
+    }
+
+    /// Each peak held inside its range; a non-finite one keeps the paper's.
+    public var clamped: ReceiverBands {
+        var result = self
+        for band in 0..<3 {
+            let range = Self.ranges[band]
+            result[band] = self[band].isFinite
+                ? min(max(self[band], range.lowerBound), range.upperBound) : Self.paper[band]
+        }
+        return result
+    }
+
+    /// The bands on the spectral grid, each normalised under D65 as the paper's are.
+    var sensitivity: [[Float]] {
+        guard self != .paper else { return SpectralGrid.paperSensitivity }
+        return SpectralGrid.normalizeSensitivities((0..<3).map { band in
+            let measured = SpectralGrid.paperSensitivity[band]
+            let shift = self[band] - Self.paper[band]
+            return SpectralGrid.wavelengths.map { wavelength in
+                // Read the measured band `shift` nanometres back; nothing past the grid.
+                let position = (wavelength - shift - SpectralGrid.wavelengths[0]) / SpectralGrid.stepNM
+                guard position >= 0, position <= Float(SpectralGrid.count - 1) else { return 0 }
+                let low = min(Int(position), SpectralGrid.count - 2)
+                let fraction = position - Float(low)
+                return measured[low] * (1 - fraction) + measured[low + 1] * fraction
+            }
+        })
+    }
+}
+
 /// Fixed spectral receiver for color negatives on Digital Reference. Equal-energy illumination
-/// reads the developed image dyes through broad RA-4 sensitivity bands. A common density matrix
+/// reads the developed image dyes through broad RA-4 sensitivity bands, or the `ReceiverBands`
+/// an edit places instead. A common density matrix
 /// separates their overlap against the public synthetic negative dye basis, then a common curve
 /// delivers the records directly in Display P3. These are explicit modeling choices, not
 /// measurements of a scanner or display. No capture-stock inverse is applied.
@@ -128,7 +195,6 @@ enum DigitalReferenceReceiver {
     }
 
     static let illuminant = SpectralGrid.equalEnergy
-    static let sensitivity = SpectralGrid.paperSensitivity
 
     /// The receiver's mid-grey density above base, `PrintPaper.screen.midDensity`.
     static let anchorDensity: Float = 0.744
@@ -436,39 +502,51 @@ enum DigitalReferenceReceiver {
     /// The receiver's small-signal density response at a neutral synthetic negative. Because
     /// the reference dyes partition unity, equal amounts transmit a constant spectrum. The
     /// derivative of measured density is therefore the band-weighted mean of each dye.
-    /// This characterizes the receiver once, without looking at a selected stock or its curves.
-    private static let densityUnmix: [SIMD3<Float>] = {
-        let dyes = SpectralGrid.dyes(family: .kodakNegative)
-        let rows: [SIMD3<Float>] = (0..<3).map { band in
-            var response = SIMD3<Float>(repeating: 0)
-            var total: Float = 0
-            for i in 0..<SpectralGrid.count {
-                let weight = illuminant[i] * sensitivity[band][i]
-                total += weight
-                for dye in 0..<3 { response[dye] += weight * dyes[dye][i] }
-            }
-            return response / total
-        }
-        func cross(_ a: SIMD3<Float>, _ b: SIMD3<Float>) -> SIMD3<Float> {
-            SIMD3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z,
-                  a.x * b.y - a.y * b.x)
-        }
-        let a = cross(rows[1], rows[2])
-        let b = cross(rows[2], rows[0])
-        let c = cross(rows[0], rows[1])
-        // Transpose the cofactors into inverse rows. Normalizing their sums cancels the
-        // common determinant and holds an equal-channel exposure exactly on the neutral axis.
-        return (0..<3).map { i in
-            let row = SIMD3(a[i], b[i], c[i])
-            return row / (row.x + row.y + row.z)
-        }
-    }()
+    /// This characterizes the receiver once per set of bands, without looking at a selected
+    /// stock or its curves.
+    struct DensityUnmix {
+        private let rows: [SIMD3<Float>]
 
-    static func read(_ relativeLogEnergy: SIMD3<Float>) -> SIMD3<Float> {
-        SIMD3(densityUnmix.map { row in
-            row.x * relativeLogEnergy.x + row.y * relativeLogEnergy.y
-                + row.z * relativeLogEnergy.z
-        })
+        init(bands: ReceiverBands) {
+            let dyes = SpectralGrid.dyes(family: .kodakNegative)
+            let sensitivity = bands.sensitivity
+            let response: [SIMD3<Float>] = (0..<3).map { band in
+                var response = SIMD3<Float>(repeating: 0)
+                var total: Float = 0
+                for i in 0..<SpectralGrid.count {
+                    let weight = illuminant[i] * sensitivity[band][i]
+                    total += weight
+                    for dye in 0..<3 { response[dye] += weight * dyes[dye][i] }
+                }
+                return response / total
+            }
+            func cross(_ a: SIMD3<Float>, _ b: SIMD3<Float>) -> SIMD3<Float> {
+                SIMD3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z,
+                      a.x * b.y - a.y * b.x)
+            }
+            let a = cross(response[1], response[2])
+            let b = cross(response[2], response[0])
+            let c = cross(response[0], response[1])
+            // Transpose the cofactors into inverse rows. Normalizing their sums cancels the
+            // common determinant and holds an equal-channel exposure exactly on the neutral axis.
+            rows = (0..<3).map { i in
+                let row = SIMD3(a[i], b[i], c[i])
+                return row / (row.x + row.y + row.z)
+            }
+        }
+
+        func read(_ relativeLogEnergy: SIMD3<Float>) -> SIMD3<Float> {
+            SIMD3(rows.map { row in
+                row.x * relativeLogEnergy.x + row.y * relativeLogEnergy.y
+                    + row.z * relativeLogEnergy.z
+            })
+        }
+    }
+
+    private static let paperUnmix = DensityUnmix(bands: .paper)
+
+    static func unmix(_ bands: ReceiverBands) -> DensityUnmix {
+        bands == .paper ? paperUnmix : DensityUnmix(bands: bands)
     }
 
     /// The log exposure the screen conversion's exposure adds to every read, in the paper

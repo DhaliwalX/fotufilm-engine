@@ -1590,7 +1590,7 @@ public struct FilmEngineInvocation {
                 callier: callier, printer: printer,
                 digitalReference: options.digitalReference,
                 screenGrade: options.screenGrade, screenExposureEV: options.screenExposureEV,
-                labScanLook: options.labScanLook)
+                labScanLook: options.labScanLook, receiverBands: options.receiverBands)
             self.spectralCacheID = SpectralRuntime.cacheIdentifier(
                 for: stock, paper: printMedium,
                 bleachBypass: options.bleachBypass,
@@ -1598,7 +1598,7 @@ public struct FilmEngineInvocation {
                 callier: callier, printer: printer,
                 digitalReference: options.digitalReference,
                 screenGrade: options.screenGrade, screenExposureEV: options.screenExposureEV,
-                labScanLook: options.labScanLook)
+                labScanLook: options.labScanLook, receiverBands: options.receiverBands)
         }
         // One resolved spectrum controls both integration and upload identity. Source pixels
         // have already been neutralized at capture; applying RGB WB here would count light twice.
