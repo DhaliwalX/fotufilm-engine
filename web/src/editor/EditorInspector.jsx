@@ -31,7 +31,6 @@ export default function EditorInspector() {
     active,
     edit,
     fixedSettings,
-    layeredLocked,
     patch,
     selectedStock,
     endEdit,
@@ -102,7 +101,7 @@ export default function EditorInspector() {
           <LensFilters
             edit={edit}
             stock={selectedStock}
-            disabled={exporting || !active || layeredLocked}
+            disabled={exporting || !active}
             onChange={(value) => {
               endEdit();
               patch(value);

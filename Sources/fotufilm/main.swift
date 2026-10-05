@@ -1093,26 +1093,7 @@ func packFrameSize() -> (width: Int, height: Int) {
     return (parts[0], parts[1])
 }
 
-/// Little-endian appenders shared by the two exports. Swift's `Data` has no numeric append and the
-/// browser reads these buffers as typed arrays, so the byte order is written out rather than
-/// inherited from the host.
 extension Data {
-    mutating func appendUInt32(_ value: UInt32) {
-        Swift.withUnsafeBytes(of: value.littleEndian) { append(contentsOf: $0) }
-    }
-
-    mutating func appendInt32(_ value: Int32) { appendUInt32(UInt32(bitPattern: value)) }
-
-    mutating func appendFloats(_ values: [Float]) {
-        values.withUnsafeBufferPointer { buffer in
-            buffer.baseAddress.map {
-                append(UnsafeBufferPointer(start: UnsafeRawPointer($0)
-                    .assumingMemoryBound(to: UInt8.self),
-                    count: buffer.count * MemoryLayout<Float>.size))
-            }
-        }
-    }
-
     /// A length-prefixed UTF-8 string, tail-padded so whatever follows stays four-byte aligned.
     /// The floats after it are read through `Float32Array`, which refuses an odd offset.
     mutating func appendPaddedString(_ string: String) {
@@ -1211,58 +1192,16 @@ if let packPath = flags["--dump-wasm-pack"] {
 
     do {
         if options.transportConstruction(for: stock) != nil {
-            guard stock.donorLayers.isEmpty else {
-                fail("Browser transport packs do not yet carry a donor stock's fourth record")
+            let sizes = ladder.map { shortEdge in
+                (max(shortEdge, Int((Double(shortEdge) * Double(baseLongEdge) / Double(baseShortEdge)).rounded())),
+                 shortEdge)
             }
-            let plan = try LayeredTransportRenderer.renderPlan(stock: stock, options: options,
-                                                              width: packWidth, height: packHeight)
-            guard plan.head.featureMask == FilmEngineFeature.lightOut else {
-                fail("Browser transport packs currently require lens flare and diffusion off")
-            }
-            // A component's stencil table without its empty levels: the count of levels it
-            // uses, then each one's level, radius and (2r + 1)² weights from the centred slot.
-            func appendStencils(_ component: TransportRenderPlan.Component) {
-                let levels = TransportRadialKernel.transportLevels
-                let limit = TransportRadialKernel.transportStencilRadius
-                let side = 2 * limit + 1, table = component.stencils
-                let used = (0..<levels).filter { table[$0] > 0 }
-                pack.appendInt32(Int32(used.count))
-                for level in used {
-                    let radius = Int(table[level]), base = levels + level * side * side
-                    pack.appendInt32(Int32(level))
-                    pack.appendInt32(Int32(radius))
-                    for dy in -radius...radius {
-                        let row = base + (dy + limit) * side + limit
-                        pack.appendFloats(Array(table[(row - radius)...(row + radius)]))
-                    }
-                }
-            }
-            func appendDelta(_ values: [Float], base: [Float]) {
-                let changed = values.indices.filter { values[$0].bitPattern != base[$0].bitPattern }
-                pack.appendInt32(Int32(changed.count))
-                for index in changed { pack.appendInt32(Int32(index)); pack.appendFloats([values[index]]) }
-            }
-            pack.appendInt32(plan.head.featureMask)
-            pack.appendInt32(LayeredTransportRenderer.continuationClears)
-            pack.appendFloats(plan.head.configuration)
-            pack.appendFloats(plan.tail.configuration)
-            pack.appendInt32(Int32(plan.components.count))
-            for component in plan.components {
-                pack.appendFloats(component.exposure)
-                appendStencils(component)
-            }
-            // Spectral tables do not depend on image size. Each size stores only its changed
-            // spatial configuration and pixel stencils, reusing the component LUTs above.
-            pack.appendInt32(Int32(ladder.count))
-            for shortEdge in ladder {
-                let longEdge = max(shortEdge, Int((Double(shortEdge) * Double(baseLongEdge) / Double(baseShortEdge)).rounded()))
-                let rung = try LayeredTransportRenderer.renderPlan(stock: stock, options: options,
-                                                                   width: longEdge, height: shortEdge)
-                precondition(rung.components.count == plan.components.count)
-                pack.appendInt32(Int32(shortEdge))
-                appendDelta(rung.head.configuration, base: plan.head.configuration)
-                appendDelta(rung.tail.configuration, base: plan.tail.configuration)
-                for component in rung.components { appendStencils(component) }
+            do {
+                pack.append(try WebFilmProfile.transportSection(stock: stock, options: options,
+                                                                width: packWidth, height: packHeight,
+                                                                sizes: sizes))
+            } catch let failure as WebFilmProfile.Failure {
+                fail(failure.description)
             }
         }
         // The film grain model's tiles close the pack, their count last so a reader finds them

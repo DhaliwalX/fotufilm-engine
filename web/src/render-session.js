@@ -96,6 +96,20 @@ function sampledEdge(image, edit, maxEdge, cropMode, displaySize) {
 }
 
 // WASM instances share a heap. Serialize stock changes, renders, exports and disposal.
+/// Whether an edit develops from a profile prepared at its render size: any film setting does, and
+/// so does a Layered Transport edit away from the film's own medium, style and light, which are
+/// all its sealed pack holds.
+export function needsRuntimeProfile(edit, sceneKelvin) {
+  if (edit.stock === null) return false
+  if (hasProfileSettings(edit)) return true
+  return (
+    edit.halationModel === 'layered' &&
+    (!!edit.medium ||
+      !!sceneKelvin ||
+      (edit.digitalReference || 'auto-levels') !== 'auto-levels')
+  )
+}
+
 export class RenderSession {
   constructor() {
     this.pending = []
@@ -389,19 +403,11 @@ export class RenderSession {
       : null
     if (this.closed || stale()) return null
     edit = frameRenderEdit(edit, frameConfiguration)
-    const dynamic = edit.stock !== null && hasProfileSettings(edit)
-    if (dynamic && edit.halationModel === 'layered')
-      throw new Error(
-        'Choose Legacy halation to adjust film, print or filter settings.',
-      )
+    const sceneKelvin = sourceIlluminant(edit)
+    const dynamic = needsRuntimeProfile(edit, sceneKelvin)
     if (dynamic && stage !== null)
       throw new Error(
         'Pipeline inspection requires default film, print and filter settings.',
-      )
-    const sceneKelvin = sourceIlluminant(edit)
-    if (edit.halationModel === 'layered' && sceneKelvin)
-      throw new Error(
-        'Layered Transport requires Stock Native source illumination. Choose Legacy for another illuminant.',
       )
     const work = { label: background ? 'film thumbnail' : purpose }
     const report = (text) => {
@@ -414,7 +420,7 @@ export class RenderSession {
     if (
       edit.stock !== null &&
       !this.packs.has(
-        `${stock}:${edit.medium || 'default'}:${edit.halationModel || 'legacy'}:${edit.digitalReference || 'auto-levels'}`,
+        `${stock}:${edit.medium || 'default'}:${dynamic ? 'legacy' : edit.halationModel || 'legacy'}:${edit.digitalReference || 'auto-levels'}`,
       )
     )
       report(
@@ -428,7 +434,7 @@ export class RenderSession {
         : await this.pack(
             stock,
             edit.medium,
-            edit.halationModel,
+            dynamic ? 'legacy' : edit.halationModel,
             edit.digitalReference,
           )
     if (this.closed || stale()) return null
@@ -533,6 +539,7 @@ export class RenderSession {
                   controls: {
                     ...profileRequestControls(edit, entry.stock),
                     digitalReference: edit.digitalReference || 'auto-levels',
+                    halationModel: edit.halationModel || 'legacy',
                   },
                 },
                 report,

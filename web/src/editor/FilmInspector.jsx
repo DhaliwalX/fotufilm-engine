@@ -7,13 +7,11 @@ import {
 } from "@react-spectrum/s2/Disclosure";
 import { Picker, PickerItem } from "@react-spectrum/s2/Picker";
 import FormatPicker from "./FormatPicker.jsx";
-import { hasProfileSettings } from "../profile-settings.js";
 import { useEditor } from "./EditorContext.jsx";
 export default function FilmInspector() {
   const {
     edit,
     fixedSettings,
-    layeredLocked,
     selectedStock,
     exporting,
     active,
@@ -21,15 +19,12 @@ export default function FilmInspector() {
     patch,
     setStage,
     setDifference,
-    sceneKelvin,
     backend,
   } = useEditor();
-  // The native engine solves Layered Transport for every film and edit. The browser's sealed
-  // packs carry three records and the film's own settings.
+  // The native engine solves Layered Transport for every film. The browser's packs carry three
+  // records, so a donor stock's fourth layer keeps it on Legacy there.
   const native = backend?.kind === "native";
-  const layeredOffered =
-    native ||
-    (selectedStock?.layeredTransport !== false && !sceneKelvin && !hasProfileSettings(edit));
+  const layeredOffered = native || selectedStock?.layeredTransport !== false;
   return (
     <>
       <Disclosure
@@ -65,7 +60,7 @@ export default function FilmInspector() {
             <DisclosurePanel>
               <div className="control-stack">
                 <FormatPicker
-                  disabled={exporting || !active || layeredLocked}
+                  disabled={exporting || !active}
                   onChange={(format) => {
                     endEdit();
                     patch({ format });
@@ -108,7 +103,7 @@ export default function FilmInspector() {
                 value={edit.halationModel || "legacy"}
                 onChange={(halationModel) => {
                   endEdit();
-                  patch(native ? { halationModel } : { halationModel, medium: null });
+                  patch({ halationModel });
                   setStage(null);
                   setDifference(false);
                 }}
@@ -154,19 +149,6 @@ export default function FilmInspector() {
                   ]}
                 />
               }
-              {!native && hasProfileSettings(edit) && (
-                <p className="medium-detail">
-                  Custom film settings use Legacy halation.
-                </p>
-              )}
-              {!native && sceneKelvin && (
-                <p className="medium-detail">
-                  Custom source illumination uses Legacy halation.
-                </p>
-              )}
-              {layeredLocked && (
-                <p className="medium-detail">Uses the film’s defaults.</p>
-              )}
             </div>
           </DisclosurePanel>
         </Disclosure>

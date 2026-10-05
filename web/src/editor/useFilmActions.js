@@ -37,7 +37,7 @@ export default function useFilmActions({
     patch({
       stock: id,
       ...selectStockSettings(nextStock),
-      medium: halationModel === "layered" && backend?.kind !== "native" ? null : medium,
+      medium,
       halationModel,
     });
     setStage(null);
