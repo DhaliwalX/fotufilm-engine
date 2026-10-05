@@ -42,7 +42,7 @@ extension EditState {
     static let bespokeKeySections: [String: EditorControlSection?] = [
         "stockID": .filmStock, "chosenFormatID": .filmStock,
         "grainModel": .filmGrain, "grainMottleShare": .filmGrain,
-        "halationReturnRatio": .filmEmulsion, "couplerGapReach": .filmEmulsion,
+        "halationReturnRatio": .filmHalation, "couplerGapReach": .filmEmulsion,
         "shutterSeconds": .filmLab,
         "lensFilterIDs": .lensGlass, "lensFilterMetering": .lensGlass,
         "lensProfileID": .lensCorrection, "lensAdjustment": .lensCorrection,

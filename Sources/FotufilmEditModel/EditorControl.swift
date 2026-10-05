@@ -57,7 +57,7 @@ public enum EditorControlGroup: String, CaseIterable, Sendable {
 }
 
 public enum EditorControlSection: String, CaseIterable, Sendable {
-    case filmStock, filmGrain, filmEmulsion, filmLab
+    case filmStock, filmGrain, filmHalation, filmEmulsion, filmLab
     case lensGlass, lensCorrection
     case lightExposure, lightBalance, lightColor, lightGrade
     case hdrHighlights
@@ -67,7 +67,7 @@ public enum EditorControlSection: String, CaseIterable, Sendable {
 
     public var group: EditorControlGroup {
         switch self {
-        case .filmStock, .filmGrain, .filmEmulsion, .filmLab: return .film
+        case .filmStock, .filmGrain, .filmHalation, .filmEmulsion, .filmLab: return .film
         case .lensGlass, .lensCorrection: return .lens
         case .lightExposure, .lightBalance, .lightColor, .lightGrade, .hdrHighlights: return .light
         case .printPaper, .printLamp: return .print
@@ -80,6 +80,7 @@ public enum EditorControlSection: String, CaseIterable, Sendable {
         switch self {
         case .filmStock: return "Stock"
         case .filmGrain: return "Grain"
+        case .filmHalation: return "Halation"
         case .filmEmulsion: return "Emulsion"
         case .filmLab: return "Lab"
         case .lensGlass: return "Filters"

@@ -594,7 +594,7 @@ public enum EditorControlCatalogue {
         EditorControl(
             .halationModel, title: "Halation Model",
             detail: "Choose how light is scattered and reflected within the film.",
-            section: .filmEmulsion,
+            section: .filmHalation,
             kind: .menu(.fixed([EditorMenuChoice(0, "Legacy", detail: "Original film halation", id: "legacy"),
                                 EditorMenuChoice(1, "Layered Transport", detail: "Illustrative film stack",
                                                  id: "layered")])),
@@ -614,7 +614,7 @@ public enum EditorControlCatalogue {
         EditorControl(
             .halation, title: "Halation",
             detail: "Adjust the glow around bright areas caused by light reflecting inside the film.",
-            section: .filmEmulsion,
+            section: .filmHalation,
             kind: .slider(EditorControlScale(HalationAmount.travel, neutral: 0,
                                              unit: .stopsFromOff,
                                              admitted: HalationAmount.admitted)),
@@ -642,7 +642,7 @@ public enum EditorControlCatalogue {
         EditorControl(
             .estimatedHalation, title: "Estimated Halation Shape",
             detail: "Use an estimated halo shape when the film has no measured shape.",
-            section: .filmEmulsion, kind: .toggle(restingOn: false),
+            section: .filmHalation, kind: .toggle(restingOn: false),
             scope: .global(settingKey: "fotufilm.estimated-halation"),
             binding: .estimatedHalationProfile,
             surfaces: [.resolve, .finalcut, .cli, .web],
@@ -662,7 +662,7 @@ public enum EditorControlCatalogue {
         EditorControl(
             .halationReturn, title: "Halation Return",
             detail: "Red returned/direct exposure percentage; follows the selected film until adjusted.",
-            section: .filmEmulsion,
+            section: .filmHalation,
             kind: .slider(EditorControlScale(0...1, neutral: 0, unit: .percent)),
             availability: .film,
             persistence: .bespoke, binding: .halationReturnRatio,
@@ -678,7 +678,7 @@ public enum EditorControlCatalogue {
         EditorControl(
             .halationColour, title: "Halo Colour",
             detail: "Control how much the halo keeps the color of the light source.",
-            section: .filmEmulsion,
+            section: .filmHalation,
             kind: .slider(EditorControlScale(0...1, neutral: 0, unit: .percent)),
             availability: .colourNegative,
             binding: .halationSourceColour,
@@ -701,7 +701,7 @@ public enum EditorControlCatalogue {
         EditorControl(
             .halationSpectrum, title: "Return Spectrum",
             detail: "Adjust which colors the film base reflects back into the image.",
-            section: .filmEmulsion,
+            section: .filmHalation,
             kind: .curve(EditorControlCurve(
                 handles: HalationSpectrum.handleNM.map { Double($0) },
                 domain: 380...780,
@@ -729,7 +729,7 @@ public enum EditorControlCatalogue {
         EditorControl(
             .halationHaze, title: "Base Haze",
             detail: "Soften the halo with scatter inside the film base.",
-            section: .filmEmulsion,
+            section: .filmHalation,
             kind: .slider(EditorControlScale(0...100, neutral: 0, unit: .micrometers)),
             availability: .film,
             foldsUnder: .halation,
@@ -745,7 +745,7 @@ public enum EditorControlCatalogue {
         EditorControl(
             .antiHalation, title: "Anti-Halation",
             detail: "Set the strength of the film's anti-halation layer. Layered Transport only.",
-            section: .filmEmulsion,
+            section: .filmHalation,
             kind: .slider(EditorControlScale(0...1.5, neutral: 1, unit: .percent)),
             availability: .film,
             foldsUnder: .halation,
@@ -761,7 +761,7 @@ public enum EditorControlCatalogue {
         EditorControl(
             .baseThickness, title: "Base Thickness",
             detail: "Make the film base thinner or thicker. Layered Transport only.",
-            section: .filmEmulsion,
+            section: .filmHalation,
             kind: .slider(EditorControlScale(0.5...2, neutral: 1, unit: .multiplier)),
             availability: .film,
             foldsUnder: .halation,
@@ -777,7 +777,7 @@ public enum EditorControlCatalogue {
         EditorControl(
             .pressurePlate, title: "Pressure Plate",
             detail: "Reflect light back from a plate behind the film. Layered Transport only.",
-            section: .filmEmulsion,
+            section: .filmHalation,
             kind: .slider(EditorControlScale(0...1, neutral: 0, unit: .percent)),
             availability: .film,
             foldsUnder: .halation,

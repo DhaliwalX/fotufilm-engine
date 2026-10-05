@@ -1396,7 +1396,7 @@
         "desktop" : "Film Model settings choose it for every photograph"
       },
       "scope" : "global",
-      "section" : "filmEmulsion",
+      "section" : "filmHalation",
       "settingKey" : "fotufilm.halation-model",
       "surfaces" : [
         "resolve",
@@ -1462,7 +1462,7 @@
         "unit" : "stopsFromOff"
       },
       "scope" : "edit",
-      "section" : "filmEmulsion",
+      "section" : "filmHalation",
       "storedEncoding" : "scaleFromStops",
       "storedNeutral" : 1,
       "surfaces" : [
@@ -1517,7 +1517,7 @@
       },
       "restingOn" : false,
       "scope" : "global",
-      "section" : "filmEmulsion",
+      "section" : "filmHalation",
       "settingKey" : "fotufilm.estimated-halation",
       "surfaces" : [
         "resolve",
@@ -1562,7 +1562,7 @@
         "unit" : "percent"
       },
       "scope" : "edit",
-      "section" : "filmEmulsion",
+      "section" : "filmHalation",
       "surfaces" : [
         "app",
         "desktop",
@@ -1627,7 +1627,7 @@
         "unit" : "percent"
       },
       "scope" : "edit",
-      "section" : "filmEmulsion",
+      "section" : "filmHalation",
       "storedEncoding" : "same",
       "storedNeutral" : 0,
       "surfaces" : [
@@ -1699,7 +1699,7 @@
       },
       "persistedKey" : "halationSpectrum",
       "scope" : "edit",
-      "section" : "filmEmulsion",
+      "section" : "filmHalation",
       "storedEncoding" : "same",
       "surfaces" : [
         "app",
@@ -1746,7 +1746,7 @@
         "unit" : "micrometers"
       },
       "scope" : "edit",
-      "section" : "filmEmulsion",
+      "section" : "filmHalation",
       "storedEncoding" : "same",
       "storedNeutral" : 0,
       "surfaces" : [
@@ -1794,7 +1794,7 @@
         "unit" : "percent"
       },
       "scope" : "edit",
-      "section" : "filmEmulsion",
+      "section" : "filmHalation",
       "storedEncoding" : "same",
       "storedNeutral" : 1,
       "surfaces" : [
@@ -1842,7 +1842,7 @@
         "unit" : "multiplier"
       },
       "scope" : "edit",
-      "section" : "filmEmulsion",
+      "section" : "filmHalation",
       "storedEncoding" : "same",
       "storedNeutral" : 1,
       "surfaces" : [
@@ -1890,7 +1890,7 @@
         "unit" : "percent"
       },
       "scope" : "edit",
-      "section" : "filmEmulsion",
+      "section" : "filmHalation",
       "storedEncoding" : "same",
       "storedNeutral" : 0,
       "surfaces" : [
@@ -7042,6 +7042,12 @@
       "groupTitle" : "Film",
       "id" : "filmGrain",
       "title" : "Grain"
+    },
+    {
+      "group" : "film",
+      "groupTitle" : "Film",
+      "id" : "filmHalation",
+      "title" : "Halation"
     },
     {
       "group" : "film",

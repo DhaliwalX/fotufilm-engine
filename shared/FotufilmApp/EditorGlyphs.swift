@@ -87,6 +87,7 @@ enum Glyph {
         switch section {
         case .filmStock: return "fotu.deck.film"
         case .filmGrain: return "fotu.tab.grain"
+        case .filmHalation: return "fotu.tab.halation"
         case .filmEmulsion: return "fotu.tab.emulsion"
         case .filmLab: return "fotu.tab.lab"
         case .lensGlass: return "fotu.tab.filters"
