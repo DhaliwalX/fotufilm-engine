@@ -18,6 +18,7 @@ import PluginsDialog from "./PluginsDialog.jsx";
 import FilmPackNotice from "./FilmPackNotice.jsx";
 import UpdateDialog from "./UpdateDialog.jsx";
 import SettingsSectionsDialog from "./SettingsSectionsDialog.jsx";
+import BandSetDialog from "./BandSetDialog.jsx";
 import PresetsDialog from "./PresetsDialog.jsx";
 import { FILM_PACK_EXTENSION } from "./useFilmPacks.js";
 import { useEditor } from "./EditorContext.jsx";
@@ -125,6 +126,8 @@ export default function Workspace() {
           <SettingsSectionsDialog />
         ) : dialog === "savePreset" ? (
           <SettingsSectionsDialog preset />
+        ) : dialog === "saveBands" ? (
+          <BandSetDialog />
         ) : dialog === "presets" ? (
           <PresetsDialog />
         ) : dialog === "update" ? (

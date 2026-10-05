@@ -83,3 +83,15 @@ test("a colour pair set on its own seeds its reach; one left linked follows Sepa
     resetAppSettings();
     assert.equal(appSetting("couplerRedGreen"), null);
   }));
+
+test("bands chosen for new photos start a new photograph's edit", () =>
+  withStorage(() => {
+    setAppSetting("receiverBands", { red: 625, green: 522, blue: 455 });
+    assert.deepEqual(newPhotoEdit(defaultEdit("gold200")).profile, {
+      screenRedBand: 625,
+      screenGreenBand: 522,
+      screenBlueBand: 455,
+    });
+    setAppSetting("receiverBands", null);
+    assert.deepEqual(newPhotoEdit(defaultEdit("gold200")).profile, {});
+  }));

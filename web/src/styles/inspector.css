@@ -405,8 +405,10 @@
     gap: 12px;
     font-size: 11px;
   }
-  .receiver-bands > button {
-    align-self: flex-start;
+  .receiver-band-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
   }
   .inspector-section {
     padding: 10px 0;
