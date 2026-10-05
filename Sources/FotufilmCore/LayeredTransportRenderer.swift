@@ -192,18 +192,16 @@ public enum LayeredTransportRenderer {
         return result
     }
 
-    /// Solved inputs for portable AOT hosts. The browser stores these alongside its base pack.
     /// The stages the continuation leaves off: the heads already ran the optics, and the
     /// transport took the place of the halation and the emulsion's MTF.
     public static let continuationClears = FilmEngineFeature.flare | FilmEngineFeature.diffusion
         | FilmEngineFeature.mtf | FilmEngineFeature.mtfLuma | FilmEngineFeature.halation
         | FilmEngineFeature.annularHalation | FilmEngineFeature.texture
 
+    /// Solved inputs for portable AOT hosts. The browser stores these alongside its base pack.
+    /// A donor stock's components carry its fourth record in each exposure table's fourth lane.
     public static func renderPlan(stock: FilmStock, options: FotufilmEngine.Options,
                                   width: Int, height: Int) throws -> TransportRenderPlan {
-        guard stock.donorLayers.isEmpty else {
-            throw TransportError.unsupported("transport packs do not yet carry a donor stock's fourth record")
-        }
         guard let model = options.transportConstruction(for: stock),
               options.stage == .full, !options.localTone else {
             throw TransportError.unsupported("transport pack requires full stage without image-dependent local tone")
@@ -265,8 +263,8 @@ public enum LayeredTransportRenderer {
         var referenceExposure = try render(image, referenceHead, true)
         if exposed.channels == 4 {
             var donorHead = referenceHead
-            donorHead.setTransportExposure(Self.fourthRecord(of: exposed.invocation.spectral.exposure))
-            referenceExposure.planes.append(try render(image, donorHead, true).planes[0])
+            donorHead.setTransportExposure(exposed.invocation.spectral.exposure)
+            referenceExposure.planes.append(try render(image, Self.fourthRecordHead(donorHead), true).planes[0])
         }
         var reference = continuation
         reference.featureMask &= ~(FilmEngineFeature.grain | FilmEngineFeature.adjacency
@@ -364,7 +362,7 @@ public enum LayeredTransportRenderer {
                         var head = head(table)
                         try light(head, into: component.baseAddress!)
                         if donated {
-                            head.setTransportExposure(Self.fourthRecord(of: table))
+                            head = Self.fourthRecordHead(head)
                             try fourth.withUnsafeMutableBufferPointer {
                                 try light(head, into: $0.baseAddress!)
                                 component.baseAddress!.advanced(by: 3 * n).update(from: $0.baseAddress!, count: n)
@@ -479,6 +477,16 @@ public enum LayeredTransportRenderer {
         let status = fotufilm_transport_component(component, sum, Int32(width), Int32(height),
                                                   Int32(channels), stencils, backend.rawValue)
         guard status == 0 else { throw TransportError.backend("transport failed (\(status))") }
+    }
+
+    /// A head exposing its table's fourth record, a donor stock's, in each of the three it renders,
+    /// through the lens diffusion the donor's own record takes.
+    public static func fourthRecordHead(_ head: FilmEngineInvocation) -> FilmEngineInvocation {
+        var donor = head
+        donor.setTransportExposure(fourthRecord(of: head.spectral.exposure))
+        let from = Int(FOTUFILM_CONFIG_DONOR_DIFFUSION_KERNEL), to = Int(FOTUFILM_CONFIG_DIFFUSION_KERNEL)
+        for c in 0..<3 { for k in 0..<3 { donor.configuration[to + 3 * c + k] = head.configuration[from + k] } }
+        return donor
     }
 
     /// A table exposing its fourth record, a donor stock's, in each of the three it renders.

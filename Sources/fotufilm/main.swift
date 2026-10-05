@@ -1206,6 +1206,9 @@ if let packPath = flags["--dump-wasm-pack"] {
 
     do {
         if options.transportConstruction(for: stock) != nil {
+            guard stock.donorLayers.isEmpty else {
+                fail("Browser transport packs do not yet carry a donor stock's fourth record")
+            }
             let plan = try LayeredTransportRenderer.renderPlan(stock: stock, options: options,
                                                               width: packWidth, height: packHeight)
             guard plan.head.featureMask == FilmEngineFeature.lightOut else {
