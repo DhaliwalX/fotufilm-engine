@@ -69,6 +69,11 @@ Options:
   --depth <8|16>     Output bit depth (default: 16 for TIFF; otherwise 8, dithered)
   --hlg              Write the print as 16-bit Rec.2020 HLG instead of sRGB.
                      Implies --depth 16.
+  --edge             Develop the film around the picture too (Emulsion Border):
+                     the gauge's unexposed band, the gate's shadow at the
+                     input's recorded aperture, and a negative's carrier
+  --f-number <n>     With --edge, the aperture the input was taken at, in place
+                     of the one its file records
   --transport <json> Opt in to a layered transport construction (experimental)
   --transport-backend <cpu|metal> Transport convolution backend (default: cpu)
   --iterations <n>  Render n times; the first warms caches, remaining runs report
@@ -122,7 +127,7 @@ while !args.isEmpty {
         || a == "--list-film-bases"
         || a == "--dump-spectra" || a == "--help" || a == "-h"
         || a == "--autoexpose" || a == "--check-stocks" || a == "--make-pack-key"
-        || a == "--stages" || a == "--hlg" || valuelessControlFlags.contains(a) {
+        || a == "--stages" || a == "--hlg" || a == "--edge" || valuelessControlFlags.contains(a) {
         flags[a] = ""
     } else if a.hasPrefix("--") {
         guard !args.isEmpty else { fail("Missing value for \(a)\n\n\(usage)") }
@@ -1396,7 +1401,23 @@ let background = parseLinearBackground(flags["--background"])
 
 let scene = loadLinear(path: positional[0])
 var rgba = scene.rgba
-let width = scene.width, height = scene.height, contentHeadroom = scene.contentHeadroom
+var width = scene.width, height = scene.height
+let contentHeadroom = scene.contentHeadroom
+if flags["--edge"] != nil, let geometry = UnexposedEdge.Geometry.preset(options.format.presetID ?? "35mm") {
+    let margins = geometry.margins(photoWidth: width, photoHeight: height,
+                                   pixelsPerMM: options.pixelsPerMM(width: width, height: height),
+                                   carrier: !stock.isReversal)
+    let outer = (width + margins.left + margins.right, height + margins.top + margins.bottom)
+    var extended = [Float](repeating: 0, count: outer.0 * outer.1 * 4)
+    rgba.withUnsafeBufferPointer { source in extended.withUnsafeMutableBufferPointer {
+        UnexposedEdge.extend(source, width: width, height: height, margins: margins, into: $0) } }
+    let input = URL(fileURLWithPath: positional[0])
+    let aperture = UnexposedEdge.TakingAperture(
+        fNumber: flags["--f-number"].flatMap { Float($0) }, sensor: SensorFrame.read(url: input))
+        ?? UnexposedEdge.TakingAperture(contentsOf: input)
+    options.unexposedEdge = .init(margins: margins, fNumber: aperture?.equivalent(on: options.format))
+    rgba = extended; width = outer.0; height = outer.1
+}
 PremultipliedAlpha.flatten(&rgba, over: background)
 // RAW decoding keeps its as-shot white. All inputs then use the stock's native light unless
 // --scene-kelvin explicitly names a different source. --wb is the same relative edit on both.

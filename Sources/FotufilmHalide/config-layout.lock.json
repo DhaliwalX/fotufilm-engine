@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "count": 18227,
+  "count": 18236,
   "fields": {
     "CURVES": {
       "offset": 0,
@@ -393,6 +393,14 @@
     "HDR_RANGE": {
       "offset": 18225,
       "count": 2
+    },
+    "GATE_CORNER": {
+      "offset": 18227,
+      "count": 1
+    },
+    "CARRIER": {
+      "offset": 18228,
+      "count": 8
     }
   }
 }

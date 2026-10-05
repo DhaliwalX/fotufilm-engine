@@ -44,7 +44,7 @@ final class PrintFrameTests: XCTestCase {
         -> (image: CGImage, margins: UnexposedEdge.Margins) {
         let margins = try XCTUnwrap(UnexposedEdge.Geometry.preset(format))
             .margins(photoWidth: image.width, photoHeight: image.height,
-                     pixelsPerMM: Float(min(image.width, image.height)) / 24)
+                     pixelsPerMM: Float(min(image.width, image.height)) / 24, carrier: false)
         let space = try XCTUnwrap(image.colorSpace)
         let width = image.width + margins.left + margins.right
         let height = image.height + margins.top + margins.bottom
@@ -220,6 +220,26 @@ final class PrintFrameTests: XCTestCase {
             XCTAssertEqual(config.frame, .emulsion)
             XCTAssertEqual(config.baseRGB, SIMD3(repeating: 0.91))
         }
+    }
+
+    func testEmulsionMarginIsThePaperBeyondTheCarrierAsDeveloped() throws {
+        let source = try fixture()
+        let config = configuration(.emulsion, paper: .screen)
+        let developed = try film(around: source, tone: [0.9, 0.8, 0.7, 1])
+        let band = developed.margins
+        let carried = UnexposedEdge.Margins(left: band.left, right: band.right, top: band.top,
+                                            bottom: band.bottom, carrier: 2)
+        let result = try XCTUnwrap(PrintFrameRenderer.render(developed.image, configuration: config,
+                                                             edge: carried))
+        let data = try pixels(result)
+        let paper = rgb(result, data, 0, 0)
+        XCTAssertEqual(paper.x, 0.9, accuracy: 0.002)
+        XCTAssertEqual(paper.z, 0.7, accuracy: 0.002)
+        let layout = PrintFrameRenderer.layout(width: source.width, height: source.height,
+                                               configuration: config, edge: carried)
+        let left = Int(layout.imageRect.minX) - band.left
+        XCTAssertEqual(rgb(result, data, left - 1, 100), rgb(result, data, left, 100),
+                       "no seam where the developed film meets the margin")
     }
 
     func testEmulsionPrintsTheDevelopedFilmInsideTheMargin() throws {

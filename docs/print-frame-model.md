@@ -245,15 +245,42 @@ and that whole piece is developed and printed as one frame (`UnexposedEdge`,
 - **Inner edge.** The gate's aperture plate stands in front of the emulsion by
   `gateSeparationMM` = 0.15 mm, about one support thickness between the film's outer and inner
   rails. Each point of the exit pupil casts the edge at a different place, so each edge passes the
-  fraction of a uniform pupil disc on the open side of a straight line, of radius `0.15 / (2 N)` mm,
-  drawn for a reference aperture of f/8 (`referenceFNumber`); the two axes multiply. Both figures are
-  representative, not measurements of a particular camera.
+  fraction of a uniform pupil disc on the open side of a straight line, of radius `0.15 / (2 N)` mm.
+  The aperture's corners are rounded to `gateCornerRadiusMM` = 0.15 mm (FOTUFILM_CONFIG_GATE_CORNER),
+  and the line is taken at the pixel's signed distance from that rounded edge; along the straight
+  sides that is one axis's distance alone. The f/2 shadow is about 0.08 mm across, the softness
+  full-frame prints show at the gate. All three figures are representative, not measurements of a
+  particular camera.
+- **Taking aperture.** `N` is the photograph's own aperture (`UnexposedEdge.TakingAperture`): EXIF
+  FNumber, or the APEX ApertureValue where only that is written, read without needing a lens name.
+  The gate's shadow is the cone of light reaching the gauge's gate, so the recorded f-number is
+  scaled to the same picture on the gauge, with the same angle of view and depth of field:
+  `N × gauge diagonal / sensor diagonal`, with the sensor from `SensorFrame`. An X-T50 frame at
+  f/1.4 is about f/2.1 on 135; a phone's f/1.78 main camera is about f/6.3. Without a measured
+  sensor the picture is taken to have been exposed on the gauge itself, and without a believable
+  f-number (0.7 to 128) the shadow is drawn at `referenceFNumber` = f/2. However far the lens is
+  stopped down, the edge stays no sharper than its own Fresnel fringe, `sqrt(λ z)` across at
+  λ = 550 nm: the radius is `sqrt((0.15 / (2 N))² + (sqrt(λ · 0.15) / 2)²)` mm. That adds under 1%
+  at f/2 and is most of the shadow at f/16. The camera's own path keeps the aperture even though
+  its gauge does not follow the sensor.
 - **Width.** The film runs from the gate to the first thing that is not continuous emulsion, in
   the gauge's `FilmBorderGeometry`: the inner edge of the perforation row, the film's cut edge on
   unperforated gauges, or halfway to the next frame along the roll. On 135 that is about 0.70 mm
   across and 1.0 mm along the film; 120 and sheet film run to the edge. A photograph standing the
-  other way from the aperture turns the film with it. The outer edge is the straight cut of the
-  film or the perforation row, with no wear.
+  other way from the aperture turns the film with it.
+- **Outer edge.** A negative is printed in the enlarger's carrier, filed out to the film's outer
+  edge where the band ends (FOTUFILM_CONFIG_CARRIER, `UnexposedEdge.carrier…`). The develop carries
+  the film `carrierReachMM` = 0.22 mm further, and the carrier holds the printing light off it: up to
+  6 D added to every record of the developed film, after the grain and before the enlarger's
+  spread. The opening's corners are rounded to 0.3 mm, and its sides are filed by hand up to
+  0.025 mm inside it, wandering over about 2 mm on a smooth value-noise lattice. It stands a step in
+  front of the film, so its edge casts the shadow of a 0.15 mm disc, the enlarger's cone of light
+  across that step. Across the shadow the paper sees a fraction of the light through the film base,
+  and its records leave their toe unevenly, so the edge passes through the paper's own fringe
+  colour on its way to white. Beyond it the paper saw no light at all, and the margin is that
+  paper as developed (the developed piece's corner), so there is no seam. A transparency is seen
+  whole, with no carrier. These figures are representative, read from full-frame prints, not
+  measurements of a particular carrier.
 - **Selective edits** are drawn on the photograph; their mask reaches the film beyond as the picture
   does, continued from the nearest edge.
 
@@ -261,8 +288,9 @@ The band is offered with any film and any roll or sheet gauge; integral instant 
 there instead of emulsion and Normal has no film. The browser does not offer it: its kernels carry the
 gate, but its host does not build the larger frame. The paper margin beyond the band follows the
 crop at 7% of the photograph's short side horizontally and 11% vertically, rounded up to whole
-pixels, and is the selected reflection paper's modelled base and Viewing Light where there is one
-and a neutral 0.91 display-linear P3 mount elsewhere. The developed film goes down whole at integer
+pixels. Beyond a negative's carrier it is the paper as developed; around a transparency it is the
+selected reflection paper's modelled base and Viewing Light where there is one and a neutral 0.91
+display-linear P3 mount elsewhere. The developed film goes down whole at integer
 pixel coordinates in its colour profile and 16-bit precision. The photograph inside it is the same
 develop as the band, so it is not the photograph's own unframed develop pixel for pixel: near the
 gate the film's halation and scatter see the dark film beyond it instead of more picture.

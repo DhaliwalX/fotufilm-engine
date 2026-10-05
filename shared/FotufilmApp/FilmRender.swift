@@ -206,6 +206,10 @@ enum FilmRender {
         /// of what the file says about itself, because the develop settles the gauge from it and a
         /// develop runs many times over one scene.
         var sensorFrame: SensorFrame?
+        /// The aperture the file says the lens was set to, with the frame it was set on. Kept on
+        /// the camera's own path too, where `sensorFrame` is not, because the Emulsion Border's
+        /// gate shadow follows the lens whichever gauge the picture develops on.
+        var takingAperture: UnexposedEdge.TakingAperture?
         /// Set only while the rasterise is still running behind this scene; nil once the pixels
         /// are all there, which is every scene the editor holds between renders.
         var ready: RowWatermark?
@@ -608,6 +612,7 @@ enum FilmRender {
                      frameCoverage: frameCoverage,
                      viewport: viewport,
                      sensorFrame: usesSourceFrame ? source.sensorFrame : nil,
+                     takingAperture: source.takingAperture,
                      ready: watermark,
                      placeSelectionMask: { mask in
                          let original = atOrigin(mask).transformed(by: CGAffineTransform(
@@ -703,7 +708,8 @@ enum FilmRender {
                      inputConversion: scene.inputConversion,
                      frameCoverage: scene.frameCoverage,
                      viewport: scene.viewport,
-                     sensorFrame: scene.sensorFrame)
+                     sensorFrame: scene.sensorFrame,
+                     takingAperture: scene.takingAperture)
     }
 
     /// Develops `source` under `state`, resampled so its long edge is
@@ -1248,8 +1254,9 @@ enum FilmRender {
     /// A piece of film larger than the camera's aperture, developed whole: `scene` is the light
     /// the lens forms inside the aperture, continued past its edges as the world beyond them, and
     /// the gate passes it only inside (`UnexposedEdge`). The film reaches as far beyond the
-    /// aperture as the gauge's emulsion does before its perforations or cut edge. Nil with no
-    /// film, on a gauge with no emulsion there, or when the develop fails.
+    /// aperture as the gauge's emulsion does before its perforations or cut edge, and the gate's
+    /// shadow is the one the picture's own aperture casts on that gauge. Nil with no film, on a
+    /// gauge with no emulsion there, or when the develop fails.
     static func developFilm(
         beyond scene: Scene, state: EditState, hdr: Bool = false,
         dynamicRange: AppSettings.DynamicRange = AppSettings.storedStillDynamicRange,
@@ -1272,7 +1279,8 @@ enum FilmRender {
         else { return nil }
         let margins = geometry.margins(
             photoWidth: scene.width, photoHeight: scene.height,
-            pixelsPerMM: options.pixelsPerMM(width: scene.width, height: scene.height))
+            pixelsPerMM: options.pixelsPerMM(width: scene.width, height: scene.height),
+            carrier: !stock.isReversal)
         // The photograph's own Auto Levels reading, metered as its develop meters it.
         var stops = options.sceneHighlightStops
         var medians = options.sceneChannelMedians
@@ -1314,8 +1322,10 @@ enum FilmRender {
             sceneKelvin: scene.sceneKelvin, sceneChromaticity: scene.sceneChromaticity,
             contentHeadroom: scene.contentHeadroom, inputConversion: scene.inputConversion,
             frameCoverage: scene.frameCoverage, viewport: nil, sensorFrame: scene.sensorFrame,
+            takingAperture: scene.takingAperture,
             unexposedEdge: .init(margins: margins, sceneHighlightStops: stops,
-                                 sceneChannelMedians: medians, sceneToneStops: tone))
+                                 sceneChannelMedians: medians, sceneToneStops: tone,
+                                 fNumber: scene.takingAperture?.equivalent(on: options.format)))
         func print(_ state: EditState) -> Rendered? {
             develop(film, state: state, hdr: hdr, dynamicRange: dynamicRange, exact: exact,
                     negative: negative, shouldContinue: shouldContinue)?.image
@@ -1816,6 +1826,9 @@ struct PhotoSource: @unchecked Sendable {
     var captureMetadata: [String: Any]? { descriptor.captureMetadata }
     var lensShot: LensShot? { descriptor.lensShot }
     var sensorFrame: SensorFrame? { descriptor.sensorFrame }
+    var takingAperture: UnexposedEdge.TakingAperture? {
+        UnexposedEdge.TakingAperture(capture: captureMetadata, sensor: sensorFrame)
+    }
     var declaredHeadroom: Float? { descriptor.declaredHeadroom }
     var originalFile: OriginalFile? {
         guard let data else { return nil }

@@ -465,12 +465,22 @@
     {
       "name": "GATE",
       "count": 5,
-      "doc": "The camera gate, for a frame larger than the aperture (Emulsion Border's film beyond the gate): the aperture's left, top, right and bottom edges in frame pixels, then the radius in pixels of the lens pupil's shadow of its edge. Light the lens formed \u2014 the direct image, a diffusion filter's halo, veiling glare, a camera preflash \u2014 reaches the film only through it: each edge passes the share of a uniform disc on the open side of a straight line, and the two axes multiply. A negative radius is no gate, and the light passes unchanged. Appended without renumbering earlier fields."
+      "doc": "The camera gate, for a frame larger than the aperture (Emulsion Border's film beyond the gate): the aperture's left, top, right and bottom edges in frame pixels, then the radius in pixels of the lens pupil's shadow of its edge. Light the lens formed \u2014 the direct image, a diffusion filter's halo, veiling glare, a camera preflash \u2014 reaches the film only through it: the edge passes the share of a uniform disc on the open side of a line at the pixel's distance beyond it, the corners rounded to FOTUFILM_CONFIG_GATE_CORNER. A negative radius is no gate, and the light passes unchanged. Appended without renumbering earlier fields."
     },
     {
       "name": "HDR_RANGE",
       "count": 2,
       "doc": "The knee, in units of diffuse white, and the log2 curvature that compress an HDR source's light above the knee into the headroom its edit keeps (HDRHighlightRange), before the white balance. Curvature 0 changes nothing. Appended without renumbering earlier fields."
+    },
+    {
+      "name": "GATE_CORNER",
+      "count": 1,
+      "doc": "The radius in pixels to which the camera gate's corners are rounded, for FOTUFILM_CONFIG_GATE. The gate passes the share of the pupil's disc on the open side of the rounded aperture's edge at the pixel's signed distance from it, so its straight sides cast the same shadow as before and the corners curve. Read only when the gate's radius is non-negative; appended without renumbering earlier fields."
+    },
+    {
+      "name": "CARRIER",
+      "count": 8,
+      "doc": "The enlarger's negative carrier, for a frame larger than the aperture (Emulsion Border): its opening's left, top, right and bottom edges in frame pixels, the radius its corners are rounded to, the radius of the disc whose shadow its edge casts, how far inside the opening a hand-filed edge wanders at most, and the cell of the noise lattice it wanders on, all in pixels. Beyond the opening it holds the printing light off, as density added to every record of the developed film before the enlarger's spread. A negative shadow radius is no carrier. Appended without renumbering earlier fields."
     }
   ]
 }

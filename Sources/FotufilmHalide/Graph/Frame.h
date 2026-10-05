@@ -646,6 +646,20 @@ inline Developed build_develop(Backend &b, const Inputs &in, Var x, Var y, Var c
                                  name("grain_selected"));
     }
 
+    // The developed film is printed through the enlarger's carrier, which holds the light off
+    // the paper beyond its opening; its edge then spreads with the enlarger's own.
+    {
+        Expr carried = carrier_density(configuration, x + p.origin_x_, y + p.origin_y_);
+        Func in_carrier(name("in_carrier"));
+        in_carrier(x, y, c) = developed(x, y, c) + carried;
+        developed = in_carrier;
+        if (in.texture) {
+            Func flat_in_carrier(name("flat_in_carrier"));
+            flat_in_carrier(x, y, c) = flat_density(x, y, c) + carried;
+            flat_density = flat_in_carrier;
+        }
+    }
+
     if (use_print_mtf) {
         Func source = b.store(developed, Store::PrintMtfInput, 3);
         Func transmittance(name("print_mtf_transmittance"));

@@ -50,8 +50,14 @@ public enum PrintFrameRenderer {
         else { return nil }
         let material = materialGeometry(configuration)
         // The card of a slide mount covers the whole canvas, including any sub-pixel sliver
-        // outside the rotated millimetre rectangle; its aperture is cut to the base below.
-        context.setFillColor(configuration.slideMount == nil ? baseColor(configuration.baseRGB) : cardColor)
+        // outside the rotated millimetre rectangle; its aperture is cut to the base below. The
+        // Emulsion Border's film reaches past its carrier, where the paper saw no light: the
+        // margin is that paper, as developed.
+        if let band, band.carrier > 0, let paper = cornerColor(image) {
+            context.setFillColor(paper)
+        } else {
+            context.setFillColor(configuration.slideMount == nil ? baseColor(configuration.baseRGB) : cardColor)
+        }
         context.fill(CGRect(origin: .zero, size: placement.size))
         context.saveGState()
         context.scaleBy(x: placement.pixelsPerMM, y: placement.pixelsPerMM)
@@ -114,6 +120,28 @@ public enum PrintFrameRenderer {
                      y: material.size.height - placement.imageRect.maxX / scale,
                      width: placement.imageRect.height / scale, height: placement.imageRect.width / scale)
             : placement.imageRect.applying(CGAffineTransform(scaleX: 1 / scale, y: 1 / scale))
+    }
+
+    /// The colour of an image's corner pixel, in its own colour space.
+    private static func cornerColor(_ image: CGImage) -> CGColor? {
+        guard let space = image.colorSpace, let corner = image.cropping(to: CGRect(x: 0, y: 0, width: 1, height: 1))
+        else { return nil }
+        var pixel = [Float](repeating: 0, count: 4)
+        let drawn = pixel.withUnsafeMutableBytes { bytes -> Bool in
+            guard let context = CGContext(data: bytes.baseAddress, width: 1, height: 1, bitsPerComponent: 32,
+                                          bytesPerRow: 16, space: space,
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+                                            | CGBitmapInfo.floatComponents.rawValue
+                                            | CGBitmapInfo.byteOrder32Little.rawValue)
+            else { return false }
+            context.setBlendMode(.copy)
+            context.draw(corner, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+            return true
+        }
+        guard drawn else { return nil }
+        let alpha = max(pixel[3], 1e-6)
+        return CGColor(colorSpace: space, components: [CGFloat(pixel[0] / alpha), CGFloat(pixel[1] / alpha),
+                                                      CGFloat(pixel[2] / alpha), 1])
     }
 
     private static func baseColor(_ rgb: SIMD3<Float>) -> CGColor {
