@@ -52,6 +52,7 @@ final class HalationReturnTests: XCTestCase {
         }
     }
 
+    /// Legacy halation leaves a uniform field alone; Layered adds the returned light to it.
     func testZeroDisablesReturnAndUniformColoursStayAnchored() throws {
         try XCTSkipUnless(TransportBackend.cpu.isAvailable)
         for model in HalationModel.allCases {
@@ -63,7 +64,12 @@ final class HalationReturnTests: XCTestCase {
                 let zero = try FotufilmEngine(stock: TestStocks.negative, options: options).processChecked(linearRGB: field)
                 options.halationReturnRatio = 0.24
                 let stronger = try FotufilmEngine(stock: TestStocks.negative, options: options).processChecked(linearRGB: field)
-                equal(zero, stronger, tolerance: 0.00005)
+                if model == .legacy {
+                    equal(zero, stronger, tolerance: 0.00005)
+                } else {
+                    XCTAssertGreaterThan(stronger.planes.map { $0[0] }.reduce(0, +),
+                                         zero.planes.map { $0[0] }.reduce(0, +))
+                }
             }
             var source = ImageBuffer(width: 33, height: 25, fill: 0.02)
             for c in 0..<3 { source.planes[c][412] = 16 }

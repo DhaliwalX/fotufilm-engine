@@ -44,8 +44,9 @@ final class LayeredTransportTests: XCTestCase {
                 let legacy = FilmEngineInvocation(stock: stock, options: options.withoutLayeredTransport,
                                                   width: 9, height: 7).spectral.exposure.values
                 var maximumError: Float = 0
+                // The three direct captures are Legacy's exposure; returned light comes on top.
                 for i in legacy.indices where i % 4 != 3 {
-                    let sum = plan.components.reduce(Float(0)) { $0 + $1.exposure[i] }
+                    let sum = plan.components.prefix(3).reduce(Float(0)) { $0 + $1.exposure[i] }
                     maximumError = max(maximumError, abs(sum - legacy[i]))
                 }
                 XCTAssertLessThan(maximumError, 2e-5,
@@ -123,7 +124,7 @@ final class LayeredTransportTests: XCTestCase {
         }
     }
 
-    func testPositiveNormalizedSpectralPartitionsAndBoundedAmount() throws {
+    func testReturnedLightAddsToAWholeDirectCaptureAndScalesWithTheAmount() throws {
         var model = TransportFixtures.stack
         model.returnedToDirect[0] = SpectralGrid.wavelengths.map { Double($0 - 375) / 1000 }
         for sourceColour: Float in [0, 0.5, 1] {
@@ -133,14 +134,22 @@ final class LayeredTransportTests: XCTestCase {
                 for c in 0..<3 { for b in 0..<SpectralGrid.count {
                     let values = endpoint.map { $0[c][b] }
                     XCTAssertTrue(values.allSatisfy { $0 >= 0 && $0.isFinite })
-                    XCTAssertEqual(values.reduce(0, +), 1, accuracy: 2e-6)
+                    XCTAssertEqual(values[c], 1, "the direct capture stays whole")
+                    XCTAssertEqual(values[..<3].reduce(0, +), 1)
                 } }
             }
-            let amounts = [0.0, 0.5, 1, 2, 20, 1e10].map { compiled.interpolation(amount: $0) }
+            if sourceColour == 0 {
+                for c in 0..<3 { for b in stride(from: 0, to: SpectralGrid.count, by: 7) {
+                    let returned = compiled.saturated.dropFirst(3).reduce(0.0) { $0 + Double($1[c][b]) }
+                    XCTAssertEqual(returned * compiled.maximumReturnedRatio,
+                                   LayeredTransport.sample(model.returnedToDirect[c], b), accuracy: 1e-5)
+                } }
+            }
+            let amounts = [0.0, 0.5, 1, 2].map { compiled.interpolation(amount: $0) }
             XCTAssertEqual(amounts[0], 0)
-            XCTAssertEqual(amounts[2], Float(compiled.maximumReturnedShare), accuracy: 1e-7)
-            XCTAssertEqual(amounts, amounts.sorted()); XCTAssertLessThanOrEqual(amounts.last!, 1)
+            XCTAssertEqual(amounts[2], Float(compiled.maximumReturnedRatio), accuracy: 1e-7)
             XCTAssertEqual(amounts[1], amounts[2] / 2, accuracy: 1e-7)
+            XCTAssertEqual(amounts[3], amounts[2] * 2, accuracy: 1e-7)
         }
     }
 
@@ -316,7 +325,8 @@ final class LayeredTransportTests: XCTestCase {
         let source = ImageBuffer(width: 9, height: 7,
             planes: [Float(0.4), 0.15, 0.08].map { Array(repeating: $0, count: 63) })
         let legacy = try FotufilmEngine(stock: TestStocks.negative, options: options).processChecked(linearRGB: source)
-        options.halationModel = .layered
+        // Without returned light, which only adds to a uniform field.
+        options.halationModel = .layered; options.halationScale = 0
         for scale: Float in [1, 7] {
             options.sceneIlluminantSpectrum = lamp.map { $0 * scale }
             let layered = try FotufilmEngine(stock: TestStocks.negative, options: options).processChecked(linearRGB: source)
@@ -326,7 +336,7 @@ final class LayeredTransportTests: XCTestCase {
         }
     }
 
-    func testRenderedUniformColoursAreIndependentOfAmount() throws {
+    func testUniformColoursGainOnlyTheirReturnedLight() throws {
         guard TransportBackend.cpu.isAvailable else { throw XCTSkip("Halide unavailable") }
         var stock = TestStocks.negative; stock.adjacencyStrength = 0
         var options = TransportFixtures.quiet
@@ -342,11 +352,16 @@ final class LayeredTransportTests: XCTestCase {
             for c in 0..<3 {
                 XCTAssertEqual(zero.planes[c][0], calibrated.planes[c][0], accuracy: 0.00005)
             }
+            // Returned light is added to the direct capture, so the field only brightens, evenly.
+            var previous = zero.planes.map { $0[0] }.reduce(0, +)
             for amount: Float in [1, 10] {
                 options.halationScale = amount
                 let output = try FotufilmEngine(stock: stock, options: options).processChecked(linearRGB: image)
+                let total = output.planes.map { $0[0] }.reduce(0, +)
+                XCTAssertGreaterThan(total, previous, "colour \(colour) amount \(amount)")
+                previous = total
                 for c in 0..<3 { for i in 0..<63 {
-                    XCTAssertEqual(output.planes[c][i], zero.planes[c][i], accuracy: 0.00005)
+                    XCTAssertEqual(output.planes[c][i], output.planes[c][0], accuracy: 0.00005)
                 } }
             }
         }
@@ -377,7 +392,8 @@ final class LayeredTransportTests: XCTestCase {
         XCTAssertGreaterThan(zip(hazed.planes[0], full.planes[0]).map { abs($0 - $1) }.max() ?? 0, 0)
     }
 
-    /// A uniform field is untouched by the film's optics, so Layered develops it as Legacy does.
+    /// With no returned light a uniform field is untouched by the film's optics, so Layered
+    /// develops it as Legacy does; the returned light only adds to it.
     private func assertUniformFieldsMatchLegacy(stock: FilmStock, options configured: FotufilmEngine.Options,
                                                 file: StaticString = #filePath, line: UInt = #line) throws -> [Float] {
         var options = configured
@@ -387,14 +403,17 @@ final class LayeredTransportTests: XCTestCase {
         for colour: [Float] in [[0.18, 0.18, 0.18], [2, 0.04, 0.1], [0.2, 1.5, 0.05], [0.002, 0.003, 0.004]] {
             let image = ImageBuffer(width: 9, height: 7, planes: colour.map { Array(repeating: $0, count: 63) })
             let expected = try FotufilmEngine(stock: stock, options: legacy).processChecked(linearRGB: image)
-            for amount: Float in [0, 1] {
-                options.halationScale = amount
-                let layered = try FotufilmEngine(stock: stock, options: options).processChecked(linearRGB: image)
-                for c in 0..<3 {
-                    XCTAssertEqual(layered.planes[c][31], expected.planes[c][31], accuracy: 0.00005,
-                                   "colour \(colour) amount \(amount)", file: file, line: line)
-                }
+            options.halationScale = 0
+            let layered = try FotufilmEngine(stock: stock, options: options).processChecked(linearRGB: image)
+            for c in 0..<3 {
+                XCTAssertEqual(layered.planes[c][31], expected.planes[c][31], accuracy: 0.00005,
+                               "colour \(colour)", file: file, line: line)
             }
+            options.halationScale = 1
+            let returned = try FotufilmEngine(stock: stock, options: options).processChecked(linearRGB: image)
+            XCTAssertGreaterThan((0..<3).map { returned.planes[$0][31] }.reduce(0, +),
+                                 (0..<3).map { expected.planes[$0][31] }.reduce(0, +),
+                                 "colour \(colour)", file: file, line: line)
             outputs += (0..<3).map { expected.planes[$0][31] }
         }
         return outputs
@@ -426,7 +445,9 @@ final class LayeredTransportTests: XCTestCase {
         for b in 0..<SpectralGrid.count {
             let values = deeper.saturated.map { $0[3][b] }
             XCTAssertTrue(values.allSatisfy { $0 >= 0 && $0.isFinite })
-            XCTAssertEqual(values.reduce(0, +), 1, accuracy: 2e-6)
+            XCTAssertEqual(values[1], 1, "the donor's direct capture is green's core, whole")
+            XCTAssertEqual(values.dropFirst(3).reduce(0, +),
+                           deeper.saturated.dropFirst(3).map { $0[1][b] }.reduce(0, +), accuracy: 2e-6)
             XCTAssertEqual(deeper.saturated[1][3][b], deeper.saturated[1][1][b], accuracy: 1e-6)
             XCTAssertEqual(deeper.core[1][3][b], 1)
             differs = differs || deeper.saturated.indices.contains { deeper.saturated[$0][3][b] != deeper.saturated[$0][1][b] }
@@ -509,12 +530,11 @@ final class LayeredConstructionControlTests: XCTestCase {
         let open = try film.adjusted(antiHalation: 0, baseThickness: 1, pressurePlate: 0)
         let compiled = try TransportKernelCompiler.compile(open, reference: film, edgeTolerance: 0.02)
         let band = 54
-        // A record's returned share is its saturated partition's returned kernels (after the
-        // three cores), scaled back from the largest share.
+        // A record's returned ratio is its saturated returned kernels (after the three cores),
+        // scaled back from the largest ratio.
         func ratio(_ c: Int) -> Double {
-            let share = compiled.maximumReturnedShare * compiled.kernels.indices.dropFirst(3)
+            compiled.maximumReturnedRatio * compiled.kernels.indices.dropFirst(3)
                 .reduce(0.0) { $0 + Double(compiled.saturated[$1][c][band]) }
-            return share / (1 - share)
         }
         XCTAssertGreaterThan(ratio(0), 0.2); XCTAssertLessThan(ratio(0), 0.35)
         XCTAssertEqual(ratio(1) / ratio(0), film.returnedToDirect[1][0] / film.returnedToDirect[0][0],

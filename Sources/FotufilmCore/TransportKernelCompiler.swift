@@ -3,25 +3,23 @@ import FotufilmHalide
 
 public struct TransportCompilation: Sendable {
     public let kernels: [TransportRadialKernel]
-    /// [basis][receiver][wavelength], positive unit partitions at amount zero and saturation.
-    /// A donor stock's fourth record is a fourth receiver.
+    /// [basis][receiver][wavelength], positive weights at amount zero and at the largest return.
+    /// Each record's direct capture is its core at weight one in both; the returned light is
+    /// added on top of it, never taken from it, as the light an anti-halation layer would have
+    /// absorbed. A donor stock's fourth record is a fourth receiver.
     public let core: [[[Float]]]
     public let saturated: [[[Float]]]
-    public let maximumReturnedShare: Double
+    /// The largest returned-to-direct ratio, the scale of `saturated`'s returned weights.
+    public let maximumReturnedRatio: Double
     public let maximumEdgeError: Double
     /// Uniform ESF error bound from equal-mass radial compression alone.
     public let radialCompressionErrorBound: Double
     public let maximumUnresolvedPower: Double
 
+    /// How far toward `saturated` an amount reaches: at one, every record returns its own
+    /// ratio of its direct light; the returned light scales with the amount from there.
     public func interpolation(amount: Double) -> Float {
-        guard maximumReturnedShare > 0 else { return 0 }
-        let a = max(amount, 0)
-        let ceiling = 1 / maximumReturnedShare
-        let gain: Double
-        if a <= 1 { gain = a }
-        else if ceiling <= 1 { gain = 1 }
-        else { gain = 1 + (ceiling - 1) / (1 + (ceiling - 1) / (a - 1)) }
-        return Float(min(max(gain * maximumReturnedShare, 0), 1))
+        Float(max(amount, 0) * maximumReturnedRatio)
     }
 }
 
@@ -66,7 +64,7 @@ public enum TransportKernelCompiler {
         func like(_ c: Int) -> Int { c < 3 ? c : 1 }
         var targets = [TransportRadialKernel]()
         var targetIndex = Array(repeating: Array(repeating: 0, count: bands), count: receivers)
-        var shares = Array(repeating: Array(repeating: 0.0, count: bands), count: receivers)
+        var ratios = Array(repeating: Array(repeating: 0.0, count: bands), count: receivers)
         var worstUnresolved = 0.0
         var compressionBound = 0.0
         func signature(_ solving: LayeredTransport, _ r: Int, _ band: Int) -> String {
@@ -124,7 +122,7 @@ public enum TransportKernelCompiler {
                 var ratio = LayeredTransport.sample(model.returnedToDirect[r], band)
                     * (returnGain.isEmpty ? 1 : Double(returnGain[band]))
                 if ratio > 0 { ratio *= try redFactor(band) }
-                shares[c][band] = ratio / (1 + ratio)
+                ratios[c][band] = ratio
                 if ratio > 0 && solved.kernel == nil {
                     throw TransportError.invalid("nonzero return ratio has no reflected capture")
                 }
@@ -172,25 +170,25 @@ public enum TransportKernelCompiler {
         kernels += try parallel(selected.count) { i in
             Result { hazeMM > 0 ? try targets[selected[i]].hazed(sigmaMM: hazeMM) : targets[selected[i]] }
         }.map { try $0.get() }
-        let maxShare = shares.flatMap { $0 }.max() ?? 0
+        let maxRatio = ratios.flatMap { $0 }.max() ?? 0
         var core = Array(repeating: Array(repeating: Array(repeating: Float(0), count: bands), count: receivers),
                          count: kernels.count)
         var saturated = core
         for c in 0..<receivers {
             for band in 0..<bands {
                 core[like(c)][c][band] = 1
-                let fraction = maxShare > 0 ? shares[c][band] / maxShare : 0
-                saturated[like(c)][c][band] = Float(1 - fraction)
+                saturated[like(c)][c][band] = 1
+                let fraction = maxRatio > 0 ? ratios[c][band] / maxRatio : 0
                 for k in selected.indices {
                     saturated[k + 3][c][band] = Float(fraction * fits[targetIndex[c][band]][k])
                 }
             }
         }
-        // A common spatial endpoint is a deliberate creative operator, independent of wavelength
-        // and receiver. Its positive average keeps every component partition normalized.
+        // A common spatial endpoint for the returned light is a deliberate creative operator,
+        // independent of wavelength and receiver. Its positive average keeps each kernel's share.
         if sourceColour > 0 {
             let t = sourceColour
-            for k in kernels.indices {
+            for k in kernels.indices.dropFirst(3) {
                 let mean = saturated[k].prefix(3).flatMap { $0 }.reduce(0, +) / Float(3 * bands)
                 for c in 0..<receivers { for band in 0..<bands {
                     saturated[k][c][band] = (1 - t) * saturated[k][c][band] + t * mean
@@ -198,7 +196,7 @@ public enum TransportKernelCompiler {
             }
         }
         return TransportCompilation(kernels: kernels, core: core, saturated: saturated,
-                                    maximumReturnedShare: maxShare, maximumEdgeError: worstError + compressionBound,
+                                    maximumReturnedRatio: maxRatio, maximumEdgeError: worstError + compressionBound,
                                     radialCompressionErrorBound: compressionBound,
                                     maximumUnresolvedPower: worstUnresolved)
     }

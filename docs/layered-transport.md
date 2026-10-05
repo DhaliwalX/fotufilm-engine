@@ -157,17 +157,20 @@ Angular quadrature is deterministic; this residual is not an angular integration
 error bound.
 
 Each solved returned kernel is normalized separately from its return amount.
-For receiver c and wavelength λ, `alpha = ratio / (1 + ratio)` partitions
-no-return and returned exposure. Both kernels are nonnegative and integrate to
-one. The positive spectral component tables sum to the stock's calibrated
-pointwise exposure table, including its gamut continuation. Thus spatially
-uniform colours retain their calibrated exposure at every amount.
+For receiver c and wavelength λ, the direct capture keeps weight one and the
+returned kernel adds `ratio` on top of it: returned light is light that crossed
+the emulsion and came back, which an anti-halation layer would have absorbed, so
+it never takes exposure from the point it left. Both kernels are nonnegative and
+integrate to one. The direct component tables sum to the stock's calibrated
+pointwise exposure table, including its gamut continuation, so the curves keep
+describing the film as measured with its backing; a film that returns light
+gains that light everywhere, most visibly as a glow into darker surroundings.
 
-The amount control scales all wavelength/receiver return shares together up to
-one, then approaches a positive saturation endpoint smoothly above one. It does
-not refit the angular distribution or reinterpret amount as an absorption change.
-Return Spectrum changes the wavelength ratios before normalization. Source Colour
-blends toward a common positive spatial endpoint as an explicit creative control.
+The amount control scales every wavelength/receiver return ratio together,
+linearly. It does not refit the angular distribution or reinterpret amount as an
+absorption change. Return Spectrum changes the wavelength ratios. Source Colour
+blends the returned light toward a common positive spatial endpoint as an
+explicit creative control.
 
 The compiler fits convex pairs from at most eight solved radial basis kernels,
 choosing for each solved kernel the pair and share with the smallest largest error,
