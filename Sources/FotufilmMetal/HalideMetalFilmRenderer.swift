@@ -1807,13 +1807,10 @@ public final class HalideMetalFilmRenderer {
             return override
         }
         #if os(iOS)
-        // Half of what the process may still allocate. The tile working set *is* the budget,
-        // so giving it half leaves the other half for the decode's bands, the print encode, and
-        // slack under pressure. It need not be quantized: a tile delivers the whole frame's
-        // pixels whatever the cut, so available-memory jitter changes the tile count and
-        // nothing else. Sixty-four megabytes is the floor a quarter-megapixel tile with a
-        // hundred-pixel apron still fits.
-        return max(64 << 20, ProcessMemory.availableBytes() / 2)
+        // The tile working set *is* the budget (see `ProcessMemory.workingBudget`). It need not
+        // be quantized: a tile delivers the whole frame's pixels whatever the cut, so
+        // available-memory jitter changes the tile count and nothing else.
+        return ProcessMemory.workingBudget()
         #else
         // A quarter of the machine, between 2 and 8 GiB. The fixed 2 GiB this replaced decided
         // that no stills frame above about 16 MP developed in one pass, which on a machine with

@@ -25,6 +25,22 @@ public enum ProcessMemory {
         #endif
     }
 
+    /// A render's working set: 512 MiB, what a full-quality still has always developed in, or
+    /// half of what the system still allows when that is less. Under the ceiling that is the
+    /// most half the headroom could give anyway, and a render it would starve — the editor's
+    /// preview beside a camera that has just captured — runs a little over the ceiling rather
+    /// than failing. `FOTUFILM_STRIP_BUDGET` overrides it in bytes.
+    public static func workingBudget() -> Int {
+        if let raw = ProcessInfo.processInfo.environment["FOTUFILM_STRIP_BUDGET"],
+           let override = Int(raw), override > 0 { return override }
+        #if os(iOS)
+        let system = Int(os_proc_available_memory())
+        return max(64 << 20, min(512 << 20, system > 0 ? system / 2 : 256 << 20))
+        #else
+        return availableBytes() / 2
+        #endif
+    }
+
     /// The process's physical footprint — what the system holds it to.
     public static func footprintBytes() -> Int {
         #if canImport(Darwin)
