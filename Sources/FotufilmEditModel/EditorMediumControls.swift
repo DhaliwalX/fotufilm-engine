@@ -37,10 +37,10 @@ extension EditorControlCatalogue {
             return (paper == .screen || paper == .labScan) && !stock.isReversal
                 && !stock.isMonochrome && !stock.isReflectionPrint
         case .screenRedBand, .screenGreenBand, .screenBlueBand:
-            // The bands read a colour negative's dyes; every other film is read without them.
+            // The bands read a colour film's dyes, negative or slide; silver reads the same
+            // through any bands.
             guard let stock else { return false }
-            return paper == .screen && !stock.isReversal && !stock.isMonochrome
-                && !stock.isReflectionPrint
+            return paper == .screen && !stock.isMonochrome && !stock.isReflectionPrint
         case .labScanDodging, .labScanLook:
             guard let stock else { return false }
             return paper == .labScan && !stock.isReversal && !stock.isReflectionPrint

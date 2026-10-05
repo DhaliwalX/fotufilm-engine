@@ -5277,7 +5277,7 @@
       "webTransform" : "profile"
     },
     {
-      "availability" : "colourNegative",
+      "availability" : "colourFilm",
       "binding" : "receiverBand(0)",
       "commandLineFlag" : "--red-band",
       "commandLineGeneric" : true,
@@ -5286,7 +5286,7 @@
       "commandLineMin" : 600,
       "commandLinePlaceholder" : "<nm>",
       "detail" : "Peak wavelength of the band Digital Reference reads the cyan dye through.",
-      "documentation" : "Digital Reference colour negatives only. Places the red receiver band's peak; its measured paper shape moves with it, and the neutral axis is held.",
+      "documentation" : "Digital Reference colour films only, negatives and slides. Places the red receiver band's peak; its measured paper shape moves with it, and the neutral axis is held. Black-and-white silver reads the same through any band.",
       "drives" : [
 
       ],
@@ -5324,7 +5324,7 @@
       "webTransform" : "profile"
     },
     {
-      "availability" : "colourNegative",
+      "availability" : "colourFilm",
       "binding" : "receiverBand(1)",
       "commandLineFlag" : "--green-band",
       "commandLineGeneric" : true,
@@ -5333,7 +5333,7 @@
       "commandLineMin" : 500,
       "commandLinePlaceholder" : "<nm>",
       "detail" : "Peak wavelength of the band Digital Reference reads the magenta dye through.",
-      "documentation" : "Digital Reference colour negatives only. Places the green receiver band's peak; its measured paper shape moves with it, and the neutral axis is held.",
+      "documentation" : "Digital Reference colour films only, negatives and slides. Places the green receiver band's peak; its measured paper shape moves with it, and the neutral axis is held. Black-and-white silver reads the same through any band.",
       "drives" : [
 
       ],
@@ -5371,7 +5371,7 @@
       "webTransform" : "profile"
     },
     {
-      "availability" : "colourNegative",
+      "availability" : "colourFilm",
       "binding" : "receiverBand(2)",
       "commandLineFlag" : "--blue-band",
       "commandLineGeneric" : true,
@@ -5380,7 +5380,7 @@
       "commandLineMin" : 400,
       "commandLinePlaceholder" : "<nm>",
       "detail" : "Peak wavelength of the band Digital Reference reads the yellow dye through.",
-      "documentation" : "Digital Reference colour negatives only. Places the blue receiver band's peak; its measured paper shape moves with it, and the neutral axis is held.",
+      "documentation" : "Digital Reference colour films only, negatives and slides. Places the blue receiver band's peak; its measured paper shape moves with it, and the neutral axis is held. Black-and-white silver reads the same through any band.",
       "drives" : [
 
       ],

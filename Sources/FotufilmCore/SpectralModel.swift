@@ -590,8 +590,9 @@ public enum SpectralRuntime {
             // stage as density above its 18% mid-grey so the levels can ride the paper slots.
             // The straight positive curve adds them back and the output table transmits.
             let read = positiveScreenRead(for: stock)
+            let shift = positiveBandShift(stock: stock, bands: receiverBands)
             let printing = buildDensityLUT(stock: stock) { density in
-                let rgb = read.transmittance(density: density)
+                let rgb = read.transmittance(density: shift?(density) ?? density)
                 return SIMD3(-log10(max(rgb.x, 1e-6) / 0.18), -log10(max(rgb.y, 1e-6) / 0.18),
                              -log10(max(rgb.z, 1e-6) / 0.18))
             }
@@ -613,8 +614,9 @@ public enum SpectralRuntime {
             let balance = reversalBalance(for: stock, aligned: aligned)
                 * exp2(directViewExposure(screenExposureEV, stock: stock, paper: paper,
                                           digitalReference: digitalReference))
+            let shift = positiveBandShift(stock: stock, bands: receiverBands)
             let output = buildDensityLUT(stock: stock) { density in
-                let rgb = transmissionRGB(density: aligned(density),
+                let rgb = transmissionRGB(density: aligned(shift?(density) ?? density),
                                           stock: stock) * balance
                 return SIMD3(max(rgb.x, 0), max(rgb.y, 0), max(rgb.z, 0))
             }
@@ -2139,11 +2141,12 @@ public enum SpectralRuntime {
     }
 
     /// The bands a table reads through: the stated ones, in range, where Digital Reference reads a
-    /// colour negative's dyes, and the paper's own everywhere else so nothing else's identity moves.
+    /// colour film's dyes, negative or slide, and the paper's own everywhere else so nothing
+    /// else's identity moves. Silver is neutral, so a black-and-white film reads the same through
+    /// any bands.
     static func effectiveReceiverBands(_ bands: ReceiverBands, stock: FilmStock,
                                        paper: PrintPaper) -> ReceiverBands {
-        guard paper == .screen, !stock.isReversal, !stock.isMonochrome,
-              !stock.isReflectionPrint else { return .paper }
+        guard paper == .screen, !stock.isMonochrome, !stock.isReflectionPrint else { return .paper }
         return bands.clamped
     }
 
@@ -2202,6 +2205,45 @@ public enum SpectralRuntime {
         let neutral = ReceiverNeutralCalibration(stock: stock, read: read,
                                                  paperRead: { paperUnmix.read(paperEnergy($0)) })
         return { neutral(read($0)) }
+    }
+
+    /// A slide as a scanner reads it through `bands`: each band's density of the slide's own
+    /// transmittance under equal energy. Moved bands separate the dyes differently; the scanner is
+    /// calibrated on the film's greys, so those read as through the paper's bands. Each record then
+    /// moves along the film's neutral wedge by what its band reads differently from the paper's,
+    /// so the direct view and its levels show the moved scan. Nil at the paper's bands, which
+    /// leave every slide exactly as it was.
+    static func positiveBandShift(stock: FilmStock, bands: ReceiverBands) -> (([Float]) -> [Float])? {
+        guard bands != .paper else { return nil }
+        let basis = neutralDensityBasis(for: stock)
+        let dyes = stock.spectralProfile.imageDyeDensity
+        let offset = filmDensityOffset(for: stock)
+        func reader(_ sensitivity: [[Float]]) -> ([Float]) -> SIMD3<Float> {
+            let totals = sensitivity.map { max($0.reduce(0, +), 1e-12) }
+            return { density in
+                let aligned = basis(density)
+                var read = SIMD3<Float>(repeating: 0)
+                for i in 0..<SpectralGrid.count {
+                    var d = offset?[i] ?? 0
+                    for dye in 0..<dyes.count { d += aligned[dye] * dyes[dye][i] }
+                    let transmitted = pow(10, -d)
+                    for band in 0..<3 { read[band] += transmitted * sensitivity[band][i] }
+                }
+                return SIMD3((0..<3).map { -log10(max(read[$0] / totals[$0], 1e-12)) })
+            }
+        }
+        let moved = reader(bands.sensitivity), paperRead = reader(ReceiverBands.paper.sensitivity)
+        let neutral = ReceiverNeutralCalibration(stock: stock, read: moved, paperRead: paperRead)
+        // Each record's density and the paper bands' read of it, both ways along the neutral wedge.
+        let records = { (density: [Float]) in SIMD3(density[0], density[1], density[2]) }
+        let wedgeRead = ReceiverNeutralCalibration(stock: stock, read: records, paperRead: paperRead)
+        let wedgeDensity = ReceiverNeutralCalibration(stock: stock, read: paperRead, paperRead: records)
+        let ranges = stock.curves.map { $0.dMin...$0.dMax }
+        return { density in
+            let difference = neutral(moved(density)) - paperRead(density)
+            let shifted = wedgeDensity(wedgeRead(records(density)) + difference)
+            return (0..<3).map { min(max(shifted[$0], ranges[$0].lowerBound), ranges[$0].upperBound) }
+        }
     }
 
     static func screenShadowScale(stock: FilmStock, paper: PrintPaper,
