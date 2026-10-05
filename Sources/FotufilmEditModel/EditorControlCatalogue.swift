@@ -1735,6 +1735,48 @@ public enum EditorControlCatalogue {
                 + "after its per-frame setup: lightening moves the frame up the film's own curve, "
                 + "darkening deepens the scan, so shadows keep their separation."),
         EditorControl(
+            .screenRedBand, title: "Red Band",
+            detail: "Peak wavelength of the band Digital Reference reads the cyan dye through.",
+            section: .printPaper,
+            kind: .slider(EditorControlScale(receiverBandRange(0), neutral: receiverBandPaper(0),
+                                             unit: .nanometres)),
+            availability: .colourNegative, binding: .receiverBand(0),
+            surfaces: [.app, .web, .cli], omitted: receiverBandOmissions,
+            web: .profile,
+            commandLine: CommandLineFlag("--red-band", placeholder: "<nm>",
+                help: "Digital Reference red band peak in nm (default: the paper's own)",
+                range: receiverBandRange(0)),
+            documentation: "Digital Reference colour negatives only. Places the red receiver band's peak; "
+                + "its measured paper shape moves with it, and the neutral axis is held."),
+        EditorControl(
+            .screenGreenBand, title: "Green Band",
+            detail: "Peak wavelength of the band Digital Reference reads the magenta dye through.",
+            section: .printPaper,
+            kind: .slider(EditorControlScale(receiverBandRange(1), neutral: receiverBandPaper(1),
+                                             unit: .nanometres)),
+            availability: .colourNegative, binding: .receiverBand(1),
+            surfaces: [.app, .web, .cli], omitted: receiverBandOmissions,
+            web: .profile,
+            commandLine: CommandLineFlag("--green-band", placeholder: "<nm>",
+                help: "Digital Reference green band peak in nm (default: the paper's own)",
+                range: receiverBandRange(1)),
+            documentation: "Digital Reference colour negatives only. Places the green receiver band's peak; "
+                + "its measured paper shape moves with it, and the neutral axis is held."),
+        EditorControl(
+            .screenBlueBand, title: "Blue Band",
+            detail: "Peak wavelength of the band Digital Reference reads the yellow dye through.",
+            section: .printPaper,
+            kind: .slider(EditorControlScale(receiverBandRange(2), neutral: receiverBandPaper(2),
+                                             unit: .nanometres)),
+            availability: .colourNegative, binding: .receiverBand(2),
+            surfaces: [.app, .web, .cli], omitted: receiverBandOmissions,
+            web: .profile,
+            commandLine: CommandLineFlag("--blue-band", placeholder: "<nm>",
+                help: "Digital Reference blue band peak in nm (default: the paper's own)",
+                range: receiverBandRange(2)),
+            documentation: "Digital Reference colour negatives only. Places the blue receiver band's peak; "
+                + "its measured paper shape moves with it, and the neutral axis is held."),
+        EditorControl(
             .screenCyan, title: "Cyan / Red",
             detail: "Positive adds cyan by reducing red; negative adds red.",
             section: .printPaper,
@@ -1945,6 +1987,18 @@ public enum EditorControlCatalogue {
     ]
 
     private static let filmGrainOmission = "not yet offered; the Grain Model menu is not offered"
+
+    private static let receiverBandOmissions: [EditorSurface: String] = [
+        .desktop: "The Mac and iPad inspector does not yet carry the receiver bands.",
+        .android: "The Android photo editor does not yet carry the receiver bands.",
+        .resolve: "The plugin bridge does not yet expose the receiver bands.",
+        .finalcut: "The plugin bridge does not yet expose the receiver bands.",
+    ]
+    private static func receiverBandRange(_ band: Int) -> ClosedRange<Double> {
+        let range = ReceiverBands.ranges[band]
+        return Double(range.lowerBound)...Double(range.upperBound)
+    }
+    private static func receiverBandPaper(_ band: Int) -> Double { Double(ReceiverBands.paper[band]) }
 
     private static let screenCurveOmission =
         "The Android photo editor does not yet carry the screen conversion's grade and exposure."

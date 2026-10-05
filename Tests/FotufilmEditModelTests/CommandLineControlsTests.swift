@@ -19,6 +19,17 @@ final class CommandLineControlsTests: XCTestCase {
         XCTAssertEqual(try applying(.screenExposure, "-1.5").screenExposureEV, -1.5)
     }
 
+    func testReceiverBandFlagsPlaceEachPeakAndRejectOutOfRange() throws {
+        XCTAssertEqual(FotufilmEngine.Options().receiverBands, .paper)
+        XCTAssertEqual(try applying(.screenRedBand, "630").receiverBands,
+                       ReceiverBands(red: 630, green: 545, blue: 470))
+        XCTAssertEqual(try applying(.screenGreenBand, "525").receiverBands.green, 525)
+        XCTAssertEqual(try applying(.screenBlueBand, "455").receiverBands.blue, 455)
+        for invalid in ["599", "741", "nan"] {
+            XCTAssertThrowsError(try applying(.screenRedBand, invalid))
+        }
+    }
+
     func testCMYFlagsReachIndependentChannelsAndRejectInvalidValues() throws {
         for (channel, field) in [EditorControlField.screenCyan, .screenMagenta, .screenYellow].enumerated() {
             var expected = SIMD3<Float>.zero

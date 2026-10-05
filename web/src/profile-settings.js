@@ -56,6 +56,10 @@ export function profileControlAvailable(c, edit, stock) {
     case "screenMagenta":
     case "screenYellow":
       return !!medium?.screenCMY;
+    case "screenRedBand":
+    case "screenGreenBand":
+    case "screenBlueBand":
+      return !!medium?.receiverBands;
     case "labScanDodging":
     case "labScanLook":
       return !!medium?.labScan;

@@ -613,7 +613,7 @@ public struct ControlsExport {
         }
         lines += ["}", "", "enum class ControlUnit {"]
         for unit in [EditorControlUnit.multiplier, .stops, .stopsFromOff, .signed, .percent, .years, .seconds,
-                     .degrees, .kelvin, .micrometers, .millimetres, .opticalDensity, .none] {
+                     .degrees, .kelvin, .micrometers, .millimetres, .nanometres, .opticalDensity, .none] {
             lines.append("    \(upperSnake(unit.rawValue)),")
         }
         lines += ["}", "", "enum class ControlAvailability {"]
@@ -960,6 +960,7 @@ public struct ControlsExport {
             "        ControlUnit.KELVIN -> String.format(\"%.0f K\", value)",
             "        ControlUnit.MICROMETERS -> String.format(\"%.0f µm\", value)",
             "        ControlUnit.MILLIMETRES -> String.format(\"%.0f mm\", value)",
+            "        ControlUnit.NANOMETRES -> String.format(\"%.0f nm\", value)",
             "        ControlUnit.OPTICAL_DENSITY -> String.format(\"%.2f OD\", value)",
             "        ControlUnit.NONE -> \"\"",
             "    }",

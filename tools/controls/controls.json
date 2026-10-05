@@ -5278,6 +5278,147 @@
     },
     {
       "availability" : "colourNegative",
+      "binding" : "receiverBand(0)",
+      "commandLineFlag" : "--red-band",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Digital Reference red band peak in nm (default: the paper's own)",
+      "commandLineMax" : 740,
+      "commandLineMin" : 600,
+      "commandLinePlaceholder" : "<nm>",
+      "detail" : "Peak wavelength of the band Digital Reference reads the cyan dye through.",
+      "documentation" : "Digital Reference colour negatives only. Places the red receiver band's peak; its measured paper shape moves with it, and the neutral axis is held.",
+      "drives" : [
+
+      ],
+      "field" : "screenRedBand",
+      "group" : "print",
+      "kind" : "slider",
+      "omitted" : {
+        "android" : "The Android photo editor does not yet carry the receiver bands.",
+        "desktop" : "The Mac and iPad inspector does not yet carry the receiver bands.",
+        "finalcut" : "The plugin bridge does not yet expose the receiver bands.",
+        "resolve" : "The plugin bridge does not yet expose the receiver bands."
+      },
+      "persistedKey" : "screenRedBand",
+      "scale" : {
+        "admittedMax" : 740,
+        "admittedMin" : 600,
+        "max" : 740,
+        "min" : 600,
+        "neutral" : 700,
+        "stops" : [
+
+        ],
+        "unit" : "nanometres"
+      },
+      "scope" : "edit",
+      "section" : "printPaper",
+      "storedEncoding" : "same",
+      "storedNeutral" : 700,
+      "surfaces" : [
+        "app",
+        "web",
+        "cli"
+      ],
+      "title" : "Red Band",
+      "webTransform" : "profile"
+    },
+    {
+      "availability" : "colourNegative",
+      "binding" : "receiverBand(1)",
+      "commandLineFlag" : "--green-band",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Digital Reference green band peak in nm (default: the paper's own)",
+      "commandLineMax" : 600,
+      "commandLineMin" : 500,
+      "commandLinePlaceholder" : "<nm>",
+      "detail" : "Peak wavelength of the band Digital Reference reads the magenta dye through.",
+      "documentation" : "Digital Reference colour negatives only. Places the green receiver band's peak; its measured paper shape moves with it, and the neutral axis is held.",
+      "drives" : [
+
+      ],
+      "field" : "screenGreenBand",
+      "group" : "print",
+      "kind" : "slider",
+      "omitted" : {
+        "android" : "The Android photo editor does not yet carry the receiver bands.",
+        "desktop" : "The Mac and iPad inspector does not yet carry the receiver bands.",
+        "finalcut" : "The plugin bridge does not yet expose the receiver bands.",
+        "resolve" : "The plugin bridge does not yet expose the receiver bands."
+      },
+      "persistedKey" : "screenGreenBand",
+      "scale" : {
+        "admittedMax" : 600,
+        "admittedMin" : 500,
+        "max" : 600,
+        "min" : 500,
+        "neutral" : 545,
+        "stops" : [
+
+        ],
+        "unit" : "nanometres"
+      },
+      "scope" : "edit",
+      "section" : "printPaper",
+      "storedEncoding" : "same",
+      "storedNeutral" : 545,
+      "surfaces" : [
+        "app",
+        "web",
+        "cli"
+      ],
+      "title" : "Green Band",
+      "webTransform" : "profile"
+    },
+    {
+      "availability" : "colourNegative",
+      "binding" : "receiverBand(2)",
+      "commandLineFlag" : "--blue-band",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Digital Reference blue band peak in nm (default: the paper's own)",
+      "commandLineMax" : 500,
+      "commandLineMin" : 400,
+      "commandLinePlaceholder" : "<nm>",
+      "detail" : "Peak wavelength of the band Digital Reference reads the yellow dye through.",
+      "documentation" : "Digital Reference colour negatives only. Places the blue receiver band's peak; its measured paper shape moves with it, and the neutral axis is held.",
+      "drives" : [
+
+      ],
+      "field" : "screenBlueBand",
+      "group" : "print",
+      "kind" : "slider",
+      "omitted" : {
+        "android" : "The Android photo editor does not yet carry the receiver bands.",
+        "desktop" : "The Mac and iPad inspector does not yet carry the receiver bands.",
+        "finalcut" : "The plugin bridge does not yet expose the receiver bands.",
+        "resolve" : "The plugin bridge does not yet expose the receiver bands."
+      },
+      "persistedKey" : "screenBlueBand",
+      "scale" : {
+        "admittedMax" : 500,
+        "admittedMin" : 400,
+        "max" : 500,
+        "min" : 400,
+        "neutral" : 470,
+        "stops" : [
+
+        ],
+        "unit" : "nanometres"
+      },
+      "scope" : "edit",
+      "section" : "printPaper",
+      "storedEncoding" : "same",
+      "storedNeutral" : 470,
+      "surfaces" : [
+        "app",
+        "web",
+        "cli"
+      ],
+      "title" : "Blue Band",
+      "webTransform" : "profile"
+    },
+    {
+      "availability" : "colourNegative",
       "binding" : "screenCMY(0)",
       "commandLineFlag" : "--screen-cyan",
       "commandLineGeneric" : true,

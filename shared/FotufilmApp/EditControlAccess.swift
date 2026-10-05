@@ -125,6 +125,9 @@ extension EditorControlField {
         case .screenCyan: return .number(\.screenCyan)
         case .screenMagenta: return .number(\.screenMagenta)
         case .screenYellow: return .number(\.screenYellow)
+        case .screenRedBand: return .number(\.screenRedBand)
+        case .screenGreenBand: return .number(\.screenGreenBand)
+        case .screenBlueBand: return .number(\.screenBlueBand)
         case .labScanDodging: return .number(\.labScanDodging)
         case .labScanLook: return .number(\.labScanLook)
         case .enlarger:

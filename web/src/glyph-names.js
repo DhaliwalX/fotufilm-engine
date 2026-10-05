@@ -28,9 +28,9 @@ const SLIDER_FIELDS = { ev: "exposure", temperature: "warmth" };
 const REVERSED = new Set(["temperature"]);
 
 // The set draws a low and a high glyph for every catalogue slider but the grade's (the deck
-// draws those), Straighten and the halo's construction controls.
+// draws those), Straighten, the halo's construction controls and the typed receiver bands.
 const WITHOUT_ENDS =
-  /^grade(Shadows|Midtones|Highlights)|^(straighten|halationHaze|antiHalation|baseThickness|pressurePlate)$/;
+  /^grade(Shadows|Midtones|Highlights)|^(straighten|halationHaze|antiHalation|baseThickness|pressurePlate|screen(Red|Green|Blue)Band)$/;
 const ENDED = new Set(
   EDITOR_CONTROLS.filter(
     (control) => control.kind === "slider" && !WITHOUT_ENDS.test(control.field),

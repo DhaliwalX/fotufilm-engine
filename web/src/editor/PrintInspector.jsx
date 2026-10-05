@@ -11,6 +11,11 @@ import { colorSpaceLabel, preferredCanvasColorSpace } from "../canvas-color.js";
 import { profileMedium } from "../profile-settings.js";
 import PrintFrameControls from "../PrintFrameControls.jsx";
 import { Button } from "@react-spectrum/s2/Button";
+import { ActionButton } from "@react-spectrum/s2/ActionButton";
+import { Tooltip, TooltipTrigger } from "@react-spectrum/s2/Tooltip";
+import { useState } from "react";
+import { Glyph } from "../glyphs.jsx";
+import ReceiverBands from "./ReceiverBands.jsx";
 import { useEditor } from "./EditorContext.jsx";
 
 // The Output Medium choice that follows the film, as the Mac app's does.
@@ -32,6 +37,8 @@ export default function PrintInspector() {
   } = useEditor();
   // A film that is its own print (instax) has only its own medium to match.
   const canMatchFilm = !!selectedStock?.filmMedium && !selectedStock.reflectionPrint;
+  const [bandsOpen, setBandsOpen] = useState(false);
+  const offersBands = !fixedSettings && !!profileMedium(edit, selectedStock)?.receiverBands;
   return (
     <>
       <Disclosure
@@ -43,6 +50,7 @@ export default function PrintInspector() {
         <DisclosureTitle>{"Output"}</DisclosureTitle>
         <DisclosurePanel>
           <div className="control-stack">
+            <div className="medium-row">
             <Picker
               label="Output medium"
               size="S"
@@ -95,6 +103,24 @@ export default function PrintInspector() {
                   </PickerItem>
                 ))}
             </Picker>
+            {offersBands && (
+              <TooltipTrigger>
+                <ActionButton
+                  size="S"
+                  isQuiet
+                  aria-label="Receiver bands"
+                  aria-expanded={bandsOpen}
+                  aria-controls="receiver-bands"
+                  UNSAFE_className={bandsOpen ? "medium-settings open" : "medium-settings"}
+                  onPress={() => setBandsOpen(!bandsOpen)}
+                >
+                  <Glyph name="fotu.ui.settings" size={18} />
+                </ActionButton>
+                <Tooltip>{"Receiver bands"}</Tooltip>
+              </TooltipTrigger>
+            )}
+            </div>
+            {offersBands && bandsOpen && <ReceiverBands id="receiver-bands" />}
             {(edit.medium || selectedStock?.defaultMedium) === "screen" &&
               selectedStock?.media.find((m) => m.id === "screen")
                 ?.screenConversions && (

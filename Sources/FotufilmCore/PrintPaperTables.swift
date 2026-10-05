@@ -40,10 +40,13 @@ extension PrintPaper {
     /// Layer sensitivities with publication tails extended. Release prints preserve the
     /// publication's inter-layer speed scale: it determines the additive printer's beam mix.
     /// Per-layer normalization is harmless only for paths without a spectral timing solve.
-    /// Digital Reference uses fixed receiver bands; viewed negatives bypass this stage.
-    var sensitivity: [[Float]] {
+    /// Digital Reference reads through its receiver bands; viewed negatives bypass this stage.
+    var sensitivity: [[Float]] { sensitivity(bands: .paper) }
+
+    /// The layer sensitivities, with Digital Reference reading through `bands`.
+    func sensitivity(bands: ReceiverBands) -> [[Float]] {
         switch self {
-        case .screen: return DigitalReferenceReceiver.sensitivity
+        case .screen: return bands.sensitivity
         case .ektacolorEdge, .negative, .ilfochromeCPS1K, .ilfochromeCLM1K: return SpectralGrid.paperSensitivity
         case .enduraPremier: return SpectralGrid.enduraPremierSensitivity
         case .crystalArchive: return SpectralGrid.crystalArchiveSensitivity

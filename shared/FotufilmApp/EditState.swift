@@ -388,6 +388,10 @@ struct EditState: Equatable {
     var screenCyan = 0.0
     var screenMagenta = 0.0
     var screenYellow = 0.0
+    /// Digital Reference's receiver band peaks, in nanometres.
+    var screenRedBand = Double(ReceiverBands.paper.red)
+    var screenGreenBand = Double(ReceiverBands.paper.green)
+    var screenBlueBand = Double(ReceiverBands.paper.blue)
     var labScanDodging = Double(FotufilmEngine.Options().labScanDodging)
     var labScanLook = Double(FotufilmEngine.Options().labScanLook)
     var enlarger = Enlarger.default
