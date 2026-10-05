@@ -21,8 +21,9 @@ for (const { id } of stocks.filter(stock => stock.layeredTransport)) {
     for (const rgb of [[0.18, 0.18, 0.18], [1, 1, 1], [0.4, 0.15, 0.08], [0.01, 0.03, 20]]) {
       const source = pixelSource({ width, height, data: Float32Array.from(
         { length: count * 4 }, (_, i) => i % 4 === 3 ? 1 : rgb[i % 4]) })
-      for (const temperature of [3200, 6500, 10000]) {
-        const controls = { grain: 0, temperature }
+      // Preflash exposes the film once, however many components the transport splits it into.
+      for (const [temperature, cameraPreflash] of [[3200, 0], [6500, 0], [10000, 0], [6500, 0.02]]) {
+        const controls = { grain: 0, temperature, cameraPreflash }
         await legacy.develop(source, controls)
         const expected = module.HEAPF32.slice(legacy.outputPtr / 4, legacy.outputPtr / 4 + count * 3)
         await layered.develop(source, controls)

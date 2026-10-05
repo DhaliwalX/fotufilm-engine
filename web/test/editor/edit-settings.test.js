@@ -64,19 +64,19 @@ test("only the chosen sections move", () => {
   const target = { ...base, profile: { halation: 0.2, bleach: 0.5 } };
   const pasted = pasteSettings(
     target,
-    copySettings(source, ["lightExposure", "filmEmulsion"]),
+    copySettings(source, ["lightExposure", "filmHalation"]),
   );
   assert.equal(pasted.params.ev, 1);
   assert.equal(pasted.params.temperature, base.params.temperature);
   assert.equal(pasted.params.grain, base.params.grain);
   assert.equal(pasted.stock, "gold200");
-  // Emulsion is replaced whole; Lab stays with the photograph.
+  // Halation is replaced whole; Lab stays with the photograph.
   assert.deepEqual(pasted.profile, { bleach: 0.5, halation: 0.4 });
 });
 
 test("a section the source left at rest resets it here", () => {
   const target = { ...base, profile: { halation: 0.2 } };
-  const pasted = pasteSettings(target, copySettings(base, ["filmEmulsion"]));
+  const pasted = pasteSettings(target, copySettings(base, ["filmHalation"]));
   assert.deepEqual(pasted.profile, {});
 });
 

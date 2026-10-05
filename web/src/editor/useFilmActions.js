@@ -7,6 +7,7 @@ import { download } from "./file-download.js";
 import { cleanName } from "./file-download.js";
 import { parseEdit } from "../editor-state.js";
 export default function useFilmActions({
+  backend,
   exporting,
   stocks,
   auto,
@@ -30,13 +31,13 @@ export default function useFilmActions({
         ? edit.medium
         : null;
     const halationModel =
-      stocks.find((s) => s.id === id)?.layeredTransport === false
+      backend?.kind !== "native" && stocks.find((s) => s.id === id)?.layeredTransport === false
         ? "legacy"
         : edit.halationModel || "legacy";
     patch({
       stock: id,
       ...selectStockSettings(nextStock),
-      medium: halationModel === "layered" ? null : medium,
+      medium: halationModel === "layered" && backend?.kind !== "native" ? null : medium,
       halationModel,
     });
     setStage(null);

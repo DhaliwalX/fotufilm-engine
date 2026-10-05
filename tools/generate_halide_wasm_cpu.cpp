@@ -11,6 +11,7 @@
 #define FOTUFILM_HALIDE_ENABLED 1
 #define FOTUFILM_HALIDE_AOT_GENERATOR 1
 #include "../Sources/FotufilmHalide/Pipeline/Cpu.h"
+#include "../Sources/FotufilmHalide/Pipeline/Transport.h"
 #include "../Sources/FotufilmHalide/include/FotufilmAotVariants.h"
 
 using namespace fotufilm;
@@ -98,5 +99,12 @@ int main(int argc, char **argv) {
     }
     PlainPipeline plain(false, "_browser_plain", false, 0);
     plain.compile_aot((output / "plain_float").string(), "plain_float", false, target);
+    // Layered Transport spreads each component's light with the native hosts' pipeline.
+    if (!plain_only) {
+        TransportPipeline transport;
+        transport.output.compile_to_static_library(
+            (output / "transport").string(), transport.arguments(), "transport",
+            target.with_feature(Halide::Target::NoRuntime));
+    }
     return 0;
 }

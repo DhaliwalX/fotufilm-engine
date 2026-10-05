@@ -187,7 +187,7 @@ final class EditorControlCatalogueTests: XCTestCase {
         let spectrum = try XCTUnwrap(
             EditorControlCatalogue.control(.halationSpectrum))
         XCTAssertEqual(spectrum.foldsUnder, .halation)
-        XCTAssertEqual(spectrum.section, .filmEmulsion)
+        XCTAssertEqual(spectrum.section, .filmHalation)
         let curve = try XCTUnwrap(spectrum.kind.curve)
         XCTAssertEqual(curve.neutral, 0,
                        "no stops added must be the film's own return")
@@ -545,8 +545,7 @@ final class EditorControlCatalogueTests: XCTestCase {
             .keys.sorted()
 
         XCTAssertEqual(unexposedOrGlobal,
-                       ["adjacencyModel", "couplerRangeScale", "halationHazeMM",
-                        "layeredTransport", "transportBackend"])
+                       ["adjacencyModel", "couplerRangeScale", "layeredTransport", "transportBackend"])
     }
 
     func testTheAuditedGapsAreAllOffered() {

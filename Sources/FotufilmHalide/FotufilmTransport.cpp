@@ -1,282 +1,209 @@
 #include "FotufilmTransport.h"
+#include "FotufilmHalide.h"
 #if defined(FOTUFILM_HALIDE_ENABLED)
-#include "FotufilmHalideShared.h"
+#include "Pipeline/Transport.h"
+#include <cstdio>
+#include <cstring>
 #include <memory>
 #include <mutex>
-#include <cmath>
-#include <cstdio>
-#if defined(__APPLE__)
-#include <Accelerate/Accelerate.h>
-#endif
+
+static_assert(FOTUFILM_TRANSPORT_TABLE_FLOATS == fotufilm::pipelines::kTransportTableFloats,
+              "the C table size names the pipeline's");
 
 namespace {
-using namespace Halide;
+using fotufilm::pipelines::TransportDomainPipeline;
+using fotufilm::pipelines::TransportPipeline;
 
-class AccumulatePipeline {
-    ImageParam accum_in{Float(32), 3}, band_in{Float(32), 3};
-    Param<float> weight;
-    Pipeline pipeline;
-public:
-    explicit AccumulatePipeline(bool metal) {
-        Var x, y, c, xo, yo, xi, yi;
-        Func output;
-        output(x, y, c) = accum_in(x, y, c) + weight * band_in(x, y, c);
-        output.bound(c, 0, 3).reorder(c, x, y).unroll(c);
-        if (metal) { output.gpu_tile(x, y, xo, yo, xi, yi, 16, 8, TailStrategy::GuardWithIf); }
-        else { output.vectorize(x, 8, TailStrategy::GuardWithIf).parallel(y); }
-        pipeline = Pipeline(output);
-    }
-    void run(Buffer<float> &accum, Buffer<float> &band, float w, Target target, Buffer<float> &out) {
-        accum_in.set(accum);
-        band_in.set(band);
-        weight.set(w);
-        pipeline.realize(out, target);
-    }
-};
-
-class TransportConvolution {
-    ImageParam red{Float(32), 2}, green{Float(32), 2}, blue{Float(32), 2}, kernel{Float(32), 2};
-    Param<int32_t> width, height, radius, stride;
-    Pipeline pipeline;
-    Target target;
-    bool is_metal;
-    AccumulatePipeline accum_pipe;
-    std::mutex mutex;
-    Buffer<float> cached_accum[2];
-    Buffer<float> cached_band_result;
-    int cached_w = 0, cached_h = 0;
-
-    void ensure_buffers(int w, int h) {
-        if (w == cached_w && h == cached_h) return;
-        Buffer<float> result(w, h, 3);
-        Buffer<float> accum[2];
-        if (is_metal) {
-            accum[0] = Buffer<float>(w, h, 3);
-            accum[1] = Buffer<float>(w, h, 3);
-        }
-        cached_band_result = std::move(result);
-        cached_accum[0] = std::move(accum[0]);
-        cached_accum[1] = std::move(accum[1]);
-        cached_w = w; cached_h = h;
-    }
-public:
-    explicit TransportConvolution(bool metal)
-        : target(get_jit_target_from_environment()), is_metal(metal), accum_pipe(metal) {
-        if (metal) { target.set_feature(Target::Metal); }
-        Var x, y, c, xo, yo, xi, yi;
-        Expr gw = (width + stride - 1) / stride, gh = (height + stride - 1) / stride;
-        Func input, reduced, blurred, output;
-        Expr sx = clamp(x, 0, width - 1), sy = clamp(y, 0, height - 1);
-        input(x, y, c) = mux(c, {red(sx, sy), green(sx, sy), blue(sx, sy)});
-        RDom down(0, stride, 0, stride);
-        reduced(x, y, c) = sum(input(x * stride + down.x, y * stride + down.y, c))
-            / cast<float>(stride * stride);
-        RDom tap(-radius, 2 * radius + 1, -radius, 2 * radius + 1);
-        blurred(x, y, c) = sum(kernel(tap.x + radius, tap.y + radius)
-            * reduced(clamp(x + tap.x, 0, gw - 1), clamp(y + tap.y, 0, gh - 1), c));
-        auto sample_at = [&](Expr xx, Expr yy) {
-            return blurred(clamp(xx, 0, gw - 1), clamp(yy, 0, gh - 1), c);
-        };
-        Expr px = (cast<float>(x) + 0.5f) / cast<float>(stride) - 0.5f;
-        Expr py = (cast<float>(y) + 0.5f) / cast<float>(stride) - 0.5f;
-        output(x, y, c) = select(stride == 1,
-            sample_at(x, y),
-            fotufilm::bicubic_sample(sample_at, px, py));
-        for (Func f : {reduced, blurred}) {
-            f.compute_root().bound(c, 0, 3).reorder(c, x, y).unroll(c);
-            if (metal) { f.gpu_tile(x, y, xo, yo, xi, yi, 16, 8, TailStrategy::GuardWithIf); }
-            else { f.vectorize(x, 8, TailStrategy::GuardWithIf).parallel(y); }
-        }
-        output.compute_root().bound(c, 0, 3).reorder(c, x, y).unroll(c);
-        if (metal) { output.gpu_tile(x, y, xo, yo, xi, yi, 16, 8, TailStrategy::GuardWithIf); }
-        else { output.vectorize(x, 8, TailStrategy::GuardWithIf).parallel(y); }
-        pipeline = Pipeline(output);
-    }
-    void run(const float *r, const float *g, const float *b,
-             float *out_r, float *out_g, float *out_b,
-             int w, int h, const float *weights, int rad, int scale) {
-        std::lock_guard<std::mutex> lock(mutex);
-        Buffer<float> rb(const_cast<float *>(r), w, h), gb(const_cast<float *>(g), w, h),
-            bb(const_cast<float *>(b), w, h), kb(const_cast<float *>(weights), rad * 2 + 1, rad * 2 + 1);
-        rb.set_host_dirty(); gb.set_host_dirty(); bb.set_host_dirty(); kb.set_host_dirty();
-        red.set(rb); green.set(gb); blue.set(bb); kernel.set(kb);
-        width.set(w); height.set(h); radius.set(rad); stride.set(scale);
-        ensure_buffers(w, h);
-        pipeline.realize(cached_band_result, target);
-        cached_band_result.copy_to_host();
-        const int64_t n = int64_t(w) * h;
-        std::copy_n(cached_band_result.data(), n, out_r);
-        std::copy_n(cached_band_result.data() + n, n, out_g);
-        std::copy_n(cached_band_result.data() + 2 * n, n, out_b);
-    }
-    void accumulate_bands(const float *r, const float *g, const float *b,
-                          float *accum_r, float *accum_g, float *accum_b,
-                          int w, int h, const FotufilmTransportBand *bands, int band_count) {
-        if (band_count <= 0) return;
-        std::lock_guard<std::mutex> lock(mutex);
-        const int64_t n = int64_t(w) * h;
-
-        // Reuse the input bindings across bands; Metal uploads each plane once.
-        Buffer<float> rb(const_cast<float *>(r), w, h), gb(const_cast<float *>(g), w, h),
-            bb(const_cast<float *>(b), w, h);
-        rb.set_host_dirty(); gb.set_host_dirty(); bb.set_host_dirty();
-        red.set(rb); green.set(gb); blue.set(bb);
-        width.set(w); height.set(h);
-
-        ensure_buffers(w, h);
-
-        if (is_metal) {
-            // The previous call may have finished in buffer 1 after an odd band count.
-            // Buffer 0 is wholly overwritten here; discard its old device contents.
-            cached_accum[0].set_device_dirty(false);
-            cached_accum[0].fill(0.0f);
-            cached_accum[0].set_host_dirty();
-            int cur = 0;
-
-            for (int i = 0; i < band_count; ++i) {
-                if (bands[i].weight <= 0.0f) continue;
-                Buffer<float> kb(const_cast<float *>(bands[i].kernel),
-                                 bands[i].radius * 2 + 1, bands[i].radius * 2 + 1);
-                kb.set_host_dirty();
-                kernel.set(kb);
-                radius.set(bands[i].radius);
-                stride.set(bands[i].stride);
-
-                // Run convolution on GPU
-                pipeline.realize(cached_band_result, target);
-
-                // Run GPU accumulation without downloading to host
-                accum_pipe.run(cached_accum[cur], cached_band_result, bands[i].weight, target, cached_accum[1 - cur]);
-                cur = 1 - cur;
-            }
-
-            // Download the accumulated bands once at the end.
-            cached_accum[cur].copy_to_host();
-            const float *res = cached_accum[cur].data();
-
-            #if defined(__APPLE__)
-            vDSP_vadd(res, 1, accum_r, 1, accum_r, 1, n);
-            vDSP_vadd(res + n, 1, accum_g, 1, accum_g, 1, n);
-            vDSP_vadd(res + 2 * n, 1, accum_b, 1, accum_b, 1, n);
-            #else
-            for (int64_t i = 0; i < n; ++i) {
-                accum_r[i] += res[i];
-                accum_g[i] += res[i + n];
-                accum_b[i] += res[i + 2 * n];
-            }
-            #endif
-        } else {
-            // CPU backend: reuse cached_band_result and accumulate directly into accum_r, accum_g, accum_b
-            for (int i = 0; i < band_count; ++i) {
-                if (bands[i].weight <= 0.0f) continue;
-                Buffer<float> kb(const_cast<float *>(bands[i].kernel),
-                                 bands[i].radius * 2 + 1, bands[i].radius * 2 + 1);
-                kb.set_host_dirty();
-                kernel.set(kb);
-                radius.set(bands[i].radius);
-                stride.set(bands[i].stride);
-
-                pipeline.realize(cached_band_result, target);
-                const float *res = cached_band_result.data();
-                const float weight = bands[i].weight;
-
-                #if defined(__APPLE__)
-                vDSP_vsma(res, 1, &weight, accum_r, 1, accum_r, 1, n);
-                vDSP_vsma(res + n, 1, &weight, accum_g, 1, accum_g, 1, n);
-                vDSP_vsma(res + 2 * n, 1, &weight, accum_b, 1, accum_b, 1, n);
-                #else
-                for (int64_t j = 0; j < n; ++j) {
-                    accum_r[j] += weight * res[j];
-                    accum_g[j] += weight * res[j + n];
-                    accum_b[j] += weight * res[j + 2 * n];
-                }
-                #endif
-            }
-        }
-    }
-};
+std::mutex &pipeline_mutex() {
+    // Never destroyed, like every pipeline cache here: a warm-up thread still compiling when the
+    // process exits must not find its cache torn down by the exit-time destructors.
+    static std::mutex &mutex = *new std::mutex;
+    return mutex;
 }
+
+Halide::Target transport_target(int32_t backend) {
+    auto target = Halide::get_host_target().with_feature(Halide::Target::StrictFloat);
+    if (backend) target.set_feature(Halide::Target::Metal);
+    return target;
+}
+
+/// The pipeline for a backend and input, compiled on first use. Call with the mutex held.
+TransportPipeline &pipeline(int32_t backend, bool from_scene) {
+    static auto *const pipelines = new std::unique_ptr<TransportPipeline>[4]();
+    auto &pipeline = pipelines[backend + 2 * from_scene];
+    if (!pipeline) {
+        auto candidate = std::make_unique<TransportPipeline>(
+            backend ? Halide::DeviceAPI::Metal : Halide::DeviceAPI::None, from_scene);
+        candidate->output.compile_jit(transport_target(backend));
+        pipeline = std::move(candidate);
+    }
+    return *pipeline;
+}
+
+bool metal_available() {
+#if defined(__APPLE__)
+    return Halide::host_supports_target_device(
+        Halide::get_host_target().with_feature(Halide::Target::Metal));
+#else
+    return false;
+#endif
+}
+}
+
 extern "C" int32_t fotufilm_transport_available(int32_t backend) {
     if (backend == 0) return 1;
-#if defined(__APPLE__)
-    if (backend == 1) {
-        Halide::Target target = Halide::get_jit_target_from_environment();
-        target.set_feature(Halide::Target::Metal);
-        return Halide::host_supports_target_device(target) ? 1 : 0;
-    }
-#endif
-    return 0;
+    return backend == 1 && metal_available() ? 1 : 0;
 }
-extern "C" int32_t fotufilm_transport_convolve(
-    const float *r, const float *g, const float *b, float *out_r, float *out_g, float *out_b,
-    int32_t width, int32_t height, const float *kernel, int32_t radius, int32_t stride, int32_t backend) {
-    if (!r || !g || !b || !out_r || !out_g || !out_b || !kernel || width <= 0 || height <= 0
-        || radius < 1 || radius > 128 || stride < 1 || stride > 4096 || (stride & (stride - 1))) return -1;
+
+extern "C" int32_t fotufilm_transport_component(
+    const float *exposure, float *accumulated, int32_t width, int32_t height, int32_t channels,
+    const float *stencils, int32_t backend) {
+    const int32_t status = fotufilm_transport_validate(exposure, accumulated, width, height,
+                                                       channels, stencils, backend);
+    if (status) return status;
     if (!fotufilm_transport_available(backend)) return -3;
-    double sum = 0;
-    for (int i = 0; i < (radius * 2 + 1) * (radius * 2 + 1); ++i) {
-        if (!std::isfinite(kernel[i]) || kernel[i] < 0) return -1;
-        sum += kernel[i];
-    }
-    if (std::abs(sum - 1) > 1e-5) return -1;
+    std::lock_guard<std::mutex> lock(pipeline_mutex());
     try {
-        // Never destroyed, like every pipeline cache here: a warm-up thread still compiling
-        // when the process exits must not find its cache torn down by the exit-time destructors.
-        static auto *const engines = new std::unique_ptr<TransportConvolution>[2]();
-        static std::mutex &preparation = *new std::mutex;
-        TransportConvolution *engine;
-        {
-            std::lock_guard<std::mutex> lock(preparation);
-            if (!engines[backend]) engines[backend] = std::make_unique<TransportConvolution>(backend == 1);
-            engine = engines[backend].get();
+        const auto target = transport_target(backend);
+        TransportPipeline &pipeline = ::pipeline(backend, false);
+        Halide::Buffer<float> input(const_cast<float *>(exposure), width, height, channels);
+        Halide::Buffer<float> sum(accumulated, width, height, channels);
+        Halide::Buffer<float> table(const_cast<float *>(stencils), FOTUFILM_TRANSPORT_TABLE_FLOATS);
+        input.set_host_dirty(); sum.set_host_dirty(); table.set_host_dirty();
+        pipeline.exposure.set(input);
+        pipeline.accumulated.set(sum);
+        pipeline.stencils.set(table);
+        for (int l = 0; l < FOTUFILM_TRANSPORT_LEVELS; ++l) pipeline.radii[l].set(int32_t(stencils[l]));
+        struct Unbind {
+            TransportPipeline &pipeline;
+            ~Unbind() {
+                pipeline.exposure.reset(); pipeline.accumulated.reset(); pipeline.stencils.reset();
+            }
+        } unbind{pipeline};
+        // The sum is read only at the point written, so the pipeline adds into it in place.
+        pipeline.output.realize(sum, target);
+        return sum.copy_to_host();
+    } catch (const Halide::Error &error) {
+        std::fprintf(stderr, "Layered transport: %s\n", error.what());
+        return -2;
+    } catch (const std::exception &error) {
+        std::fprintf(stderr, "Layered transport: %s\n", error.what());
+        return -2;
+    }
+}
+
+struct fotufilm_transport_frame {
+    int32_t backend;
+    Halide::Buffer<float> domain, sum, configuration, lut, table;
+    /// Whether a component has written the sum yet.
+    bool written = false;
+};
+
+extern "C" fotufilm_transport_frame *fotufilm_transport_frame_begin(
+    const float *scene, const float *configuration, float *sum, int32_t width, int32_t height,
+    int32_t channels, int32_t backend) {
+    if (!scene || !configuration || !sum || width < 1 || height < 1 || (int64_t)width * height > 150000000
+        || channels < 3 || channels > 4 || !fotufilm_transport_available(backend)) return nullptr;
+    std::lock_guard<std::mutex> lock(pipeline_mutex());
+    try {
+        static auto *const domains = new std::unique_ptr<TransportDomainPipeline>[2]();
+        auto &domain = domains[backend];
+        if (!domain) {
+            auto candidate = std::make_unique<TransportDomainPipeline>(
+                backend ? Halide::DeviceAPI::Metal : Halide::DeviceAPI::None);
+            candidate->output.compile_jit(transport_target(backend));
+            domain = std::move(candidate);
         }
-        engine->run(r, g, b, out_r, out_g, out_b, width, height, kernel, radius, stride);
+        halide_dimension_t shape[3] = {{0, width, 4}, {0, height, 4 * width}, {0, 4, 1}};
+        Halide::Buffer<float> source(const_cast<float *>(scene), 3, shape);
+        Halide::Buffer<float> shared(const_cast<float *>(configuration),
+                                     FOTUFILM_FRAME_CONFIGURATION_COUNT);
+        source.set_host_dirty(); shared.set_host_dirty();
+        // On a device the scene's domain lives there alone.
+        auto frame = std::make_unique<fotufilm_transport_frame>(fotufilm_transport_frame{
+            backend, backend ? Halide::Buffer<float>(nullptr, 3, shape)
+                             : Halide::Buffer<float>::make_interleaved(width, height, 4),
+            Halide::Buffer<float>(sum, width, height, channels),
+            Halide::Buffer<float>(FOTUFILM_FRAME_CONFIGURATION_COUNT),
+            Halide::Buffer<float>(33 * 33 * 33 * 4),
+            Halide::Buffer<float>(FOTUFILM_TRANSPORT_TABLE_FLOATS)});
+        if (backend && frame->domain.device_malloc(
+                Halide::get_device_interface_for_device_api(Halide::DeviceAPI::Metal,
+                                                            transport_target(backend)))) {
+            return nullptr;
+        }
+        domain->scene.set(source);
+        domain->configuration.set(shared);
+        struct Unbind {
+            TransportDomainPipeline &pipeline;
+            ~Unbind() { pipeline.scene.reset(); pipeline.configuration.reset(); }
+        } unbind{*domain};
+        // The scene is read here alone: the components read its domain, left on the device.
+        domain->output.realize(frame->domain, transport_target(backend));
+        return frame.release();
+    } catch (const std::exception &error) {
+        std::fprintf(stderr, "Layered transport: %s\n", error.what());
+        return nullptr;
+    }
+}
+
+extern "C" int32_t fotufilm_transport_frame_add(fotufilm_transport_frame *frame,
+                                                const float *configuration,
+                                                const float *exposure_lut, const float *stencils) {
+    if (!frame || !configuration || !exposure_lut || fotufilm_transport_validate_table(stencils))
+        return -1;
+    std::lock_guard<std::mutex> lock(pipeline_mutex());
+    try {
+        auto &pipeline = ::pipeline(frame->backend, true);
+        std::memcpy(frame->configuration.data(), configuration,
+                    sizeof(float) * FOTUFILM_FRAME_CONFIGURATION_COUNT);
+        std::memcpy(frame->lut.data(), exposure_lut, sizeof(float) * frame->lut.number_of_elements());
+        std::memcpy(frame->table.data(), stencils, sizeof(float) * FOTUFILM_TRANSPORT_TABLE_FLOATS);
+        frame->configuration.set_host_dirty(); frame->lut.set_host_dirty();
+        frame->table.set_host_dirty();
+        pipeline.exposure.set(frame->domain);
+        pipeline.configuration.set(frame->configuration);
+        pipeline.exposure_lut.set(frame->lut);
+        pipeline.accumulated.set(frame->sum);
+        pipeline.stencils.set(frame->table);
+        for (int l = 0; l < FOTUFILM_TRANSPORT_LEVELS; ++l) pipeline.radii[l].set(int32_t(stencils[l]));
+        pipeline.first.set(!frame->written);
+        struct Unbind {
+            TransportPipeline &pipeline;
+            ~Unbind() {
+                pipeline.exposure.reset(); pipeline.configuration.reset();
+                pipeline.exposure_lut.reset(); pipeline.accumulated.reset(); pipeline.stencils.reset();
+            }
+        } unbind{pipeline};
+        // The sum stays where the pipeline left it until the frame finishes.
+        pipeline.output.realize(frame->sum, transport_target(frame->backend));
+        frame->written = true;
         return 0;
     } catch (const std::exception &error) {
         std::fprintf(stderr, "Layered transport: %s\n", error.what());
         return -2;
     }
 }
-extern "C" int32_t fotufilm_transport_accumulate(
-    const float *r, const float *g, const float *b,
-    float *accum_r, float *accum_g, float *accum_b,
-    int32_t width, int32_t height,
-    const FotufilmTransportBand *bands, int32_t band_count,
-    int32_t backend) {
-    if (!r || !g || !b || !accum_r || !accum_g || !accum_b || !bands || width <= 0 || height <= 0 || band_count < 0) return -1;
-    if (band_count == 0) return 0;
-    if (!fotufilm_transport_available(backend)) return -3;
-    for (int b = 0; b < band_count; ++b) {
-        int rad = bands[b].radius, scale = bands[b].stride;
-        if (!bands[b].kernel || rad < 1 || rad > 128 || scale < 1 || scale > 4096 || (scale & (scale - 1))) return -1;
-        if (!std::isfinite(bands[b].weight) || bands[b].weight < 0) return -1;
-        double sum = 0;
-        for (int i = 0; i < (rad * 2 + 1) * (rad * 2 + 1); ++i) {
-            if (!std::isfinite(bands[b].kernel[i]) || bands[b].kernel[i] < 0) return -1;
-            sum += bands[b].kernel[i];
-        }
-        if (std::abs(sum - 1) > 1e-5) return -1;
-    }
-    try {
-        static auto *const engines = new std::unique_ptr<TransportConvolution>[2]();
-        static std::mutex &preparation = *new std::mutex;
-        TransportConvolution *engine;
-        {
-            std::lock_guard<std::mutex> lock(preparation);
-            if (!engines[backend]) engines[backend] = std::make_unique<TransportConvolution>(backend == 1);
-            engine = engines[backend].get();
-        }
-        engine->accumulate_bands(r, g, b, accum_r, accum_g, accum_b, width, height, bands, band_count);
+
+extern "C" int32_t fotufilm_transport_frame_finish(fotufilm_transport_frame *frame, int32_t deliver) {
+    if (!frame) return -1;
+    std::unique_ptr<fotufilm_transport_frame> owned(frame);
+    if (!deliver) return 0;
+    if (!frame->written) {
+        std::memset(frame->sum.data(), 0, sizeof(float) * frame->sum.number_of_elements());
         return 0;
-    } catch (const std::exception &error) {
-        std::fprintf(stderr, "Layered transport accumulate: %s\n", error.what());
-        return -2;
     }
+    return frame->sum.copy_to_host();
 }
-#else
-extern "C" int32_t fotufilm_transport_available(int32_t) { return 0; }
-extern "C" int32_t fotufilm_transport_convolve(const float *, const float *, const float *,
-    float *, float *, float *, int32_t, int32_t, const float *, int32_t, int32_t, int32_t) { return -3; }
-extern "C" int32_t fotufilm_transport_accumulate(const float *, const float *, const float *,
-    float *, float *, float *, int32_t, int32_t, const FotufilmTransportBand *, int32_t, int32_t) { return -3; }
+#elif !defined(FOTUFILM_HALIDE_IOS_AOT)
+// SwiftPM can supply the unavailable stubs beside the app's AOT implementation.
+extern "C" FOTUFILM_FALLBACK int32_t fotufilm_transport_available(int32_t) { return 0; }
+extern "C" FOTUFILM_FALLBACK int32_t fotufilm_transport_component(
+    const float *, float *, int32_t, int32_t, int32_t, const float *, int32_t) { return -3; }
+extern "C" FOTUFILM_FALLBACK fotufilm_transport_frame *fotufilm_transport_frame_begin(
+    const float *, const float *, float *, int32_t, int32_t, int32_t, int32_t) { return nullptr; }
+extern "C" FOTUFILM_FALLBACK int32_t fotufilm_transport_frame_add(
+    fotufilm_transport_frame *, const float *, const float *, const float *) { return -3; }
+extern "C" FOTUFILM_FALLBACK int32_t fotufilm_transport_frame_finish(
+    fotufilm_transport_frame *, int32_t) { return -3; }
 #endif

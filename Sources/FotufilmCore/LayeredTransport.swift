@@ -29,6 +29,9 @@ public struct LayeredTransport: Codable, Sendable, Equatable {
     public var rearIndex: [Double]
     /// Reflectance of an opaque backing; its complement is absorbed. Nil uses the dielectric boundary.
     public var rearReflectance: [Double]?
+    /// Reflectance of a plate pressed against an open rear surface, as a camera's pressure plate
+    /// is. Light the rear surface transmits returns from it, re-crossing that surface in place.
+    public var rearPlateReflectance: [Double]?
     /// Capture/launch planes measured down from the exposing surface, in R,G,B order.
     public var recordDepthMM: [Double]
     public var angularExponent: [[Double]]
@@ -40,12 +43,14 @@ public struct LayeredTransport: Codable, Sendable, Equatable {
 
     public init(constructionID: String, layers: [Layer],
                 frontIndex: [Double] = [1], rearIndex: [Double] = [1],
-                rearReflectance: [Double]? = nil, recordDepthMM: [Double],
+                rearReflectance: [Double]? = nil, rearPlateReflectance: [Double]? = nil,
+                recordDepthMM: [Double],
                 angularExponent: [[Double]], captureProbability: [[Double]],
                 returnedToDirect: [[Double]], coreSigmaMM: [Double]) {
         self.constructionID = constructionID
         self.layers = layers; self.frontIndex = frontIndex; self.rearIndex = rearIndex
-        self.rearReflectance = rearReflectance; self.recordDepthMM = recordDepthMM
+        self.rearReflectance = rearReflectance; self.rearPlateReflectance = rearPlateReflectance
+        self.recordDepthMM = recordDepthMM
         self.angularExponent = angularExponent; self.captureProbability = captureProbability
         self.returnedToDirect = returnedToDirect; self.coreSigmaMM = coreSigmaMM
     }
@@ -76,6 +81,10 @@ public struct LayeredTransport: Codable, Sendable, Equatable {
         try spectrum(frontIndex, 1...4, "frontIndex")
         try spectrum(rearIndex, 1...4, "rearIndex")
         if let rearReflectance { try spectrum(rearReflectance, 0...1, "rearReflectance") }
+        if let rearPlateReflectance {
+            try require(rearReflectance == nil, "an opaque backing leaves no rear surface for a plate")
+            try spectrum(rearPlateReflectance, 0...1, "rearPlateReflectance")
+        }
         let thickness = layers.reduce(0) { $0 + $1.thicknessMM }
         try require(recordDepthMM.count == 3 && recordDepthMM.allSatisfy {
             $0.isFinite && $0 > 0 && $0 < thickness
@@ -212,12 +221,25 @@ public enum LayeredTransportSolver {
         let n0 = indices[sourceEdge]
         let q = LayeredTransport.sample(model.angularExponent[receiver], band)
         let capture = LayeredTransport.sample(model.captureProbability[receiver], band)
+        // Each segment's traversal count, a lane per segment (16 layers and the virtual plane at
+        // most), with an additive hash of them kept as they grow: a branch copies no storage
+        // and a merge hashes one word, then compares the counts themselves.
+        typealias Visits = SIMD32<UInt16>
+        let segmentHashes = (0..<count).map { j -> UInt64 in
+            var z = UInt64(j + 1) &* 0x9e3779b97f4a7c15
+            z = (z ^ (z >> 30)) &* 0xbf58476d1ce4e5b9
+            z = (z ^ (z >> 27)) &* 0x94d049bb133111eb
+            return z ^ (z >> 31)
+        }
         struct Packet {
             var layer: Int; var down: Bool; var r: Double; var s: Double; var p: Double
-            var returned: Bool; var events: Int; var visits: [UInt16]
+            var returned: Bool; var events: Int; var visits: Visits; var visited: UInt64
         }
         struct PathKey: Hashable {
-            let layer: Int; let down: Bool; let returned: Bool; let visits: [UInt16]
+            let layer: Int; let down: Bool; let returned: Bool; let visits: Visits; let visited: UInt64
+            func hash(into hasher: inout Hasher) {
+                hasher.combine(visited &+ UInt64(layer) << 2 &+ (down ? 2 : 0) &+ (returned ? 1 : 0))
+            }
         }
         var radii = [Double](), masses = [Double]()
         var captured = 0.0, unreturnedCapture = 0.0, absorbed = 0.0, escaped = 0.0, unresolved = 0.0
@@ -227,14 +249,16 @@ public enum LayeredTransportSolver {
             let invariant = n0 * sqrt(max(0, 1 - u * u))
             let weight = 0.5 / Double(angularSamples)
             var queue = [Packet(layer: sourceEdge, down: true, r: 0, s: weight, p: weight,
-                                returned: false, events: 0, visits: Array(repeating: 0, count: count))]
+                                returned: false, events: 0, visits: .zero, visited: 0)]
+            var nextQueue = [Packet](), lookup = [PathKey: Int]()
             while !queue.isEmpty {
-                var nextQueue = [Packet](), lookup = [PathKey: Int]()
+                nextQueue.removeAll(keepingCapacity: true); lookup.removeAll(keepingCapacity: true)
                 // Paths with the same segment traversal counts have exactly the same lateral
                 // displacement. Combine their power before further branching, without radial bins.
                 func enqueue(_ packet: Packet) {
                     let key = PathKey(layer: packet.layer, down: packet.down,
-                                      returned: packet.returned, visits: packet.visits)
+                                      returned: packet.returned, visits: packet.visits,
+                                      visited: packet.visited)
                     if let i = lookup[key] {
                         nextQueue[i].s += packet.s; nextQueue[i].p += packet.p
                     } else { lookup[key] = nextQueue.count; nextQueue.append(packet) }
@@ -246,7 +270,7 @@ public enum LayeredTransportSolver {
                     }
                     guard queue.count < 200_000 else { throw TransportError.convergence("too many optical branches") }
                     let j = packet.layer, n = indices[j]
-                    packet.visits[j] += 1
+                    packet.visits[j] += 1; packet.visited &+= segmentHashes[j]
                     let cosine = sqrt(max(0, 1 - pow(invariant / n, 2)))
                     guard cosine > 0 else { throw TransportError.convergence("invalid transmitted angle") }
                     let depth = edges[j+1] - edges[j]
@@ -271,26 +295,37 @@ public enum LayeredTransportSolver {
                     if next >= count, let override = model.rearReflectance {
                         let value = LayeredTransport.sample(override, band)
                         reflectance = (value, value)
+                    } else if next >= count, let plate = model.rearPlateReflectance {
+                        // The plate returns what the surface transmits, and the surface
+                        // reflects part of that back again: the incoherent sum of the bounces.
+                        let plated = LayeredTransport.sample(plate, band)
+                        func behind(_ r: Double) -> Double {
+                            r >= 1 ? 1 : r + (1 - r) * (1 - r) * plated / (1 - r * plated)
+                        }
+                        reflectance = (behind(reflectance.s), behind(reflectance.p))
                     }
                     let reflectedS = packet.s * reflectance.s, reflectedP = packet.p * reflectance.p
                     let transmittedS = packet.s - reflectedS, transmittedP = packet.p - reflectedP
-                    if next >= count && model.rearReflectance != nil {
-                        // An effective opaque backing reflects this fraction and absorbs the rest.
+                    if next >= count && (model.rearReflectance != nil || model.rearPlateReflectance != nil) {
+                        // An effective opaque backing, or the plate, reflects this fraction and
+                        // absorbs the rest.
                         absorbed += transmittedS + transmittedP
                     } else if exterior { escaped += transmittedS + transmittedP }
                     else if transmittedS + transmittedP > 0 {
                         enqueue(Packet(layer: next, down: packet.down, r: packet.r,
                                             s: transmittedS, p: transmittedP, returned: packet.returned,
-                                            events: packet.events, visits: packet.visits))
+                                            events: packet.events, visits: packet.visits,
+                                            visited: packet.visited))
                     }
                     if reflectedS + reflectedP > 0 {
                         enqueue(Packet(layer: j, down: !packet.down, r: packet.r,
                                             s: reflectedS, p: reflectedP,
                                             returned: packet.returned || next >= count,
-                                            events: packet.events, visits: packet.visits))
+                                            events: packet.events, visits: packet.visits,
+                                            visited: packet.visited))
                     }
                 }
-                queue = nextQueue
+                swap(&queue, &nextQueue)
             }
         }
         guard unresolved <= residualTolerance else {

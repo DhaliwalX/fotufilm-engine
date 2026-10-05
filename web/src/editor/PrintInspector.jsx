@@ -27,6 +27,7 @@ export default function PrintInspector() {
     setStage,
     setDifference,
     fixedSettings,
+    layeredLocked,
     setDialog,
   } = useEditor();
   // A film that is its own print (instax) has only its own medium to match.
@@ -49,7 +50,7 @@ export default function PrintInspector() {
                 exporting ||
                 !active ||
                 !edit.stock ||
-                edit.halationModel === "layered"
+                layeredLocked
               }
               value={
                 edit.mediumFollowsFilm && canMatchFilm
@@ -105,7 +106,7 @@ export default function PrintInspector() {
                   )}
                   size="S"
                   isDisabled={
-                    exporting || !active || edit.halationModel === "layered"
+                    exporting || !active || layeredLocked
                   }
                   value={edit.digitalReference || SCREEN_CONVERSION.default}
                   onChange={(digitalReference) => {
@@ -155,7 +156,7 @@ export default function PrintInspector() {
             {!fixedSettings && profileMedium(edit, selectedStock)?.screenCMY && (
               <Button
                 size="S"
-                isDisabled={exporting || !active || edit.halationModel === "layered" ||
+                isDisabled={exporting || !active || layeredLocked ||
                   !["screenCyan", "screenMagenta", "screenYellow"].some((field) => edit.profile?.[field])}
                 onPress={() => {
                   endEdit();

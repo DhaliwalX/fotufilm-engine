@@ -15,7 +15,8 @@
 #include "FotufilmHalide.h"
 #include "../../Sources/FotufilmHalide/FotufilmResolvedFrameParams.h"
 #include "FotufilmHalideDevelop.h"
-#include "FotufilmTransportPortable.h"
+#include "FotufilmTransport.h"
+#include "transport.h"
 
 #include "fotufilm_wasm_variants.h"
 #if __has_include("develop_flexible.h")
@@ -38,12 +39,6 @@
 extern "C" {
 
 EMSCRIPTEN_KEEPALIVE int fotufilm_wasm_plain_supported() { return 1; }
-EMSCRIPTEN_KEEPALIVE
-int fotufilm_wasm_transport(float *input, float *output, int w, int h,
-                            float *kernel, int radius, int stride) {
-    return fotufilm_transport_filter(input, output, w, h, kernel, radius, stride);
-}
-
 static const int32_t kLutCount = 33 * 33 * 33 * 4;
 
 static int32_t max_i(int32_t a, int32_t b) { return a > b ? a : b; }
@@ -77,6 +72,32 @@ static void init_flat(halide_buffer_t *buffer, halide_dimension_t *dim,
     // ABI halide_type_t and dropped `lanes` from the struct, but both versions take this ctor —
     // 21 defaults the lanes away, 22 never had them.
     buffer->type = halide_type_t(halide_type_float, 32);
+}
+
+/// Adds one Layered Transport component to the running sum, as fotufilm_transport_component
+/// does natively: `exposure` and `accumulated` are planar width * height * channels floats and
+/// `stencils` the component's table. Returns -1 for invalid input, or the Halide error code.
+EMSCRIPTEN_KEEPALIVE
+int fotufilm_wasm_transport(const float *exposure, float *accumulated, int32_t width, int32_t height,
+                            int32_t channels, const float *stencils) {
+    if (int32_t status = fotufilm_transport_validate(exposure, accumulated, width, height, channels,
+                                                     stencils, 0)) return status;
+    const int32_t plane = width * height;
+    float *output = (float *)malloc(size_t(plane) * channels * sizeof(float));
+    if (!output) return -1;
+    halide_buffer_t exposure_buf, sum_buf, table_buf, out_buf;
+    halide_dimension_t xd[3], sd[3], td[1], od[3];
+    init_planar(&exposure_buf, xd, const_cast<float *>(exposure), width, height, channels);
+    init_planar(&sum_buf, sd, accumulated, width, height, channels);
+    init_flat(&table_buf, td, const_cast<float *>(stencils), FOTUFILM_TRANSPORT_TABLE_FLOATS);
+    init_planar(&out_buf, od, output, width, height, channels);
+    int32_t r[FOTUFILM_TRANSPORT_LEVELS];
+    for (int l = 0; l < FOTUFILM_TRANSPORT_LEVELS; ++l) r[l] = (int32_t)stencils[l];
+    const int status = transport(&exposure_buf, &sum_buf, &table_buf, r[0], r[1], r[2], r[3], r[4],
+                                 r[5], r[6], r[7], r[8], r[9], r[10], r[11], r[12], &out_buf);
+    if (status == 0) memcpy(accumulated, output, size_t(plane) * channels * sizeof(float));
+    free(output);
+    return status;
 }
 
 /// The film grain model's tiles for the stock on screen, as `fotufilm --dump-wasm-pack

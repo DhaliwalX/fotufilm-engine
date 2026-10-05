@@ -119,6 +119,9 @@ export default function usePreviewState({
   );
   const selectedStock = stocks.find((stock) => stock.id === edit.stock);
   const fixedSettings = fixedStockSettings(selectedStock);
+  // The browser renders Layered Transport from a sealed pack built with the film's own settings;
+  // the native engine solves it for any edit.
+  const layeredLocked = edit.halationModel === "layered" && backend.kind !== "native";
   const stockId = edit.stock || stocks[0]?.id || "normal";
   const visibleError = error || libraryError;
   return {
@@ -137,6 +140,7 @@ export default function usePreviewState({
     detailRequest,
     selectedStock,
     fixedSettings,
+    layeredLocked,
     stockId,
     visibleError,
   };

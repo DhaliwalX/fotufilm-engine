@@ -19,14 +19,14 @@ spec.loader.exec_module(aot)
 
 
 class ReleaseTests(unittest.TestCase):
-    def test_complete_generated_set_includes_negative_scan_helpers(self):
+    def test_complete_generated_set_includes_scan_and_transport_helpers(self):
         source = (aot.ROOT / "tools/generate_halide_ios.cpp").read_text()
-        # Names are emitted literally by the generator, including its CPU/Metal scan pair.
+        # Names are emitted literally by the generator, including its CPU/Metal scan and transport pairs.
         generated_names = set(re.findall(r'"(fotufilm_halide_ios_[a-z0-9_]+)"', source))
         self.assertEqual(aot.EXTRA_ARCHIVES, {name + ".a" for name in generated_names})
         contents = {name: b"archive" for name in aot.EXTRA_ARCHIVES}
         contents["fotufilm_halide_ios_color.a"] = b"frame variant"
-        self.assertEqual(aot.validate_generated_archives(contents, 1), 9)
+        self.assertEqual(aot.validate_generated_archives(contents, 1), 15)
         for missing in aot.EXTRA_ARCHIVES:
             with self.subTest(missing=missing):
                 incomplete = {k: v for k, v in contents.items() if k != missing}

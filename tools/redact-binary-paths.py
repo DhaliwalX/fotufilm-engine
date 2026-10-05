@@ -11,7 +11,7 @@ import sys
 # Halide's prebuilt runtime carries __FILE__ strings from the machine that built the toolchain.
 # Object/archive offsets must not move, so replacements are exactly as long as the originals.
 PRIVATE_PREFIX = re.compile(
-    rb"/(?:Users|home)/[^\x00\r\n]{1,768}?/(?=(?:third_party/Halide|Halide|Sources|tools)/)"
+    rb"/(?:Users|home|Volumes)/[^\x00\r\n]{1,768}?/(?=(?:third_party/Halide|Halide|Sources|tools)/)"
 )
 
 

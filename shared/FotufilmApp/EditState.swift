@@ -321,6 +321,13 @@ struct EditState: Equatable {
     /// A gain on what the base returns at each wavelength, one value per handle of the
     /// catalogue's ladder. Flat at 1 is the film's own return trip.
     var halationSpectrum = EditState.restingHalationSpectrum
+    /// The base's impurity scatter in micrometers; 0 keeps the film's own.
+    var halationHaze = 0.0
+    /// Layered Transport's construction: the anti-halation layer's absorption and the base's
+    /// thickness as multiples of the film's, and a pressure plate's reflectance behind it.
+    var antiHalation = 1.0
+    var baseThickness = 1.0
+    var pressurePlate = 0.0
     var couplers = 1.0
     var chromaticFringeAmount = 0.0
     /// Gaussian sigma on the film, displayed and persisted in micrometers.

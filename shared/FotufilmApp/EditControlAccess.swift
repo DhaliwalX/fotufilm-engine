@@ -61,6 +61,10 @@ extension EditorControlField {
         case .halation: return .number(\.halation)
         case .halationColour: return .number(\.halationColour)
         case .halationSpectrum: return .curve(\.halationSpectrum)
+        case .halationHaze: return .number(\.halationHaze)
+        case .antiHalation: return .number(\.antiHalation)
+        case .baseThickness: return .number(\.baseThickness)
+        case .pressurePlate: return .number(\.pressurePlate)
         case .halationModel, .estimatedHalation:
             return .unstored("Film Model settings decide it for every photograph")
         case .couplers: return .number(\.couplers)

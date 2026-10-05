@@ -158,3 +158,32 @@ test("phone pinch zoom and one-finger continuation refresh the visible region", 
     page.getByAltText("Original photo", { exact: true }),
   ).toHaveCount(0);
 });
+
+test("a press on a magnified photograph shows the original until it drags", async ({
+  page,
+}) => {
+  await open(page);
+  const viewer = page.getByLabel("Photo preview", { exact: true });
+  const bounds = await viewer.boundingBox();
+  const x = bounds.x + bounds.width / 2,
+    y = bounds.y + bounds.height / 2;
+  await page.mouse.move(x, y);
+  await page.keyboard.down("Meta");
+  for (let i = 0; i < 10; i++) await page.mouse.wheel(0, -30);
+  await page.keyboard.up("Meta");
+  await expect
+    .poll(async () => (await pixels(page.locator(".viewport-detail"))).frame)
+    .toBeGreaterThan(1600);
+  const badge = page.locator(".original-badge");
+  await page.mouse.down();
+  await expect(badge).toBeVisible();
+  await page.mouse.move(x + 3, y);
+  await expect(badge).toBeVisible();
+  await page.mouse.move(x + 40, y + 10);
+  await expect(badge).toHaveCount(0);
+  await page.mouse.up();
+  await page.mouse.down();
+  await expect(badge).toBeVisible();
+  await page.mouse.up();
+  await expect(badge).toHaveCount(0);
+});

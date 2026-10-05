@@ -433,7 +433,7 @@ final class SceneReferredTests: XCTestCase {
             width: width, height: height, stock: stock, options: options,
             budget: estimate - 1))
 
-        let available = HalideMetalFilmRenderer.availableBytes()
+        let available = ProcessMemory.availableBytes()
         XCTAssertFalse(HalideMetalFilmRenderer.canRender(
             width: width, height: height, stock: stock, options: options,
             budget: nil) && estimate > available * 4 / 5,

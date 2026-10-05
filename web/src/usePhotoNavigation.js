@@ -131,7 +131,8 @@ export function usePhotoNavigation(options) {
       pointers.current.set(event.pointerId, point(event));
       clearHold();
       rebase();
-      if (pointers.current.size > 1 || viewed().zoom > 1) {
+      // A press shows the original at any zoom; a drag or a second finger ends it.
+      if (pointers.current.size > 1) {
         current.setCompare(false);
       } else if (event.pointerType === "touch") {
         hold.current = setTimeout(() => live.current.setCompare(true), 180);
@@ -158,7 +159,16 @@ export function usePhotoNavigation(options) {
         );
       } else if (viewed().zoom > 1) {
         const { zoom } = viewed();
-        clearHold();
+        if (
+          !start.panning &&
+          Math.hypot(
+            ...position.map((value, axis) => value - start.anchor[axis]),
+          ) > 6
+        ) {
+          start.panning = true;
+          clearHold();
+          current.setCompare(false);
+        }
         apply({
           zoom,
           offset: constrainPhotoOffset(

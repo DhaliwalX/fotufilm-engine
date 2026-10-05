@@ -203,6 +203,11 @@ public enum EditorControlCatalogue {
     static let hdrInputOmission: String = "the host hands over its own scene-referred range"
     static let noCurveFlag: String = "no flag carries a curve"
     static let filmModelSetting: String = "Film Model settings choose it for every photograph"
+    static let layeredConstructionOmissions: [EditorSurface: String] = [
+        .android: "the Android editor does not yet offer the construction's controls",
+        .resolve: "plugin hosts do not yet offer the construction's controls",
+        .finalcut: "plugin hosts do not yet offer the construction's controls",
+    ]
 
     private static let signed = EditorControlScale(-1...1, neutral: 0, unit: .signed)
     private static let percent = EditorControlScale(0...1, neutral: 0, unit: .percent)
@@ -589,7 +594,7 @@ public enum EditorControlCatalogue {
         EditorControl(
             .halationModel, title: "Halation Model",
             detail: "Choose how light is scattered and reflected within the film.",
-            section: .filmEmulsion,
+            section: .filmHalation,
             kind: .menu(.fixed([EditorMenuChoice(0, "Legacy", detail: "Original film halation", id: "legacy"),
                                 EditorMenuChoice(1, "Layered Transport", detail: "Illustrative film stack",
                                                  id: "layered")])),
@@ -609,7 +614,7 @@ public enum EditorControlCatalogue {
         EditorControl(
             .halation, title: "Halation",
             detail: "Adjust the glow around bright areas caused by light reflecting inside the film.",
-            section: .filmEmulsion,
+            section: .filmHalation,
             kind: .slider(EditorControlScale(HalationAmount.travel, neutral: 0,
                                              unit: .stopsFromOff,
                                              admitted: HalationAmount.admitted)),
@@ -637,7 +642,7 @@ public enum EditorControlCatalogue {
         EditorControl(
             .estimatedHalation, title: "Estimated Halation Shape",
             detail: "Use an estimated halo shape when the film has no measured shape.",
-            section: .filmEmulsion, kind: .toggle(restingOn: false),
+            section: .filmHalation, kind: .toggle(restingOn: false),
             scope: .global(settingKey: "fotufilm.estimated-halation"),
             binding: .estimatedHalationProfile,
             surfaces: [.resolve, .finalcut, .cli, .web],
@@ -657,7 +662,7 @@ public enum EditorControlCatalogue {
         EditorControl(
             .halationReturn, title: "Halation Return",
             detail: "Red returned/direct exposure percentage; follows the selected film until adjusted.",
-            section: .filmEmulsion,
+            section: .filmHalation,
             kind: .slider(EditorControlScale(0...1, neutral: 0, unit: .percent)),
             availability: .film,
             persistence: .bespoke, binding: .halationReturnRatio,
@@ -673,7 +678,7 @@ public enum EditorControlCatalogue {
         EditorControl(
             .halationColour, title: "Halo Colour",
             detail: "Control how much the halo keeps the color of the light source.",
-            section: .filmEmulsion,
+            section: .filmHalation,
             kind: .slider(EditorControlScale(0...1, neutral: 0, unit: .percent)),
             availability: .colourNegative,
             binding: .halationSourceColour,
@@ -696,7 +701,7 @@ public enum EditorControlCatalogue {
         EditorControl(
             .halationSpectrum, title: "Return Spectrum",
             detail: "Adjust which colors the film base reflects back into the image.",
-            section: .filmEmulsion,
+            section: .filmHalation,
             kind: .curve(EditorControlCurve(
                 handles: HalationSpectrum.handleNM.map { Double($0) },
                 domain: 380...780,
@@ -721,6 +726,70 @@ public enum EditorControlCatalogue {
                 kind: .double(min: -6, max: 6, value: 0), order: 10),
             web: .profile,
             documentation: "Selects base reflectance spectral weighting."),
+        EditorControl(
+            .halationHaze, title: "Base Haze",
+            detail: "Soften the halo with scatter inside the film base.",
+            section: .filmHalation,
+            kind: .slider(EditorControlScale(0...100, neutral: 0, unit: .micrometers)),
+            availability: .film,
+            foldsUnder: .halation,
+            binding: .halationHazeMicrometers,
+            surfaces: [.app, .desktop, .cli, .web],
+            omitted: layeredConstructionOmissions,
+            web: .profile,
+            commandLine: CommandLineFlag("--halation-haze", placeholder: "<um>",
+                                         help: "Scatter inside the base as a Gaussian sigma, 0-500 micrometers "
+                                             + "(default: 0, the stock's own figure)",
+                                         range: 0...500),
+            documentation: "Blurs the returned light by the base's impurity scatter, a Gaussian sigma in micrometres. Both halation models apply it; 0 keeps the film's own figure."),
+        EditorControl(
+            .antiHalation, title: "Anti-Halation",
+            detail: "Set the strength of the film's anti-halation layer. Layered Transport only.",
+            section: .filmHalation,
+            kind: .slider(EditorControlScale(0...1.5, neutral: 1, unit: .percent)),
+            availability: .film,
+            foldsUnder: .halation,
+            binding: .antiHalationScale,
+            surfaces: [.app, .desktop, .cli, .web],
+            omitted: layeredConstructionOmissions,
+            web: .profile,
+            commandLine: CommandLineFlag("--anti-halation", placeholder: "<f>",
+                                         help: "Layered Transport: absorption of the construction's "
+                                             + "anti-halation layers, 0-4 (default: 1; 0 removes them)",
+                                         range: 0...4),
+            documentation: "Scales the absorption of the Layered Transport construction's anti-halation layer, or the dyed coating standing in for one. Lower lets more light return from the base, so the halo brightens and widens; 0 removes the layer, as on a film with its backing taken off. The amount moves between the film's own calibrated return and the return of the same stack without absorbers at a measured launch."),
+        EditorControl(
+            .baseThickness, title: "Base Thickness",
+            detail: "Make the film base thinner or thicker. Layered Transport only.",
+            section: .filmHalation,
+            kind: .slider(EditorControlScale(0.5...2, neutral: 1, unit: .multiplier)),
+            availability: .film,
+            foldsUnder: .halation,
+            binding: .baseThicknessScale,
+            surfaces: [.app, .desktop, .cli, .web],
+            omitted: layeredConstructionOmissions,
+            web: .profile,
+            commandLine: CommandLineFlag("--base-thickness", placeholder: "<f>",
+                                         help: "Layered Transport: multiplier on the support's thickness, "
+                                             + "0.25-3 (default: 1)",
+                                         range: 0.25...3),
+            documentation: "Scales the Layered Transport construction's support. Light returning from the base's back surface travels farther through a thicker base, so the halo's ring widens."),
+        EditorControl(
+            .pressurePlate, title: "Pressure Plate",
+            detail: "Reflect light back from a plate behind the film. Layered Transport only.",
+            section: .filmHalation,
+            kind: .slider(EditorControlScale(0...1, neutral: 0, unit: .percent)),
+            availability: .film,
+            foldsUnder: .halation,
+            binding: .pressurePlateReflectance,
+            surfaces: [.app, .desktop, .cli, .web],
+            omitted: layeredConstructionOmissions,
+            web: .profile,
+            commandLine: CommandLineFlag("--pressure-plate", placeholder: "<f>",
+                                         help: "Layered Transport: reflectance of a pressure plate behind "
+                                             + "the film, 0-1 (default: 0)",
+                                         range: 0...1),
+            documentation: "Places a camera's pressure plate against the back of a Layered Transport construction. Light the base's back surface lets out returns from the plate, adding to the halo; a film with an opaque backing hides it."),
         EditorControl(
             .couplers, title: "Couplers",
             detail: "Adjust how development affects color separation and edge contrast.",
@@ -2209,9 +2278,6 @@ public extension EngineOptionCoverage {
             "Explicit optical construction override; apps select the model in Film Model settings."),
         "transportBackend": .unexposed(
             "Selects CPU or Metal JIT transport convolution in the checked planar API."),
-        "halationHazeMM": .unexposed(
-            "the support's impurity scatter is the stock's own figure, stated per sheet; the CLI "
-            + "exposes an override for calibration experiments"),
         "couplerRangeScale": .unexposed(
             "the app sets the per-gap reaches instead; the Resolve bridge derives it from Separation"),
         "sceneIlluminantChromaticity": .derived("capture chromaticity"),

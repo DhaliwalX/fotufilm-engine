@@ -73,8 +73,6 @@ Options:
   --transport-backend <cpu|metal> Transport convolution backend (default: cpu)
   --iterations <n>  Render n times; the first warms caches, remaining runs report
                      processing time and throughput (31 measures 30 warm frames)
-  --halation-haze <mm> Support impurity scatter as a Gaussian sigma in
-                     millimeters (default: the stock's own figure)
   --adjacency-model <m> gaussian or screened-diffusion (default: stock's model)
   --stages           Instead of one render, write the frame the film would make
                      with only the physics enabled up to each stage, into the
@@ -955,7 +953,6 @@ if let text = flags["--halation-return"] {
     }
     options.halationReturnRatio = percent / 100
 }
-if let z = flags["--halation-haze"] { options.halationHazeMM = Float(z) }
 if let path = flags["--transport"] {
     do {
         let model = try JSONDecoder().decode(LayeredTransport.self,
@@ -1144,7 +1141,7 @@ if let packPath = flags["--dump-wasm-pack"] {
 
     var pack = Data()
     pack.append(contentsOf: Array("FSWP".utf8))
-    pack.appendUInt32(options.transportConstruction(for: stock) == nil ? 2 : 3)
+    pack.appendUInt32(options.transportConstruction(for: stock) == nil ? 2 : 4)
     pack.appendInt32(Int32(packWidth))
     pack.appendInt32(Int32(packHeight))
     pack.appendInt32(invocation.featureMask)
@@ -1209,18 +1206,30 @@ if let packPath = flags["--dump-wasm-pack"] {
 
     do {
         if options.transportConstruction(for: stock) != nil {
+            guard stock.donorLayers.isEmpty else {
+                fail("Browser transport packs do not yet carry a donor stock's fourth record")
+            }
             let plan = try LayeredTransportRenderer.renderPlan(stock: stock, options: options,
                                                               width: packWidth, height: packHeight)
             guard plan.head.featureMask == FilmEngineFeature.lightOut else {
                 fail("Browser transport packs currently require lens flare and diffusion off")
             }
-            func appendBands(_ component: TransportRenderPlan.Component) {
-                pack.appendInt32(Int32(component.bands.count))
-                for band in component.bands {
-                    pack.appendFloats([band.weight])
-                    pack.appendInt32(Int32(band.stencil.radius))
-                    pack.appendInt32(Int32(band.stencil.stride))
-                    pack.appendFloats(band.stencil.weights)
+            // A component's stencil table without its empty levels: the count of levels it
+            // uses, then each one's level, radius and (2r + 1)² weights from the centred slot.
+            func appendStencils(_ component: TransportRenderPlan.Component) {
+                let levels = TransportRadialKernel.transportLevels
+                let limit = TransportRadialKernel.transportStencilRadius
+                let side = 2 * limit + 1, table = component.stencils
+                let used = (0..<levels).filter { table[$0] > 0 }
+                pack.appendInt32(Int32(used.count))
+                for level in used {
+                    let radius = Int(table[level]), base = levels + level * side * side
+                    pack.appendInt32(Int32(level))
+                    pack.appendInt32(Int32(radius))
+                    for dy in -radius...radius {
+                        let row = base + (dy + limit) * side + limit
+                        pack.appendFloats(Array(table[(row - radius)...(row + radius)]))
+                    }
                 }
             }
             func appendDelta(_ values: [Float], base: [Float]) {
@@ -1229,12 +1238,13 @@ if let packPath = flags["--dump-wasm-pack"] {
                 for index in changed { pack.appendInt32(Int32(index)); pack.appendFloats([values[index]]) }
             }
             pack.appendInt32(plan.head.featureMask)
+            pack.appendInt32(LayeredTransportRenderer.continuationClears)
             pack.appendFloats(plan.head.configuration)
             pack.appendFloats(plan.tail.configuration)
             pack.appendInt32(Int32(plan.components.count))
             for component in plan.components {
                 pack.appendFloats(component.exposure)
-                appendBands(component)
+                appendStencils(component)
             }
             // Spectral tables do not depend on image size. Each size stores only its changed
             // spatial configuration and pixel stencils, reusing the component LUTs above.
@@ -1247,7 +1257,7 @@ if let packPath = flags["--dump-wasm-pack"] {
                 pack.appendInt32(Int32(shortEdge))
                 appendDelta(rung.head.configuration, base: plan.head.configuration)
                 appendDelta(rung.tail.configuration, base: plan.tail.configuration)
-                for component in rung.components { appendBands(component) }
+                for component in rung.components { appendStencils(component) }
             }
         }
         // The film grain model's tiles close the pack, their count last so a reader finds them

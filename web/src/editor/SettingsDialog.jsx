@@ -358,10 +358,16 @@ function FilmModel() {
   };
   const adjusted = FILM_MODEL.some((key) => values[key] !== APP_SETTINGS[key]);
   // The Mac app reads halation as a photo develops, so these reach the open photo as well.
-  const { active, edit, selectedStock, fixedSettings, sceneKelvin, patch, setProfile } =
+  const { active, edit, selectedStock, fixedSettings, sceneKelvin, patch, setProfile, backend } =
     useEditor();
   const modelled = !!active && !!edit?.stock && !fixedSettings;
   const halationModelChanged = (model) => {
+    // The native engine solves Layered Transport for any edit; the browser's sealed packs take
+    // the film's own settings only.
+    if (backend?.kind === "native") {
+      if (modelled) patch({ halationModel: model });
+      return;
+    }
     const layered =
       selectedStock?.layeredTransport !== false && !sceneKelvin && !hasProfileSettings(edit);
     if (modelled && (model !== "layered" || layered))

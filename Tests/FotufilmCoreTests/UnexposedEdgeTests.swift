@@ -138,6 +138,18 @@ final class UnexposedEdgeTests: XCTestCase {
                           "the photograph is exposed, the film beyond it is not")
     }
 
+    func testLayeredTransportScattersPastTheGateOnce() throws {
+        let layered: (inout FotufilmEngine.Options) -> Void = { $0.halationModel = .layered }
+        let dark = try develop(scene: 0, layered)
+        let bright = try develop(scene: 4, layered)
+        let top = dark.margins.top
+        for c in [0, 1] { XCTAssertEqual(bright.column[c], dark.column[c], accuracy: 0.01) }
+        XCTAssertGreaterThan(bright.column[top - 1] - dark.column[top - 1], 0.01,
+                             "the transported light returns past the gate")
+        XCTAssertGreaterThan(bright.column[top - 1] - dark.column[top - 1],
+                             bright.column[top / 2] - dark.column[top / 2])
+    }
+
     func testLensSideLightStopsAtTheGate() throws {
         let plain = try develop(scene: 0.18)
         let flashed = try develop(scene: 0.18) { $0.cameraPreflash = 0.1 }

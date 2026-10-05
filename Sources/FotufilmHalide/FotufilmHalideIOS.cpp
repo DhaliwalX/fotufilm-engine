@@ -10,6 +10,14 @@
 #include "FotufilmNegativeScan.h"
 #include "fotufilm_halide_ios_negative_cpu.h"
 #include "fotufilm_halide_ios_negative_metal.h"
+#include "fotufilm_halide_ios_transport_cpu.h"
+#include "fotufilm_halide_ios_transport_metal.h"
+#include "fotufilm_halide_ios_transport_scene_cpu.h"
+#include "fotufilm_halide_ios_transport_domain_cpu.h"
+#include "fotufilm_halide_ios_transport_scene_metal.h"
+#include "fotufilm_halide_ios_transport_domain_metal.h"
+#include "TransportFrameAot.h"
+#include "FotufilmTransport.h"
 #include <HalideBuffer.h>
 #include <HalideRuntimeMetal.h>
 
@@ -1166,6 +1174,49 @@ extern "C" int32_t fotufilm_negative_scan(const float *in, float *out, int32_t w
     return status;
 }
 
+// Layered Transport: one component's light spread by its stencil table and added to the sum.
+extern "C" int32_t fotufilm_transport_available(int32_t backend) { return backend == 0 || backend == 1; }
+
+extern "C" int32_t fotufilm_transport_component(
+    const float *exposure, float *accumulated, int32_t width, int32_t height, int32_t channels,
+    const float *stencils, int32_t backend) {
+    if (int32_t status = fotufilm_transport_validate(exposure, accumulated, width, height, channels,
+                                                     stencils, backend)) return status;
+    int32_t r[FOTUFILM_TRANSPORT_LEVELS];
+    for (int l = 0; l < FOTUFILM_TRANSPORT_LEVELS; ++l) r[l] = int32_t(stencils[l]);
+    Buffer<float> input(const_cast<float *>(exposure), width, height, channels);
+    Buffer<float> sum(accumulated, width, height, channels);
+    Buffer<float> table(const_cast<float *>(stencils), FOTUFILM_TRANSPORT_TABLE_FLOATS);
+    input.set_host_dirty(); sum.set_host_dirty(); table.set_host_dirty();
+    auto run = backend ? fotufilm_halide_ios_transport_metal : fotufilm_halide_ios_transport_cpu;
+    // The sum is read only at the point written, so the pipeline adds into it in place.
+    int status = run(input, sum, table, r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8], r[9],
+                     r[10], r[11], r[12], sum);
+    if (!status) status = sum.copy_to_host();
+    return status;
+}
+
+extern "C" fotufilm_transport_frame *fotufilm_transport_frame_begin(
+    const float *scene, const float *configuration, float *sum, int32_t width, int32_t height,
+    int32_t channels, int32_t backend) {
+    if (backend < 0 || backend > 1) return nullptr;
+    return fotufilm::transport_frame::begin(
+        backend ? fotufilm_halide_ios_transport_domain_metal : fotufilm_halide_ios_transport_domain_cpu,
+        backend ? fotufilm_halide_ios_transport_scene_metal : fotufilm_halide_ios_transport_scene_cpu,
+        backend ? halide_metal_device_interface() : nullptr, scene, configuration, sum, width, height,
+        channels);
+}
+
+extern "C" int32_t fotufilm_transport_frame_add(fotufilm_transport_frame *frame,
+                                                const float *configuration,
+                                                const float *exposure_lut, const float *stencils) {
+    return fotufilm::transport_frame::add(frame, configuration, exposure_lut, stencils);
+}
+
+extern "C" int32_t fotufilm_transport_frame_finish(fotufilm_transport_frame *frame, int32_t deliver) {
+    return fotufilm::transport_frame::finish(frame, deliver);
+}
+
 extern "C" int32_t fotufilm_halide_available(void) { return 0; }
 // The Film tile builder needs the Halide compiler; ahead-of-time hosts build tiles in Metal.
 extern "C" int32_t fotufilm_film_tile_build(int32_t, int32_t, int32_t, const float *, int32_t,
@@ -1210,10 +1261,4 @@ extern "C" int32_t fotufilm_halide_gaussian(
 extern "C" int32_t fotufilm_halide_approximate_gaussian(
     const float *, float *, int32_t, int32_t, int32_t) { return -1; }
 
-#endif
-
-// The layered Apple path injects AOT rendering and native Metal convolution.
-// Keep the reference ABI linked for the shared portable Swift implementation.
-#if defined(FOTUFILM_TRANSPORT_REFERENCE_STUBS)
-#include "FotufilmTransport.cpp"
 #endif

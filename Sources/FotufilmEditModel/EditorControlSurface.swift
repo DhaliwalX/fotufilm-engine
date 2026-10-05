@@ -182,6 +182,10 @@ public enum EngineBinding: Equatable, Sendable {
     case halationSourceColour
     case halationReturnRatio
     case halationReturnGain
+    case halationHazeMicrometers
+    case antiHalationScale
+    case baseThicknessScale
+    case pressurePlateReflectance
     case couplerScale
     case couplerGapReach
     case couplerSelf
@@ -241,6 +245,10 @@ public enum EngineBinding: Equatable, Sendable {
         case .halationReturnRatio: return ["halationReturnRatio"]
         case .halationSourceColour: return ["halationSourceColour"]
         case .halationReturnGain: return ["halationReturnGain"]
+        case .halationHazeMicrometers: return ["halationHazeMM"]
+        case .antiHalationScale: return ["antiHalationScale"]
+        case .baseThicknessScale: return ["baseThicknessScale"]
+        case .pressurePlateReflectance: return ["pressurePlateReflectance"]
         case .couplerScale: return ["couplerScale"]
         case .couplerGapReach: return ["couplerGapReachScales"]
         case .couplerSelf: return ["couplerSelfScale"]
@@ -323,6 +331,15 @@ public enum EngineBinding: Equatable, Sendable {
             if case .curve(let handles) = value {
                 options.halationReturnGain = HalationSpectrum.resampled(handles.map(Float.init))
             }
+        case .halationHazeMicrometers:
+            // Zero keeps the film's own figure.
+            if let number = value.number { options.halationHazeMM = number > 0 ? Float(number / 1000) : nil }
+        case .antiHalationScale:
+            if let number = value.number { options.antiHalationScale = Float(number) }
+        case .baseThicknessScale:
+            if let number = value.number { options.baseThicknessScale = Float(number) }
+        case .pressurePlateReflectance:
+            if let number = value.number { options.pressurePlateReflectance = Float(number) }
         case .couplerScale:
             if let number = value.number { options.couplerScale = Float(number) }
         case .couplerGapReach:
