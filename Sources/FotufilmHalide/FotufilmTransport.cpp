@@ -100,9 +100,9 @@ struct fotufilm_transport_frame {
 };
 
 extern "C" fotufilm_transport_frame *fotufilm_transport_frame_begin(
-    const float *scene, const float *configuration, int32_t width, int32_t height, int32_t channels,
-    int32_t backend) {
-    if (!scene || !configuration || width < 1 || height < 1 || (int64_t)width * height > 150000000
+    const float *scene, const float *configuration, float *sum, int32_t width, int32_t height,
+    int32_t channels, int32_t backend) {
+    if (!scene || !configuration || !sum || width < 1 || height < 1 || (int64_t)width * height > 150000000
         || channels < 3 || channels > 4 || !fotufilm_transport_available(backend)) return nullptr;
     std::lock_guard<std::mutex> lock(pipeline_mutex());
     try {
@@ -119,12 +119,19 @@ extern "C" fotufilm_transport_frame *fotufilm_transport_frame_begin(
         Halide::Buffer<float> shared(const_cast<float *>(configuration),
                                      FOTUFILM_FRAME_CONFIGURATION_COUNT);
         source.set_host_dirty(); shared.set_host_dirty();
+        // On a device the scene's domain lives there alone.
         auto frame = std::make_unique<fotufilm_transport_frame>(fotufilm_transport_frame{
-            backend, Halide::Buffer<float>::make_interleaved(width, height, 4),
-            Halide::Buffer<float>(width, height, channels),
+            backend, backend ? Halide::Buffer<float>(nullptr, 3, shape)
+                             : Halide::Buffer<float>::make_interleaved(width, height, 4),
+            Halide::Buffer<float>(sum, width, height, channels),
             Halide::Buffer<float>(FOTUFILM_FRAME_CONFIGURATION_COUNT),
             Halide::Buffer<float>(33 * 33 * 33 * 4),
             Halide::Buffer<float>(FOTUFILM_TRANSPORT_TABLE_FLOATS)});
+        if (backend && frame->domain.device_malloc(
+                Halide::get_device_interface_for_device_api(Halide::DeviceAPI::Metal,
+                                                            transport_target(backend)))) {
+            return nullptr;
+        }
         domain->scene.set(source);
         domain->configuration.set(shared);
         struct Unbind {
@@ -178,17 +185,15 @@ extern "C" int32_t fotufilm_transport_frame_add(fotufilm_transport_frame *frame,
     }
 }
 
-extern "C" int32_t fotufilm_transport_frame_finish(fotufilm_transport_frame *frame, float *sum) {
+extern "C" int32_t fotufilm_transport_frame_finish(fotufilm_transport_frame *frame, int32_t deliver) {
     if (!frame) return -1;
     std::unique_ptr<fotufilm_transport_frame> owned(frame);
-    if (!sum) return 0;
+    if (!deliver) return 0;
     if (!frame->written) {
-        std::memset(sum, 0, sizeof(float) * frame->sum.number_of_elements());
+        std::memset(frame->sum.data(), 0, sizeof(float) * frame->sum.number_of_elements());
         return 0;
     }
-    if (int status = frame->sum.copy_to_host()) return status;
-    std::memcpy(sum, frame->sum.data(), sizeof(float) * frame->sum.number_of_elements());
-    return 0;
+    return frame->sum.copy_to_host();
 }
 #elif !defined(FOTUFILM_HALIDE_IOS_AOT)
 // SwiftPM can supply the unavailable stubs beside the app's AOT implementation.
@@ -196,9 +201,9 @@ extern "C" FOTUFILM_FALLBACK int32_t fotufilm_transport_available(int32_t) { ret
 extern "C" FOTUFILM_FALLBACK int32_t fotufilm_transport_component(
     const float *, float *, int32_t, int32_t, int32_t, const float *, int32_t) { return -3; }
 extern "C" FOTUFILM_FALLBACK fotufilm_transport_frame *fotufilm_transport_frame_begin(
-    const float *, const float *, int32_t, int32_t, int32_t, int32_t) { return nullptr; }
+    const float *, const float *, float *, int32_t, int32_t, int32_t, int32_t) { return nullptr; }
 extern "C" FOTUFILM_FALLBACK int32_t fotufilm_transport_frame_add(
     fotufilm_transport_frame *, const float *, const float *, const float *) { return -3; }
 extern "C" FOTUFILM_FALLBACK int32_t fotufilm_transport_frame_finish(
-    fotufilm_transport_frame *, float *) { return -3; }
+    fotufilm_transport_frame *, int32_t) { return -3; }
 #endif

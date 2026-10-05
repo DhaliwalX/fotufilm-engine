@@ -1197,13 +1197,14 @@ extern "C" int32_t fotufilm_transport_component(
 }
 
 extern "C" fotufilm_transport_frame *fotufilm_transport_frame_begin(
-    const float *scene, const float *configuration, int32_t width, int32_t height, int32_t channels,
-    int32_t backend) {
+    const float *scene, const float *configuration, float *sum, int32_t width, int32_t height,
+    int32_t channels, int32_t backend) {
     if (backend < 0 || backend > 1) return nullptr;
     return fotufilm::transport_frame::begin(
         backend ? fotufilm_halide_ios_transport_domain_metal : fotufilm_halide_ios_transport_domain_cpu,
         backend ? fotufilm_halide_ios_transport_scene_metal : fotufilm_halide_ios_transport_scene_cpu,
-        scene, configuration, width, height, channels);
+        backend ? halide_metal_device_interface() : nullptr, scene, configuration, sum, width, height,
+        channels);
 }
 
 extern "C" int32_t fotufilm_transport_frame_add(fotufilm_transport_frame *frame,
@@ -1212,8 +1213,8 @@ extern "C" int32_t fotufilm_transport_frame_add(fotufilm_transport_frame *frame,
     return fotufilm::transport_frame::add(frame, configuration, exposure_lut, stencils);
 }
 
-extern "C" int32_t fotufilm_transport_frame_finish(fotufilm_transport_frame *frame, float *sum) {
-    return fotufilm::transport_frame::finish(frame, sum);
+extern "C" int32_t fotufilm_transport_frame_finish(fotufilm_transport_frame *frame, int32_t deliver) {
+    return fotufilm::transport_frame::finish(frame, deliver);
 }
 
 extern "C" int32_t fotufilm_halide_available(void) { return 0; }

@@ -542,6 +542,15 @@ extension FilmEngineInvocation {
         setToneBase(measurement)
     }
 
+    /// Whole-frame convenience for callers holding interleaved linear RGBA.
+    public mutating func measureToneBase(
+        linearRGBA pixels: UnsafePointer<Float>, width: Int, height: Int
+    ) {
+        var measurement = toneBaseMeasurement()
+        measurement.add(linearRGBA: pixels, rows: 0..<height)
+        setToneBase(measurement)
+    }
+
     /// Whole-frame convenience for callers holding interleaved sRGB bytes.
     public mutating func measureToneBase(
         srgbRGBA bytes: UnsafePointer<UInt8>, width: Int, height: Int

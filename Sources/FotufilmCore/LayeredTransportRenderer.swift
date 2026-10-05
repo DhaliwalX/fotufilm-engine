@@ -18,13 +18,94 @@ public struct TransportExecution {
     /// The scene's light under a head invocation, written as three contiguous planes of the
     /// frame's pixel count. Optional: without it the heads go through `render`.
     public let light: ((FilmEngineInvocation, UnsafeMutablePointer<Float>) throws -> Void)?
-    /// The image as RGBA floats, when the caller holds it so; the alpha is not read.
-    public let scene: [Float]?
     public init(render: @escaping (ImageBuffer, FilmEngineInvocation, Bool) throws -> ImageBuffer,
                 backend: TransportBackend,
-                light: ((FilmEngineInvocation, UnsafeMutablePointer<Float>) throws -> Void)? = nil,
-                scene: [Float]? = nil) {
-        self.render = render; self.backend = backend; self.light = light; self.scene = scene
+                light: ((FilmEngineInvocation, UnsafeMutablePointer<Float>) throws -> Void)? = nil) {
+        self.render = render; self.backend = backend; self.light = light
+    }
+}
+
+/// A frame's scene as the caller holds it, planar or interleaved RGBA (whose alpha no stage
+/// reads). The other form is made only when a stage asks for it: a whole frame of it is
+/// expensive at full resolution.
+public final class TransportScene {
+    public let width: Int, height: Int
+    private var planar: ImageBuffer?
+    private var rgba: [Float]?
+
+    public init(_ image: ImageBuffer) {
+        width = image.width; height = image.height; planar = image
+    }
+
+    public init(rgba: [Float], width: Int, height: Int) {
+        self.width = width; self.height = height; self.rgba = rgba
+    }
+
+    var pixelCount: Int { width * height }
+
+    func validate() throws {
+        if let planar { return try planar.validate() }
+        let (count, overflow) = width.multipliedReportingOverflow(by: height)
+        guard width >= 0, height >= 0, width <= Int32.max, height <= Int32.max,
+              !overflow, count <= Int(Int32.max) / 3, rgba?.count == count * 4 else {
+            throw TransportError.invalid("image requires width × height RGBA samples")
+        }
+        let bands = 64, valid = UnsafeMutableBufferPointer<Bool>.allocate(capacity: bands)
+        defer { valid.deallocate() }
+        rgba!.withUnsafeBufferPointer { pixels in
+            DispatchQueue.concurrentPerform(iterations: bands) { band in
+                var finite = true
+                for i in band * count / bands..<(band + 1) * count / bands {
+                    finite = finite && pixels[4 * i].isFinite && pixels[4 * i + 1].isFinite
+                        && pixels[4 * i + 2].isFinite
+                }
+                valid[band] = finite
+            }
+        }
+        guard valid.allSatisfy({ $0 }) else { throw TransportError.invalid("image samples must be finite") }
+    }
+
+    /// The three planes.
+    public var image: ImageBuffer {
+        if let planar { return planar }
+        let n = pixelCount
+        var r = [Float](repeating: 0, count: n), g = r, b = r
+        rgba!.withUnsafeBufferPointer { pixels in
+            r.withUnsafeMutableBufferPointer { r in
+                g.withUnsafeMutableBufferPointer { g in
+                    b.withUnsafeMutableBufferPointer { b in
+                        DispatchQueue.concurrentPerform(iterations: 64) { band in
+                            for i in band * n / 64..<(band + 1) * n / 64 {
+                                r[i] = pixels[4 * i]; g[i] = pixels[4 * i + 1]; b[i] = pixels[4 * i + 2]
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        let image = ImageBuffer(width: width, height: height, planes: [r, g, b])
+        planar = image
+        return image
+    }
+
+    /// RGBA floats.
+    var interleaved: [Float] {
+        if let rgba { return rgba }
+        let made = LayeredTransportRenderer.interleaved(planar!)
+        rgba = made
+        return made
+    }
+
+    func measureToneBase(_ invocation: inout FilmEngineInvocation) {
+        if let rgba {
+            rgba.withUnsafeBufferPointer {
+                invocation.measureToneBase(linearRGBA: $0.baseAddress!, width: width, height: height)
+            }
+        } else {
+            LayeredTransportRenderer.withPlanes(planar!.planes) { r, g, b in
+                invocation.measureToneBase(planarR: r, g: g, b: b, width: width, height: height)
+            }
+        }
     }
 }
 
@@ -164,7 +245,7 @@ public enum LayeredTransportRenderer {
                                execution: TransportExecution? = nil,
                                invocation: FilmEngineInvocation? = nil,
                                pixelPitchMM: Double? = nil) throws -> ImageBuffer {
-        let exposed = try expose(image: image, stock: stock, options: options, model: model,
+        let exposed = try expose(scene: TransportScene(image), stock: stock, options: options, model: model,
                                  frameIndex: frameIndex, execution: execution, invocation: invocation,
                                  pixelPitchMM: pixelPitchMM)
         let render = execution?.render ?? { image, invocation, developOnly in
@@ -206,17 +287,17 @@ public enum LayeredTransportRenderer {
     }
 
     /// Runs every component of the frame's transport, up to the records' development.
-    public static func expose(image: ImageBuffer, stock: FilmStock, options: FotufilmEngine.Options,
+    public static func expose(scene: TransportScene, stock: FilmStock, options: FotufilmEngine.Options,
                               model supplied: LayeredTransport, frameIndex: UInt64 = 0,
                               execution: TransportExecution? = nil,
                               invocation suppliedInvocation: FilmEngineInvocation? = nil,
                               pixelPitchMM: Double? = nil) throws -> Exposure {
-        try image.validate()
+        try scene.validate()
         let backend = execution?.backend ?? options.transportBackend
         guard backend.isAvailable, execution != nil || HalideBackend.isAvailable else {
             throw TransportError.backend("requested transport backend is unavailable")
         }
-        guard image.width > 0 && image.height > 0,
+        guard scene.width > 0 && scene.height > 0,
               options.halationScale.isFinite && options.halationScale >= 0,
               stock.halationLookScale.isFinite && stock.halationLookScale >= 0,
               options.frameCoverage.isFinite, options.format.frameHeightMM.isFinite,
@@ -236,15 +317,11 @@ public enum LayeredTransportRenderer {
             : Double(options.halationScale) * Double(stock.halationLookScale)
         let t = prepared.compilation.interpolation(amount: amount)
         var invocation = try suppliedInvocation ?? FilmEngineInvocation(validating: plain, options: settings,
-                                             width: image.width, height: image.height, frameIndex: frameIndex)
-        if invocation.sceneMeteringActive && suppliedInvocation == nil {
-            withPlanes(image.planes) { r, g, b in
-                invocation.measureToneBase(planarR: r, g: g, b: b, width: image.width, height: image.height)
-            }
-        }
-        let pitch = pixelPitchMM ?? options.pixelPitchMM(width: image.width, height: image.height)
+                                             width: scene.width, height: scene.height, frameIndex: frameIndex)
+        if invocation.sceneMeteringActive && suppliedInvocation == nil { scene.measureToneBase(&invocation) }
+        let pitch = pixelPitchMM ?? options.pixelPitchMM(width: scene.width, height: scene.height)
         let donated = !plain.donorLayers.isEmpty
-        let n = image.pixelCount, channels = donated ? 4 : 3
+        let n = scene.pixelCount, channels = donated ? 4 : 3
         // The running sum and each component, planar and contiguous as the transport takes
         // them; a donor stock's fourth record accumulates beside the three.
         var sum = [Float](repeating: 0, count: n * channels)
@@ -252,7 +329,7 @@ public enum LayeredTransportRenderer {
         lazy var fourth = [Float](repeating: 0, count: donated ? n * 3 : 0)
         func light(_ head: FilmEngineInvocation, into destination: UnsafeMutablePointer<Float>) throws {
             if let light = execution?.light { return try light(head, destination) }
-            let planes = try render(image, head, true).planes
+            let planes = try render(scene.image, head, true).planes
             for c in 0..<3 {
                 planes[c].withUnsafeBufferPointer { destination.advanced(by: c * n).update(from: $0.baseAddress!, count: n) }
             }
@@ -275,8 +352,7 @@ public enum LayeredTransportRenderer {
         if invocation.featureMask & (FilmEngineFeature.flare | FilmEngineFeature.diffusion) == 0 {
             // Every head is the scene through its table and the gate, which the transport
             // exposes itself: the frame's components never leave the device.
-            let scene = execution?.scene ?? interleaved(image)
-            try exposeFrame(scene, width: image.width, height: image.height, channels: channels,
+            try exposeFrame(scene.interleaved, width: scene.width, height: scene.height, channels: channels,
                             components: prepared.compilation.kernels.indices.compactMap { k in
                                 tables[k].map { (head($0), stencils[k]) } },
                             backend: backend, into: &sum)
@@ -294,8 +370,8 @@ public enum LayeredTransportRenderer {
                                 component.baseAddress!.advanced(by: 3 * n).update(from: $0.baseAddress!, count: n)
                             }
                         }
-                        try transport(component.baseAddress!, into: sum.baseAddress!, width: image.width,
-                                      height: image.height, channels: channels, stencils: stencils[k],
+                        try transport(component.baseAddress!, into: sum.baseAddress!, width: scene.width,
+                                      height: scene.height, channels: channels, stencils: stencils[k],
                                       backend: backend)
                     }
                 }
@@ -331,29 +407,29 @@ public enum LayeredTransportRenderer {
             throw TransportError.invalid("invalid transport frame")
         }
         guard let first = components.first?.head else { return }
-        guard let frame = scene.withUnsafeBufferPointer({ scene in
-            first.configuration.withUnsafeBufferPointer {
-                fotufilm_transport_frame_begin(scene.baseAddress, $0.baseAddress, Int32(width),
-                                               Int32(height), Int32(channels), backend.rawValue)
-            }
-        }) else { throw TransportError.backend("transport frame unavailable") }
-        var status: Int32 = 0
-        for (head, stencils) in components where status == 0 {
-            status = head.configuration.withUnsafeBufferPointer { configuration in
-                head.spectral.exposure.values.withUnsafeBufferPointer { lut in
-                    stencils.withUnsafeBufferPointer {
-                        fotufilm_transport_frame_add(frame, configuration.baseAddress, lut.baseAddress,
-                                                     $0.baseAddress)
+        let status = sum.withUnsafeMutableBufferPointer { sum -> Int32 in
+            guard let frame = scene.withUnsafeBufferPointer({ scene in
+                first.configuration.withUnsafeBufferPointer {
+                    fotufilm_transport_frame_begin(scene.baseAddress, $0.baseAddress, sum.baseAddress,
+                                                   Int32(width), Int32(height), Int32(channels),
+                                                   backend.rawValue)
+                }
+            }) else { return -3 }
+            var status: Int32 = 0
+            for (head, stencils) in components where status == 0 {
+                status = head.configuration.withUnsafeBufferPointer { configuration in
+                    head.spectral.exposure.values.withUnsafeBufferPointer { lut in
+                        stencils.withUnsafeBufferPointer {
+                            fotufilm_transport_frame_add(frame, configuration.baseAddress, lut.baseAddress,
+                                                         $0.baseAddress)
+                        }
                     }
                 }
             }
+            let finished = fotufilm_transport_frame_finish(frame, status == 0 ? 1 : 0)
+            return status == 0 ? finished : status
         }
-        let finished = status == 0
-            ? sum.withUnsafeMutableBufferPointer { fotufilm_transport_frame_finish(frame, $0.baseAddress) }
-            : fotufilm_transport_frame_finish(frame, nil)
-        guard status == 0, finished == 0 else {
-            throw TransportError.backend("transport frame failed (\(status == 0 ? finished : status))")
-        }
+        guard status == 0 else { throw TransportError.backend("transport frame failed (\(status))") }
     }
 
     /// The image's three planes as RGBA floats.
@@ -464,7 +540,7 @@ public enum LayeredTransportRenderer {
         return output
     }
 
-    private static func withPlanes<T>(_ planes: [[Float]], _ body: (UnsafePointer<Float>, UnsafePointer<Float>, UnsafePointer<Float>) -> T) -> T {
+    static func withPlanes<T>(_ planes: [[Float]], _ body: (UnsafePointer<Float>, UnsafePointer<Float>, UnsafePointer<Float>) -> T) -> T {
         planes[0].withUnsafeBufferPointer { r in planes[1].withUnsafeBufferPointer { g in
             planes[2].withUnsafeBufferPointer { b in body(r.baseAddress!, g.baseAddress!, b.baseAddress!) }
         } }

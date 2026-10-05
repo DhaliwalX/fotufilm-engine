@@ -31,19 +31,21 @@ typedef struct fotufilm_transport_frame fotufilm_transport_frame;
 
 /// Starts a frame over `scene`, linear Rec.2020 RGBA floats, as the heads' shared `configuration`
 /// (FOTUFILM_FRAME_CONFIGURATION_COUNT floats) exposes it, summing `channels` records (3, or 4
-/// with a donor record, the LUT's fourth channel). Null when the backend cannot run frames.
+/// with a donor record, the LUT's fourth channel) into `sum`, planar width * height * channels
+/// floats the caller keeps until `fotufilm_transport_frame_finish`. Null when the backend cannot
+/// run frames.
 fotufilm_transport_frame *fotufilm_transport_frame_begin(
-    const float *scene, const float *configuration, int32_t width, int32_t height, int32_t channels,
-    int32_t backend);
+    const float *scene, const float *configuration, float *sum, int32_t width, int32_t height,
+    int32_t channels, int32_t backend);
 
 /// Adds one component: its head's configuration — the shared one, its preflash share and camera
 /// gate aside — and exposure LUT (33^3 x 4 floats) expose it, and its stencil table spreads it.
 int32_t fotufilm_transport_frame_add(fotufilm_transport_frame *frame, const float *configuration,
                                      const float *exposure_lut, const float *stencils);
 
-/// Copies the sum, planar width * height * channels floats (zero before any component), into
-/// `sum` unless it is null, and releases the frame.
-int32_t fotufilm_transport_frame_finish(fotufilm_transport_frame *frame, float *sum);
+/// Delivers the sum (zero before any component) to the `sum` the frame began with, unless
+/// `deliver` is 0, and releases the frame.
+int32_t fotufilm_transport_frame_finish(fotufilm_transport_frame *frame, int32_t deliver);
 
 /// The table's checks alone.
 static inline int32_t fotufilm_transport_validate_table(const float *stencils) {

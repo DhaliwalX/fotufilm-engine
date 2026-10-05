@@ -26,24 +26,22 @@ public enum LayeredMetalTransport {
         guard pixels.count == width * height * 4, let model = options.transportConstruction(for: stock),
               TransportBackend.metal.isAvailable else { throw TransportError.backend("Metal transport unavailable") }
         let n = width * height
-        var input = ImageBuffer(width: width, height: height)
-        // Every head exposes the same scene: it is packed once, opaque, as `render` packs it.
-        var scene = pixels
-        pixels.withUnsafeBufferPointer { source in
-            scene.withUnsafeMutableBufferPointer { packed in
-                withPlanes(&input.planes) { planes in
+        let scene = TransportScene(rgba: pixels, width: width, height: height)
+        // Heads rendered one at a time — a lens with flare or diffusion — expose the scene packed
+        // opaque, as `render` packs it, through a light grid; both are made on the first such head.
+        var opaque: [Float]?, grid = [Float]()
+        let light = { (head: FilmEngineInvocation, destination: UnsafeMutablePointer<Float>) throws in
+            if opaque == nil {
+                var packed = pixels
+                packed.withUnsafeMutableBufferPointer { packed in
                     rows(height) { range in
-                        for i in range.lowerBound * width..<range.upperBound * width {
-                            for c in 0..<3 { planes[c][i] = source[4 * i + c] }
-                            packed[4 * i + 3] = 1
-                        }
+                        for i in range.lowerBound * width..<range.upperBound * width { packed[4 * i + 3] = 1 }
                     }
                 }
+                opaque = packed
+                grid = [Float](repeating: 0, count: n * 3)
             }
-        }
-        var grid = [Float](repeating: 0, count: n * 3)
-        let light = { (head: FilmEngineInvocation, destination: UnsafeMutablePointer<Float>) throws in
-            try lightGrid(scene, width: width, height: height, head, into: &grid)
+            try lightGrid(opaque!, width: width, height: height, head, into: &grid)
             grid.withUnsafeBufferPointer { grid in
                 rows(height) { range in
                     for i in range.lowerBound * width..<range.upperBound * width {
@@ -52,11 +50,11 @@ public enum LayeredMetalTransport {
                 }
             }
         }
-        let execution = TransportExecution(render: render, backend: .metal, light: light, scene: scene)
+        let execution = TransportExecution(render: render, backend: .metal, light: light)
         guard options.stage != .texture else {
             outputTransform = nil
-            var result = try LayeredTransportRenderer.process(image: input, stock: stock, options: options,
-                model: model, frameIndex: frameIndex, execution: execution,
+            var result = try LayeredTransportRenderer.process(image: scene.image, stock: stock,
+                options: options, model: model, frameIndex: frameIndex, execution: execution,
                 invocation: invocation, pixelPitchMM: pixelPitchMM)
             var output = pixels
             output.withUnsafeMutableBufferPointer { output in
@@ -70,22 +68,27 @@ public enum LayeredMetalTransport {
             }
             return output
         }
-        let exposed = try LayeredTransportRenderer.expose(image: input, stock: stock, options: options,
-            model: model, frameIndex: frameIndex, execution: execution,
-            invocation: invocation, pixelPitchMM: pixelPitchMM)
         // The records develop as the develop reads them, interleaved, a donor stock's fourth in
-        // the alpha; the scene's alpha is laid back over the developed frame.
-        var records = scene
-        exposed.sum.withUnsafeBufferPointer { sum in
-            records.withUnsafeMutableBufferPointer { records in
-                rows(height) { range in
-                    for i in range.lowerBound * width..<range.upperBound * width {
-                        for c in 0..<exposed.channels { records[4 * i + c] = sum[c * n + i] }
+        // the alpha (opaque otherwise); the scene's alpha is laid back over the developed frame.
+        // The sum is let go before the development takes room of its own.
+        var records = pixels
+        var continuation: FilmEngineInvocation
+        do {
+            let exposed = try LayeredTransportRenderer.expose(scene: scene, stock: stock,
+                options: options, model: model, frameIndex: frameIndex, execution: execution,
+                invocation: invocation, pixelPitchMM: pixelPitchMM)
+            exposed.sum.withUnsafeBufferPointer { sum in
+                records.withUnsafeMutableBufferPointer { records in
+                    rows(height) { range in
+                        for i in range.lowerBound * width..<range.upperBound * width {
+                            for c in 0..<exposed.channels { records[4 * i + c] = sum[c * n + i] }
+                            if exposed.channels == 3 { records[4 * i + 3] = 1 }
+                        }
                     }
                 }
             }
+            continuation = exposed.continuation
         }
-        var continuation = exposed.continuation
         if let transform = outputTransform, encodes(continuation.featureMask) {
             continuation.featureMask |= FilmEngineFeature.encodeOut
             continuation.setOutputTransform(transform)
