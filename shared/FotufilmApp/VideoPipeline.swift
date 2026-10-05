@@ -1055,7 +1055,7 @@ enum VideoPipeline {
         let pipelineSlots = max(2, wantedSlots)
         #else
         let affordableSlots = max(
-            1, HalideMetalFilmRenderer.availableBytes() / (8 * max(1, slotBytes)))
+            1, ProcessMemory.availableBytes() / (8 * max(1, slotBytes)))
         let pipelineSlots = hybridDevelop
             ? max(2, min(wantedSlots, affordableSlots))
             : min(wantedSlots, affordableSlots)

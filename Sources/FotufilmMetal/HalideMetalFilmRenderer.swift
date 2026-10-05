@@ -1109,7 +1109,7 @@ public final class HalideMetalFilmRenderer {
         // Where the footprint stands as the tiles go by, against what the plan was priced at,
         // for the timing line: the process's own reading, so it counts what the host holds —
         // the print's unwritten pages, the staging — as well as the schedule's.
-        let footprintBefore = timings ? Self.footprintBytes() : 0
+        let footprintBefore = timings ? ProcessMemory.footprintBytes() : 0
         var footprintPeak = 0
         // The host's half of the previous tile, still running. `writeTile` is the caller's
         // encode — on a still, a full pass over the tile in float and out in sixteen-bit — and
@@ -1168,7 +1168,7 @@ public final class HalideMetalFilmRenderer {
             }
             engineSeconds += Date().timeIntervalSince(engineStart)
             guard ok else { return false }
-            if timings { footprintPeak = max(footprintPeak, Self.footprintBytes()) }
+            if timings { footprintPeak = max(footprintPeak, ProcessMemory.footprintBytes()) }
             // Complete the previous write before submitting the next to preserve tile order.
             joinWrite()
             let writeStart = Date()
@@ -1210,18 +1210,6 @@ public final class HalideMetalFilmRenderer {
                 footprintBefore >> 20, max(0, footprintPeak - footprintBefore) >> 20))
         }
         return true
-    }
-
-    /// The process's physical footprint — what the system holds it to.
-    static func footprintBytes() -> Int {
-        var info = task_vm_info_data_t()
-        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size) / 4
-        let result = withUnsafeMutablePointer(to: &info) {
-            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
-                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
-            }
-        }
-        return result == KERN_SUCCESS ? Int(info.phys_footprint) : 0
     }
 
     /// Develops `staging.scenePixels` into `staging.developedPixels` without host-device copies.
@@ -1793,23 +1781,13 @@ public final class HalideMetalFilmRenderer {
         return frames + least
     }
 
-    /// Bytes this process may still allocate before the system kills it.
-    public static func availableBytes() -> Int {
-        #if os(iOS)
-        let available = Int(os_proc_available_memory())
-        return available > 0 ? available : 512 << 20
-        #else
-        return 8 << 30
-        #endif
-    }
-
     /// Whether a frame this large can be developed and encoded with enough
     /// headroom left for the rest of the app.
     public static func canRender(width: Int, height: Int, stock: FilmStock,
                                  options: FotufilmEngine.Options,
                                  budget: Int? = nil,
                                  exactMath: Bool = false) -> Bool {
-        let ceiling = budget ?? min(availableBytes() * 3 / 5,
+        let ceiling = budget ?? min(ProcessMemory.availableBytes() * 3 / 5,
                                     defaultMemoryBudget())
         guard let minimum = minimumPeakBytes(width: width, height: height, stock: stock,
                                             options: options, exactMath: exactMath)
@@ -1835,7 +1813,7 @@ public final class HalideMetalFilmRenderer {
         // pixels whatever the cut, so available-memory jitter changes the tile count and
         // nothing else. Sixty-four megabytes is the floor a quarter-megapixel tile with a
         // hundred-pixel apron still fits.
-        return max(64 << 20, availableBytes() / 2)
+        return max(64 << 20, ProcessMemory.availableBytes() / 2)
         #else
         // A quarter of the machine, between 2 and 8 GiB. The fixed 2 GiB this replaced decided
         // that no stills frame above about 16 MP developed in one pass, which on a machine with

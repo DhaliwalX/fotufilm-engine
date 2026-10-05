@@ -47,13 +47,16 @@ public enum ImageResampling {
 public extension ImageResampling {
     /// Target pixels per synchronous Core Image render band.
     static let defaultPixelsPerBand: Int = {
-        // Raw demosaic output depends on band boundaries because each region has a finite apron.
-        // Keep 8 MP for output compatibility. `FOTUFILM_RASTER_BAND` is for controlled sweeps only.
+        // Core Image's working set grows with the band: a 24 MP raw at 8 MP bands held over a
+        // gigabyte of GPU and malloc memory on an iPhone, at 1 MP about a third of that, and it
+        // rendered faster. Raw demosaic output depends on band boundaries because each region
+        // has a finite apron; the developed print moved by at most half an 8-bit step.
+        // `FOTUFILM_RASTER_BAND` is for controlled sweeps only.
         if let raw = ProcessInfo.processInfo.environment["FOTUFILM_RASTER_BAND"],
            let megapixels = Int(raw), megapixels > 0 {
             return megapixels * 1_000_000
         }
-        return 8_000_000
+        return 1_000_000
     }()
 
     /// Rasterises a Core Image graph into an interleaved float linear buffer, a band at a time.
