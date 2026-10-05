@@ -94,31 +94,33 @@ extension FilmGrain.TileBinding {
     /// Lays this film's grain over `density`, a frame of interleaved developed gross densities
     /// (`channels` per pixel, the records first), crystal by crystal for a frame of `pxPerMM`,
     /// scaled by `amount` and laid as `look` lays it, the colour mix included: what the kernel's
-    /// grain stage adds, without its tiles. False, leaving `density` as it was, where the host
-    /// cannot lay it or `shouldContinue` stops it.
+    /// grain stage adds, without its tiles. False where the host cannot lay it or `shouldContinue`
+    /// stops it, with `density` then partly grained.
     public func addFrameGrain(to density: UnsafeMutableBufferPointer<Float>, channels: Int,
                               width: Int, height: Int, pxPerMM: Float, amount: Float,
                               look: FilmGrain.Look, seed: UInt32,
                               shouldContinue: () -> Bool = { true }) -> Bool {
-        guard let planes = frameGrain(density: UnsafeBufferPointer(density), channels: channels,
-                                      width: width, height: height, pxPerMM: pxPerMM,
-                                      amount: amount, look: look, seed: seed,
-                                      shouldContinue: shouldContinue)
-        else { return false }
         let count = width * height
-        if grain.monochrome {
-            let plane = planes[1]
-            guard !plane.isEmpty else { return true }
+        guard density.count >= count * channels, channels >= 3 else { return false }
+        // Each record's own share lands in its channel as soon as it is laid: a later record reads
+        // only its own channel's gross density, which no other record's own share touches. The
+        // shared share waits in one running sum until every record has read its density.
+        let (own, shared) = grain.monochrome ? (Float(0), Float(3)) : FilmGrain.Look.mix(colour: look.colour)
+        var mixed = [Float]()
+        let laid = frameGrain(density: UnsafeBufferPointer(density), channels: channels,
+                              width: width, height: height, pxPerMM: pxPerMM, amount: amount,
+                              look: look, seed: seed, shouldContinue: shouldContinue) { r, plane in
+            if mixed.isEmpty { mixed = [Float](repeating: 0, count: count) }
             for i in 0..<count {
-                for c in 0..<min(channels, 3) { density[i * channels + c] += plane[i] }
+                density[i * channels + r] += own * plane[i]
+                mixed[i] += plane[i]
             }
-            return true
         }
-        let (own, shared) = FilmGrain.Look.mix(colour: look.colour)
+        guard laid else { return false }
+        guard !mixed.isEmpty else { return true }
+        let share = shared / 3
         for i in 0..<count {
-            let g = planes.map { $0.isEmpty ? 0 : $0[i] }
-            let mean = (g[0] + g[1] + g[2]) / 3
-            for c in 0..<min(channels, 3) { density[i * channels + c] += own * g[c] + shared * mean }
+            for c in 0..<3 { density[i * channels + c] += share * mixed[i] }
         }
         return true
     }
@@ -128,32 +130,44 @@ extension FilmGrain.TileBinding {
     func frameGrain(density: UnsafeBufferPointer<Float>, channels: Int, width: Int, height: Int,
                     pxPerMM: Float, amount: Float, look: FilmGrain.Look, seed: UInt32,
                     raw: Bool = false, shouldContinue: () -> Bool) -> [[Float]]? {
+        var planes = [[Float]](repeating: [], count: 3)
+        let laid = frameGrain(density: density, channels: channels, width: width, height: height,
+                              pxPerMM: pxPerMM, amount: amount, look: look, seed: seed, raw: raw,
+                              shouldContinue: shouldContinue) { planes[$0] = $1 }
+        return laid ? planes : nil
+    }
+
+    /// Lays each record's grain in turn and hands it to `each` with the record's index, one
+    /// frame-sized plane at a time; false where the host cannot lay it or `shouldContinue` stops
+    /// it. A record reads its gross density from `density` before `each` sees its grain.
+    func frameGrain(density: UnsafeBufferPointer<Float>, channels: Int, width: Int, height: Int,
+                    pxPerMM: Float, amount: Float, look: FilmGrain.Look, seed: UInt32,
+                    raw: Bool = false, shouldContinue: () -> Bool,
+                    each: (Int, [Float]) -> Void) -> Bool {
         #if canImport(Metal)
         guard let renderer = FilmFrameMetalRenderer.shared, width > 0, height > 0, channels >= 3,
-              density.count >= width * height * channels else { return nil }
+              density.count >= width * height * channels else { return false }
         let geometry = look.geometry(pxPerMM: pxPerMM)
         let amounts = look.recordAmounts(amount)
         let filmSeed = FilmGrain.frameFilmSeed(seed)
-        var planes = [[Float]](repeating: [], count: 3)
         for r in grain.monochrome ? [1] : [0, 1, 2] where !tiles.levels[r].isEmpty {
             let s = grain.frameSupersample(r)
             guard let record = grain.frameRecord(r, seed: filmSeed, supersample: s),
                   let means = raw ? [0, 0] : frameMeans(r, renderer: renderer, pitch: geometry.pitch,
                                                         footprint: geometry.footprint, supersample: s,
-                                                        shouldContinue: shouldContinue)
-            else { return nil }
-            let plane = (0..<(width * height)).map { density[$0 * channels + r] }
-            guard let out = renderer.render(
-                record: record, density: plane, width: width, height: height,
-                pitch: geometry.pitch, footprint: geometry.footprint, supersample: s,
-                amount: amounts[r], meanAt: means, lo: tiles.dMin[r],
-                hi: tiles.dMax[r], raw: raw, shouldContinue: shouldContinue)
-            else { return nil }
-            planes[r] = out
+                                                        shouldContinue: shouldContinue),
+                  let out = renderer.render(
+                      record: record, density: (0..<(width * height)).map { density[$0 * channels + r] },
+                      width: width, height: height, pitch: geometry.pitch,
+                      footprint: geometry.footprint, supersample: s, amount: amounts[r],
+                      meanAt: means, lo: tiles.dMin[r], hi: tiles.dMax[r], raw: raw,
+                      shouldContinue: shouldContinue)
+            else { return false }
+            each(r, out)
         }
-        return planes
+        return true
         #else
-        return nil
+        return false
         #endif
     }
 

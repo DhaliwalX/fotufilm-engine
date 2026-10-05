@@ -97,4 +97,37 @@ final class FilmFrameGrainTests: XCTestCase {
             }
         }
     }
+
+    /// Laid over a frame, each record's grain lands in its own channel and the shared share in
+    /// every channel, as the colour mix sets them; black-and-white grain lands in all three.
+    func testAddedGrainMixesTheRecords() throws {
+        guard FilmGrain.laysFrameGrain else { throw XCTSkip("No Metal") }
+        for id in ["portra400", "trix400"] {
+            let film = try binding(id)
+            let width = 96, height = 64
+            let frame = ramp(film.grain, width: width, height: height)
+            let look = FilmGrain.Look(colour: 0.4)
+            let planes = try frame.withUnsafeBufferPointer { frame in
+                try XCTUnwrap(film.frameGrain(density: frame, channels: 4, width: width, height: height,
+                                              pxPerMM: 160, amount: 1, look: look, seed: 5,
+                                              shouldContinue: { true }))
+            }
+            var laid = frame
+            XCTAssertTrue(laid.withUnsafeMutableBufferPointer {
+                film.addFrameGrain(to: $0, channels: 4, width: width, height: height, pxPerMM: 160,
+                                   amount: 1, look: look, seed: 5)
+            })
+            let (own, shared) = FilmGrain.Look.mix(colour: look.colour)
+            var worst: Float = 0
+            for i in 0..<(width * height) {
+                let g = planes.map { $0.isEmpty ? 0 : $0[i] }
+                for c in 0..<3 {
+                    let added = film.grain.monochrome ? g[1] : own * g[c] + shared * (g[0] + g[1] + g[2]) / 3
+                    worst = max(worst, abs(laid[i * 4 + c] - frame[i * 4 + c] - added))
+                }
+                XCTAssertEqual(laid[i * 4 + 3], frame[i * 4 + 3])
+            }
+            XCTAssertLessThan(worst, 1e-5, id)
+        }
+    }
 }

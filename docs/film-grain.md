@@ -82,8 +82,9 @@ the CPU and Metal roads at the cost of the standard grain.
   frame-seeded stretch of coating. Dye clouds sample two to a texel, whose grain reads within 1%
   of three. The mean a footprint reads is measured on the frame film at 65 levels, since the
   tiles' 17 leave a few thousandths of bend between levels. The laid grain reads as the tiles'
-  do: σ within 5%, mean within 0.002 D. A 24 MP frame takes about 28 s for Portra 400 and 10 s
-  for Tri-X on an M4 Pro.
+  do: σ within 5%, mean within 0.002 D. A 24 MP export takes about 19 s for Portra 400 and 8 s for
+  Tri-X on an M4 Pro (4.5 s and 3.2 s with the tiles). It peaks about 400 MB higher, the grained
+  densities the print reads.
 - **The kernel.** `Stages/FilmTiles.h` samples the tiles after development and before the
   enlarger, so the print's spread applies to the film grain as it does to the other models.
   The host packs the pitch, the amount, the tiles' id and the per-pitch tables into the

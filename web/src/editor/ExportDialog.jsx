@@ -37,6 +37,11 @@ export function videoExportTypes(backend) {
   );
 }
 
+/** A colour film's whole-photo grain on an M4 Pro, about 0.8 s a megapixel, to the next five. */
+function grainSeconds({ width, height }) {
+  return Math.max(5, Math.ceil((width * height * 0.8e-6) / 5) * 5);
+}
+
 export default function ExportDialog() {
   const {
     backend,
@@ -242,7 +247,7 @@ export default function ExportDialog() {
           {sizeWarning && <p className="export-detail">{sizeWarning}</p>}
           {slowGrain && (
             <p className="export-detail">
-              Film grain is laid crystal by crystal over the whole photo: allow up to a minute.
+              {`Film grain is laid crystal by crystal over the whole photo: up to ${grainSeconds(delivered)} seconds.`}
             </p>
           )}
           {!active?.image.video &&
