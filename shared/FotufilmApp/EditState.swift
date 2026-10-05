@@ -426,6 +426,17 @@ struct EditState: Equatable {
 
     static let defaults = EditState()
 
+    /// A newly opened photograph's edit: the defaults, on the receiver bands chosen for new photos.
+    static func newPhoto() -> EditState {
+        var edit = EditState()
+        if let bands = AppSettings.startingReceiverBands {
+            edit.screenRedBand = bands.red
+            edit.screenGreenBand = bands.green
+            edit.screenBlueBand = bands.blue
+        }
+        return edit
+    }
+
     /// The screen conversion new edits and the camera develop with: Graded Print on iPhone and
     /// iPad, the engine's default elsewhere.
     static let defaultDigitalReference: DigitalReferenceStyle = {

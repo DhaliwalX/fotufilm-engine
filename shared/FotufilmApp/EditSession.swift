@@ -30,7 +30,7 @@ final class EditSession {
     var onApply: ((_ state: EditState, _ previous: EditState,
                    _ restoring: Bool) -> Void)?
 
-    var edit = EditState() {
+    var edit = EditState.newPhoto() {
         didSet { editChanged(from: oldValue) }
     }
 

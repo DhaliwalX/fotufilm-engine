@@ -39,6 +39,53 @@ final class AppSettings: ObservableObject {
         static let cameraFilmBalance = "fotufilm.camera-film-balance"
         static let flash = "fotufilm.flash"
         static let shareCrashReports = "fotufilm.share-crash-reports"
+        static let receiverBandSets = "fotufilm.receiver-band-sets"
+        static let startingReceiverBands = "fotufilm.starting-receiver-bands"
+    }
+
+    /// Digital Reference's receiver bands saved under a name, in nm.
+    struct BandSet: Codable, Equatable, Sendable {
+        var name: String
+        var red: Double
+        var green: Double
+        var blue: Double
+
+        func matches(_ edit: EditState) -> Bool {
+            red == edit.screenRedBand && green == edit.screenGreenBand && blue == edit.screenBlueBand
+        }
+    }
+
+    /// The saved band sets, sorted by name.
+    nonisolated static var receiverBandSets: [BandSet] {
+        get {
+            UserDefaults.standard.data(forKey: Key.receiverBandSets)
+                .flatMap { try? JSONDecoder().decode([BandSet].self, from: $0) } ?? []
+        }
+        set {
+            let sorted = newValue.sorted {
+                $0.name.localizedStandardCompare($1.name) == .orderedAscending
+            }
+            UserDefaults.standard.set(try? JSONEncoder().encode(sorted), forKey: Key.receiverBandSets)
+        }
+    }
+
+    /// Saves `edit`'s bands under `name`, replacing a set of the same name.
+    nonisolated static func saveBandSet(named name: String, from edit: EditState) {
+        receiverBandSets = receiverBandSets.filter { $0.name != name } + [BandSet(
+            name: name, red: edit.screenRedBand, green: edit.screenGreenBand,
+            blue: edit.screenBlueBand)]
+    }
+
+    /// The bands a newly opened photograph starts on; nil starts on the paper's own.
+    nonisolated static var startingReceiverBands: BandSet? {
+        get {
+            UserDefaults.standard.data(forKey: Key.startingReceiverBands)
+                .flatMap { try? JSONDecoder().decode(BandSet.self, from: $0) }
+        }
+        set {
+            UserDefaults.standard.set(newValue.flatMap { try? JSONEncoder().encode($0) },
+                                      forKey: Key.startingReceiverBands)
+        }
     }
 
     /// What the lamp does when the shutter opens.
