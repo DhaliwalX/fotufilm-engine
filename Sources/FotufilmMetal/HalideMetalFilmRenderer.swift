@@ -1782,12 +1782,14 @@ public final class HalideMetalFilmRenderer {
     }
 
     /// Whether a frame this large can be developed and encoded with enough
-    /// headroom left for the rest of the app.
+    /// headroom left for the rest of the app. It measures against what the system still allows,
+    /// not the app's own ceiling: an open editor can hold most of that ceiling, and the export
+    /// develops in tiles within its working budget anyway.
     public static func canRender(width: Int, height: Int, stock: FilmStock,
                                  options: FotufilmEngine.Options,
                                  budget: Int? = nil,
                                  exactMath: Bool = false) -> Bool {
-        let ceiling = budget ?? min(ProcessMemory.availableBytes() * 3 / 5,
+        let ceiling = budget ?? min(ProcessMemory.systemAvailableBytes() * 3 / 5,
                                     defaultMemoryBudget())
         guard let minimum = minimumPeakBytes(width: width, height: height, stock: stock,
                                             options: options, exactMath: exactMath)
