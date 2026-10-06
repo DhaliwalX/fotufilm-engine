@@ -25,6 +25,17 @@ public enum ProcessMemory {
         #endif
     }
 
+    /// What the system still lets the process take, whatever the app's own ceiling: an export
+    /// the user asked for may run past the ceiling, but not past this.
+    public static func systemAvailableBytes() -> Int {
+        #if os(iOS)
+        let system = Int(os_proc_available_memory())
+        return system > 0 ? system : 512 << 20
+        #else
+        return availableBytes()
+        #endif
+    }
+
     /// A render's working set: 512 MiB, what a full-quality still has always developed in, or
     /// half of what the system still allows when that is less. Under the ceiling that is the
     /// most half the headroom could give anyway, and a render it would starve — the editor's
