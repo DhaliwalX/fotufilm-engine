@@ -48,6 +48,9 @@ int main(int argc, char **argv) {
         // 0: linear P3, 1: linear Rec.709, 2: Rec.709 Gamma 2.4, 3: sRGB.
         int delivery = 0;
         bool monochrome = false;
+        // Stages the request leaves out, as a film without them asks: the twin still runs, with
+        // those stages gated off at run time, over every window of the frame.
+        int off = 0;
     };
     const Case cases[] = {
         {"first-window", 32, 512, 0, 1, 1},
@@ -70,6 +73,15 @@ int main(int argc, char **argv) {
         {"portrait-monochrome-rec709", 1080, 1920, 0, 1, 1, 2, 0, false, 2, true},
         {"partial-monochrome-srgb", 65, 769, 0, 1, 1, 2, 0, false, 3, true},
         {"linear709-one-window", 32, 512, 0, 1, 1, 2, 0, false, 1},
+        {"no-coupler-diffusion", 1920, 1080, 0, 1, 1, 2, 0, false, 0, false,
+         FOTUFILM_FRAME_COUPLER_DIFFUSION},
+        {"no-couplers", 1920, 1080, 0, 1, 1, 2, 0, false, 0, false,
+         FOTUFILM_FRAME_COUPLERS | FOTUFILM_FRAME_COUPLER_DIFFUSION},
+        {"no-mtf", 1920, 1080, 0, 1, 1, 2, 0, false, 0, false, FOTUFILM_FRAME_MTF},
+        {"no-adjacency-portrait-rec709", 1080, 1920, 0, 1, 1, 2, 0, false, 2, false, FOTUFILM_FRAME_ADJACENCY},
+        {"no-grain", 1920, 1080, 0, 1, 1, 2, 0, false, 0, false, FOTUFILM_FRAME_GRAIN},
+        {"no-halation-monochrome", 1920, 1080, 0, 1, 1, 2, 0, false, 0, true,
+         FOTUFILM_FRAME_HALATION},
     };
     for (const Case &test : cases) {
         auto c = configuration;
@@ -106,7 +118,7 @@ int main(int argc, char **argv) {
         c[FOTUFILM_CONFIG_OUTPUT_GAMUT] = 0;
         c[FOTUFILM_CONFIG_OUTPUT_SHOULDER] = -1;
         if (test.delivery) {
-            // A real display conversion reads all three channels from folded film rows.
+            // A real display conversion reads all three channels from windowed film rows.
             // Exercise both fitting branches, including saturated negative/out-of-range RGB.
             const float p3_to_709[] = {
                 1.2249402f, -0.2249402f, 0,
@@ -126,7 +138,7 @@ int main(int argc, char **argv) {
             std::memcpy(c.data() + FOTUFILM_CONFIG_OUTPUT_COEFFICIENTS,
                         test.delivery == 3 ? srgb : gamma24, sizeof(gamma24));
         }
-        const int mask = FOTUFILM_AOT_BASIC_STAGES
+        const int mask = (FOTUFILM_AOT_BASIC_STAGES & ~test.off)
             | FOTUFILM_FRAME_ENCODE_OUT
             | (test.delivery >= 2 ? FOTUFILM_FRAME_OUTPUT_POWER : FOTUFILM_FRAME_OUTPUT_LINEAR)
             | (test.monochrome ? FOTUFILM_FRAME_MONOCHROME : 0)

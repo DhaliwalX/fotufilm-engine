@@ -53,7 +53,7 @@ struct GpuPolicy {
     bool tabulated_curves = false;
     bool table_grain = false;
     /// Whether the frame averages its own first stage for the veiling glare rather than reading the
-    /// host's mean: the request's runtime bit, or false where a folded graph cannot see the frame.
+    /// host's mean: the request's runtime bit, or false where a row-window graph cannot see the frame.
     Expr measure_flare;
     bool fields_in = false;
     bool monochrome = false;

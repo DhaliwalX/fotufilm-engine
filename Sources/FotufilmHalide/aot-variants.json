@@ -248,7 +248,7 @@
     }
   ],
   "windowed": {
-    "doc": "Compiled a second time with the folded row-window schedule, for the hosts that cannot hold a whole frame's intermediates. The shim picks a twin only when the request's stages fit BASIC_STAGES, whose reach it can bound.",
+    "doc": "Compiled a second time with the row-window schedule, for the hosts that cannot hold a whole frame's intermediates. The shim picks a twin only when the request's stages fit BASIC_STAGES, whose reach it can bound.",
     "variants": [
       {
         "name": "color_float_realtime",

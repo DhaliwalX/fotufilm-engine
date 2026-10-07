@@ -78,7 +78,7 @@ enum {
     FOTUFILM_FRAME_PRINT_MTF = 1 << 17,
     /// Measures global veiling glare on-device: the frame averages its own first stage rather than
     /// reading FOTUFILM_CONFIG_FLARE_MEAN, so only a whole-frame caller may set it. Chosen at run
-    /// time within a class; a folded row-window graph cannot see the frame and never serves it.
+    /// time within a class; a row-window graph cannot see the frame and never serves it.
     /// The float32 GPU reduction is not bit-identical to the host's ordered double reduction.
     FOTUFILM_FRAME_FLARE_MEASURE = 1 << 18,
     /// Applies the configured output matrix, transfer, and premultiplication in-kernel.

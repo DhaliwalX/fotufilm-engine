@@ -15,7 +15,7 @@ as standalone development ending before the enlarger, remain explicit at the cal
 
 GPU hosts resolve `GpuConfiguration` once, including diagnostic environment overrides, and each
 pipeline retains an immutable copy. AOT generators supply their device and precision defaults
-explicitly. A schedule owns its folded-store collection, so independent graph builds do not
+explicitly. A schedule owns its row-window store collection, so independent graph builds do not
 share construction state. All resolved compilation options participate in the frame cache key.
 
 For changes here, run `bash tools/test-stages.sh`, relevant release Swift tests, and `swift build`.

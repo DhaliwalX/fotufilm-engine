@@ -33,7 +33,7 @@ assert "Fotufilm AOT:" not in (root / "0.trace").read_text(), "general path used
 assert "Fotufilm AOT:" in (root / "1.trace").read_text(), "windowed path was not exercised"
 general = sorted((root / "0").glob("*.f32"))
 windowed = sorted((root / "1").glob("*.f32"))
-assert len(general) == len(windowed) == 40, "missing comparison frames"
+assert len(general) == len(windowed) == 52, "missing comparison frames"
 worst = 0.0
 for left, right in zip(general, windowed):
     assert left.name == right.name
@@ -56,9 +56,9 @@ for left, right in zip(general, windowed):
     error = max(abs(decode(x) - decode(y)) for x, y in zip(a, b))
     # Independently compiled Metal schedules can round the same expression
     # differently (previous kernels differ by up to 2.7e-6). Keep the allowance
-    # below one 16-bit code; a corrupt folded read differs by up to full scale.
+    # below one 16-bit code; a corrupt window read differs by up to full scale.
     assert error <= 1e-5, f"output differs: {left.name}, maximum error {error}"
     assert encoded_error < 1 / 255, f"encoded output differs: {left.name}, error {encoded_error}"
     worst = max(worst, error)
-print(f"PASS: all 40 general/windowed AOT frames agree; maximum linear error {worst:.3g}")
+print(f"PASS: all {len(general)} general/windowed AOT frames agree; maximum linear error {worst:.3g}")
 PY

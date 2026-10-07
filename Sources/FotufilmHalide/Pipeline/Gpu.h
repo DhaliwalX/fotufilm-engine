@@ -507,7 +507,7 @@ public:
         // Full-quality grain shares CPU/native Metal's analytic seeded draws, including
         // portable GPU backends. Only explicitly approximate/realtime paths use tables.
         policy.table_grain = fast(kStillFastGrainTable);
-        // A folded graph never sees the whole frame, so it can only read the host's mean.
+        // A row-window graph never sees the whole frame, so it can only read the host's mean.
         policy.measure_flare = windowed
             ? Expr(Halide::Internal::const_false())
             : Expr((runtime_features_ & FOTUFILM_FRAME_FLARE_MEASURE) != 0);
@@ -759,6 +759,12 @@ public:
             // The AOT shim checks the complete spatial reach before selecting this
             // graph. Global coordinates and the original boundary rules remain in
             // every expression; only when and where rows are stored changes.
+            //
+            // Each stage is stored per window: the window's rows plus its apron, recomputed
+            // for the next window rather than kept in a circular buffer across windows. A
+            // circular store cannot follow a stage the frame gates off at run time: its
+            // unused region does not advance with the windows, so the fold's order check
+            // failed on every frame past the second window with a stage off (issue #268).
             Var window, row, block_x, block_y, thread_x, thread_y;
             output.compute_root().bound(channel, 0, 4)
                 .reorder(channel, x, y).unroll(channel)
@@ -767,16 +773,14 @@ public:
                           gpu_tile_x(), gpu_tile_y(),
                           Halide::TailStrategy::GuardWithIf, gpu_device_api());
             for (Func stage : window_stores()) {
-                stage.store_root().compute_at(output, window).fold_storage(y, kWindowStorageRows);
+                stage.store_at(output, window).compute_at(output, window);
             }
         } else {
             gpu_pointwise(output, x, y, channel, output_channels);
         }
-        // Specialize only full-frame graphs. Halide's folding pass does not rewrite
-        // the folded-buffer reads consistently across both consumer specializations:
-        // the gamut-enabled branch can address rows past the circular allocation.
-        // Keep one consumer loop for windowed graphs; host_output_encode's uniform
-        // configuration select still skips fitting when it is disabled.
+        // Specialize only full-frame graphs. Windowed graphs keep one consumer loop;
+        // host_output_encode's uniform configuration select still skips fitting when it
+        // is disabled.
         if (encodes && !windowed) {
             for (Expr shape : {on_encode && shape_linear, on_encode && shape_power,
                                on_encode && shape_log, on_encode}) {

@@ -118,9 +118,9 @@
     X(no_film_float, FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_NO_FILM) \
     X(no_film_float_exact, FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_EXACT_MATH | FOTUFILM_FRAME_NO_FILM)
 
-/// Compiled a second time with the folded row-window schedule, for the hosts that cannot hold a
-/// whole frame's intermediates. The shim picks a twin only when the request's stages fit
-/// BASIC_STAGES, whose reach it can bound.
+/// Compiled a second time with the row-window schedule, for the hosts that cannot hold a whole
+/// frame's intermediates. The shim picks a twin only when the request's stages fit BASIC_STAGES,
+/// whose reach it can bound.
 #define FOTUFILM_AOT_WINDOWED_VARIANTS(X) \
     X(color_float_realtime, FOTUFILM_AOT_BASIC_STAGES) \
     X(monochrome_float_realtime, FOTUFILM_AOT_BASIC_STAGES | FOTUFILM_FRAME_MONOCHROME)

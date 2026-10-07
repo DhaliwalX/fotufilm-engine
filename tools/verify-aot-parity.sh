@@ -133,3 +133,8 @@ done | xargs -P "$JOBS" -n 2 sh -c '
 echo "--- comparison ---"
 "$OUT/parity-aot" --compare "$OUT/aot" "$OUT/jit" \
   --tolerance="$TOLERANCE" --categorical-budget="$CATEGORICAL_BUDGET"
+
+# The row-window twins against the full-frame variants they stand in for, on the same fixture:
+# window seams, the reach fallbacks, and requests that gate stages off.
+echo "--- row windows ---"
+FOTUFILM_PARITY_KERNELS="$KERNELS" bash tools/verify-aot-windows.sh "$PACK"
