@@ -264,6 +264,20 @@ enum {
     /// of the developed film before the enlarger's spread. A negative shadow radius is no carrier.
     /// Appended without renumbering earlier fields.
     FOTUFILM_CONFIG_CARRIER = 18228,
+    /// A scanned negative's light controls, acting on the printed picture: red, green and blue
+    /// gains less one, highlights and shadows (-1...1, moving the ends of the print's luminance in
+    /// stops about mid-grey), saturation less one, and vibrance. Read only by a print span with
+    /// density input (FOTUFILM_FRAME_DENSITY_IN), between the print and the grade; all zero is the
+    /// print unchanged. Appended without renumbering earlier fields.
+    FOTUFILM_CONFIG_PRINT_FINISH = 18236,
+    /// How a print span with density input reads a scanned negative handed to it as linear scan RGB
+    /// (ApproximateNegativeScan). Mode first: 0 the input is density; 1 it is a scan, each record's
+    /// density its base less its gain times the log10 of its scan channel over the clear film, a
+    /// sample outside the usable range reading as the base and printing black. Then the clear film
+    /// (3), the record base densities (3), each record's scan channel (3), the record gains (3),
+    /// and the usable range's lower and upper samples (3 each). Appended without renumbering
+    /// earlier fields.
+    FOTUFILM_CONFIG_SCAN_READING = 18243,
 };
 
 enum {
@@ -367,8 +381,10 @@ enum {
     FOTUFILM_CONFIG_HDR_RANGE_COUNT = 2,
     FOTUFILM_CONFIG_GATE_CORNER_COUNT = 1,
     FOTUFILM_CONFIG_CARRIER_COUNT = 8,
+    FOTUFILM_CONFIG_PRINT_FINISH_COUNT = 7,
+    FOTUFILM_CONFIG_SCAN_READING_COUNT = 19,
 };
 
-enum { FOTUFILM_FRAME_CONFIGURATION_COUNT = 18236 };
+enum { FOTUFILM_FRAME_CONFIGURATION_COUNT = 18262 };
 
 #endif

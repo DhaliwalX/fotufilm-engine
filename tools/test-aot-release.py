@@ -26,7 +26,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(aot.EXTRA_ARCHIVES, {name + ".a" for name in generated_names})
         contents = {name: b"archive" for name in aot.EXTRA_ARCHIVES}
         contents["fotufilm_halide_ios_color.a"] = b"frame variant"
-        self.assertEqual(aot.validate_generated_archives(contents, 1), 15)
+        self.assertEqual(aot.validate_generated_archives(contents, 1), 16)
         for missing in aot.EXTRA_ARCHIVES:
             with self.subTest(missing=missing):
                 incomplete = {k: v for k, v in contents.items() if k != missing}

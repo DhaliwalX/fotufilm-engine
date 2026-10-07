@@ -26,6 +26,15 @@ import { validateStockSettings } from './stock-settings.js'
 import { sourceIlluminant } from './editor-catalogue.js'
 import { compositeSelection } from './backend/browser-selective.js'
 import {
+  INVALID_BORDER,
+  areaPreview,
+  denseEnd,
+  estimatedBorder,
+  loadScanPreparation,
+  plainReading,
+  positiveSource,
+} from './negative-reading.js'
+import {
   assetUrl,
   sceneScreenMeter,
   prepareLinearSource,
@@ -36,6 +45,7 @@ import {
   loadPack,
   parsePack,
   loadStages,
+  decodeRGBA,
 } from './engine.js'
 import { canvasBlob, cropImage, orientImage, outputSize } from './geometry.js'
 import { encodePreview } from './canvas-encoder.js'
@@ -95,13 +105,24 @@ function sampledEdge(image, edit, maxEdge, cropMode, displaySize) {
   return edge < Math.max(w, h) ? edge : null
 }
 
+// The light controls an enlarger or a scan carries into a scanned negative's print
+// (WebProfileRequest.Negative.light); the rest finish the print at render time.
+function negativeLight(params) {
+  return Object.fromEntries(
+    ['ev', 'temperature', 'tint']
+      .filter((key) => Number.isFinite(params?.[key]))
+      .map((key) => [key, params[key]]),
+  )
+}
+
 // WASM instances share a heap. Serialize stock changes, renders, exports and disposal.
 /// Whether an edit develops from a profile prepared at its render size: any film setting does, and
 /// so does a Layered Transport edit away from the film's own medium, style and light, which are
 /// all its sealed pack holds.
 export function needsRuntimeProfile(edit, sceneKelvin) {
   if (edit.stock === null) return false
-  if (hasProfileSettings(edit)) return true
+  // A scanned negative prints from a profile metered on its own reading.
+  if (edit.negative || hasProfileSettings(edit)) return true
   return (
     edit.halationModel === 'layered' &&
     (!!edit.medium ||
@@ -120,6 +141,7 @@ export class RenderSession {
     this.sources = []
     this.scaledImages = []
     this.scenePacks = new WeakMap()
+    this.negativeReadings = new WeakMap()
     this.closed = false
     this.lifecycle = new AbortController()
   }
@@ -345,6 +367,56 @@ export class RenderSession {
     }
     return entry.value
   }
+  // What a scanned negative's reading takes from its framing: the clear film it is measured
+  // against, sampled or else the thinnest film of the whole scan, and the framing's densest end.
+  // The densest end is kept, so each film reads it without drawing the scan again.
+  async negativeFraming(image, edit, report, stale) {
+    let kept = this.negativeReadings.get(image)
+    if (!kept)
+      this.negativeReadings.set(image, (kept = { border: null, framings: [] }))
+    // The framed scan by area at 512 pixels, from a copy four times that across: close to the
+    // desktop host's reduction of the whole scan, at a size a browser reads quickly.
+    const read = async (edit) => {
+      const prepared = await this.source(image, edit, 2048, false, null, false, report, stale)
+      if (!prepared || stale()) return null
+      const { source } = prepared
+      return areaPreview(
+        decodeRGBA(source.read(0, 0, source.width, source.height)),
+        source.width,
+        source.height,
+      )
+    }
+    if (!edit.negative.border && !kept.border) {
+      const whole = await read(defaultEdit())
+      if (!whole) return null
+      kept.border = estimatedBorder(whole.pixels)
+      if (!kept.border) throw new Error(INVALID_BORDER)
+    }
+    const border = edit.negative.border ?? kept.border
+    const framing = JSON.stringify([
+      border,
+      edit.rotation,
+      edit.flip,
+      lensIsActive(edit.lens) ? edit.lens : null,
+      edit.crop,
+      edit.straighten,
+      edit.perspectiveV || 0,
+      edit.perspectiveH || 0,
+    ])
+    let framed = kept.framings.find((item) => item.key === framing)
+    if (!framed) {
+      const preview = await read(edit)
+      if (!preview) return null
+      framed = {
+        key: framing,
+        border,
+        dense: denseEnd(border, preview.pixels, preview.width, preview.height),
+      }
+      kept.framings.push(framed)
+      if (kept.framings.length > 8) kept.framings.shift()
+    }
+    return framed
+  }
   async capturePack(pack, stock, kelvin, report) {
     if (!pack || !Number.isFinite(kelvin) || kelvin <= 0) return pack
     const key = pack.id === '01-bypassed' ? stock + '@bypassed' : stock
@@ -403,7 +475,8 @@ export class RenderSession {
       : null
     if (this.closed || stale()) return null
     edit = frameRenderEdit(edit, frameConfiguration)
-    const sceneKelvin = sourceIlluminant(edit)
+    const negative = !!edit.negative && edit.stock !== null
+    const sceneKelvin = negative ? null : sourceIlluminant(edit)
     const dynamic = needsRuntimeProfile(edit, sceneKelvin)
     if (dynamic && stage !== null)
       throw new Error(
@@ -478,7 +551,19 @@ export class RenderSession {
           viewport ? { width: viewport.width, height: viewport.height } : null,
         )
         if (!prepared || stale()) return null
-        const { source, canvas: sourceCanvas } = prepared
+        const { source: scan } = prepared
+        const framed = edit.negative
+          ? await this.negativeFraming(image, edit, report, stale)
+          : null
+        if (edit.negative && (!framed || stale())) return null
+        // A negative without a film is a positive photograph (plainReading); one read as a film
+        // prints from its scan, which the kernels read as the film.
+        const plain = edit.negative && !negative ? plainReading(framed.border, framed.dense) : null
+        const preparation = plain ? await loadScanPreparation() : null
+        if (stale()) return null
+        const scene = (pixels) => (plain ? positiveSource(pixels, plain, preparation) : pixels)
+        const source = scene(scan)
+        const sourceCanvas = plain ? null : prepared.canvas
         const outputWidth = region?.width || source.width
         const outputHeight = region?.height || source.height
         const selectionSource = region
@@ -495,15 +580,17 @@ export class RenderSession {
           ...edit.params,
           gradeSpace: edit.gradeSpace,
           seed: edit.seed,
-          localTone: edit.localTone,
+          // A scanned negative's tone acts on its print, keyed by each pixel's own brightness.
+          localTone: negative ? false : edit.localTone,
           labScanDodging: edit.profile?.labScanDodging ?? 1,
         }
         const needsMeter =
-          dynamic ||
+          !negative &&
+          (dynamic ||
           entry?.pack.screenMeter ||
           (controls.localTone && (controls.highlights || controls.shadows)) ||
           (edit.selective?.localTone &&
-            (edit.selective.params.highlights || edit.selective.params.shadows))
+            (edit.selective.params.highlights || edit.selective.params.shadows)))
         const meter =
           viewport && needsMeter
             ? await this.source(
@@ -518,6 +605,7 @@ export class RenderSession {
               )
             : prepared
         if (!meter || stale()) return null
+        const meterSource = scene(meter.source)
         const selected = edit.stock === null ? null : stage
         const pack = dynamic
           ? parsePack(
@@ -531,11 +619,19 @@ export class RenderSession {
                   sceneKelvin,
                   filters: edit.filters,
                   filterMetering: edit.filterMetering,
-                  ...(await sceneScreenMeter(
-                    meter.source,
-                    controls,
-                    edit.medium === 'lab-scan',
-                  )),
+                  ...(negative
+                    ? {
+                        negative: {
+                          border: framed.border,
+                          denseEnd: framed.dense,
+                          light: negativeLight(edit.params),
+                        },
+                      }
+                    : await sceneScreenMeter(
+                        meterSource,
+                        controls,
+                        edit.medium === 'lab-scan',
+                      )),
                   controls: {
                     ...profileRequestControls(edit, entry.stock),
                     digitalReference: edit.digitalReference || 'auto-levels',
@@ -559,17 +655,18 @@ export class RenderSession {
           throw new Error('This pipeline stage is unavailable.')
         if (
           viewport &&
+          !negative &&
           (pack?.screenMeter ||
             (controls.localTone && (controls.highlights || controls.shadows)))
         )
-          output.toneGrid = await measuredTone(meter.source, controls)
+          output.toneGrid = await measuredTone(meterSource, controls)
         developer?.usePack(pack)
         const developed = developer
           ? await developer.develop(source, controls, rendering, stale, output)
           : await developNormal(source, controls, rendering, stale, output)
         if (!developed || stale()) return null
         let { pixels, elapsed } = developed
-        if (edit.selective?.sample && !cropMode && stage === null) {
+        if (edit.selective?.sample && !cropMode && stage === null && !negative) {
           report('Developing selection')
           const local = edit.selective
           const localControls = {
@@ -585,7 +682,7 @@ export class RenderSession {
                   pack?.screenMeter ||
                   (localControls.localTone &&
                     (localControls.highlights || localControls.shadows))
-                    ? await measuredTone(meter.source, localControls)
+                    ? await measuredTone(meterSource, localControls)
                     : null,
               }
             : output
@@ -701,7 +798,7 @@ export class RenderSession {
           : transient && !framePlan
             ? await encodePreview(pixels, outputWidth, outputHeight, colorSpace)
             : await canvasBlob(canvas)
-        let original = viewport ? null : prepared.original
+        let original = viewport || plain ? null : prepared.original
         if (comparison && !original) report('Preparing original for comparison')
         if (comparison && !original && sourceCanvas)
           original = await canvasBlob(sourceCanvas)
@@ -727,7 +824,7 @@ export class RenderSession {
                 pixelsCanvas(baseline.pixels, outputWidth, outputHeight, colorSpace),
               )
         }
-        if (!viewport) prepared.original = original
+        if (!viewport && !plain) prepared.original = original
         if (
           comparison &&
           original &&
@@ -753,6 +850,8 @@ export class RenderSession {
           framePlan,
           colorSpace,
           sceneSource: source,
+          // The scan itself, where its clear film is picked.
+          scanSource: scan,
           canvas,
           blob,
           original,

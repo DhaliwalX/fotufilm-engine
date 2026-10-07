@@ -125,17 +125,17 @@ struct PortableImageDecoder: HostImageDecoder {
 /// Scanned negatives as `CoreImageScanDecoder` reads them: a camera RAW with no exposure or
 /// profile of its own, anything else through its colour profile or as linear samples.
 struct PortableScanDecoder: HostScanDecoder {
-    func decodeScan(_ url: URL, linearSamples: Bool) throws -> HostScanFile {
-        let options = UInt32(FFC_DECODE_SCAN) | (linearSamples ? UInt32(FFC_DECODE_LINEAR_SAMPLES) : 0)
-        let scan = try PortableCodecs.decode(url, options: options)
+    func decodeScan(_ url: URL) throws -> HostImage {
+        // An untagged scan is the scanner's raw output: its samples are linear light.
+        let scan = try PortableCodecs.decode(
+            url, options: UInt32(FFC_DECODE_SCAN) | UInt32(FFC_DECODE_LINEAR_SAMPLES))
         guard scan.width <= 40000, scan.height <= 40000,
               scan.width * scan.height <= 150_000_000 else {
             throw HostEngine.Failure(description: "This negative could not be decoded. Try an "
                                      + "unadjusted TIFF or a supported camera RAW file.")
         }
-        let image = HostImage(rgba: scan.rgba, width: scan.width, height: scan.height,
-                              contentHeadroom: 1)
-        return HostScanFile(image: image, isRAW: scan.isRAW)
+        return HostImage(rgba: scan.rgba, width: scan.width, height: scan.height,
+                         contentHeadroom: 1)
     }
 
     func measureLight(_ url: URL) throws -> NegativeLightFrame {

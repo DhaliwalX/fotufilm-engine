@@ -45,6 +45,7 @@ export async function loadStockIndex() {
       profile: catalogue[stock.id],
       available: catalogue[stock.id]?.available || [],
       nativeFormat: catalogue[stock.id]?.nativeFormat,
+      readsNegative: catalogue[stock.id].readsNegative === true,
       media: entry.choices,
       defaultMedium: entry.default,
       // The browser's base pack is built on the film's own medium.

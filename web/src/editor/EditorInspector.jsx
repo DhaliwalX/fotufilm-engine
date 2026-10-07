@@ -10,9 +10,9 @@ import {
   DisclosurePanel,
 } from "@react-spectrum/s2/Disclosure";
 import InspectorHeading from "./InspectorHeading.jsx";
-import { inspectorPanels } from "../editor-catalogue.js";
 import InspectorPanel from "../InspectorPanel.jsx";
 import FilmInspector from "./FilmInspector.jsx";
+import NegativeInspector from "./NegativeInspector.jsx";
 import PrintInspector from "./PrintInspector.jsx";
 import LightInspector from "./LightInspector.jsx";
 import LensFilters from "../LensFilters.jsx";
@@ -22,6 +22,7 @@ import SelectiveInspector from "./SelectiveInspector.jsx";
 import CropInspector from "./CropInspector.jsx";
 import PipelineInspector from "./PipelineInspector.jsx";
 import { useEditor } from "./EditorContext.jsx";
+import { printsNegative } from "../negative-document.js";
 export default function EditorInspector() {
   const {
     inspectorOpen,
@@ -36,7 +37,10 @@ export default function EditorInspector() {
     endEdit,
     setStage,
     setDifference,
+    inspectorPanels,
   } = useEditor();
+  // A scanned negative's light acts on its print, so the scene's lens and source do not apply.
+  const negative = printsNegative(edit);
   return (
     <aside
       className="inspector"
@@ -78,11 +82,11 @@ export default function EditorInspector() {
               : "Pipeline")
         }
       >
-        {panel === "film" && <FilmInspector />}
+        {panel === "film" && (edit.negative ? <NegativeInspector /> : <FilmInspector />)}
         {panel === "develop" && <DevelopInspector />}
         {panel === "print" && <PrintInspector />}
         {panel === "light" && <LightInspector />}
-        {panel === "light" && selectedStock?.available.includes("shutter") && (
+        {panel === "light" && !negative && selectedStock?.available.includes("shutter") && (
           <Disclosure
             defaultExpanded={true}
             size={"S"}
@@ -97,7 +101,7 @@ export default function EditorInspector() {
             </DisclosurePanel>
           </Disclosure>
         )}
-        {panel === "light" && !fixedSettings && (
+        {panel === "light" && !negative && !fixedSettings && (
           <LensFilters
             edit={edit}
             stock={selectedStock}
@@ -110,8 +114,8 @@ export default function EditorInspector() {
             }}
           />
         )}
-        {panel === "light" && <LensInspector />}
-        {panel === "light" && <SourceInspector />}
+        {panel === "light" && !negative && <LensInspector />}
+        {panel === "light" && !negative && <SourceInspector />}
         {panel === "selective" && <SelectiveInspector />}
         {panel === "crop" && <CropInspector />}
         {panel === "pipeline" && <PipelineInspector />}

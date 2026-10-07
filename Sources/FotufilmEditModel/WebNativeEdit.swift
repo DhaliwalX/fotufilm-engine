@@ -31,6 +31,18 @@ public struct WebNativeEdit: Decodable {
         public var seed: UInt32?
         /// Legacy or Layered Transport, which the editor keeps beside the film settings.
         public var halationModel: String?
+        /// Set on a scanned negative: how the scan is read as the edit's film.
+        public var negative: Negative?
+    }
+
+    /// A scanned negative's reading the editor keeps: the clear film it is measured against and
+    /// the light source it was scanned on. The film is the edit's own.
+    public struct Negative: Decodable, Equatable {
+        /// Clear film sampled from the scan, as linear Rec. 2020 scan RGB; nil estimates it from
+        /// the thinnest film of the scan.
+        public var border: [Float]?
+        /// A photograph of the bare light source the scan was made on (`NegativeLightFrame`).
+        public var lightFrame: String?
     }
 
     public var edit: Edit
@@ -38,6 +50,9 @@ public struct WebNativeEdit: Decodable {
     /// How much of the frame's short edge the edit's geometry keeps, measured by the host that
     /// cut the scene: a crop is an enlargement, as the Mac app develops it. Nil is the whole frame.
     public var frameCoverage: Float?
+    /// A scanned negative's reading, resolved by the host that holds the scan: the scene it
+    /// develops is then the framed scan, printed as the edit's film.
+    public var negativeReading: NegativeScanPrint.Reading?
 
     private enum CodingKeys: String, CodingKey { case edit, profileRequest }
 

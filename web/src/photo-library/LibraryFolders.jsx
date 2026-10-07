@@ -115,6 +115,7 @@ export default function LibraryFolders({
   onAdd,
   onRescan,
   onRemove,
+  onMarkNegative = null,
 }) {
   const [expanded, setExpanded] = useState(() => new Set());
   const toggle = (id) =>
@@ -139,17 +140,32 @@ export default function LibraryFolders({
     <nav className="library-folders" aria-label="Folders">
       <div className="library-folders-heading">
         <span>Library</span>
-        <TooltipTrigger>
-          <ActionButton
-            aria-label="Add Folder"
-            size="S"
-            isQuiet
-            onPress={onAdd}
-          >
-            <Icon name="addFolder" />
-          </ActionButton>
-          <Tooltip>Add Folder</Tooltip>
-        </TooltipTrigger>
+        {onMarkNegative ? (
+          // A folder of scanned negatives is added as one.
+          <MenuTrigger>
+            <ActionButton aria-label="Add Folder" size="S" isQuiet>
+              <Icon name="addFolder" />
+            </ActionButton>
+            <Menu
+              onAction={(kind) => onAdd({ negative: kind === "negatives" })}
+            >
+              <MenuItem id="photos">Add Folder…</MenuItem>
+              <MenuItem id="negatives">Add Negatives Folder…</MenuItem>
+            </Menu>
+          </MenuTrigger>
+        ) : (
+          <TooltipTrigger>
+            <ActionButton
+              aria-label="Add Folder"
+              size="S"
+              isQuiet
+              onPress={() => onAdd()}
+            >
+              <Icon name="addFolder" />
+            </ActionButton>
+            <Tooltip>Add Folder</Tooltip>
+          </TooltipTrigger>
+        )}
       </div>
       <ul className={`library-folder-list${nested ? " nested" : ""}`}>
         <li>
@@ -187,11 +203,13 @@ export default function LibraryFolders({
                   aria-current={
                     (scope.folderId === folder.id && !scope.path) || undefined
                   }
-                  title={
-                    folder.transient
-                      ? `${folder.name} · this session only`
-                      : folder.name
-                  }
+                  title={[
+                    folder.name,
+                    folder.negative && "scanned negatives",
+                    folder.transient && "this session only",
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
                   onClick={() => onSelect(folder.id, "")}
                 >
                   <Icon name="folder" size={18} />
@@ -218,10 +236,17 @@ export default function LibraryFolders({
                       onAction={(action) =>
                         action === "rescan"
                           ? onRescan(folder)
-                          : onRemove(folder)
+                          : action === "negative"
+                            ? onMarkNegative(folder.id, !folder.negative)
+                            : onRemove(folder)
                       }
                     >
                       {folder.handle && <MenuItem id="rescan">Rescan</MenuItem>}
+                      {onMarkNegative && (
+                        <MenuItem id="negative">
+                          {folder.negative ? "Open as Photos" : "Open as Negatives"}
+                        </MenuItem>
+                      )}
                       <MenuItem id="remove">Remove from Library…</MenuItem>
                     </Menu>
                   </MenuTrigger>

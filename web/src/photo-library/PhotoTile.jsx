@@ -1,24 +1,30 @@
 import { memo, useEffect, useState } from "react";
 import { Icon } from "../icons.jsx";
 
-function useThumbnail(thumbnails, photo) {
+// `look` is the photo's kept edit, `{edit, edited}`, which an edited photo is drawn with. A new
+// edit draws a new thumbnail; the old one stays up until it arrives.
+function useThumbnail(thumbnails, photo, look) {
+  const drawn = `${photo.negative ? "negative" : ""}:${look?.edited ?? 0}`;
   // A retained thumbnail shows at once, without fading in again on scroll.
   const [state, setState] = useState(() => ({
-    url: thumbnails?.peek(photo) ?? null,
+    url: thumbnails?.peek(photo, look) ?? null,
     fresh: false,
+    drawn,
   }));
   useEffect(() => {
-    if (!thumbnails || state.url) return;
+    if (!thumbnails || (state.url && state.drawn === drawn)) return;
     let live = true;
-    const request = thumbnails.request(photo);
+    const request = thumbnails.request(photo, { look });
     request.promise.then(
-      ({ url, fresh }) => live && setState({ url: url || false, fresh }),
+      ({ url, fresh }) =>
+        live &&
+        setState((current) => ({ url: url || current.url || false, fresh, drawn })),
     );
     return () => {
       live = false;
       request.cancel();
     };
-  }, [thumbnails, photo.key, photo.size, photo.modified]);
+  }, [thumbnails, photo.key, photo.size, photo.modified, drawn]);
   return state;
 }
 
@@ -57,13 +63,14 @@ export default memo(function PhotoTile({
   focused,
   rating,
   edited,
+  look,
   thumbnails,
   onPress,
   onOpen,
   onRate,
   onMenu,
 }) {
-  const { url, fresh } = useThumbnail(thumbnails, photo);
+  const { url, fresh } = useThumbnail(thumbnails, photo, look);
   const [loaded, setLoaded] = useState(false);
   return (
     <div

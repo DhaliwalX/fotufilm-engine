@@ -74,25 +74,6 @@ test("startup compiles GPU families before import and reuses the prepared worker
         ).length,
     ),
   ).toBe(1);
-  const result = await page.evaluate(async () => {
-    const { convertNegative } = await import("/src/negative-conversion.js");
-    const { LinearImage } = await import("/src/linear-image.js");
-    const image = new LinearImage({
-      pixels: new Float32Array(64 * 48 * 4).fill(0.5),
-      width: 64,
-      height: 48,
-    });
-    const converted = await convertNegative(image, {
-      parameters: [0, 0, 0, 1, 1, 1, 1, 0],
-    });
-    return {
-      backend: converted.backend,
-      workers: window.engineWorkers.filter((url) =>
-        url.includes("/negative-conversion-worker.js"),
-      ).length,
-    };
-  });
-  expect(result).toEqual({ backend: "webgpu", workers: 1 });
   expect(errors).toEqual([]);
 });
 
@@ -125,7 +106,6 @@ test("mobile loader fades away after a failed GPU download", async ({
   await page.emulateMedia({ reducedMotion: "reduce" });
   await recordWorkers(page);
   await page.route("**/fotufilm-webgpu.mjs*", (route) => route.abort());
-  await page.route("**/negative/gpu.mjs*", (route) => route.abort());
   await page.goto("/");
   await page.waitForFunction(() =>
     window.engineEvents.some((e) => e.kind === "gpu-ready"),
@@ -140,33 +120,4 @@ test("mobile loader fades away after a failed GPU download", async ({
       () => window.engineEvents.find((e) => e.kind === "gpu-ready")?.available,
     ),
   ).toBe(false);
-});
-
-test("a stalled negative GPU leaves startup alone and converts on the CPU", async ({
-  page,
-}) => {
-  test.setTimeout(300000);
-  await page.route("**/negative/gpu.mjs*", (route) =>
-    route.fulfill({
-      contentType: "text/javascript",
-      body: "export default () => new Promise(() => {});",
-    }),
-  );
-  await page.goto("/");
-  await expect(
-    page.getByRole("progressbar", { name: "Preparing editor" }),
-  ).toBeHidden({ timeout: 240000 });
-  const backend = await page.evaluate(async () => {
-    const { convertNegative } = await import("/src/negative-conversion.js");
-    const { LinearImage } = await import("/src/linear-image.js");
-    const image = new LinearImage({
-      pixels: new Float32Array(64 * 48 * 4).fill(0.5),
-      width: 64,
-      height: 48,
-    });
-    return (
-      await convertNegative(image, { parameters: [0, 0, 0, 1, 1, 1, 1, 0] })
-    ).backend;
-  });
-  expect(backend).toBe("cpu");
 });

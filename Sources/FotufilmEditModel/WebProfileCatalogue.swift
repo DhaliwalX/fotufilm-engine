@@ -51,6 +51,8 @@ public enum WebProfileCatalogue {
         /// A negative's predicted clear base, for suggesting films from a scan
         /// (`NegativeFilmSuggestions`). Absent for films with no negative.
         let filmBase: [Float]?
+        /// Whether a scanned negative can be read as this film (`NegativeScanPrint.reads`).
+        let readsNegative: Bool
     }
 
     public static func data(_ definitions: [String: FilmStockDefinition]) throws -> Data {
@@ -84,8 +86,9 @@ public enum WebProfileCatalogue {
                 scales: scales,
                 choices: ["shutter": choices(.shutter, stock: stock, paper: .default)!.map(encodedChoice)],
                 media: media, filterHalos: EditorLensFilters.previews(for: stock),
-                filmBase: stock.isReversal || stock.isReflectionPrint ? nil
-                    : { let b = NegativeFilmSuggestions.base(of: stock); return [b.x, b.y, b.z] }())
+                filmBase: NegativeScanPrint.reads(stock)
+                    ? { let b = NegativeFilmSuggestions.base(of: stock); return [b.x, b.y, b.z] }() : nil,
+                readsNegative: NegativeScanPrint.reads(stock))
         }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]

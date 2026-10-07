@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { outputSize } from "../geometry.js";
 import { usePrintFrame } from "../usePrintFrame.js";
+import { readsNegative } from "../negative-document.js";
 import { exportBasis, exportMaxEdge, exportPixels } from "../export-sizes.js";
 // The same size as the last render's keeps its identity, so what reads it is not rendered again.
 function useSize(size) {
@@ -23,9 +24,15 @@ export default function useOutputState({
   endEdit,
   exporting,
 }) {
+  // A negative is read only as a film that has a negative.
+  const libraryStocks = useMemo(
+    () => (edit.negative ? stocks.filter(readsNegative) : stocks),
+    [stocks, edit.negative],
+  );
   const visibleStocks = useMemo(
-    () => stocks.filter((stock) => stock.name.toLowerCase().includes(search.toLowerCase())),
-    [stocks, search],
+    () =>
+      libraryStocks.filter((stock) => stock.name.toLowerCase().includes(search.toLowerCase())),
+    [libraryStocks, search],
   );
   const rawWidth = active?.image.naturalWidth || 0,
     rawHeight = active?.image.naturalHeight || 0;
@@ -56,6 +63,7 @@ export default function useOutputState({
   );
   const shownResult = result?.fileId === activeId ? result : null;
   return {
+    libraryStocks,
     visibleStocks,
     rawWidth,
     rawHeight,

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Generate the native references with WebNegativeScanRequestTests and
+// Generate the native references with WebNegativeProfileRequestTests and
 // FOTUFILM_SCAN_REFERENCE_DIRECTORY=build/negative-reference before running.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -10,8 +10,8 @@ const browser = await chromium.launch({ channel: "chrome" });
 try {
   const page = await browser.newPage();
   await page.goto(process.argv[2] || "http://127.0.0.1:5173/");
-  await expect(page.locator(".viewer-status > [role=status]")).toContainText(
-    /\d+ × \d+/,
+  await expect(page.locator(".viewer-status .document-name")).toHaveText(
+    "No photo open",
   );
   for (const stock of ["gold200", "hp5plus400"]) {
     const fixture = JSON.parse(
@@ -30,17 +30,14 @@ try {
           pixelSource,
         } = await import("/src/engine.js");
         const { loadFilmProfile } = await import("/src/film-profile.js");
+        const { CONFIG } = await import("/src/engine-constants.js");
         const { createBackgroundDeveloper } = await import(
           "/src/background-developer.js"
         );
-        const bytes = await loadFilmProfile({ ...fixture.request, stock });
-        const prepared = JSON.parse(new TextDecoder().decode(bytes));
-        const unpack = (encoded) =>
-          parsePack(
-            Uint8Array.from(atob(encoded), (v) => v.charCodeAt(0)).buffer,
-          );
-        const native = unpack(fixture.result.profile),
-          pack = unpack(prepared.profile);
+        const native = parsePack(
+            Uint8Array.from(atob(fixture.pack), (v) => v.charCodeAt(0)).buffer,
+          ),
+          pack = parsePack(await loadFilmProfile({ ...fixture.profile, stock }));
         const maxError = (a, b) => {
           if (a.length !== b.length)
             throw new Error("Reference length differs");
@@ -52,7 +49,7 @@ try {
           }
           return error;
         };
-        const { width, height } = fixture.request;
+        const { width, height } = fixture.profile;
         const gpu = await createDeveloper(pack),
           cpu = await createCpuDeveloper(pack);
         const results = {};
@@ -62,15 +59,26 @@ try {
             ["cpu", cpu],
           ]) {
             developer.setFrame(width, height);
-            // Read the kernel's linear Display P3 output before delivery encoding;
-            // compare directly with native printPositiveChecked, not another web path.
+            // The kernel reads the scan as the film. Read its linear Display P3 output before
+            // delivery encoding; compare directly with native printPositiveChecked.
             developer.module.HEAPF32.set(
               developer.configuration,
               developer.configPtr / 4,
             );
+            // The print's finish, as applyControls writes it for a scanned negative.
+            const finish = developer.configPtr / 4 + CONFIG.PRINT_FINISH;
+            developer.module.HEAPF32.set(
+              [
+                fixture.finish.highlights,
+                fixture.finish.shadows,
+                fixture.finish.saturation - 1,
+                fixture.finish.vibrance,
+              ],
+              finish + 3,
+            );
             const input = new Float32Array(width * height * 4);
             for (let i = 0; i < width * height; i++)
-              input.set([...fixture.density.slice(i * 3, i * 3 + 3), 1], i * 4);
+              input.set([...fixture.scan.slice(i * 3, i * 3 + 3), 1], i * 4);
             const region = { x: 0, y: 0, width, height };
             developer.decodeRegion(input, region);
             const code = await developer.run(region);
@@ -96,10 +104,10 @@ try {
           await background.gpuReady;
           const data = new Float32Array(width * height * 4);
           for (let i = 0; i < width * height; i++)
-            data.set([...fixture.density.slice(i * 3, i * 3 + 3), 1], i * 4);
+            data.set([...fixture.scan.slice(i * 3, i * 3 + 3), 1], i * 4);
           const delivered = await background.develop(
             pixelSource({ width, height, data }),
-            {},
+            fixture.finish,
             undefined,
             undefined,
             { bitDepth: 16, colorSpace: "display-p3" },
@@ -136,7 +144,6 @@ try {
             pack.configuration,
             native.configuration,
           ),
-          calibration: prepared.calibration,
         };
       },
       { stock, fixture },
@@ -151,19 +158,6 @@ try {
     assert.equal(report.background.backend, "webgpu");
     assert.ok(report.background.error <= 1, JSON.stringify(report));
     assert.ok(report.configurationError < 0.0002, JSON.stringify(report));
-    for (const key of [
-      "border",
-      "baseDensity",
-      "recordChannels",
-      "minimumSample",
-      "maximumSample",
-    ])
-      for (let i = 0; i < 3; i++)
-        assert.ok(
-          Math.abs(
-            report.calibration[key][i] - fixture.result.calibration[key][i],
-          ) < 0.0002,
-        );
     console.log(JSON.stringify(report));
   }
 } finally {

@@ -5,6 +5,7 @@ import { parseProfileSettings } from "./profile-settings.js";
 import { VIDEO_ENCODINGS } from "./video-color.js";
 import { catalogueSlider, editorControl } from "./editor-catalogue.js";
 import { selectionKeys } from "./selective.js";
+import { parseNegative } from "./negative-document.js";
 export const SLIDERS = [
   catalogueSlider("cameraPreflash", "Light", 0.005),
   catalogueSlider("sceneLightKelvin", "Source Illuminant", 1),
@@ -131,6 +132,8 @@ export const defaultEdit = (stock = null) => ({
   cropShape: "rectangle",
   crop: fullCrop(),
   ratio: "free",
+  // Set on a scanned negative (negative-document.js).
+  negative: null,
 });
 export const initialHistory = {
   past: [],
@@ -240,6 +243,7 @@ export function parseEdit(json, stockIDs) {
     base = defaultEdit(edit.stock);
   if (edit.stock !== null && !stockIDs.includes(edit.stock))
     throw new Error("The film in this edit is not installed.");
+  const negative = parseNegative(edit.negative);
   if (
     !edit.params ||
     !SLIDERS.every(
@@ -398,5 +402,6 @@ export function parseEdit(json, stockIDs) {
     params: Object.fromEntries(
       SLIDERS.map((s) => [s.key, edit.params[s.key] ?? s.def]),
     ),
+    negative,
   };
 }

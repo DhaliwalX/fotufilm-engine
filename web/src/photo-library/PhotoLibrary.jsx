@@ -22,6 +22,7 @@ import {
   filteredPhotos,
   folderTree,
   nextSelection,
+  rollEdit,
   sortedPhotos,
   steppedKey,
 } from "./library-model.js";
@@ -91,6 +92,8 @@ export default function PhotoLibrary({
   onPhotoRenamed,
   onPhotosTrashed,
   onClose,
+  negatives = false,
+  renderThumbnail = null,
 }) {
   const library = usePhotoLibrary(open);
   const [thumbnails, setThumbnails] = useState(null);
@@ -111,8 +114,13 @@ export default function PhotoLibrary({
   const upload = useRef(null),
     grid = useRef(null);
 
+  // Edited photos and negatives are drawn by the editor (`renderThumbnail`), which may change.
+  const render = useRef(renderThumbnail);
+  render.current = renderThumbnail;
   useEffect(() => {
-    const cache = createThumbnails();
+    const cache = createThumbnails({
+      render: (photo) => render.current?.(photo) ?? Promise.resolve(null),
+    });
     setThumbnails(cache);
     return () => cache.dispose();
   }, []);
@@ -163,9 +171,12 @@ export default function PhotoLibrary({
     [],
   );
 
-  const addFolder = async () => {
-    if (!supportsFolderAccess()) return upload.current.click();
-    const id = await library.addFolder();
+  const addFolder = async ({ negative = false } = {}) => {
+    if (!supportsFolderAccess()) {
+      upload.current.dataset.negative = String(negative);
+      return upload.current.click();
+    }
+    const id = await library.addFolder({ negative });
     if (id) setScope({ folderId: id, path: "" });
   };
 
@@ -179,6 +190,9 @@ export default function PhotoLibrary({
           key: photo.key,
           name: photo.name,
           file: await currentFile(photo),
+          ...(photo.negative && negatives
+            ? { negative: true, roll: rollEdit(library.records, photo.folderId) }
+            : {}),
         });
       } catch {
         missing.push(photo.name);
@@ -373,6 +387,7 @@ export default function PhotoLibrary({
         onAdd={addFolder}
         onRescan={library.rescan}
         onRemove={setRemoving}
+        onMarkNegative={negatives ? library.markNegative : null}
       />
       <motion.div
         className="library-main"
@@ -402,7 +417,8 @@ export default function PhotoLibrary({
           photos={photos}
           records={library.records}
           tileSize={tileSize}
-          thumbnails={thumbnails}
+          // Hidden, the library draws nothing: an edit kept while editing waits for it to open.
+          thumbnails={open ? thumbnails : null}
           selected={selection.selected}
           focusKey={focusKey}
           onPress={press}
@@ -418,7 +434,7 @@ export default function PhotoLibrary({
               <EmptyState
                 folders={scopeFolders}
                 filtered={filtered && total > 0}
-                onAdd={addFolder}
+                onAdd={() => addFolder()}
                 onClear={() =>
                   setFilters((current) => ({
                     ...noFilters,
@@ -435,7 +451,9 @@ export default function PhotoLibrary({
         webkitdirectory=""
         hidden
         onChange={async (event) => {
-          const id = await library.addUploadedFiles(event.target.files);
+          const id = await library.addUploadedFiles(event.target.files, {
+            negative: event.target.dataset.negative === "true",
+          });
           event.target.value = "";
           if (id) setScope({ folderId: id, path: "" });
         }}

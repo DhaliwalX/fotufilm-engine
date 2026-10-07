@@ -19,7 +19,7 @@ export default function SelectiveInspector() {
       edit={edit}
       patch={patch}
       endEdit={endEdit}
-      sampling={sampling}
+      sampling={sampling === true}
       setSampling={setSampling}
       showMask={showMask}
       setShowMask={setShowMask}

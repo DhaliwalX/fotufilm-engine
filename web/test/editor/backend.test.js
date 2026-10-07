@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createBackend } from "../../src/backend/create.js";
 import { BACKEND_METHODS } from "../../src/backend/contract.js";
-import { createImageScope } from "../../src/backend/image-scope.js";
 
 function host() {
   const bridge = { version: 1, marker: "host" };
@@ -36,33 +35,17 @@ test("incompatible or incomplete native bridges never fall back silently", async
     /incompatible/,
   );
   const incomplete = host();
-  delete incomplete.convertNegative;
-  await assert.rejects(createBackend(incomplete), /convertNegative/);
+  delete incomplete.createHistogram;
+  await assert.rejects(createBackend(incomplete), /createHistogram/);
   const malformed = host();
   malformed.createSession = () => ({});
   const backend = await createBackend(malformed);
   assert.throws(() => backend.createSession(), /render/);
 });
-test("image scopes release cancelled/late results once and transfer accepted images", () => {
-  const released = [],
-    backend = { releaseImage: (image) => released.push(image) };
-  const scope = createImageScope(backend),
-    provisional = {},
-    accepted = {},
-    late = {};
-  scope.image(provisional);
-  scope.image(provisional);
-  scope.image(accepted);
-  scope.transfer(accepted);
-  scope.dispose();
-  scope.dispose();
-  scope.image(late);
-  assert.deepEqual(released, [provisional, late]);
-});
 test("editor's static dependency graph stays independent of browser processing", () => {
   const visited = new Set();
   const forbidden =
-    /\/(?:engine|render-session|film-profile|negative-conversion|raw-import|photo-import|exr-import|video-import|video-export|lens-catalogue)\.js$/;
+    /\/(?:engine|render-session|film-profile|negative-reading|raw-import|photo-import|exr-import|video-import|video-export|lens-catalogue)\.js$/;
   function visit(url, trail) {
     if (visited.has(url.href) || !/\.[jt]sx?$/.test(url.pathname)) return;
     visited.add(url.href);

@@ -5,7 +5,7 @@ import Foundation
 /// scale each channel's density, for scanners whose channels do not read the dyes' own
 /// densities. This does not fit a scanner profile or correct illumination, flare or dye
 /// cross-talk.
-public struct ApproximateNegativeScan: Encodable, Sendable {
+public struct ApproximateNegativeScan: Encodable, Equatable, Sendable {
     public let border: [Float]
     public let baseDensity: [Float]
     public let recordChannels: [Int]
@@ -133,7 +133,14 @@ public struct ApproximateNegativeScan: Encodable, Sendable {
     /// keeps the holder out, as automatic conversion does; a monochrome film reads one channel.
     public static func balance(stock: FilmStock, border: SIMD3<Float>,
                                preview: ImageBuffer) -> Balance {
-        guard preview.width >= 2, preview.height >= 2 else { return .neutral }
+        denseEnd(border: border, preview: preview).map { balance(stock: stock, denseEnd: $0) }
+            ?? .neutral
+    }
+
+    /// The densest end of the framed picture, its highlights: each channel's scanner density over
+    /// `border` at the 99.5th percentile of the central 80%. Nil for a frame too small to read.
+    public static func denseEnd(border: SIMD3<Float>, preview: ImageBuffer) -> SIMD3<Float>? {
+        guard preview.width >= 2, preview.height >= 2 else { return nil }
         var channels = [[Float]](repeating: [], count: 3)
         let mx = preview.width / 10, my = preview.height / 10
         for y in my..<(preview.height - my) { for x in mx..<(preview.width - mx) {
@@ -142,12 +149,17 @@ public struct ApproximateNegativeScan: Encodable, Sendable {
             guard pixel.allSatisfy({ $0.isFinite && $0 > 0 }) else { continue }
             for c in 0..<3 { channels[c].append(-log10(pixel[c] / border[c])) }
         } }
-        guard channels[0].count >= 16 else { return .neutral }
+        guard channels[0].count >= 16 else { return nil }
         let dense = channels.map { values -> Float in
             let sorted = values.sorted()
             return sorted[Int(Float(sorted.count - 1) * 0.995)]
         }
-        guard dense[1] > 0.05 else { return .neutral }
+        return SIMD3(dense[0], dense[1], dense[2])
+    }
+
+    /// The balance of a frame whose densest end reads `dense` over the border, against `stock`.
+    public static func balance(stock: FilmStock, denseEnd dense: SIMD3<Float>) -> Balance {
+        guard (0..<3).allSatisfy({ dense[$0].isFinite }), dense[1] > 0.05 else { return .neutral }
         let exposure = stock.curves[1].logExposure(density: stock.curves[1].dMin + dense[1])
         var gains = SIMD3<Float>.one
         if !stock.isMonochrome {

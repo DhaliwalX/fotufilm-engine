@@ -82,19 +82,19 @@ public enum NegativeScanImport {
         return result
     }
 
-    /// Samples outside the model's usable density range (commonly the film holder) are
-    /// excluded and painted black. No artificial density floor enters the measurement API.
+    /// The kernels read the scan as the film (`FotufilmEngine.Options.scanReading`). Samples
+    /// outside the model's usable density range (commonly the film holder) print black. No
+    /// artificial density floor enters the measurement API.
     public static func positive(image: CIImage, border: SIMD3<Float>, stock: FilmStock) throws -> CIImage {
         let scan = try samples(image)
-        let converted = try ApproximateNegativeScan(stock: stock, border: border).convert(scan)
         var options = FotufilmEngine.Options()
         options.paper = .screen
+        options.stage = .print
+        options.scanReading = try ApproximateNegativeScan(stock: stock, border: border)
         let positive = try FotufilmEngine(stock: stock, options: options)
-            .printPositiveChecked(negativeDensity: converted.density)
+            .printPositiveChecked(negativeDensity: scan)
         var rgba = [Float](repeating: 1, count: positive.pixelCount * 4)
-        for i in 0..<positive.pixelCount { for c in 0..<3 {
-            rgba[4*i+c] = converted.invalid[i] ? 0 : positive.planes[c][i]
-        } }
+        for i in 0..<positive.pixelCount { for c in 0..<3 { rgba[4*i+c] = positive.planes[c][i] } }
         let data = rgba.withUnsafeBytes { Data($0) }
         return CIImage(bitmapData: data, bytesPerRow: positive.width * 16,
             size: CGSize(width: positive.width, height: positive.height), format: .RGBAf,

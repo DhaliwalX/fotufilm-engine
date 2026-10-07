@@ -1,7 +1,6 @@
 import { Icon } from "../icons.jsx";
 import { Tooltip, TooltipTrigger } from "@react-spectrum/s2/Tooltip";
 import { ToggleButton } from "@react-spectrum/s2/ToggleButton";
-import { inspectorPanels } from "../editor-catalogue.js";
 import { useEditor } from "./EditorContext.jsx";
 export default function InspectorRail() {
   const {
@@ -11,6 +10,7 @@ export default function InspectorRail() {
     compactLayout,
     filmOpen,
     setFilmOpen,
+    inspectorPanels,
   } = useEditor();
   return (
     <nav

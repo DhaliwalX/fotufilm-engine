@@ -4,8 +4,8 @@
 An explicit `ScanDensityCalibration` maps those measurements into the film-record
 density format consumed by the engine's existing print stage.
 
-Mac and web offer [automatic conversion](automatic-negative-conversion.md) without a drawn reference.
-The Mac app also offers the approximate manual workflow described below. The CLI does not
+The desktop and browser editors read a scan as a film and print it (below). The native apps
+also offer [automatic conversion](automatic-negative-conversion.md) without a drawn reference. The CLI does not
 yet expose scanned-negative conversion.
 No scanner profiles or automatic calibration fitting are bundled. A supplied affine
 profile is an approximation: validate its colour accuracy over the density range you
@@ -88,32 +88,37 @@ scanner densities, which is useful with a film-border reference.
 
 ## Shared approximate import and browser print boundary
 
-`ApproximateNegativeScan` contains the Mac importer's border normalization, film-base
-restoration, monochrome record mapping and usable-range mask. Its `convert` method
-returns density samples and an invalid-pixel mask; paint masked pixels black after
-printing. It does not alter the source scan or fit a scanner profile.
+`ApproximateNegativeScan` contains the editor's border normalization, film-base restoration,
+monochrome record mapping and usable-range mask. Set it as `FotufilmEngine.Options.scanReading`
+and hand the print span (`stage = .print`) linear scan RGB in place of densities: the kernels read
+each sample as `density(of:)` does and print the samples it cannot place black. `convert` reads a
+whole buffer in Swift, for reference. Neither alters the source scan nor fits a scanner profile.
+`NegativeScanPreparation` runs the kernels that divide a light frame out of a scan and read a
+scan without a film (`PlainNegativeScan`).
 
-The browser profile protocol accepts `kind: "negative-scan"`, a stock definition,
-three linear capture-channel border values and the output width/height. It returns
-the same calibration plus a binary screen-print profile. The profile enters the
-WebGPU or SIMD renderer with density input, bypassing exposure and development.
-Color and monochrome print kernels warm independently from positive-photo kernels.
-The browser dialog uses the separate `negative-auto` analysis protocol and shared
-Halide automatic inversion stage. This explicit-border protocol remains available
-for the manual, stock-based conversion.
+The browser profile protocol's film request takes `negative: {border, denseEnd, light}`: the clear
+film as three linear scan values, the framed picture's densest end
+(`ApproximateNegativeScan.denseEnd`, or nothing for a frame too small to read), and the edit's
+`ev`, `temperature` and `tint`, which the enlarger or the scan takes. It prepares the print
+profile `NegativeScanPrint.Reading.printing` describes, which enters the WebGPU or SIMD renderer
+with the framed scan as its input, bypassing exposure and development. The renderer writes
+highlights, shadows, saturation and vibrance into the print's finish
+(`FOTUFILM_CONFIG_PRINT_FINISH`) at render time. A scan read without a film goes through the scan
+preparation module (`tools/build-negative-wasm.sh`). Color and monochrome print kernels warm
+independently from positive-photo kernels.
 
-To compare the shipped browser kernels against native scan printing, generate
-synthetic references, start the web development server, then run the pixel check:
+To compare the shipped browser kernels against native scan printing, generate synthetic
+references, start the web development server, then run the pixel check:
 
 ```sh
 FOTUFILM_SCAN_REFERENCE_DIRECTORY="$PWD/build/negative-reference" \
-  swift test -c release --parallel --filter WebNegativeScanRequestTests
+  swift test -c release --parallel --filter WebNegativeProfileRequestTests
 node tools/test-negative-kernels.mjs http://127.0.0.1:5173/
 ```
 
-The check requires actual WebGPU, compares linear output before display encoding,
-and checks 16-bit Display P3 delivery through the background worker. References and
-build output stay in the ignored build directory.
+The check requires actual WebGPU, compares linear output before display encoding, and checks
+16-bit Display P3 delivery through the background worker. References and build output stay in
+the ignored build directory.
 
 ## Film suggestions
 
@@ -138,38 +143,59 @@ swift run -c release fotufilm --suggest-film scan.dng [--light-frame light.dng]
 swift run -c release fotufilm --list-film-bases
 ```
 
-## Mac app import
+## Editor
 
-Choose **File → Import Scanned Negative…** and open an unconverted negative with
-its developed, unexposed film border visible. Supported camera RAW files are decoded
-with Core Image; TIFF, PNG and other ImageIO images use their file colour profile.
-Choose **Linear Samples** only for a scan exported with a linear transfer curve.
-Sixteen-bit storage alone does not establish this. Use unadjusted scans: automatic
-levels, local contrast, clipping and prior inversion cannot be undone by the importer.
+Choose **Import Scanned Negative…** and open unconverted negatives. Each opens as
+a photo of its own, read as a film and printed through the same print stage a simulated
+photo uses. Supported camera RAW files are decoded with every rendering choice off; TIFF,
+PNG and other images use their file colour profile, and a file without one is read as
+linear samples. Sixteen-bit storage alone does not establish linearity. Use unadjusted
+scans: automatic levels, local contrast, clipping and prior inversion cannot be undone.
 
-Automatic conversion is the default; use **Preview Positive** without drawing.
-For manual stock-based calibration, drag a rectangle over clear film, avoiding the holder, sprocket holes, edge numbers
-and image detail. The importer takes a median RGB sample of that patch. Choose the
-closest installed negative film, then **Preview Positive**. Use **Show Negative** to
-sample again. **Import Positive** converts at full resolution and opens the Crop tool.
-Cancel leaves the current photo unchanged.
+The film chosen in the film library is the film the scan is read as; only negative films
+are offered, and the scan starts on the film its clear base looks like. The scan is
+measured against its clear film base: estimated from the thinnest film of the scan, or
+sampled from a patch of developed, unexposed film, avoiding the holder, sprocket holes,
+edge numbers and image detail. Each record's density above the base is balanced on the
+frame's densest end and mapped onto the film model, restoring its base density.
+Monochrome uses the green density for all records. In the desktop app, a photograph of the
+bare light source divides out uneven scanning light.
+
+A library folder can be kept as a folder of scanned negatives. Its photos open as negatives, and
+its thumbnails show each scan read without a film, its clear base estimated from the thumbnail.
+A frame opened for the first time starts from the film, film settings, clear film and light
+frame of the folder's frame edited last, as frames of one roll share them.
+
+With **Normal**, the scan is read without a film and edited as a plain positive photograph.
+Each channel's density above the clear base is balanced on the frame's densest end and taken
+back to scene light along a straight-line negative of gamma 0.6, the densest end landing on
+diffuse white (`PlainNegativeScan`). Every photo control then applies; no print simulation
+does.
+
+Those densities then take the print exactly as a simulated negative does: every output
+medium, lamp, screen conversion and print frame applies, and an enlarged paper is timed
+to the negative's density, as a lab times each frame. Development and grain act before the
+negative existed and do not apply. Crop, rotation and straightening are the editor's own and
+are saved with the edit; the scan itself is never changed.
+
+The light controls act on the print (`NegativeScanPrint.printing`). On an enlarged paper,
+exposure and white balance are the enlarger's: a stop of exposure takes a third of a stop of
+printing light away, since a colour paper's contrast at mid-grey is about three picture stops
+per stop of light (2.7 on Crystal Archive to 3.5 on Endura Premier), and warmth and tint move
+the yellow and magenta filtration by log10(2)/3 density per stop of balance, a warmer print
+taking yellow away. On Digital Reference and Lab Scan, exposure is the scan's exposure. Whatever
+the receiver cannot carry, and highlights, shadows, saturation and vibrance, finish the printed
+picture before the grade (`PrintFinish`): gains, then the ends of its luminance moved by up to
+0.75 stops, easing in over three stops above mid-grey and four below, then chroma. A
+black-and-white print takes no colour. Lens, source illuminant and regional tone shape scene
+light the scan never had and do not apply.
 
 The conversion is approximate. RAW decoding disables tone boosts, highlight recovery,
-lens correction and noise reduction, but retains the decoder's colour processing.
-File profiles are converted to linear sRGB. These are not sensor-channel measurements.
-The importer assumes zero remaining black offset, divides by the sampled film base,
-and maps RGB densities independently to the selected film model, restoring its base
-density. Monochrome uses the green density for all records. No measured scanner profile
-is fitted or included. Uneven backlighting, flare and colour cross-talk remain uncorrected.
-Nonpositive, nonfinite and out-of-range pixels, commonly the holder, are excluded and
-painted black; they are not assigned invented densities. Crop away the holder and
-check that image detail is not being excluded before accepting the conversion.
-
-The positive is imported as a full-resolution 16-bit Display P3 TIFF in memory, with
-**Normal** selected to avoid adding another film simulation. Existing exposure, colour
-and export controls then apply to that positive. The original negative is unchanged.
-Border sampling and film choice are baked into this positive; reimport the original to
-change them. Crop edits remain editable and are saved with the photograph.
+lens correction and noise reduction, but retains the decoder's colour processing. These
+are not sensor-channel measurements. No measured scanner profile is fitted or included.
+Flare and colour cross-talk remain uncorrected. Nonpositive, nonfinite and out-of-range
+pixels, commonly the holder, print black; they are not assigned invented densities. Crop
+away the holder.
 
 In **Crop**, drag each of the four circular handles independently. The selection must
 remain convex and cannot cross itself. Leaving Crop (or pressing Return) straightens

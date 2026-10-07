@@ -521,7 +521,7 @@ public:
         policy.paper_lut_base = paper_lut_base;
         GpuBackend backend(*this, policy, *this, configuration_, film_lut_, paper_lut_);
 
-        auto density_source = [&](Expr plane_index) {
+        auto input_density = [&](Expr plane_index) {
             Expr in_w = input_.dim(0).extent();
             Expr in_h = input_.dim(1).extent();
             Expr fx = (Halide::cast<float>(x) + 0.5f)
@@ -544,6 +544,20 @@ public:
             Expr top = (1.0f - tx) * d00 + tx * d10;
             Expr bottom = (1.0f - tx) * d01 + tx * d11;
             return (1.0f - ty) * top + ty * bottom;
+        };
+        // A scanned negative arrives as its scan, read here as the film's densities
+        // (FOTUFILM_CONFIG_SCAN_READING); a staged print's input arrives as density.
+        Expr scan_mode = scan_reading_mode(configuration_);
+        Expr scan_r = input_density(0), scan_g = input_density(1), scan_b = input_density(2);
+        Expr reads_scan = density_in_ ? Expr(scan_mode == kScanFilm)
+                                      : Expr(Halide::Internal::const_false());
+        auto density_source = [&](Expr plane_index) {
+            if (!density_in_) return input_density(plane_index);
+            return Halide::select(
+                reads_scan,
+                scan_film_density(configuration_, Halide::min(plane_index, 2), scan_r, scan_g,
+                                  scan_b, approximate_),
+                input_density(plane_index));
         };
         graph::Inputs inputs{
             configuration_, exposure_lut_, *this, runtime_features_, feature_mask,
@@ -601,9 +615,13 @@ public:
             // the 33-node cube caused 1.37 codes of contouring; separate stages measured 0.003
             // codes in DenseRampTests. The 2048-sample curve table avoids per-pixel
             // transcendental functions.
-            graph::PrintInputs print{configuration_, Expr(reversal_), monochrome, "frame_", suffix};
+            graph::PrintInputs print{configuration_, Expr(reversal_), monochrome, density_in_,
+                                     "frame_", suffix};
             Func printed = graph::build_print(backend, print, developed, x, y, channel);
-            display_linear(x, y, channel) = printed(x, y, channel);
+            // What a scan's reading could not place, often the holder, prints black.
+            display_linear(x, y, channel) = Halide::select(
+                reads_scan && !scan_film_readable(configuration_, scan_r, scan_g, scan_b),
+                0.0f, printed(x, y, channel));
         }
 
         // Whether the host's delivery encode runs, and which transfer it takes, are the

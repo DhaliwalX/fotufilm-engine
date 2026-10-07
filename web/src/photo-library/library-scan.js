@@ -33,6 +33,8 @@ export function photoEntry(folder, path, size, modified, file = null) {
     order: [stem, extension, path].map(natural).join("\0"),
     root: folder.handle ?? null,
     file,
+    // A scanned negative, in a folder of them.
+    negative: !!folder.negative,
   };
 }
 
@@ -90,7 +92,7 @@ export const indexedPhotos = (folder, rows) =>
 
 // Browsers without a directory picker upload a folder as a flat file list
 // whose webkitRelativePath starts with the chosen folder's name.
-export function uploadedFolders(files) {
+export function uploadedFolders(files, negative = false) {
   const folders = new Map();
   for (const file of Array.from(files || [])) {
     const [root, ...rest] = (file.webkitRelativePath || file.name).split("/");
@@ -103,7 +105,7 @@ export function uploadedFolders(files) {
       continue;
     const id = `upload:${root}`;
     if (!folders.has(id))
-      folders.set(id, { id, name: root, transient: true, photos: [] });
+      folders.set(id, { id, name: root, transient: true, negative, photos: [] });
     const folder = folders.get(id);
     folder.photos.push(
       photoEntry(folder, path, file.size, file.lastModified, file),

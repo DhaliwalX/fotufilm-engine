@@ -1,16 +1,10 @@
 import { BACKEND_VERSION } from "./contract.js";
 import { RenderSession, loadStockIndex } from "../render-session.js";
 import { prepareEditor } from "./browser-prepare.js";
-import { importMedia } from "./browser-import.js";
+import { importNegativeMedia, negativeScans } from "./browser-negative.js";
 import { thumbnail } from "./browser-thumbnail.js";
 import { exportImage, exportVideo } from "./browser-export.js";
 import { createHistogram } from "./browser-histogram.js";
-import {
-  analyseNegative,
-  convertNegative,
-  suggestNegativeFilms,
-} from "../negative-conversion.js";
-import { attachLinearPreview } from "../linear-preview.js";
 import { solveAutoAdjustment } from "./browser-auto-adjustment.js";
 import { loadPrintFrame } from "./browser-print-frame.js";
 import { sampleScene } from "./browser-selective.js";
@@ -25,14 +19,10 @@ export function createBrowserBackend() {
     createSession: () => new RenderSession(),
     prepare: prepareEditor,
     loadStocks: loadStockIndex,
-    importMedia,
+    importMedia: importNegativeMedia,
     thumbnail,
     releaseImage: (image) => image?.video?.dispose(),
-    analyseNegative,
-    convertNegative,
-    negativeContrast: true,
-    suggestNegativeFilms,
-    makePreview: attachLinearPreview,
+    negativeScans,
     createHistogram,
     autoAdjust: solveAutoAdjustment,
     planPrintFrame: loadPrintFrame,

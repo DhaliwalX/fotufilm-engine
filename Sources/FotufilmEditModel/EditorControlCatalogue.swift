@@ -2326,6 +2326,10 @@ public extension EngineOptionCoverage {
         "unexposedEdge": .derived(
             "set by the host on the piece of film larger than the aperture it develops for Emulsion Border"),
         "sceneHeadroom": .derived("the range the source declares above diffuse white"),
+        "printFinish": .derived(
+            "a scanned negative's light controls, carried onto its print by NegativeScanPrint.printing"),
+        "scanReading": .derived(
+            "a scanned negative's film reading, from its clear film and densest end by NegativeScanPrint.Reading"),
         "grainMottleSizeRatio": .derived(
             "how coarse the mottle is, as a multiple of the emulsion's own clump; a still keeps the "
             + "sheet's figure and a clip's roads complete an explicit share with the coarser delivery ratio"),

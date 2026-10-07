@@ -395,10 +395,23 @@ public:
 
         CpuBackend backend(&film_lut_, &paper_lut_);
         backend.bind_configuration(configuration_);
+        // A scanned negative arrives as its scan and is read as the film's densities here
+        // (FOTUFILM_CONFIG_SCAN_READING); anything else arrives as density.
+        Expr scan_mode = scan_reading_mode(configuration_);
+        Expr scan_r = input_(x, y, 0), scan_g = input_(x, y, 1), scan_b = input_(x, y, 2);
+        Expr reads_scan = scan_mode == kScanFilm;
         Func developed("print_developed" + suffix);
-        developed(x, y, c) = input_(x, y, c);
-        graph::PrintInputs inputs{configuration_, Expr(reversal ? 1 : 0), monochrome, "", suffix};
-        Func printed = graph::build_print(backend, inputs, developed, x, y, c);
+        developed(x, y, c) = Halide::select(
+            reads_scan, scan_film_density(configuration_, c, scan_r, scan_g, scan_b, false),
+            input_(x, y, c));
+        graph::PrintInputs inputs{configuration_, Expr(reversal ? 1 : 0), monochrome, true, "",
+                                  suffix};
+        Func read_print = graph::build_print(backend, inputs, developed, x, y, c);
+        // What the reading could not place, often the holder, prints black.
+        Func printed("print_read" + suffix);
+        printed(x, y, c) = Halide::select(
+            reads_scan && !scan_film_readable(configuration_, scan_r, scan_g, scan_b),
+            0.0f, read_print(x, y, c));
 
         Func output("print_output" + suffix);
         if (!encode) {

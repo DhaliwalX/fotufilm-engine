@@ -103,6 +103,8 @@ static cmsHPROFILE default_profile(void) {
     for (int c = 0; c < 3; c++) if (owned[c]) cmsFreeToneCurve(owned[c]);
     cmsCloseProfile(srgb); return result;
 }
+// `linear_samples` reads samples with no colour profile as linear sRGB light: a scanner's raw
+// output, as Sources/CFotufilmCodecs reads a scanned negative.
 int tiff_decoder_open(const unsigned char *input, unsigned size, int linear_samples) {
     tiff_decoder_close(); error_text[0] = 0;
     if (size < 8 || size > 512u * 1024 * 1024) return fail("Invalid TIFF file size.");
@@ -160,7 +162,7 @@ int tiff_decoder_open(const unsigned char *input, unsigned size, int linear_samp
         }
     }
     uint32_t profile_size; void *profile_bytes;
-    if (!state.linear && TIFFGetField(state.tif, TIFFTAG_ICCPROFILE, &profile_size, &profile_bytes)) {
+    if (TIFFGetField(state.tif, TIFFTAG_ICCPROFILE, &profile_size, &profile_bytes)) {
         if (!profile_size || profile_size > 16 * 1024 * 1024) return fail("Invalid TIFF color profile size.");
         state.source = cmsOpenProfileFromMem(profile_bytes, profile_size);
     } else {

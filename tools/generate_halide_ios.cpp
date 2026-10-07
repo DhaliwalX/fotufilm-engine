@@ -209,6 +209,11 @@ int main(int argc, char **argv) {
         scan.output.compile_to_static_library((output / (prefix + "negative_cpu")).string(),
                                               {scan.input, scan.parameters},
                                               prefix + "negative_cpu", host);
+        // A scanned negative's light-frame division and plain reading.
+        ScanPreparePipeline prepare;
+        prepare.output.compile_to_static_library(
+            (output / (prefix + "scan_prepare_cpu")).string(),
+            {prepare.input, prepare.light, prepare.parameters}, prefix + "scan_prepare_cpu", host);
         // Layered Transport's spreading, on the CPU too, of a component's light or of the scene.
         for (const bool scene : {false, true}) {
             const std::string name = prefix + (scene ? "transport_scene_cpu" : "transport_cpu");
@@ -269,6 +274,15 @@ int main(int argc, char **argv) {
         auto scan_target = target.with_feature(Halide::Target::NoRuntime).with_feature(Halide::Target::StrictFloat);
         pipeline.output.compile_to_static_library((output / name).string(),
             {pipeline.input, pipeline.parameters}, name, scan_target);
+    }
+    // A scanned negative's light-frame division and plain reading, as every JIT host runs it.
+    {
+        ScanPreparePipeline pipeline;
+        pipeline.output.compile_to_static_library(
+            (output / "fotufilm_halide_ios_scan_prepare_cpu").string(),
+            {pipeline.input, pipeline.light, pipeline.parameters},
+            "fotufilm_halide_ios_scan_prepare_cpu",
+            target.with_feature(Halide::Target::NoRuntime).with_feature(Halide::Target::StrictFloat));
     }
     // Layered Transport spreads each component's light with the same pipeline as the JIT hosts,
     // and exposes a component from the scene for a frame kept on the device.

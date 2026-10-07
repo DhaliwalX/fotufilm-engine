@@ -3,62 +3,42 @@ import { test, expect } from "@playwright/test";
 import { openChart } from "./photo-fixture.js";
 import { installNativeBackend } from "./native-backend-fixture.js";
 
-test("negative dialog releases provisional native images and transfers an accepted positive", async ({
+test("a scanned negative holds one native image while it is open", async ({
   page,
 }) => {
-  await page.addInitScript(installNativeBackend);
+  await page.addInitScript(installNativeBackend, { negativeScans: true });
   await page.goto("/");
   await openChart(page, 480, 320);
   await expect(
     page.getByAltText("Developed photo", { exact: true }),
   ).toBeVisible();
-  const bytes = await page.evaluate(async () =>
-    Array.from(
-      new Uint8Array(
-        await (
-          await fetch(document.querySelector('img[alt="Developed photo"]').src)
-        ).arrayBuffer(),
-      ),
-    ),
-  );
-  async function openNegative() {
-    await page
-      .getByRole("button", { name: "More options", exact: true })
-      .click();
-    await page
-      .getByRole("menuitem", { name: "Import Scanned Negative…", exact: true })
-      .click();
-    await page.locator(".negative-import input[type=file]").setInputFiles({
-      name: "negative.png",
-      mimeType: "image/png",
-      buffer: Buffer.from(bytes),
-    });
-    await expect(
-      page.getByRole("img", { name: "Converted positive preview" }),
-    ).toBeVisible();
-  }
-  await openNegative();
-  await expect
-    .poll(() => page.evaluate(() => window.nativeLiveImages()))
-    .toBe(3);
+  // A scan of its own: the same bytes as the open photo would show that photo instead.
+  const bytes = await page.evaluate(async () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 120;
+    canvas.height = 80;
+    const context = canvas.getContext("2d");
+    context.fillStyle = "#c87838";
+    context.fillRect(0, 0, 120, 80);
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve));
+    return Array.from(new Uint8Array(await blob.arrayBuffer()));
+  });
+  const chooser = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "More options", exact: true }).click();
   await page
-    .getByRole("dialog")
-    .getByRole("button", { name: "Cancel", exact: true })
+    .getByRole("menuitem", { name: "Import Scanned Negative…", exact: true })
     .click();
-  await expect
-    .poll(() => page.evaluate(() => window.nativeLiveImages()))
-    .toBe(1);
-  await openNegative();
-  await page
-    .getByRole("button", { name: "Import Positive", exact: true })
-    .click();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await (await chooser).setFiles({
+    name: "negative.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(bytes),
+  });
   await expect
     .poll(() => page.evaluate(() => window.nativeLiveImages()))
     .toBe(2);
   await page.locator(".filmstrip-item").last().hover();
   await page
-    .getByRole("button", { name: "Close negative.png — Positive", exact: true })
+    .getByRole("button", { name: "Close negative.png", exact: true })
     .click();
   await expect
     .poll(() => page.evaluate(() => window.nativeLiveImages()))

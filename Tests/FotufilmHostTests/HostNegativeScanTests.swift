@@ -59,165 +59,48 @@ final class HostNegativeScanTests: XCTestCase {
                 answer.payload)
     }
 
-    /// Opens a strip held in memory as a session scan.
+    /// Opens a strip held in memory as a negative document.
     private func open(_ service: HostService, width: Int, height: Int) -> Int {
         let image = HostImage(rgba: strip(width: width, height: height), width: width,
                               height: height, contentHeadroom: 1)
         let handle = service.register(image)
         let lights = service.negativeScans.lights
-        service.negativeScans.add(HostNegativeScan(scan: image, isRAW: false) {
-            lights.frame($0)?.measured
-        }, handle: handle)
+        service.negativeScans.add(HostNegativeScan(scan: image) { lights.frame($0)?.measured },
+                                  handle: handle)
         return handle
     }
 
-    private func recipeJSON(_ recipe: NegativeScanRecipe) throws -> Any {
-        try JSONSerialization.jsonObject(with: JSONEncoder().encode(recipe))
+    /// A render request for a negative document read as `stock`, with the print's own controls.
+    private func request(_ handle: Int, stock: String? = "gold200", maxEdge: Int? = nil,
+                         negative: [String: Any] = [:], medium: String? = nil,
+                         controls: [String: Any] = [:]) -> [String: Any] {
+        var settings: [String: Any] = ["controls": controls]
+        if let medium { settings["medium"] = medium }
+        return ["handle": handle, "maxEdge": maxEdge ?? NSNull(),
+                "edit": ["stock": stock.map { $0 as Any } ?? NSNull(), "params": [:], "negative": negative],
+                "profileRequest": settings]
     }
 
-    // MARK: - Framing
-
-    /// Sizes follow the apps' Core Image framing: turns swap the sides, the crop is the integral
-    /// rectangle of the straightened frame and the long edge draws it down.
-    func testLayoutMatchesTheAppsRounding() {
-        var recipe = NegativeScanRecipe()
-        recipe.quarterTurns = 1
-        recipe.crop = .init(x: 0.1, y: 0.2, width: 0.8, height: 0.5)
-        let layout = HostNegativeScan.layout(scanWidth: 3000, scanHeight: 2000, recipe: recipe,
-                                             longEdge: 1000, cropped: true)
-        XCTAssertEqual(layout.oriented.width, 2000)
-        XCTAssertEqual(layout.oriented.height, 3000)
-        XCTAssertEqual(layout.keptWidth, 1600)
-        XCTAssertEqual(layout.keptHeight, 1500)
-        XCTAssertEqual(layout.width, 1000)
-        XCTAssertEqual(layout.height, 937)
-        let whole = HostNegativeScan.layout(scanWidth: 300, scanHeight: 200, recipe: recipe,
-                                            longEdge: nil, cropped: false)
-        XCTAssertEqual([whole.width, whole.height], [200, 300])
+    /// The editor's develop of a request: display-linear Display P3 RGBA.
+    private func develop(_ service: HostService, _ body: [String: Any]) throws
+        -> (rgba: [Float], width: Int, height: Int) {
+        let prepared = try service.prepare(JSONSerialization.data(withJSONObject: body))
+        let scene = try service.framedScene(prepared)
+        let (width, height) = prepared.sizes.output
+        var rgba = [Float](repeating: 0, count: width * height * 4)
+        try rgba.withUnsafeMutableBytes { buffer in
+            try service.engine.develop(scene, width: width, height: height, contentHeadroom: 1,
+                                       edit: prepared.edit,
+                                       into: .init(maxEdge: 0, format: .rgba32FloatLinearP3,
+                                                   pixels: buffer.baseAddress!,
+                                                   rowBytes: width * 16, capacity: buffer.count))
+        }
+        return (rgba, width, height)
     }
 
-    /// Each pixel of a framed picture is the part of the scan the recipe shows there: a quarter
-    /// turn clockwise puts the scan's left edge at the top, a flip puts its right edge left.
-    func testFramingFollowsTurnsAndFlips() {
-        let width = 40, height = 20
-        var rgba = [Float](repeating: 1, count: width * height * 4)
-        for y in 0..<height { for x in 0..<width {
-            rgba[(y * width + x) * 4] = Float(x)
-            rgba[(y * width + x) * 4 + 1] = Float(y)
-        } }
-        let image = HostImage(rgba: rgba, width: width, height: height, contentHeadroom: 1)
-        var recipe = NegativeScanRecipe()
-        recipe.quarterTurns = 1
-        let turned = HostNegativeScan.frame(image, recipe: recipe, longEdge: nil, cropped: true,
-                                            wide: true, light: nil)
-        XCTAssertEqual([turned.width, turned.height], [20, 40])
-        // Top-left of the turned picture is the scan's bottom-left.
-        XCTAssertEqual(turned.rgba[0], 0, accuracy: 1e-4)
-        XCTAssertEqual(turned.rgba[1], 19, accuracy: 1e-4)
-        recipe = NegativeScanRecipe()
-        recipe.mirrored = true
-        let flipped = HostNegativeScan.frame(image, recipe: recipe, longEdge: nil, cropped: true,
-                                             wide: true, light: nil)
-        XCTAssertEqual(flipped.rgba[0], 39, accuracy: 1e-4)
-        XCTAssertEqual(flipped.rgba[1], 0, accuracy: 1e-4)
-    }
+    // MARK: - A negative document
 
     #if canImport(CoreImage)
-    /// The apps frame with Core Image (`NegativeScan.framed`); the host's arithmetic framing must
-    /// show the same picture at the same size for every orientation, straightening and crop.
-    func testFramingMatchesCoreImage() throws {
-        let width = 360, height = 240
-        var rgba = [Float](repeating: 1, count: width * height * 4)
-        for y in 0..<height { for x in 0..<width {
-            let u = Float(x) / Float(width), v = Float(y) / Float(height)
-            rgba[(y * width + x) * 4] = 0.1 + 0.8 * u
-            rgba[(y * width + x) * 4 + 1] = 0.1 + 0.8 * v
-            rgba[(y * width + x) * 4 + 2] = 0.3 + 0.2 * sin(6 * u) * cos(4 * v)
-        } }
-        let image = HostImage(rgba: rgba, width: width, height: height, contentHeadroom: 1)
-        let space = CGColorSpace(name: CGColorSpace.extendedLinearITUR_2020)!
-        let source = CIImage(bitmapData: rgba.withUnsafeBufferPointer { Data(buffer: $0) },
-                             bytesPerRow: width * 16, size: CGSize(width: width, height: height),
-                             format: .RGBAf, colorSpace: space)
-        let context = CIContext(options: [.workingColorSpace: space, .cacheIntermediates: false])
-        var recipes: [NegativeScanRecipe] = []
-        for turns in 0..<4 {
-            for mirrored in [false, true] {
-                var recipe = NegativeScanRecipe()
-                recipe.quarterTurns = turns
-                recipe.mirrored = mirrored
-                recipe.straighten = turns == 2 ? -7.5 : 4
-                recipe.crop = .init(x: 0.12, y: 0.2, width: 0.7, height: 0.6)
-                recipes.append(recipe)
-            }
-        }
-        for recipe in recipes {
-            for longEdge in [nil, 120] as [Int?] {
-                let ours = HostNegativeScan.frame(image, recipe: recipe, longEdge: longEdge,
-                                                  cropped: true, wide: true, light: nil)
-                let theirs = coreImageFrame(source, recipe, longEdge: longEdge)
-                XCTAssertEqual(ours.width, Int(theirs.extent.width), "\(recipe)")
-                XCTAssertEqual(ours.height, Int(theirs.extent.height), "\(recipe)")
-                var expected = [Float](repeating: 0, count: ours.width * ours.height * 4)
-                context.render(theirs, toBitmap: &expected, rowBytes: ours.width * 16,
-                               bounds: CGRect(x: 0, y: 0, width: ours.width, height: ours.height),
-                               format: .RGBAf, colorSpace: space)
-                var error: Float = 0
-                // The outermost pixels meet the resamplers' edge handling (Lanczos reaches past a
-                // drawn-down crop); the picture is inside.
-                let m = longEdge == nil ? 2 : 4
-                for y in m..<(ours.height - m) { for x in m..<(ours.width - m) {
-                    for c in 0..<3 {
-                        let i = (y * ours.width + x) * 4 + c
-                        error = max(error, abs(ours.rgba[i] - expected[i]))
-                    }
-                } }
-                XCTAssertLessThan(error, longEdge == nil ? 1e-3 : 0.01, "turns \(recipe.quarterTurns) mirrored \(recipe.mirrored) edge \(String(describing: longEdge))")
-            }
-        }
-    }
-
-    /// `NegativeScan.framed` from the apps (shared/FotufilmApp/NegativeScanDevelop.swift).
-    private func coreImageFrame(_ picture: CIImage, _ recipe: NegativeScanRecipe,
-                                longEdge: Int?) -> CIImage {
-        func atOrigin(_ image: CIImage) -> CIImage {
-            image.transformed(by: CGAffineTransform(translationX: -image.extent.minX,
-                                                    y: -image.extent.minY))
-        }
-        var picture = picture
-        if recipe.mirrored {
-            picture = atOrigin(picture.transformed(by: CGAffineTransform(scaleX: -1, y: 1)))
-        }
-        let turns = ((recipe.quarterTurns % 4) + 4) % 4
-        if turns > 0 {
-            picture = atOrigin(picture.transformed(
-                by: CGAffineTransform(rotationAngle: -CGFloat(turns) * .pi / 2)))
-        }
-        if recipe.straighten != 0 {
-            let e = picture.extent
-            let scale = NegativeScanRecipe.straightenScale(size: e.size, degrees: recipe.straighten)
-            let turn = CGAffineTransform(translationX: -e.midX, y: -e.midY)
-                .concatenating(CGAffineTransform(rotationAngle: recipe.straighten * .pi / 180))
-                .concatenating(CGAffineTransform(scaleX: scale, y: scale))
-                .concatenating(CGAffineTransform(translationX: e.midX, y: e.midY))
-            picture = picture.transformed(by: turn).cropped(to: e)
-        }
-        let e = picture.extent
-        let crop = recipe.crop.clamped()
-        let rect = CGRect(x: crop.x * e.width, y: (1 - crop.y - crop.height) * e.height,
-                          width: crop.width * e.width, height: crop.height * e.height)
-            .integral.intersection(e)
-        picture = atOrigin(picture.cropped(to: rect))
-        guard let longEdge else { return picture }
-        let scale = min(1, CGFloat(longEdge) / max(picture.extent.width, picture.extent.height))
-        guard scale < 1 else { return picture }
-        let width = max(1, (picture.extent.width * scale).rounded(.down))
-        let height = max(1, (picture.extent.height * scale).rounded(.down))
-        return atOrigin(picture.applyingFilter("CILanczosScaleTransform", parameters: [
-            kCIInputScaleKey: scale, kCIInputAspectRatioKey: 1,
-        ])).cropped(to: CGRect(x: 0, y: 0, width: width, height: height))
-    }
-
     /// A light frame measured without Core Image evens a scan out as the apps' measurement does.
     func testPortableLightMeasurementMatchesCoreImage() throws {
         let width = 320, height = 200
@@ -241,75 +124,86 @@ final class HostNegativeScanTests: XCTestCase {
     }
     #endif
 
-    // MARK: - The session
-
-    /// Open, preview both readings, sample the border by dragging over the rebate, find the
-    /// frame, and import the positive.
-    func testSessionPrintsAndImportsThePositive() throws {
+    /// A negative develops through the editor's own print: the scan read as the edit's film
+    /// against its film base, then whatever the Print panel sets.
+    func testNegativeDocumentPrintsThroughTheEditorsPrint() throws {
         let (service, engine) = try service()
         defer { fotufilm_engine_destroy(engine) }
         let handle = open(service, width: 300, height: 200)
-        var recipe = NegativeScanRecipe()
 
-        // Automatic: a positive of the framed scan.
-        let automatic = try call(service, "negativeScanRender",
-                                 ["handle": handle, "recipe": recipeJSON(recipe), "maxEdge": 150])
-        XCTAssertEqual(automatic.json["width"] as? Int, 150)
-        XCTAssertEqual(automatic.json["height"] as? Int, 100)
-        XCTAssertFalse(automatic.payload.isEmpty)
-
-        // The rebate in the picture's top rows, as a drag over the whole negative marks it.
-        let sampled = try call(service, "negativeScanSampleBorder", [
-            "handle": handle, "recipe": recipeJSON(recipe),
-            "area": ["x": 0.3, "y": 0.02, "width": 0.4, "height": 0.08],
-        ]).json
-        let measured = try XCTUnwrap(sampled["border"] as? [Double])
+        // The rebate in the picture's top rows, picked as the Film panel picks it.
+        let sampled = try JSONSerialization.jsonObject(with: service.call(
+            "negativeSampleFilmBase",
+            params: JSONSerialization.data(withJSONObject: [
+                "render": request(handle, maxEdge: 150), "point": [0.5, 0.05]]),
+            payload: nil).json) as? [Double]
+        let measured = try XCTUnwrap(sampled)
         for c in 0..<3 {
             XCTAssertEqual(Float(measured[c]), border[c] * pow(10, -0.02), accuracy: 1e-3)
         }
-        recipe.border = measured.map(Float.init)
-        recipe.borderArea = try JSONDecoder().decode(
-            NegativeScanRecipe.Area.self,
-            from: JSONSerialization.data(withJSONObject: sampled["borderArea"]!))
 
-        // Film: gold200 on the display receiver; the light spot prints darker than the thin end.
-        recipe.conversion = .film
-        recipe.stockID = "gold200"
-        let film = try XCTUnwrap(service.negativeScans.scan(handle)
-            .print(recipe, longEdge: 150, engine: service.engine))
-        let thin = film.rgba[(50 * 150 + 30) * 4 + 1], dense = film.rgba[(50 * 150 + 120) * 4 + 1]
-        XCTAssertGreaterThan(dense, thin, "the denser negative prints brighter")
-        // The open holder is outside the film's densities and prints black.
-        XCTAssertEqual(film.rgba[(50 * 150 + 149) * 4 + 1], 0)
+        // Read as Gold 200 on Digital Reference: the denser negative prints brighter, and the open
+        // holder, outside the film's densities, prints black.
+        let reading = ["border": measured]
+        let film = try develop(service, request(handle, maxEdge: 150, negative: reading))
+        XCTAssertEqual([film.width, film.height], [150, 100])
+        func green(_ print: (rgba: [Float], width: Int, height: Int), _ x: Int, _ y: Int) -> Float {
+            print.rgba[(y * print.width + x) * 4 + 1]
+        }
+        XCTAssertGreaterThan(green(film, 120, 50), green(film, 30, 50))
+        XCTAssertEqual(green(film, 149, 50), 0)
 
-        // Exposure brightens a print on the display receiver only through the screen exposure.
-        var brighter = recipe
-        brighter.exposure = 1
-        let lifted = try service.negativeScans.scan(handle)
-            .print(brighter, longEdge: 150, engine: service.engine)
-        XCTAssertGreaterThan(lifted.rgba[(50 * 150 + 60) * 4 + 1], film.rgba[(50 * 150 + 60) * 4 + 1])
+        // Until clear film is picked the base is estimated from the thinnest film of the scan
+        // (here the open holder, which a pick then corrects).
+        let estimated = try develop(service, request(handle, maxEdge: 150))
+        XCTAssertNotEqual(green(estimated, 60, 50), green(film, 60, 50), accuracy: 1e-3)
 
-        // Find Frame crops to the picture between the rebate and the holder.
-        let found = try call(service, "negativeScanDetectFrame",
-                             ["handle": handle, "recipe": recipeJSON(recipe)]).json
-        let crop = try XCTUnwrap(found["crop"] as? [String: Double])
-        XCTAssertEqual(crop["x"]!, 0.1, accuracy: 0.03)
-        XCTAssertEqual(crop["y"]!, 0.15, accuracy: 0.03)
+        // The Print panel's own controls act on it: screen exposure, and an RA-4 paper.
+        let brighter = try develop(service, request(handle, maxEdge: 150, negative: reading,
+                                                    controls: ["screenExposure": 1]))
+        XCTAssertGreaterThan(green(brighter, 60, 50), green(film, 60, 50))
+        let paper = try develop(service, request(handle, maxEdge: 150, negative: reading,
+                                                 medium: PrintPaper.crystalArchive.rawValue))
+        XCTAssertNotEqual(green(paper, 60, 50), green(film, 60, 50), accuracy: 1e-3)
 
-        // The committed positive is a new photograph at the scan's full size.
-        recipe.quarterTurns = 1
-        let committed = try call(service, "negativeScanCommit",
-                                 ["handle": handle, "recipe": recipeJSON(recipe)]).json
-        XCTAssertEqual(committed["naturalWidth"] as? Int, 200)
-        XCTAssertEqual(committed["naturalHeight"] as? Int, 300)
-        XCTAssertNotEqual(committed["handle"] as? Int, handle)
+        // The editor's crop frames it like any photograph.
+        var cropped = request(handle, maxEdge: 150, negative: reading)
+        cropped["edit"] = (cropped["edit"] as! [String: Any]).merging([
+            "crop": [[0.1, 0.15], [0.9, 0.15], [0.9, 0.85], [0.1, 0.85]],
+        ]) { $1 }
+        let framed = try develop(service, cropped)
+        XCTAssertEqual(framed.width, 150)
+        XCTAssertLessThan(framed.height, 100)
 
-        // A slide has no negative to read.
-        recipe.stockID = try XCTUnwrap(FilmStock.presetIDs.first { FilmStock.presets[$0]!.isReversal })
-        XCTAssertThrowsError(try call(service, "negativeScanRender",
-                                      ["handle": handle, "recipe": recipeJSON(recipe)]))
+        // A slide has no negative to read; no film at all asks for one.
+        let slide = try XCTUnwrap(FilmStock.presetIDs.first { FilmStock.presets[$0]!.isReversal })
+        XCTAssertThrowsError(try develop(service, request(handle, stock: slide)))
         _ = try call(service, "release", ["handle": handle])
-        XCTAssertThrowsError(try service.negativeScans.scan(handle))
+        XCTAssertNil(service.negativeScans.scan(handle))
+    }
+
+    /// With no film chosen (Normal) a negative develops as a plain positive, like any photograph
+    /// without film: no print, and the photograph's own controls act on it.
+    func testANegativeWithoutAFilmDevelopsAsAPlainPositive() throws {
+        let (service, engine) = try service()
+        defer { fotufilm_engine_destroy(engine) }
+        let handle = open(service, width: 300, height: 200)
+        let reading: [String: Any] = ["border": border.indices.map { Double(border[$0]) }]
+        let plain = try develop(service, request(handle, stock: nil, maxEdge: 150, negative: reading))
+        XCTAssertEqual([plain.width, plain.height], [150, 100])
+        func green(_ print: (rgba: [Float], width: Int, height: Int), _ x: Int, _ y: Int) -> Float {
+            print.rgba[(y * print.width + x) * 4 + 1]
+        }
+        // The denser negative is the brighter scene, and clear film is near black.
+        XCTAssertGreaterThan(green(plain, 120, 50), green(plain, 30, 50))
+        XCTAssertLessThan(green(plain, 75, 5), green(plain, 30, 50))
+        // It is no print: the film's own reading of the same scan differs.
+        let film = try develop(service, request(handle, maxEdge: 150, negative: reading))
+        XCTAssertNotEqual(green(plain, 60, 50), green(film, 60, 50), accuracy: 1e-3)
+        // Exposure brightens it, as it does a photograph.
+        var exposed = request(handle, stock: nil, maxEdge: 150, negative: reading)
+        exposed["edit"] = (exposed["edit"] as! [String: Any]).merging(["params": ["ev": 1]]) { $1 }
+        XCTAssertGreaterThan(green(try develop(service, exposed), 60, 50), green(plain, 60, 50))
     }
 
     /// The print stage on the CPU and on the GPU make the same print of a scan.
@@ -320,27 +214,24 @@ final class HostNegativeScanTests: XCTestCase {
             throw XCTSkip("needs both developers")
         }
         let width = 120, height = 80
-        let scan = HostImage(rgba: strip(width: width, height: height), width: width,
-                             height: height, contentHeadroom: 1)
-        var recipe = NegativeScanRecipe()
-        recipe.conversion = .film
-        recipe.stockID = "gold200"
-        recipe.paperID = PrintPaper.crystalArchive.rawValue
+        let scan = strip(width: width, height: height)
         let stock = try NegativeScanPrint.film("gold200")
-        let framed = HostNegativeScan.frame(scan, recipe: recipe, longEdge: nil, cropped: true,
-                                            wide: true, light: nil)
-        let film = try NegativeScanPrint.film(
-            recipe, stock: stock, border: [border.x, border.y, border.z],
-            balance: ApproximateNegativeScan.balance(stock: stock, border: border,
-                                                     preview: HostNegativeScan.planes(framed)))
+        let reading = try NegativeScanPrint.Reading(
+            stock: stock, border: border,
+            balance: ApproximateNegativeScan.balance(
+                stock: stock, border: border,
+                preview: HostNegativeScan.planes(scan, width: width, height: height)))
+        var edit = FotufilmEngine.Options()
+        edit.paper = .crystalArchive
+        let options = reading.printing(edit, stock: stock)
         func print(_ developer: HostDeveloper) throws -> [Float] {
             var out = [Float](repeating: 0, count: width * height * 4)
             try developer.printScan(
-                width: width, height: height, stock: stock, options: film.options,
-                calibration: film.calibration, shouldContinue: { true },
+                width: width, height: height, stock: stock, options: options,
+                calibration: reading.calibration, shouldContinue: { true },
                 readScan: { rows, into in
                     for (local, y) in rows.enumerated() {
-                        for i in 0..<(width * 4) { into[local * width * 4 + i] = framed.rgba[y * width * 4 + i] }
+                        for i in 0..<(width * 4) { into[local * width * 4 + i] = scan[y * width * 4 + i] }
                     }
                 },
                 writeRows: { rows, from in
@@ -356,7 +247,92 @@ final class HostNegativeScanTests: XCTestCase {
         XCTAssertLessThan(worst, 0.01)
     }
 
-    /// Light frames are kept, listed and forgotten; a recipe that names one evens out the scan.
+    /// Prints the strip through `developer` with `edit`'s light controls on the print.
+    private func printStrip(_ developer: HostDeveloper, width: Int = 120, height: Int = 80,
+                            edit: FotufilmEngine.Options,
+                            finish: PrintFinish? = nil) throws -> [Float] {
+        let scan = strip(width: width, height: height)
+        let stock = try NegativeScanPrint.film("gold200")
+        let reading = try NegativeScanPrint.Reading(
+            stock: stock, border: border,
+            balance: ApproximateNegativeScan.balance(
+                stock: stock, border: border,
+                preview: HostNegativeScan.planes(scan, width: width, height: height)))
+        var options = reading.printing(edit, stock: stock)
+        if let finish { options.printFinish = finish }
+        var out = [Float](repeating: 0, count: width * height * 4)
+        try developer.printScan(
+            width: width, height: height, stock: stock, options: options,
+            calibration: reading.calibration, shouldContinue: { true },
+            readScan: { rows, into in
+                for (local, y) in rows.enumerated() {
+                    for i in 0..<(width * 4) { into[local * width * 4 + i] = scan[y * width * 4 + i] }
+                }
+            },
+            writeRows: { rows, from in
+                for (local, y) in rows.enumerated() {
+                    for i in 0..<(width * 4) { out[y * width * 4 + i] = from[local * width * 4 + i] }
+                }
+            })
+        return out
+    }
+
+    /// The print's finish is `PrintFinish.apply` on the print it finishes, on every developer.
+    func testLightControlsFinishThePrintAsPrintFinishDoes() throws {
+        let (service, engine) = try service()
+        defer { fotufilm_engine_destroy(engine) }
+        var developers: [HostDeveloper] = [HalideCPUDeveloper()]
+        if service.engine.developer.kind != "cpu" { developers.append(service.engine.developer) }
+        var edit = FotufilmEngine.Options()
+        edit.paper = .crystalArchive
+        let finish = PrintFinish(gains: SIMD3(1.2, 1, 0.8), highlights: -0.7, shadows: 0.6,
+                                 saturation: 1.3, vibrance: 0.4)
+        for developer in developers {
+            let plain = try printStrip(developer, edit: edit)
+            let finished = try printStrip(developer, edit: edit, finish: finish)
+            var worst: Float = 0
+            // Where a GPU's delivery clipped the print out of gamut, it finished the unclipped value.
+            for i in stride(from: 0, to: plain.count, by: 4)
+            where (0..<3).allSatisfy({ plain[i + $0] > 0 }) {
+                let expected = finish.apply(SIMD3(plain[i], plain[i + 1], plain[i + 2]))
+                for c in 0..<3 {
+                    worst = max(worst, abs(finished[i + c] - expected[c]) / max(expected[c], 0.01))
+                }
+            }
+            XCTAssertLessThan(worst, 0.01, developer.name)
+        }
+    }
+
+    /// Exposure moves an enlarged print about a stop at mid-grey, through the enlarger; warmth
+    /// warms it, on paper through filtration and on a screen after the print alike.
+    func testExposureAndWarmthReachThePrint() throws {
+        let developer = HalideCPUDeveloper()
+        func luminance(_ rgba: [Float], _ i: Int) -> Float {
+            (SIMD3(rgba[i], rgba[i + 1], rgba[i + 2]) * PrintFinish.luminance).sum()
+        }
+        var paper = FotufilmEngine.Options()
+        paper.paper = .crystalArchive
+        let plain = try printStrip(developer, edit: paper)
+        // The strip's picture row at mid-grey.
+        let width = 120, row = 40
+        let pixels = (12..<108).map { (row * width + $0) * 4 }
+        let mid = try XCTUnwrap(pixels.min { abs(luminance(plain, $0) - 0.18) < abs(luminance(plain, $1) - 0.18) })
+        var brighter = paper
+        brighter.exposureEV = 1
+        let stops = log2(luminance(try printStrip(developer, edit: brighter), mid) / luminance(plain, mid))
+        XCTAssertEqual(stops, 1, accuracy: 0.35)
+        for medium in [PrintPaper.crystalArchive, .screen] {
+            var edit = FotufilmEngine.Options()
+            edit.paper = medium
+            let neutral = try printStrip(developer, edit: edit)
+            edit.whiteBalance.kelvin = 4500
+            let warm = try printStrip(developer, edit: edit)
+            XCTAssertGreaterThan(warm[mid] / warm[mid + 2], neutral[mid] / neutral[mid + 2] * 1.1,
+                                 medium.rawValue)
+        }
+    }
+
+    /// Light frames are kept, listed and forgotten; an edit that names one evens out the scan.
     func testLightFramesAreKeptAndEvenTheScan() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("fotufilm-lights-\(UUID().uuidString)")
@@ -381,13 +357,15 @@ final class HostNegativeScanTests: XCTestCase {
         for y in 0..<height { for x in 0..<width { for c in 0..<3 {
             rgba[(y * width + x) * 4 + c] = 0.3 * lamp(x, y)
         } } }
-        let image = HostImage(rgba: rgba, width: width, height: height, contentHeadroom: 1)
-        var recipe = NegativeScanRecipe()
-        recipe.lightFrameID = kept.id
-        let even = HostNegativeScan.frame(image, recipe: recipe, longEdge: nil, cropped: true,
-                                          wide: true, light: service.negativeScans.lights
-                                            .frame(kept.id)?.measured)
-        let centre = even.rgba[(32 * width + 48) * 4], corner = even.rgba[(4 * width + 4) * 4]
+        let lights = service.negativeScans.lights
+        let scan = HostNegativeScan(scan: HostImage(rgba: rgba, width: width, height: height,
+                                                    contentHeadroom: 1)) {
+            lights.frame($0)?.measured
+        }
+        XCTAssertTrue(try scan.image(light: nil) === scan.scan)
+        let even = try scan.image(light: kept.id).scene(width: width, height: height)
+        XCTAssertTrue(try scan.image(light: kept.id) === scan.image(light: kept.id))
+        let centre = even[(32 * width + 48) * 4], corner = even[(4 * width + 4) * 4]
         XCTAssertEqual(corner / centre, 1, accuracy: 0.05)
         XCTAssertLessThan(rgba[(4 * width + 4) * 4] / rgba[(32 * width + 48) * 4], 0.8)
 
@@ -395,12 +373,13 @@ final class HostNegativeScanTests: XCTestCase {
                              params: JSONSerialization.data(withJSONObject: ["id": kept.id]),
                              payload: nil)
         XCTAssertTrue(service.negativeScans.lights.all().isEmpty)
+        XCTAssertTrue(try scan.image(light: kept.id) === scan.scan)
     }
 
     #if canImport(ImageIO)
-    /// A scan opened from a file: the answer lists the negative films with their receivers,
-    /// starts on an installed film, and offers the scan encoding for a non-RAW file.
-    func testOpeningAScanFileDescribesTheSession() throws {
+    /// A scan opened from a file as a negative: a document like any photograph's, described with
+    /// the films its base looks like and the kept light frames, its linear profile honoured.
+    func testOpeningANegativeFileOpensADocument() throws {
         let (service, engine) = try service()
         defer { fotufilm_engine_destroy(engine) }
         let width = 120, height = 80
@@ -427,30 +406,63 @@ final class HostNegativeScanTests: XCTestCase {
         CGImageDestinationAddImage(destination, image, nil)
         XCTAssertTrue(CGImageDestinationFinalize(destination))
 
-        let opened = try call(service, "negativeScanOpen", ["path": url.path]).json
-        let handle = try XCTUnwrap(opened["handle"] as? Int)
-        XCTAssertEqual(opened["naturalWidth"] as? Int, width)
-        XCTAssertEqual(opened["raw"] as? Bool, false)
-        let films = try XCTUnwrap(opened["films"] as? [[String: Any]])
-        XCTAssertTrue(films.contains { $0["id"] as? String == "gold200" })
-        XCTAssertFalse(films.contains {
-            FilmStock.presets[$0["id"] as! String]!.isReversal
-        })
-        let gold = try XCTUnwrap(films.first { $0["id"] as? String == "gold200" })
-        XCTAssertEqual((gold["papers"] as? [[String: String]])?.first?["id"], PrintPaper.screen.rawValue)
-        XCTAssertEqual((opened["recipe"] as? [String: Any])?["stockID"] as? String, "gold200")
+        let opened = try call(service, "importPath", ["path": url.path, "negative": true])
+        let handle = try XCTUnwrap(opened.json["handle"] as? Int)
+        XCTAssertEqual(opened.json["naturalWidth"] as? Int, width)
+        XCTAssertFalse(opened.payload.isEmpty)
+        let negative = try XCTUnwrap(opened.json["negative"] as? [String: Any])
+        XCTAssertNotNil(negative["suggestions"] as? [Any])
+        XCTAssertNotNil(negative["lightFrames"] as? [Any])
+        XCTAssertNotNil(service.negativeScans.scan(handle))
 
         // The clear film reads back as it was written, through the file's linear profile.
-        let scan = try service.negativeScans.scan(handle)
-        let sampled = try scan.border(in: .init(x: 0.4, y: 0.02, width: 0.2, height: 0.08),
-                                      light: nil)
+        let sampled = try JSONSerialization.jsonObject(with: service.call(
+            "negativeSampleFilmBase",
+            params: JSONSerialization.data(withJSONObject: [
+                "render": request(handle), "point": [0.5, 0.05]]),
+            payload: nil).json) as? [Double]
         for c in 0..<3 {
-            XCTAssertEqual(sampled[c], border[c] * pow(10, -0.02), accuracy: 0.01)
+            XCTAssertEqual(Float(try XCTUnwrap(sampled)[c]), border[c] * pow(10, -0.02),
+                           accuracy: 0.01)
         }
-        let negative = try call(service, "negativeScanRender", [
-            "handle": handle, "recipe": opened["recipe"]!, "negative": true, "cropped": false,
-        ])
-        XCTAssertEqual(negative.json["width"] as? Int, width)
+        // The same file opened as a photograph is no negative.
+        let photo = try call(service, "importPath", ["path": url.path])
+        XCTAssertNil(photo.json["negative"])
+        XCTAssertNil(service.negativeScans.scan(photo.json["handle"]))
+    }
+
+    /// A scan with no colour profile is the scanner's raw output: its samples are linear light,
+    /// though ImageIO would read them as sRGB.
+    func testAnUntaggedScanIsReadAsLinearSamples() throws {
+        let width = 4, height = 2, sample: [Float] = [0.16, 0.2, 0.08]
+        // A minimal uncompressed 16-bit RGB TIFF, with no profile.
+        var bytes: [UInt8] = Array("II".utf8) + [42, 0, 8, 0, 0, 0]
+        func short(_ v: Int) -> [UInt8] { [UInt8(v & 255), UInt8(v >> 8)] }
+        func long(_ v: Int) -> [UInt8] { short(v & 0xffff) + short(v >> 16) }
+        let entries: [(tag: Int, type: Int, count: Int, value: Int)] = [
+            (256, 3, 1, width), (257, 3, 1, height), (258, 3, 3, 0), (259, 3, 1, 1), (262, 3, 1, 2),
+            (273, 4, 1, 0), (277, 3, 1, 3), (278, 3, 1, height), (279, 4, 1, width * height * 6),
+            (284, 3, 1, 1),
+        ]
+        let ifdEnd = 8 + 2 + entries.count * 12 + 4, depths = ifdEnd, pixels = depths + 6
+        bytes += short(entries.count)
+        for entry in entries {
+            let value = entry.tag == 258 ? depths : entry.tag == 273 ? pixels : entry.value
+            bytes += short(entry.tag) + short(entry.type) + long(entry.count)
+                + (entry.type == 3 && entry.count == 1 ? short(value) + [0, 0] : long(value))
+        }
+        bytes += long(0) + short(16) + short(16) + short(16)
+        for _ in 0..<(width * height) { for v in sample { bytes += short(Int(v * 65535)) } }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("untagged-\(UUID().uuidString).tiff")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try Data(bytes).write(to: url)
+        XCTAssertFalse(CoreImageScanDecoder.statesEncoding(Data(bytes)))
+
+        let scan = try CoreImageScanDecoder().decodeScan(url)
+        let rgba = scan.scene(width: width, height: height)
+        let expected = ColorScience.linearSRGBToRec2020(SIMD3(sample[0], sample[1], sample[2]))
+        for c in 0..<3 { XCTAssertEqual(rgba[c], expected[c], accuracy: 0.002) }
     }
     #endif
 }

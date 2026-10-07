@@ -4,6 +4,7 @@ import {
   ALL_FOLDERS,
   folderTree,
   nextSelection,
+  rollEdit,
   steppedKey,
   visiblePhotos,
 } from "../../src/photo-library/library-model.js";
@@ -442,3 +443,29 @@ test("a desktop host picks, lists and serves library folders itself", async () =
   }
   assert.equal(folderAccess().persistent(), false);
 });
+
+test("a folder of negatives opens its photos as negatives, a roll from its newest frame", () => {
+  assert.equal(photoEntry({ id: "n", negative: true }, "roll/01.tif", 1, 0).negative, true);
+  assert.equal(photoEntry({ id: "p" }, "01.jpg", 1, 0).negative, false);
+  const [uploaded] = uploadedFolders(
+    [Object.assign(new File(["x"], "01.tif"), { webkitRelativePath: "Roll/01.tif" })],
+    true,
+  );
+  assert.equal(uploaded.negative, true);
+  assert.equal(uploaded.photos[0].negative, true);
+
+  const kept = (stock, negative) => JSON.stringify({ version: 1, edit: { stock, negative } });
+  const reading = { border: [0.5, 0.4, 0.2], lightFrame: null };
+  const roll = new Map([
+    ["n/01.tif", { edit: kept("gold200", reading), edited: 5 }],
+    ["n/02.tif", { edit: kept("portra400", reading), edited: 9 }],
+    // A frame kept as a photograph, a newer one in another folder and an unreadable one start no roll.
+    ["n/03.tif", { edit: kept("ektar100", null), edited: 12 }],
+    ["m/01.tif", { edit: kept("hp5plus400", reading), edited: 20 }],
+    ["n/04.tif", { edit: "{", edited: 30 }],
+    ["n/05.tif", { rating: 3 }],
+  ]);
+  assert.equal(JSON.parse(rollEdit(roll, "n")).edit.stock, "portra400");
+  assert.equal(rollEdit(roll, "x"), null);
+});
+

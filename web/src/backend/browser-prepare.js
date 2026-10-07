@@ -1,13 +1,8 @@
 import { prepareVideoColor } from "../video-color-client.js";
 import { GPU_WARMUP_GROUPS } from "../gpu-warmup.js";
-import { assetUrl } from "../engine.js";
-import { prepareNegativeWorker } from "../negative-worker-pool.js";
 
 // Progress counts finished compilation groups, never elapsed time.
-// The negative converter warms in the background: it is optional, and a
-// conversion started before it finishes waits for the same worker.
 export async function prepareEditor(renderer, report) {
-  void prepareNegativeWorker(assetUrl("negative/"));
   let film = {
     completed: 0,
     total: GPU_WARMUP_GROUPS,

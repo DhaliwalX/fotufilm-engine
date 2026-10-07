@@ -108,14 +108,13 @@ test("film development, crop and 16-bit export remain available", async ({
   ).toContainText("16-bit");
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
+  // A scanned negative is chosen as a file and opens as a document, with no dialog.
+  const chooser = page.waitForEvent("filechooser");
   await page.getByRole("button", { name: "More options", exact: true }).click();
   await page
     .getByRole("menuitem", { name: "Import Scanned Negative…", exact: true })
     .click();
-  await expect(
-    page.getByRole("dialog", { name: "Import Scanned Negative", exact: true }),
-  ).toContainText("Choose Negative");
-  await page.keyboard.press("Escape");
+  await chooser;
   await expect(page.getByRole("dialog")).toHaveCount(0);
   expect(errors).toEqual([]);
 });

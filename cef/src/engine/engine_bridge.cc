@@ -7,10 +7,9 @@ namespace {
 
 // web/src/backend/desktop/host.js and lenses.js; the engine answers the ones it implements.
 constexpr const char* kMethods[] = {
-    "prepare",          "import",         "preview",          "release",
-    "render",           "stages",         "analyseNegative",  "convertNegative",
-    "suggestNegativeFilms", "autoAdjust", "printFrame",       "lensPlan",
-    "sampleScene",      "beginVideo",
+    "prepare",          "import",         "release",
+    "render",           "stages",         "autoAdjust",       "printFrame",
+    "lensPlan",         "sampleScene",    "beginVideo",
     "appendVideo",      "importVideo",    "lensCatalogue",    "importLensCatalogue",
     "removeLensCatalogue", "importPath",   "copyImage",        "exportOptions",
     // The strip's pictures of photographs opened together, decoded only when chosen, and the
@@ -27,11 +26,10 @@ constexpr const char* kMethods[] = {
     // Check for Updates: each answers at once with where the check or download stands.
     "updateCheck",      "updateStatus",   "updateInstall",    "updateCancel",
     "updateNotes",
-    // The negative-scan session (web/src/negative-scan/): a scan opens once and every preview,
-    // border sample and the imported positive is a print of it to the page's recipe.
-    "negativeScanOpen", "negativeScanRender", "negativeScanSampleBorder",
-    "negativeScanDetectFrame", "negativeScanCommit", "negativeLightFrames",
-    "negativeAddLightFrame", "negativeRemoveLightFrame",
+    // Scanned negatives open through `import`/`importPath`; their Film panel picks the clear
+    // film base and keeps the light frames (web/src/negative-document.js).
+    "negativeSampleFilmBase", "negativeLightFrames", "negativeAddLightFrame",
+    "negativeRemoveLightFrame",
     // The picture the compositor shows, for the histogram (presentation/presentation.h).
     "presentedImage",
 };

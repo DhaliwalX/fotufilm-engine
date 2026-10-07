@@ -122,50 +122,15 @@ export function createDesktopBackend(channel) {
           return URL.createObjectURL(imageBlob(result.thumbnail));
         }
       : undefined,
-    analyseNegative: (image, monochrome) =>
-      call("analyseNegative", { handle: image.handle, monochrome }),
-    negativeContrast: can.negativeContrast === true,
     // Every `maxEdge` is the long edge of the cropped picture, as the Mac app sizes previews and
     // exports.
     longEdgeOfCrop: true,
-    // The negative-scan session: film and automatic readings printed by the engine.
+    // Scanned negatives: `importMedia`/`importPath` with `negative` open one as a document.
     negativeScans: can.negativeScans
-      ? createNegativeScans(call, {
-          binary: channel.binary === true,
-          encoding: can.negativeScanEncoding,
-        })
+      ? createNegativeScans(call, { binary: channel.binary === true })
       : undefined,
     subjectSelection: can.subjectSelection === true,
     previewBudget: can.previewBudget,
-    suggestNegativeFilms: (image) =>
-      call("suggestNegativeFilms", { handle: image.handle }),
-    async convertNegative(image, plan, { signal, maxEdge, contrast = 0, onProgress } = {}) {
-      onProgress?.({ progress: 0 });
-      const result = await call(
-        "convertNegative",
-        {
-          handle: image.handle,
-          nativePlan: plan.nativePlan,
-          maxEdge: Number.isFinite(maxEdge) ? maxEdge : null,
-          contrast,
-        },
-        { signal },
-      );
-      // Preview URL ownership begins only in makePreview, after the scope owns this lease.
-      const { preview, ...descriptor } = result;
-      onProgress?.({ progress: 1 });
-      return { image: { ...descriptor, linear: true }, backend: "Halide" };
-    },
-    async makePreview(image, { signal } = {}) {
-      const result = await call(
-        "preview",
-        { handle: image.handle },
-        { signal },
-      );
-      const preview = importedImage({ ...image, ...result });
-      Object.assign(image, preview.image);
-      return { image, url: preview.url };
-    },
     // A picture the host presented never reached the page; the histogram asks for it.
     createHistogram: () => {
       const histogram = createHistogram();

@@ -48,8 +48,9 @@ protocol HostDeveloper {
                     exactMath: Bool) -> Bool
 
     /// Prints a scanned negative through the print stage: `readScan` fills rows of linear scan
-    /// RGBA, the border calibration reads them as the film's record densities, and `writeRows`
-    /// receives display-linear Display P3. Samples outside the film's densities print black.
+    /// RGBA, which the kernels read as the film's record densities by the border calibration
+    /// (`FotufilmEngine.Options.scanReading`), and `writeRows` receives display-linear Display P3.
+    /// Samples outside the film's densities print black.
     func printScan(width: Int, height: Int, stock: FilmStock, options: FotufilmEngine.Options,
                    calibration: ApproximateNegativeScan, shouldContinue: @escaping () -> Bool,
                    readScan: (Range<Int>, UnsafeMutableBufferPointer<Float>) -> Void,
@@ -113,26 +114,22 @@ struct HalideCPUDeveloper: HostDeveloper {
         film.layeredTransport = nil
         var options = options
         options.stage = .print
+        options.scanReading = calibration
         let count = width * height
         var rgba = [Float](repeating: 0, count: count * 4)
         rgba.withUnsafeMutableBufferPointer { readScan(0..<height, $0) }
-        let base = SIMD3(calibration.baseDensity[0], calibration.baseDensity[1],
-                         calibration.baseDensity[2])
-        var density = ImageBuffer(width: width, height: height)
-        var invalid = [Bool](repeating: false, count: count)
+        // A sample that is not a number reads as one the film cannot place, and prints black.
+        var scan = ImageBuffer(width: width, height: height)
         for i in 0..<count {
-            let sample = SIMD3(rgba[i * 4], rgba[i * 4 + 1], rgba[i * 4 + 2])
-            let d = calibration.density(of: sample)
-            invalid[i] = d == nil
-            for c in 0..<3 { density.planes[c][i] = (d ?? base)[c] }
+            for c in 0..<3 { scan.planes[c][i] = rgba[i * 4 + c].isFinite ? rgba[i * 4 + c] : 0 }
         }
         let positive = try FotufilmEngine(stock: film, options: options)
-            .printPositiveChecked(negativeDensity: density)
+            .printPositiveChecked(negativeDensity: scan)
         guard shouldContinue() else {
             throw HostEngine.Failure(description: "Cancelled.", cancelled: true)
         }
         for i in 0..<count {
-            for c in 0..<3 { rgba[i * 4 + c] = invalid[i] ? 0 : positive.planes[c][i] }
+            for c in 0..<3 { rgba[i * 4 + c] = positive.planes[c][i] }
             rgba[i * 4 + 3] = 1
         }
         rgba.withUnsafeBufferPointer { writeRows(0..<height, $0) }

@@ -135,24 +135,19 @@ final class PortableCodecsTests: XCTestCase {
         XCTAssertGreaterThan(rgba[bottomRight + 1], 0.9)
     }
 
-    /// Scans read as linear samples take their codes as linear sRGB light.
-    func testScansReadLinearSamples() throws {
+    /// A scan with a colour profile is read through it; only an untagged one reads as linear
+    /// samples.
+    func testScansReadThroughTheirProfile() throws {
         let url = temporary("tif")
         defer { try? FileManager.default.removeItem(at: url) }
         _ = try PortableStillEncoder().write(still(deep: true), type: "image/tiff", quality: 1, to: url)
-        let scan = try PortableScanDecoder().decodeScan(url, linearSamples: true)
-        XCTAssertFalse(scan.isRAW)
-        let rgba = scan.image.scene(width: width, height: height)
-        let x = width / 2, y = 0
-        let srgb = SIMD3<Float>(repeating: Float((code(x, y, 0) * 65535).rounded() / 65535))
-        let want = ColorScience.linearSRGBToRec2020(srgb)
-        for c in 0..<3 { XCTAssertEqual(rgba[(y * width + x) * 4 + c], want[c], accuracy: 1e-4) }
+        XCTAssertLessThan(worst(try PortableScanDecoder().decodeScan(url), deep: true), 2e-4)
     }
 
     func testCapabilitiesOfferImportAndExport() {
         let capabilities = HostPlatform.current.capabilities
         XCTAssertEqual(capabilities["importPath"] as? Bool, true)
-        XCTAssertEqual(capabilities["negativeScanEncoding"] as? Bool, true)
+        XCTAssertEqual(capabilities["negativeScans"] as? Bool, true)
         XCTAssertTrue((capabilities["imageExportTypes"] as? [String] ?? []).contains("image/tiff"))
         XCTAssertEqual(capabilities["hdrExport"] as? Bool, false)
     }

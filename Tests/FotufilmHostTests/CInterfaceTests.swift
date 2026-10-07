@@ -554,7 +554,10 @@ extension CInterfaceTests {
         XCTAssertEqual(written.bitsPerComponent, 16)
 
         _ = try call("release", #"{"handle": \#(handle)}"#)
-        XCTAssertThrowsError(try call("preview", #"{"handle": \#(handle)}"#))
+        XCTAssertThrowsError(try call("export", """
+        {"handle": \(handle), "maxEdge": null, "type": "image/tiff", "path": "\(target.path)",
+         "edit": {"stock": "gold200", "params": {}}, "profileRequest": {"controls": {}}}
+        """))
 
         // A file the host chose opens in place, without its bytes.
         let opened = try call("importPath", #"{"path": "\#(url.path)"}"#)
@@ -585,38 +588,3 @@ extension CInterfaceTests {
     }
 }
 #endif
-
-extension CInterfaceTests {
-    /// A synthetic colour negative: an orange base, denser where the scene was brighter.
-    func testNegativeAnalysisConvertsAndSuggests() throws {
-        let engine = try makeEngine()
-        defer { fotufilm_engine_destroy(engine) }
-        let service = Unmanaged<HostEngine>.fromOpaque(UnsafeRawPointer(engine))
-            .takeUnretainedValue().service
-        var rgba = [Float](repeating: 1, count: 96 * 64 * 4)
-        for y in 0..<64 {
-            for x in 0..<96 {
-                let scene = Float(x) / 95, i = (y * 96 + x) * 4
-                let base = SIMD3<Float>(0.75, 0.45, 0.25)
-                for c in 0..<3 { rgba[i + c] = base[c] * pow(0.35, scene * Float(c + 1) / 2) }
-            }
-        }
-        let handle = try service.register(HostImage(rgba: rgba, width: 96, height: 64,
-                                                    contentHeadroom: 1))
-        func call(_ method: String, _ params: [String: Any]) throws -> [String: Any] {
-            let answer = try service.call(method, params: JSONSerialization.data(withJSONObject: params),
-                                          payload: nil)
-            return try JSONSerialization.jsonObject(with: answer.json) as? [String: Any] ?? [:]
-        }
-        let plan = try call("analyseNegative", ["handle": handle, "monochrome": false])
-        XCTAssertEqual((plan["parameters"] as? [Double])?.count, 8)
-        let converted = try call("convertNegative", ["handle": handle, "nativePlan": plan["nativePlan"]!,
-                                                     "maxEdge": NSNull(), "contrast": 0.5])
-        XCTAssertNotEqual(converted["handle"] as? Int, handle)
-        XCTAssertEqual(converted["naturalWidth"] as? Int, 96)
-        let answer = try service.call("suggestNegativeFilms",
-                                      params: JSONSerialization.data(withJSONObject: ["handle": handle]),
-                                      payload: nil)
-        XCTAssertNotNil(try JSONSerialization.jsonObject(with: answer.json) as? [Any])
-    }
-}

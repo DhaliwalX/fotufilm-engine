@@ -205,11 +205,13 @@ struct SceneConverter::Impl {
         : channels(raster.channels), colours(raster.cmyk ? 4 : raster.channels <= 2 ? 1 : 3),
           samples(raster.samples), alpha(channels == colours + 1), associated(raster.associated), cmyk(raster.cmyk) {
         if (channels != colours && channels != colours + 1) throw Failure("Invalid image channel layout.");
-        matrix = !cmyk && (linearSamples || raster.encoding.kind == Encoding::Linear
-            || (raster.encoding.kind == Encoding::Unstated && samples == Samples::F32));
-        if (linearSamples && cmyk) throw Failure("CMYK samples cannot be interpreted as linear RGB.");
+        // Samples with no stated encoding are linear light where asked (a scanner's raw output),
+        // and always when they are floating point.
+        const bool unstated = raster.encoding.kind == Encoding::Unstated;
+        matrix = !cmyk && (raster.encoding.kind == Encoding::Linear
+            || (unstated && (linearSamples || samples == Samples::F32)));
         if (matrix) {
-            coefficients = toRec2020(linearSamples ? rec709 : raster.encoding.kind == Encoding::Linear
+            coefficients = toRec2020(raster.encoding.kind == Encoding::Linear
                 ? raster.encoding.chromaticities : rec709);
             return;
         }

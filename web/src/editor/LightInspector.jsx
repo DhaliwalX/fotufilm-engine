@@ -10,8 +10,11 @@ import { Switch } from "@react-spectrum/s2/Switch";
 import { Picker, PickerItem } from "@react-spectrum/s2/Picker";
 import { editorControl } from "../editor-catalogue.js";
 import { useEditor } from "./EditorContext.jsx";
+import { printsNegative } from "../negative-document.js";
 export default function LightInspector() {
   const { edit, patch, exporting, active, endEdit } = useEditor();
+  // A scanned negative's light acts on its print: nothing here reaches a scene it never had.
+  const negative = printsNegative(edit);
   return (
     <>
       <Disclosure
@@ -23,7 +26,8 @@ export default function LightInspector() {
         <DisclosureTitle>{"Light"}</DisclosureTitle>
         <DisclosurePanel>
           <div className="control-stack">
-            {<AdjustmentGroup group={"Light"} />}
+            {<AdjustmentGroup group={"Light"} hasFilm={!negative} />}
+            {!negative && (
             <WithHelp label="Regional" detail={controlDetail("localTone")}>
               <Switch
                 isSelected={edit.localTone}
@@ -38,9 +42,11 @@ export default function LightInspector() {
                 {"Regional"}
               </Switch>
             </WithHelp>
+            )}
           </div>
         </DisclosurePanel>
       </Disclosure>
+      {!negative && (
       <Disclosure
         defaultExpanded={true}
         size={"S"}
@@ -87,6 +93,7 @@ export default function LightInspector() {
           </div>
         </DisclosurePanel>
       </Disclosure>
+      )}
       <Disclosure
         defaultExpanded={true}
         size={"S"}

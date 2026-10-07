@@ -18,7 +18,7 @@ enum {
     FFC_DECODE_SCENE = 0,
     /* A scanned negative: RAW with no exposure of its own. */
     FFC_DECODE_SCAN = 1 << 0,
-    /* Read samples as linear sRGB light instead of through the file's colour profile (not RAW). */
+    /* Read samples with no stated colour encoding as linear sRGB light (not RAW). */
     FFC_DECODE_LINEAR_SAMPLES = 1 << 1,
 };
 
