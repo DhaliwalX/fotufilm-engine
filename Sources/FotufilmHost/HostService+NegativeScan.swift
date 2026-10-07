@@ -9,7 +9,7 @@ import FotufilmEditModel
 import FotufilmImaging
 #endif
 
-/// The scans open in a negative-scan session, and the light frames kept for them.
+/// The scanned negatives open in the editor, and the light frames kept for them.
 final class HostNegativeScans {
     private let lock = NSLock()
     private var open: [Int: HostNegativeScan] = [:]
@@ -24,11 +24,10 @@ final class HostNegativeScans {
         lock.withLock { open[handle] = scan }
     }
 
-    func scan(_ handle: Any?) throws -> HostNegativeScan {
-        guard let handle = handle as? Int, let scan = lock.withLock({ open[handle] }) else {
-            throw HostEngine.Failure(description: "That negative is no longer open.")
-        }
-        return scan
+    /// The scan a document's handle names, nil for a photograph.
+    func scan(_ handle: Any?) -> HostNegativeScan? {
+        guard let handle = handle as? Int else { return nil }
+        return lock.withLock { open[handle] }
     }
 
     func release(_ handle: Any?) {
@@ -104,39 +103,21 @@ final class HostNegativeLightFrames {
     }
 }
 
-/// The negative-scan session's calls (`web/src/negative-scan/`): a scan opens once, and every
-/// preview, border sample and the imported positive is a print of it to the page's
-/// `NegativeScanRecipe`, as the apps' `NegativeScanSession` makes them.
+/// Scanned negatives in the editor (`web/src/backend/desktop/negative-scans.js`): a scan opens as
+/// a document, its film is the edit's, and every develop of it prints the framed scan through the
+/// edit's own print (`HostEngine.printNegative`).
 extension HostService {
     static let negativeScanMethods: Set<String> = [
-        "negativeScanOpen", "negativeScanRender", "negativeScanSampleBorder",
-        "negativeScanDetectFrame", "negativeScanCommit", "negativeLightFrames",
-        "negativeAddLightFrame", "negativeRemoveLightFrame",
+        "negativeSampleFilmBase", "negativeLightFrames", "negativeAddLightFrame",
+        "negativeRemoveLightFrame",
     ]
 
     func negativeScan(_ method: String, parameters: [String: Any],
                       payload: UnsafeRawBufferPointer?) throws -> Answer {
         do {
             switch method {
-            case "negativeScanOpen":
-                return try openNegativeScan(parameters, payload: payload)
-            case "negativeScanRender":
-                return try renderNegativeScan(parameters)
-            case "negativeScanSampleBorder":
-                let scan = try negativeScans.scan(parameters["handle"])
-                let area = try decode(NegativeScanRecipe.Area.self, parameters["area"])
-                let sampled = try scan.sampleBorder(area, recipe: recipe(parameters))
-                return try answer(["border": sampled.border.map(Double.init),
-                                   "borderArea": JSONSerialization.jsonObject(
-                                    with: JSONEncoder().encode(sampled.area))])
-            case "negativeScanDetectFrame":
-                let scan = try negativeScans.scan(parameters["handle"])
-                let found = try scan.detectedFrame(recipe(parameters))
-                return try answer(["crop": try found.map {
-                    try JSONSerialization.jsonObject(with: JSONEncoder().encode($0))
-                } ?? NSNull()])
-            case "negativeScanCommit":
-                return try commitNegativeScan(parameters)
+            case "negativeSampleFilmBase":
+                return try answer(value: sampleFilmBase(parameters))
             case "negativeLightFrames":
                 return try answer(value: negativeScans.lights.all().map { ["id": $0.id, "name": $0.name] })
             case "negativeAddLightFrame":
@@ -154,16 +135,6 @@ extension HostService {
             throw HostEngine.Failure(description: (error as? LocalizedError)?.errorDescription
                                      ?? String(describing: error))
         }
-    }
-
-    private func decode<T: Decodable>(_ type: T.Type, _ value: Any?) throws -> T {
-        try JSONDecoder().decode(T.self, from: JSONSerialization.data(
-            withJSONObject: value ?? [String: Any](), options: [.fragmentsAllowed]))
-    }
-
-    private func recipe(_ parameters: [String: Any]) throws -> NegativeScanRecipe {
-        do { return try decode(NegativeScanRecipe.self, parameters["recipe"]) }
-        catch { throw HostEngine.Failure(description: "Unreadable negative recipe: \(error)") }
     }
 
     /// Runs `body` on the file the call names: a path the host chose, read in place, or the bytes
@@ -184,7 +155,7 @@ extension HostService {
         } else if let text = parameters["data"] as? String, let data = Data(base64Encoded: text) {
             bytes = data
         } else {
-            throw HostEngine.Failure(description: "The scan's bytes did not arrive.")
+            throw HostEngine.Failure(description: "The file's bytes did not arrive.")
         }
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("fotufilm-import", isDirectory: true)
@@ -210,95 +181,85 @@ extension HostService {
         return try NegativeLightFrame(linearSRGB: srgb, width: photo.width, height: photo.height)
     }
 
-    /// Decodes the scan and describes what a session of it can offer: its size, whether it is
-    /// camera RAW, the films it can be read as with their receivers, a first guess at the film,
-    /// the kept light frames and a starting recipe.
-    private func openNegativeScan(_ parameters: [String: Any],
-                                  payload: UnsafeRawBufferPointer?) throws -> Answer {
-        let linear = parameters["linearSamples"] as? Bool ?? false
-        let file = try withFile(parameters, payload: payload) { url -> HostScanFile in
-            if let scans = HostPlatform.current.scans {
-                return try scans.decodeScan(url, linearSamples: linear)
-            }
-            let image = try HostImage.open(url)
-            return HostScanFile(image: image, isRAW: image.isRAW)
+    /// Opens a scanned negative as a document: decoded as a scan, kept under a handle like any
+    /// photograph, and described with the films its base looks like and the kept light frames.
+    func importNegative(_ url: URL) throws -> Answer {
+        let image: HostImage
+        if let scans = HostPlatform.current.scans {
+            image = try scans.decodeScan(url)
+        } else {
+            image = try HostImage.open(url)
         }
         let lights = negativeScans.lights
-        let scan = HostNegativeScan(scan: file.image, isRAW: file.isRAW) {
-            lights.frame($0)?.measured
-        }
-        // The scan is a photograph too, so the film suggestions read it by the same handle.
-        let handle = register(file.image)
-        negativeScans.add(scan, handle: handle)
-
-        let films = NegativeScanPrint.filmIDs.compactMap { id -> [String: Any]? in
-            guard let stock = engine.stock(id) else { return nil }
-            return ["id": id, "name": stock.name, "monochrome": stock.isMonochrome,
-                    "papers": NegativeScanRecipe.papers(for: stock).map {
-                        ["id": $0.rawValue, "name": $0.name]
-                    }]
-        }
-        var recipe = NegativeScanRecipe()
-        let ids = films.compactMap { $0["id"] as? String }
-        if !ids.contains(recipe.stockID), let first = ids.first { recipe.stockID = first }
-        return try answer([
-            "handle": handle, "naturalWidth": scan.width, "naturalHeight": scan.height,
-            "raw": scan.isRAW, "films": films,
-            "suggestions": negativeFilmSuggestions(file.image),
+        var descriptor = image.descriptor
+        let handle = register(image)
+        negativeScans.add(HostNegativeScan(scan: image) { lights.frame($0)?.measured },
+                          handle: handle)
+        descriptor["handle"] = handle
+        descriptor["negative"] = [
+            "suggestions": negativeFilmSuggestions(image),
             "lightFrames": lights.all().map { ["id": $0.id, "name": $0.name] },
-            "recipe": try JSONSerialization.jsonObject(with: JSONEncoder().encode(recipe)),
-        ])
+        ]
+        return try answer(descriptor, images: ["preview": previewPNG(image)])
     }
 
-    /// A preview of the session: the print of the recipe, or the negative itself as the recipe
-    /// frames it, cropped unless `cropped` is false, drawn down to `maxEdge`.
-    private func renderNegativeScan(_ parameters: [String: Any]) throws -> Answer {
-        let started = DispatchTime.now().uptimeNanoseconds
-        let scan = try negativeScans.scan(parameters["handle"])
-        let recipe = try recipe(parameters)
-        let maxEdge = (parameters["maxEdge"] as? Int).flatMap { $0 > 0 ? $0 : nil }
-        let cropped = parameters["cropped"] as? Bool ?? true
-        let pixels: [UInt8], width: Int, height: Int
-        if parameters["negative"] as? Bool == true {
-            let framed = scan.frame(recipe, longEdge: maxEdge, cropped: cropped, wide: true)
-            (width, height) = (framed.width, framed.height)
-            pixels = scan.scan.display(framed.rgba, width: width, height: height)
+    /// A negative document's develop: the scan evened under the edit's light frame, and its
+    /// framing read against the sampled or estimated film base: as the edit's film, or without one
+    /// (Normal) as a plain positive developed like any photograph.
+    func readNegative(_ prepared: inout Prepared, scan: HostNegativeScan) throws {
+        let negative = prepared.edit.edit.negative
+        let light = negative?.lightFrame
+        prepared.image = try scan.image(light: light)
+        let stock = try prepared.edit.edit.stock.map { id -> FilmStock in
+            guard let stock = engine.stock(id) else {
+                throw HostEngine.Failure(description: "This film is not installed.")
+            }
+            guard NegativeScanPrint.reads(stock) else { throw NegativeScanPrint.Failure.reversalFilm }
+            return stock
+        }
+        let border = try negative?.border ?? scan.estimatedBorder(light: light)
+        // The picture as framed, crop included even while the crop tool shows the whole frame:
+        // the reading follows what will print.
+        let image = prepared.image
+        let framing = prepared.request.edit.snapped(width: image.width, height: image.height)
+        let key = "\(framing)|\(border)|\(light ?? "")"
+        let preview = {
+            let sizes = framing.sizes(width: image.width, height: image.height, maxEdge: nil)
+            return HostNegativeScan.preview(try self.makeScene(image, geometry: framing, sizes: sizes),
+                                            width: sizes.output.0, height: sizes.output.1)
+        }
+        if let stock {
+            prepared.edit.negativeReading = try scan.reading(key, stock: stock, border: border,
+                                                             preview: preview)
         } else {
-            let print = try scan.print(recipe, longEdge: maxEdge, cropped: cropped, engine: engine)
-            (width, height) = (print.width, print.height)
-            pixels = HostNegativeScan.encode8(print)
+            prepared.image = try scan.positive(key, border: border, light: light, preview: preview)
         }
-        let rendered = Double(DispatchTime.now().uptimeNanoseconds - started) / 1e6
-        let png = pixels.withUnsafeBytes {
-            StoredPNG.encode($0.baseAddress!, width: width, height: height, rowBytes: width * 4)
-        }
-        return try answer([
-            "width": width, "height": height, "colorSpace": "display-p3",
-            "previewType": "image/png", "renderMilliseconds": rendered,
-            "elapsed": Double(DispatchTime.now().uptimeNanoseconds - started) / 1e6,
-        ], images: ["preview": png])
     }
 
-    /// The full-resolution print of the recipe as a new photograph the editor owns, with no film
-    /// of its own: the apps' delivered positive, opened.
-    private func commitNegativeScan(_ parameters: [String: Any]) throws -> Answer {
-        let scan = try negativeScans.scan(parameters["handle"])
-        let print = try scan.print(recipe(parameters), longEdge: nil, engine: engine)
-        let positive = HostImage(rgba: HostNegativeScan.positive(print), width: print.width,
-                                 height: print.height, contentHeadroom: 1)
-        var descriptor = positive.descriptor
-        descriptor["handle"] = register(positive)
-        return try answer(descriptor, images: ["preview": previewPNG(positive)])
+    /// Clear film sampled where the page points on the framed scan: the median over a patch a
+    /// fortieth of the picture's long edge across.
+    private func sampleFilmBase(_ parameters: [String: Any]) throws -> [Double] {
+        guard var render = parameters["render"] as? [String: Any],
+              let point = parameters["point"] as? [Double], point.count == 2,
+              (0...1).contains(point[0]), (0...1).contains(point[1]) else {
+            throw HostEngine.Failure(description: "Point at clear film on the negative.")
+        }
+        render["viewport"] = nil
+        let prepared = try prepare(JSONSerialization.data(withJSONObject: render), readsNegative: false)
+        let scene = try sceneFor(prepared.image, geometry: prepared.geometry, sizes: prepared.sizes)
+        let (width, height) = prepared.sizes.output
+        let radius = max(2, max(width, height) / 80)
+        let x = Int(point[0] * Double(width)), y = Int(point[1] * Double(height))
+        return try HostNegativeScan.border(scene, width: width, height: height,
+                                           x0: x - radius, y0: y - radius,
+                                           x1: x + radius + 1, y1: y + radius + 1)
+            .map(Double.init)
     }
 
     /// Up to three readings of the film base, each naming the films it could be.
     func negativeFilmSuggestions(_ image: HostImage) -> [[String: Any]] {
         let catalogue = NegativeFilmSuggestions(stocks: FilmStock.presets)
-        let (width, height) = image.renderSize(maxEdge: 512)
-        let scene = image.scene(width: width, height: height)
-        var preview = ImageBuffer(width: width, height: height)
-        for i in 0..<(width * height) { for c in 0..<3 { preview.planes[c][i] = scene[i * 4 + c] } }
-        let suggestions = NegativeFilmSuggestions.read(preview: preview)
+        let suggestions = NegativeFilmSuggestions.read(preview: HostNegativeScan.preview(image))
             .map { catalogue.suggest($0, limit: 3) } ?? []
         return suggestions.map { suggestion in
             ["films": suggestion.films.map { ["id": $0.id, "name": $0.name] },

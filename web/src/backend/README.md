@@ -38,19 +38,15 @@ events and cancellation messages, rather than attempting to serialize functions.
 | --- | --- |
 | `createSession()` | A session with `render(request)`, `stages(stock, medium, halationModel, digitalReference)`, synchronous `dispose()`, and assignable `onRendererReady` callback. |
 | `prepare(session, report)` | Initialize processing; report `{value: 0…100, label, done}`. Resolve after preparation and report `done: true`. |
-| `loadStocks()` | Film entries matching the existing catalogue: `id`, `name`, `media`, `defaultMedium`, `available`, `profile`, `nativeFormat`, and any fixed-profile restrictions. |
-| `importMedia(file, options)` | Browser `File`; options `{signal, onProgress(text), negative}`. Resolve `{image, url}`. `negative` requests an unadjusted scan suitable for inversion. |
+| `loadStocks()` | Film entries matching the existing catalogue: `id`, `name`, `media`, `defaultMedium`, `available`, `profile`, `nativeFormat`, `readsNegative`, and any fixed-profile restrictions. |
+| `importMedia(file, options)` | Browser `File`; options `{signal, onProgress(text), negative}`. Resolve `{image, url}`. `negative` opens an unadjusted scan as a negative document (below). |
 | `releaseImage(image)` | Release the caller's image lease, including video resources. Idempotent, non-throwing, safe while previously submitted work completes. |
-| `analyseNegative(image, monochrome, onProgress?)` | Return the negative-conversion plan, including `weak`. The plan is otherwise opaque to the UI. |
-| `convertNegative(image, plan, options)` | Options `{signal, maxEdge?, contrast?, onProgress({progress})}`. Return `{image, backend}` with a **new owned image**, preserving full source precision. `contrast` is stops of mid-grey slope from the plan's automatic contrast (0 keeps it); honour it only when the backend sets `negativeContrast: true`. |
-| `suggestNegativeFilms(image)` | Optional. Return up to three `{films: [{id, name}], likelihood}` for the installed films whose clear base the scan's looks like, most likely first; films a scan cannot tell apart share one entry. Suggestions, not an identification. |
-| `negativeScans` | Optional. The negative-scan session the apps have (below); without it the editor keeps the automatic import above. |
+| `negativeScans` | Optional. Scanned negatives read as a film and printed by the backend (below); without it the editor does not offer them. |
 | `longEdgeOfCrop` | Optional `true` when every `maxEdge` bounds the long edge of the cropped picture it delivers, as the Mac app sizes previews and exports, rather than of the whole upright picture; export sizes are then of the cropped picture. |
 | `subjectSelection` | Optional `true` when the backend detects subjects: an edit's `selective.kind` may then be `"subject"`, selecting the subject under `selective.point` (every subject when the point is on the background), feathered by `softness`. |
 | `previewBudget` | Optional `{settleMs?, initialInteractiveEdge?, minInteractiveEdge?, maxInteractiveEdge?, detailDelayMs?}`: how the editor paces previews while an edit moves (`web/src/preview-budget.js` holds the browser defaults). A backend that develops a full preview within a frame or two raises the edge and shortens the settle. |
 | `playbackQuality` | Optional boolean. The editor offers Playback Quality (Draft 640, Standard 1280, Fine 1920, Full · 4K 3840 px long edge) and asks for playing movie frames at that `maxEdge`; a paused frame develops at full detail. |
 | `updates` | Optional `{check, status, install, cancel, notes}`, each resolving at once to `{state, current, version?, release?, notes?, bytes?, total?, message?}`: Check for Updates on the host's own release feed. `state` is `idle`, `checking`, `current`, `available`, `failed`, `downloading`, `opened` or `downloadFailed`; the editor polls `status` while a check or download runs, and the host verifies the installer's SHA-256 before opening it. |
-| `makePreview(image, options)` | Decorate that same owned image with `src`; return `{image, url}`. Do not create a second image lease. |
 | `createHistogram()` | `{analyse(renderResult, {signal}), dispose()}`. Return the histogram schema below. |
 | `autoAdjust(request)` | `{image, edit, session, signal, onProgress(text)}` → `{ev, highlights, shadows}`. |
 | `planPrintFrame(edit, width, height, onProgress?)` | Existing print-frame plan, including `configuration` and `placement: {size, image}`. |
@@ -96,34 +92,44 @@ media element is only the clock and the sound: every frame shown is a render at
 Desktop's Chromium) answers `importVideo`/`importPath` with the sound as a WAV
 (`playback`, `playbackType`), silent when the movie is, and the page plays that.
 
-Each successful import/conversion grants one image lease. The library releases it
-on removal/unmount; a negative dialog releases cancelled, failed and superseded
-provisional images. `image-scope.js` handles results arriving after cancellation.
-A completed positive transfers its lease to the library. `url`/`src` are blob URLs
+Each successful import grants one image lease. The library releases it on
+removal/unmount. `url`/`src` are blob URLs
 created by the JavaScript facade and revoked by the UI. Sessions retain any native
 input references needed by in-flight work even after the caller releases its lease.
 The backend releases its own caches and GPU allocations when the session closes.
 
 ### Negative scans
 
-A backend with `negativeScans` prints scanned negatives itself, as the Mac and iPad apps'
-session does (`web/src/negative-scan/`). The scan opens once and stays unchanged; everything the
-person sets is a `NegativeScanRecipe` (`Sources/FotufilmEditModel/NegativeScanRecipe.swift`), sent
-whole with each call in the recipe's own JSON form: `conversion` (`automatic` or `film`),
-`monochrome`, `stockID`, `border` and `borderArea`, `paperID`, `exposure`, `warmth`, `tint`,
-`contrast`, `highlights`, `shadows`, `lightFrameID`, `quarterTurns`, `mirrored`, `straighten` and
-`crop` (`{x, y, width, height}`, unit, top left, in the oriented and straightened picture).
+A backend with `negativeScans` opens a scanned negative as a document: `importMedia` or
+`importPath` with `negative` decodes it as a scan (camera RAW with no rendering of its own, a file
+through its colour profile, an untagged one as linear samples) and its image carries
+`negative: {suggestions, lightFrames?}`: up to three `{films: [{id, name}], likelihood}`, the
+installed films its clear base looks like, most likely first (films a scan cannot tell apart share
+one entry), and the kept light frames where the backend keeps them.
+
+The scan is the film after development, so its edit is any photograph's with `negative` set to
+`{border, lightFrame}`: the film is `edit.stock`, chosen in the film library from the films whose
+catalogue entry has `readsNegative`; the print is the edit's own. Every render, export and
+thumbnail of the document frames the scan with the edit's geometry, reads it as the film's
+densities against `border` (clear film as linear Rec. 2020 scan RGB; `null` estimates it from the
+thinnest film), evened under the light frame `lightFrame` names where the backend keeps light
+frames, and prints it through the
+pipeline's print span alone (`PipelineStage.print`). An enlarged paper is timed to the negative's
+density. Development and grain do not apply; the light controls act on the print
+(`NegativeScanPrint.printing`): exposure and white balance through the enlarger or the scan where
+the receiver carries them, and as `PrintFinish` with highlights, shadows, saturation and vibrance
+otherwise. The browser's profile request carries `negative: {border, denseEnd, light}`, the clear
+film, the framing's densest end and the edit's `ev`, `temperature` and `tint`; the kernels read
+the framed scan, and the renderer writes the rest of the light controls into
+`FOTUFILM_CONFIG_PRINT_FINISH` per render. With `edit.stock`
+`null` the scan is read without a film (`PlainNegativeScan`): each channel's density above
+`border`, balanced on the frame's densest end, is taken back to scene light and developed as any
+photograph with no film is.
 
 | Member | Input and result |
 | --- | --- |
-| `encoding` | `true` when a scan's samples may be read as linear light instead of through its file's colour profile (never for camera RAW). |
-| `open(file, {linearSamples?, signal?})` | A `File` (or `{path}` the host chose). Resolves `{handle, naturalWidth, naturalHeight, raw, films: [{id, name, monochrome, papers: [{id, name}]}], suggestions, lightFrames: [{id, name}], recipe}`: the films a scan can be read as (no slides) with the receivers each prints on, `suggestNegativeFilms`' readings, and the starting recipe. |
-| `render(handle, recipe, {maxEdge, cropped?, negative?, signal?})` | The print, or with `negative` the scan as the recipe frames it; cropped unless `cropped` is false. Resolves `{blob, width, height, colorSpace, renderMilliseconds}`. |
-| `sampleBorder(handle, recipe, area)` | `area` a unit rectangle of the whole oriented negative (as `render` shows it uncropped). Resolves `{border, borderArea}` for the recipe, or rejects when the area is not clear film. |
-| `detectFrame(handle, recipe)` | The picture between rebate and holder as a crop, or `null`. |
-| `commit(handle, recipe, {signal?})` | The full-resolution print as a **new owned image** `{image, url}`, which the editor opens with no film. |
-| `lightFrames()` / `addLightFrame(file)` / `removeLightFrame(id)` | Photographs of the bare light source, kept on the device, that a recipe's `lightFrameID` divides out. |
-| `release(handle)` | Closes the scan. |
+| `sampleFilmBase(result, point)` | Clear film around a unit `point` of a shown render, for `edit.negative.border`, or rejects when the patch is not clear film. |
+| `lightFrames()` / `addLightFrame(file)` / `removeLightFrame(id)` | Optional (the desktop host): photographs of the bare light source, kept on the device, that `edit.negative.lightFrame` divides out. |
 
 ### Kept edits and the Edit History
 

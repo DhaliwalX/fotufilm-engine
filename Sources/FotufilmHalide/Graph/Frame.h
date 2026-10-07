@@ -694,6 +694,10 @@ struct PrintInputs {
     Halide::ImageParam &configuration;
     Expr reversal;
     bool monochrome;
+    /// Whether the print takes FOTUFILM_CONFIG_PRINT_FINISH before the grade: a scanned
+    /// negative's light controls. The fused pipeline compiles it into its density-in variants
+    /// alone; the standalone CPU print always does, and neutral slots leave its print untouched.
+    bool finish;
     std::string prefix;
     std::string suffix;
 };
@@ -721,7 +725,16 @@ inline Func build_print(Backend &b, const PrintInputs &in, Func developed, Var x
     Expr through_paper = b.paper_lut_sample(activated_view(x, y, 0), activated_view(x, y, 1),
                                             activated_view(x, y, 2), c);
     display(x, y, c) = Halide::select(in.reversal != 0, relative(c), through_paper);
-    Func display_view = in.monochrome ? b.store(display, Store::Display, 3) : display;
+    // Both read every channel of the display, so it is held once rather than recomputed per
+    // channel through the paper's cube.
+    Func display_view = in.monochrome || in.finish ? b.store(display, Store::Display, 3) : display;
+    if (in.finish) {
+        Func finished(name("print_finished"));
+        finished(x, y, c) = print_finish(configuration, c, display_view(x, y, 0),
+                                         display_view(x, y, 1), display_view(x, y, 2),
+                                         approximate);
+        display_view = finished;
+    }
 
     Func printed(name("print_graded"));
     Expr composed = in.monochrome

@@ -15,7 +15,7 @@ const channel = (capabilities) => ({
 test("a host without capabilities offers only the required methods", () => {
   const backend = createDesktopBackend(channel(undefined));
   assert.equal(backend.subjectSelection, false);
-  assert.equal(backend.negativeContrast, false);
+  assert.equal(backend.negativeScans, undefined);
   assert.equal(backend.importPath, undefined);
   assert.equal(backend.copyImage, undefined);
   assert.equal(backend.exportOptions, undefined);
@@ -29,14 +29,14 @@ test("the engine's platform services decide what the editor offers", () => {
   const backend = createDesktopBackend(
     channel({
       importPath: true,
-      negativeContrast: true,
+      negativeScans: true,
       subjectSelection: true,
       copyImage: false,
       imageExportTypes: ["image/tiff", "image/png"],
     }),
   );
   assert.equal(backend.subjectSelection, true);
-  assert.equal(backend.negativeContrast, true);
+  assert.equal(typeof backend.negativeScans.sampleFilmBase, "function");
   assert.equal(typeof backend.importPath, "function");
   assert.equal(backend.copyImage, undefined);
   assert.equal(typeof backend.exportOptions, "function");

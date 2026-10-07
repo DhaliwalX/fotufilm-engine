@@ -481,6 +481,16 @@
       "name": "CARRIER",
       "count": 8,
       "doc": "The enlarger's negative carrier, for a frame larger than the aperture (Emulsion Border): its opening's left, top, right and bottom edges in frame pixels, the radius its corners are rounded to, the radius of the disc whose shadow its edge casts, how far inside the opening a hand-filed edge wanders at most, and the cell of the noise lattice it wanders on, all in pixels. Beyond the opening it holds the printing light off, as density added to every record of the developed film before the enlarger's spread. A negative shadow radius is no carrier. Appended without renumbering earlier fields."
+    },
+    {
+      "name": "PRINT_FINISH",
+      "count": 7,
+      "doc": "A scanned negative's light controls, acting on the printed picture: red, green and blue gains less one, highlights and shadows (-1...1, moving the ends of the print's luminance in stops about mid-grey), saturation less one, and vibrance. Read only by a print span with density input (FOTUFILM_FRAME_DENSITY_IN), between the print and the grade; all zero is the print unchanged. Appended without renumbering earlier fields."
+    },
+    {
+      "name": "SCAN_READING",
+      "count": 19,
+      "doc": "How a print span with density input reads a scanned negative handed to it as linear scan RGB (ApproximateNegativeScan). Mode first: 0 the input is density; 1 it is a scan, each record's density its base less its gain times the log10 of its scan channel over the clear film, a sample outside the usable range reading as the base and printing black. Then the clear film (3), the record base densities (3), each record's scan channel (3), the record gains (3), and the usable range's lower and upper samples (3 each). Appended without renumbering earlier fields."
     }
   ]
 }

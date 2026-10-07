@@ -1478,6 +1478,10 @@ public struct FilmEngineInvocation {
                                                       range: options.hdrRange)]
         configuration.append(options.gateCornerConfiguration(width: width, height: height))
         configuration += options.carrierConfiguration(width: width, height: height)
+        configuration += options.stage == .print ? options.printFinish.packed
+            : PrintFinish.neutral.packed
+        configuration += ApproximateNegativeScan.packedReading(
+            options.stage == .print ? options.scanReading : nil)
         precondition(configuration.count == Self.configurationCount)
 
         var optical = 0

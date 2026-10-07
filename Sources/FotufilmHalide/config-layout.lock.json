@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "count": 18236,
+  "count": 18262,
   "fields": {
     "CURVES": {
       "offset": 0,
@@ -401,6 +401,14 @@
     "CARRIER": {
       "offset": 18228,
       "count": 8
+    },
+    "PRINT_FINISH": {
+      "offset": 18236,
+      "count": 7
+    },
+    "SCAN_READING": {
+      "offset": 18243,
+      "count": 19
     }
   }
 }

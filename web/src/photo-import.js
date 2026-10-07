@@ -7,12 +7,14 @@ import { LinearImage } from "./linear-image.js";
 
 export async function importPhoto(
   file,
-  { signal, onProgress = () => {} } = {},
+  { signal, onProgress = () => {}, negative = false } = {},
 ) {
   if (signal?.aborted)
     throw new DOMException("Import cancelled.", "AbortError");
   const header = new Uint8Array(await file.slice(0, 33).arrayBuffer());
-  if (isTIFF(header)) return importTIFF(file, { signal, onProgress });
+  // A scanner's TIFF with no colour profile holds linear light.
+  if (isTIFF(header))
+    return importTIFF(file, { signal, onProgress, linearSamples: negative });
   if (isDeepPNG(header)) return importDeepPNG(file, { signal, onProgress });
   const url = URL.createObjectURL(file);
   try {

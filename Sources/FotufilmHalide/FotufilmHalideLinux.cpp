@@ -8,6 +8,7 @@
 
 #include "FotufilmAotFrame.h"
 #include "fotufilm_aot_negative_cpu.h"
+#include "fotufilm_aot_scan_prepare_cpu.h"
 #include "fotufilm_aot_transport_cpu.h"
 #include "fotufilm_aot_transport_scene_cpu.h"
 #include "fotufilm_aot_transport_domain_cpu.h"
@@ -339,6 +340,24 @@ extern "C" int32_t fotufilm_negative_scan(const float *in, float *out, int32_t w
     Buffer<float> input(const_cast<float *>(in), w, h, 3), output(out, w, h, 3);
     Buffer<float> params(const_cast<float *>(p), 8);
     return fotufilm_aot_negative_cpu(input, params, output);
+}
+
+// A scanned negative's light-frame division and plain reading (ScanPreparePipeline), in place.
+extern "C" int32_t fotufilm_scan_prepare(const float *in, float *out, int32_t w, int32_t h,
+                                         const float *light, int32_t lw, int32_t lh,
+                                         const float *p) {
+    if (!in || !out || !p || w < 1 || h < 1 || w > 40000 || h > 40000
+        || int64_t(w) * h > 150000000) return -1;
+    for (int i = 0; i < 9; ++i) if (!std::isfinite(p[i])) return -1;
+    const bool lit = p[0] > 0.5f;
+    if (lit && (!light || lw < 1 || lh < 1 || lw > 4096 || lh > 4096)) return -1;
+    static const float none[3] = {1, 1, 1};
+    auto input = Buffer<float>::make_interleaved(const_cast<float *>(in), w, h, 4);
+    auto output = Buffer<float>::make_interleaved(out, w, h, 4);
+    auto cells = Buffer<float>::make_interleaved(const_cast<float *>(lit ? light : none),
+                                                 lit ? lw : 1, lit ? lh : 1, 3);
+    Buffer<float> params(const_cast<float *>(p), 9);
+    return fotufilm_aot_scan_prepare_cpu(input, cells, params, output);
 }
 
 // Layered Transport's spreading on the CPU; the desktop has no Metal (1).

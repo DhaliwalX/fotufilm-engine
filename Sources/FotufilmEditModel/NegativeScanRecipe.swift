@@ -168,7 +168,7 @@ public struct NegativeScanRecipe: Codable, Equatable, Sendable {
 
     /// Printer stops that print the frame's highlights where a diffuse white on a normally
     /// exposed negative would print. A thinner negative takes less light, a denser one more.
-    static func printerTiming(for stock: FilmStock, highlightStops: Float?) -> Float {
+    public static func printerTiming(for stock: FilmStock, highlightStops: Float?) -> Float {
         guard let highlightStops, highlightStops.isFinite else { return 0 }
         let green = stock.curves[1]
         let frame = green.density(logExposure: highlightStops * log10(2))

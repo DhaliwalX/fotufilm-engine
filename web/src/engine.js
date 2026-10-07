@@ -855,6 +855,14 @@ class Developer {
       this.configPtr / 4 + this.configuration.length,
     )
     applyColorControls(configuration, controls)
+    // A scanned negative prints from its densities, and its tone and colour controls finish the
+    // print (PrintFinish): its profile carries the gains, the rest is written here.
+    if (this.featureMask & (1 << 14)) {
+      configuration[CONFIG.PRINT_FINISH + 3] = controls.highlights ?? 0
+      configuration[CONFIG.PRINT_FINISH + 4] = controls.shadows ?? 0
+      configuration[CONFIG.PRINT_FINISH + 5] = (controls.saturation ?? 1) - 1
+      configuration[CONFIG.PRINT_FINISH + 6] = controls.vibrance ?? 0
+    }
     configuration[CONFIG.CAMERA_PREFLASH] =
       this.featureMask === 1 << 29 ? 0 : (controls.cameraPreflash ?? 0)
     // Keep coarse grain at the same strength as the clump field.

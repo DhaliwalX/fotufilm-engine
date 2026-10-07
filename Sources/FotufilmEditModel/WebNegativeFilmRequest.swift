@@ -4,7 +4,7 @@ import FotufilmCore
 #endif
 
 /// Suggests which films a scanned negative could be (`NegativeFilmSuggestions`), from the preview
-/// the automatic analysis reads and the film bases the browser catalogue carries.
+/// of the whole scan and the film bases the browser catalogue carries.
 public struct WebNegativeFilmRequest: Decodable {
     public struct Film: Codable {
         public let id: String
@@ -31,7 +31,7 @@ public struct WebNegativeFilmRequest: Decodable {
 
     public func prepare() throws -> Data {
         guard width >= 2, height >= 2, width <= 512, height <= 512,
-              let planes = WebAutomaticNegativeRequest.planes(samples, count: width * height),
+              let planes = Self.planes(samples, count: width * height),
               films.allSatisfy({ $0.base.count == 3 && $0.base.allSatisfy(\.isFinite) }) else {
             throw AutomaticNegativeScan.Failure.invalidImage
         }
@@ -44,5 +44,18 @@ public struct WebNegativeFilmRequest: Decodable {
         return try JSONEncoder().encode(Result(
             suggestions: suggestions.map { .init(films: $0.films.map(\.id), likelihood: $0.likelihood) },
             lamp: reading?.lamp != nil))
+    }
+
+    /// Three planes of `count` little-endian float32 samples, or nil when the size disagrees.
+    static func planes(_ samples: Data, count: Int) -> [[Float]]? {
+        guard samples.count == count * 3 * 4 else { return nil }
+        return samples.withUnsafeBytes { bytes in
+            (0..<3).map { channel in
+                (0..<count).map { index in
+                    let bits = bytes.loadUnaligned(fromByteOffset: (channel * count + index) * 4, as: UInt32.self)
+                    return Float(bitPattern: UInt32(littleEndian: bits))
+                }
+            }
+        }
     }
 }

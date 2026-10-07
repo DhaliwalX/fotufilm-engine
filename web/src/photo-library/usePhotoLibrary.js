@@ -22,7 +22,14 @@ import { folderAccess } from "./folder-access.js";
 
 export const supportsFolderAccess = () => folderAccess().persistent();
 
-const stored = ({ id, name, handle, added }) => ({ id, name, handle, added });
+// A folder of scanned negatives (`negative`) opens its photos as negatives.
+const stored = ({ id, name, handle, added, negative = false }) => ({
+  id,
+  name,
+  handle,
+  added,
+  negative,
+});
 const message = (error, fallback) =>
   error?.name === "NotFoundError"
     ? "This folder has moved or been deleted."
@@ -35,7 +42,12 @@ function keepUnchanged(previous, photos) {
   let changed = photos.length !== previous.length;
   const next = photos.map((photo) => {
     const old = known.get(photo.key);
-    if (old?.size === photo.size && old.modified === photo.modified) return old;
+    if (
+      old?.size === photo.size &&
+      old.modified === photo.modified &&
+      old.negative === photo.negative
+    )
+      return old;
     changed = true;
     return photo;
   });
@@ -182,8 +194,33 @@ export function usePhotoLibrary(active) {
     [],
   );
 
-  // Resolves the folder's id, or null when the picker was dismissed.
-  const addFolder = useCallback(async () => {
+  // Marks a folder as holding scanned negatives, or not: its photos open, and show, as negatives.
+  const markNegative = useCallback(
+    (id, negative) => {
+      const folder = folders.find((item) => item.id === id);
+      if (!folder || !!folder.negative === negative) return;
+      setFolders((list) =>
+        list.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                negative,
+                photos: item.photos.map((photo) => ({ ...photo, negative })),
+              }
+            : item,
+        ),
+      );
+      if (!folder.transient && folder.handle)
+        saveFolder(stored({ ...folder, negative })).catch(() =>
+          setError("The folder could not be saved in this browser."),
+        );
+    },
+    [folders],
+  );
+
+  // Resolves the folder's id, or null when the picker was dismissed. A folder of scanned
+  // negatives is added with `negative`.
+  const addFolder = useCallback(async ({ negative = false } = {}) => {
     let handle;
     try {
       handle = await folderAccess().choose();
@@ -197,7 +234,8 @@ export function usePhotoLibrary(active) {
         folder.handle &&
         (await folder.handle.isSameEntry(handle).catch(() => false))
       ) {
-        scan(folder);
+        if (negative && !folder.negative) markNegative(folder.id, true);
+        else scan(folder);
         return folder.id;
       }
     const folder = {
@@ -205,6 +243,7 @@ export function usePhotoLibrary(active) {
       name: handle.name,
       handle,
       added: Date.now(),
+      negative,
     };
     const saved = await saveFolder(stored(folder)).then(
       () => true,
@@ -219,13 +258,13 @@ export function usePhotoLibrary(active) {
     ]);
     scan(folder);
     return folder.id;
-  }, [folders, scan]);
+  }, [folders, scan, markNegative]);
 
   // Browsers without a directory picker upload the folder instead; it lasts for
   // the session, but its ratings and edits are kept under the folder's name.
   const addUploadedFiles = useCallback(
-    async (files) => {
-      const added = uploadedFolders(files);
+    async (files, { negative = false } = {}) => {
+      const added = uploadedFolders(files, negative);
       for (const folder of added)
         mergeRecords(await loadPhotoRecords(folder.id).catch(() => []));
       setFolders((list) => [
@@ -358,6 +397,7 @@ export function usePhotoLibrary(active) {
     dismissError: () => setError(null),
     addFolder,
     addUploadedFiles,
+    markNegative,
     removeFolder,
     rescan: (folder) => (folder.handle ? connect(folder, true) : null),
     rate,

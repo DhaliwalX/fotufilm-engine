@@ -32,6 +32,7 @@ export default function OptionsMenu() {
     editSettings,
     pasteSettings,
     applyPreset,
+    importNegatives,
   } = useEditor();
   const noPhoto = !active || exporting;
   const imageOnlyDisabled = !active || !!active.image.video || exporting;
@@ -44,14 +45,16 @@ export default function OptionsMenu() {
       </ActionButton>
       <Menu aria-label="Options">
         <MenuSection aria-label="Import">
-          <MenuItem
-            id="negative"
-            isDisabled={exporting}
-            onAction={() => setDialog("negative")}
-          >
-            <Icon slot="icon" name="negative" />
-            <Text>Import Scanned Negative…</Text>
-          </MenuItem>
+          {importNegatives && (
+            <MenuItem
+              id="negative"
+              isDisabled={exporting}
+              onAction={importNegatives}
+            >
+              <Icon slot="icon" name="negative" />
+              <Text>Import Scanned Negative…</Text>
+            </MenuItem>
+          )}
           {filmPacks && (
             <MenuItem id="filmPack" isDisabled={exporting} onAction={openFilmPacks}>
               <Icon slot="icon" name="film" />

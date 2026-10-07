@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { inspectorPanels } from "../editor-catalogue.js";
 import { appSetting, setAppSetting } from "../app-settings.js";
 import { canShowNegative } from "../negative-view.js";
+import { offersPanel } from "../negative-document.js";
 import { PLAYBACK_TOGGLE } from "../video-player/usePlayerShortcuts.js";
 import { usePlaying } from "../video-player/usePlaying.js";
 import { forgotFilmChoices, useFilmLearned } from "../film-learning.js";
@@ -69,7 +70,7 @@ function pluginMenuState(e, enabled, titles, toolTips) {
 const COMMANDS = {
   undo: (e) => e.dispatch({ type: "undo" }),
   redo: (e) => e.dispatch({ type: "redo" }),
-  importNegative: (e) => e.setDialog("negative"),
+  importNegative: (e) => e.importNegatives?.(),
   export: (e) => e.setDialog("export"),
   settings: (e) => e.setDialog("settings"),
   plugins: (e) => e.setDialog("plugins"),
@@ -163,7 +164,7 @@ export function menuState(e) {
   const reach = zoomReach(e.photoView.get());
   const enabled = {
     open: !e.exporting,
-    importNegative: !e.exporting && !e.dialog,
+    importNegative: !!e.importNegatives && !e.exporting && !e.dialog,
     export: photo && e.stocks.length > 0,
     closePhoto: photo,
     undo: free && e.history.past.length > 0,
@@ -202,7 +203,8 @@ export function menuState(e) {
   };
   for (const id of MENU_PANELS)
     enabled[`panel:${id}`] =
-      id === "selective" ? still : id === "crop" ? photo : !e.libraryOpen;
+      offersPanel(e.edit, id) &&
+      (id === "selective" ? still : id === "crop" ? photo : !e.libraryOpen);
   const checked = {
     autoFilm: !!e.backend?.suggestFilm && appSetting("autoFilm") === true,
     autoUpdates:

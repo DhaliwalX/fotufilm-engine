@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { DialogContainer } from "@react-spectrum/s2/Dialog";
 import EditorToolbar from "./EditorToolbar.jsx";
 import FilmLibrary from "./FilmLibrary.jsx";
@@ -6,9 +7,6 @@ import InspectorRail from "./InspectorRail.jsx";
 import EditorInspector from "./EditorInspector.jsx";
 import { IMAGE_ACCEPT } from "../media-types.js";
 import { VIDEO_ACCEPT } from "../media-types.js";
-import NegativeImportDialog from "../NegativeImportDialog.jsx";
-import NegativeScanDialog from "../negative-scan/NegativeScanDialog.jsx";
-import { useNegativeImportDialog } from "./useNegativeImportDialog.js";
 import ExportDialog from "./ExportDialog.jsx";
 import SavedExportNotice from "./SavedExportNotice.jsx";
 import ShortcutsDialog from "./ShortcutsDialog.jsx";
@@ -23,6 +21,7 @@ import PresetsDialog from "./PresetsDialog.jsx";
 import { FILM_PACK_EXTENSION } from "./useFilmPacks.js";
 import { useEditor } from "./EditorContext.jsx";
 import { PhotoLibrary } from "../photo-library/index.js";
+import { libraryThumbnailRenderer } from "./libraryThumbnails.js";
 import LibraryHandoff from "./LibraryHandoff.jsx";
 export default function Workspace() {
   const {
@@ -42,8 +41,15 @@ export default function Workspace() {
     filmPacks,
     packInput,
     importFilmPacks,
+    importNegatives,
+    backend,
+    session,
+    stocks,
   } = useEditor();
-  const negative = useNegativeImportDialog();
+  const renderThumbnail = useMemo(
+    () => libraryThumbnailRenderer({ backend, session, stocks }),
+    [backend, session, stocks],
+  );
   return (
     <div
       className={`editor ${filmOpen ? "" : "film-collapsed"} ${inspectorOpen ? "" : "inspector-collapsed"} ${libraryOpen ? "library-open" : ""}`}
@@ -61,6 +67,8 @@ export default function Workspace() {
         onPhotoRenamed={libraryPhotoRenamed}
         onPhotosTrashed={libraryPhotosTrashed}
         onClose={() => setLibraryOpen(false)}
+        negatives={!!importNegatives}
+        renderThumbnail={renderThumbnail}
       />
       <LibraryHandoff />
       <input
@@ -70,7 +78,11 @@ export default function Workspace() {
         multiple
         hidden
         onChange={(e) => {
-          acceptFiles(e.target.files);
+          // Files chosen as negatives open as scans.
+          const negative = e.target.dataset.negative === "true";
+          acceptFiles(
+            negative ? [...e.target.files].map((file) => ({ file, negative })) : e.target.files,
+          );
           e.target.value = "";
         }}
       />
@@ -98,19 +110,7 @@ export default function Workspace() {
         />
       )}
       <DialogContainer onDismiss={() => setDialog(null)}>
-        {dialog === "negative" && negative.scans ? (
-          <NegativeScanDialog
-            session={negative.scan}
-            scans={negative.scans}
-            onClose={() => setDialog(null)}
-            onImport={negative.importScan}
-          />
-        ) : dialog === "negative" ? (
-          <NegativeImportDialog
-            onClose={() => setDialog(null)}
-            model={negative}
-          />
-        ) : dialog === "export" ? (
+        {dialog === "export" ? (
           <ExportDialog />
         ) : dialog === "shortcuts" ? (
           <ShortcutsDialog />

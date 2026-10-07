@@ -280,6 +280,13 @@ public struct FotufilmEngine {
         /// Which spatial stages `stage == .texture` lays over the frame. Ignored by every other
         /// stage, where the selection is the ordinary strength levers.
         public var textureStages: TextureStages = .all
+        /// A scanned negative's light controls on its print (`PrintFinish`), read only by
+        /// `stage == .print`. Neutral, the default, leaves the print as it is, so `.negative`
+        /// followed by `.print` still reproduces `.full`.
+        public var printFinish: PrintFinish = .neutral
+        /// The film reading of a scanned negative handed to `stage == .print` as its linear scan
+        /// RGB, read by the kernels. Nil, the default, takes the input as densities.
+        public var scanReading: ApproximateNegativeScan? = nil
         /// Explicit source illuminant for film exposure. Nil uses the stock's own reference
         /// light, for RAW and processed inputs alike. Decode and white-balance the input first;
         /// capture metadata does not select this value automatically. `whiteBalance` edits this

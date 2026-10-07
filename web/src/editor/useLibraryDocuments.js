@@ -30,7 +30,12 @@ export default function useLibraryDocuments({
       );
       const fresh = items
         .filter((item) => !open.has(item.key))
-        .map((item) => ({ file: item.file, editKey: item.key }));
+        .map((item) => ({
+          file: item.file,
+          editKey: item.key,
+          negative: !!item.negative,
+          roll: item.roll ?? null,
+        }));
       if (origin && items[0]) setHandoff({ ...origin, key: items[0].key });
       if (fresh.length) await acceptFiles(fresh);
       else if (open.has(items[0]?.key)) selectFile(open.get(items[0].key));

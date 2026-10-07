@@ -85,7 +85,8 @@ public final class HostService {
                 throw HostEngine.Failure(description: "The photograph's bytes did not arrive.")
             }
             return try importImage(name: parameters["name"] as? String ?? "photo",
-                                   bytes: payload)
+                                   bytes: payload,
+                                   negative: parameters["negative"] as? Bool == true)
         case "importPath":
             // A file the host chose (open panel, Finder, a drop): read in place, so its bytes
             // never cross the bridge.
@@ -97,8 +98,10 @@ public final class HostService {
                     description: "\(URL(fileURLWithPath: path).lastPathComponent) cannot be read.")
             }
             let url = URL(fileURLWithPath: path)
-            let isMovie = HostPlatform.current.videoSource?.isMovie(url) == true
-            var opened = isMovie && parameters["negative"] as? Bool != true
+            let negative = parameters["negative"] as? Bool == true
+            let isMovie = !negative && HostPlatform.current.videoSource?.isMovie(url) == true
+            var opened = negative ? try importNegative(url)
+                : isMovie
                 ? try importMovie(at: url, owned: false,
                                   playback: parameters["playback"] as? Bool == true)
                 : try imported({
@@ -118,9 +121,6 @@ public final class HostService {
             return try answer(exportOriginal(parameters))
         case "thumbnail":
             return try thumbnail(parameters, payload: payload)
-        case "preview":
-            let image = try self.image(parameters["handle"])
-            return try answer(image.descriptor, images: ["preview": previewPNG(image)])
         case "release":
             if let handle = parameters["handle"] as? Int {
                 lock.lock()
@@ -142,17 +142,6 @@ public final class HostService {
                 SceneGeometry.Lens.self,
                 from: JSONSerialization.data(withJSONObject: parameters["lens"] ?? [:]))
             return Answer(json: try JSONEncoder().encode(lensPlan(image, lens)), payload: [])
-        case "analyseNegative":
-            let image = try self.image(parameters["handle"])
-            let plan = try AutomaticNegativeScan(preview: negativePreview(image, rec2020: false),
-                                                 monochrome: parameters["monochrome"] as? Bool ?? false)
-            return try answer(["weak": plan.weak, "sampleCount": plan.sampleCount,
-                               "parameters": plan.parameters,
-                               "nativePlan": ["parameters": plan.parameters]])
-        case "convertNegative":
-            return try convertNegative(parameters)
-        case "suggestNegativeFilms":
-            return try answer(value: negativeFilmSuggestions(self.image(parameters["handle"])))
         case let method where Self.negativeScanMethods.contains(method):
             return try negativeScan(method, parameters: parameters, payload: payload)
         case "stages":
@@ -257,7 +246,8 @@ public final class HostService {
         return image
     }
 
-    private func importImage(name: String, bytes: UnsafeRawBufferPointer) throws -> Answer {
+    private func importImage(name: String, bytes: UnsafeRawBufferPointer,
+                             negative: Bool) throws -> Answer {
         // The decoders read files, and RAW decoding wants the extension as its hint.
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("fotufilm-import", isDirectory: true)
@@ -267,7 +257,7 @@ public final class HostService {
         let data = Data(bytes: bytes.baseAddress!, count: bytes.count)
         try data.write(to: file)
         defer { try? FileManager.default.removeItem(at: file) }
-        return try imported(HostImage.open(file))
+        return try negative ? importNegative(file) : imported(HostImage.open(file))
     }
 
     /// Export Original: the camera RAW file itself, copied where the save panel chose. No edit
@@ -363,7 +353,10 @@ public final class HostService {
     }
 
     /// `image` stands in for the request's handle: a photograph the call opened itself.
-    func prepare(_ params: Data, image source: HostImage? = nil) throws -> Prepared {
+    /// A negative — the handle's, or `negative` for a scan the call opened itself — reads its
+    /// scan (`readNegative`) unless `readsNegative` is false, for a call that looks at the scan.
+    func prepare(_ params: Data, image source: HostImage? = nil,
+                 negative: HostNegativeScan? = nil, readsNegative: Bool = true) throws -> Prepared {
         let request: RenderRequest, decoded: WebNativeEdit
         do {
             request = try JSONDecoder().decode(RenderRequest.self, from: params)
@@ -386,6 +379,13 @@ public final class HostService {
         var prepared = Prepared(request: request, edit: decoded, image: image, geometry: geometry,
                                 maxEdge: maxEdge, sizes: sizes)
         prepared.edit = prepared.developing(decoded)
+        if let scan = negative ?? (source == nil ? negativeScans.scan(request.handle) : nil) {
+            if readsNegative {
+                try readNegative(&prepared, scan: scan)
+            } else {
+                prepared.image = try scan.image(light: decoded.edit.negative?.lightFrame)
+            }
+        }
         return prepared
     }
 
@@ -424,7 +424,7 @@ public final class HostService {
 
         // Cache keys: everything but the viewport and where the picture goes decides the
         // developed frame, and the range it is delivered in.
-        let sceneKey = "\(request.handle ?? 0)|\(image.frameKey)|\(maxEdge ?? 0)|\(request.cropMode == true)|\(geometry)"
+        let sceneKey = "\(request.handle ?? 0)|\(ObjectIdentifier(image).hashValue)|\(image.frameKey)|\(maxEdge ?? 0)|\(request.cropMode == true)|\(geometry)"
         var keyed = body
         for name in ["viewport", "maxEdge", "handle", "haveOriginal", "present"] { keyed[name] = nil }
         let developKey = sceneKey + "|" + String(decoding: (try? JSONSerialization.data(
@@ -793,56 +793,6 @@ public final class HostService {
             i % 4 == 3 ? 255
                 : UInt8(clamp(128 + (Float(pixels[i]) - Float(before[i])) * gain, 0, 255))
         }
-    }
-
-    // MARK: Negatives
-
-    /// The 512-pixel planar copy of a scan the automatic analyses read, in linear sRGB for the
-    /// inversion's statistics or linear Rec.2020 for reading the film base.
-    private func negativePreview(_ image: HostImage, rec2020: Bool) -> ImageBuffer {
-        let (width, height) = image.renderSize(maxEdge: 512)
-        return planes(image.scene(width: width, height: height), width: width, height: height,
-                      sRGB: !rec2020)
-    }
-
-    private func planes(_ rgba: [Float], width: Int, height: Int, sRGB: Bool) -> ImageBuffer {
-        var buffer = ImageBuffer(width: width, height: height)
-        for i in 0..<(width * height) {
-            var rgb = SIMD3(rgba[i * 4], rgba[i * 4 + 1], rgba[i * 4 + 2])
-            if sRGB { rgb = AutomaticNegativeScan.rec2020ToSRGB(rgb) }
-            for c in 0..<3 { buffer.planes[c][i] = rgb[c] }
-        }
-        return buffer
-    }
-
-    /// Inverts the scan with the plan the analysis solved, the contrast adjusted as the browser
-    /// adjusts it, into a new photograph the editor owns.
-    private func convertNegative(_ parameters: [String: Any]) throws -> Answer {
-        let image = try self.image(parameters["handle"])
-        guard var solved = (parameters["nativePlan"] as? [String: Any])?["parameters"] as? [Double],
-              solved.count == 8, solved.allSatisfy(\.isFinite) else {
-            throw HostEngine.Failure(description: "Invalid negative conversion settings.")
-        }
-        // The inverse sigmoid's slope at mid-grey (web/src/negative-conversion.js).
-        solved[6] *= pow(2, parameters["contrast"] as? Double ?? 0)
-        let (width, height) = image.renderSize(maxEdge: parameters["maxEdge"] as? Int ?? 0)
-        let scan = planes(image.scene(width: width, height: height), width: width, height: height,
-                          sRGB: true)
-        let positive = try AutomaticNegativeScan(parameters: solved.map(Float.init)).convert(scan)
-        var rgba = [Float](repeating: 1, count: width * height * 4)
-        for i in 0..<(width * height) {
-            let rgb = ColorScience.linearSRGBToRec2020(SIMD3(positive.planes[0][i],
-                                                             positive.planes[1][i],
-                                                             positive.planes[2][i]))
-            rgba[i * 4] = rgb.x
-            rgba[i * 4 + 1] = rgb.y
-            rgba[i * 4 + 2] = rgb.z
-        }
-        let converted = HostImage(rgba: rgba, width: width, height: height, contentHeadroom: 1)
-        converted.lensShot = image.lensShot
-        var descriptor = converted.descriptor
-        descriptor["handle"] = register(converted)
-        return try answer(descriptor, images: ["preview": previewPNG(converted)])
     }
 
     // MARK: Measuring and exporting

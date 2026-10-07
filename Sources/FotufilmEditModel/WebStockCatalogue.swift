@@ -79,6 +79,8 @@ public enum WebStockCatalogue {
                 // What Match Film prints on: the film's own medium, and whether it has only that.
                 "filmMedium": PrintPaper.default(for: stock).id,
                 "reflectionPrint": stock.isReflectionPrint,
+                // Whether a scanned negative can be read as this film: slides have no negative.
+                "readsNegative": NegativeScanPrint.reads(stock),
             ]
             if let format = profile["nativeFormat"] { entry["nativeFormat"] = format }
             return entry

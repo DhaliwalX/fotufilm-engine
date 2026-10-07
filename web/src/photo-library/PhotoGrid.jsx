@@ -153,13 +153,20 @@ export default function PhotoGrid({
           index < Math.min(photos.length, to * layout.columns);
           index++
         )
-          requests.push(thumbnails.request(photos[index], { prefetch: true }));
+          requests.push(
+            thumbnails.request(photos[index], {
+              prefetch: true,
+              look: records.get(photos[index].key)?.edit
+                ? records.get(photos[index].key)
+                : null,
+            }),
+          );
     }, 250);
     return () => {
       clearTimeout(timer);
       requests.forEach((request) => request.cancel());
     };
-  }, [thumbnails, photos, firstRow, lastRow, layout.columns, view.height]);
+  }, [thumbnails, photos, records, firstRow, lastRow, layout.columns, view.height]);
   const tiles = [];
   for (
     let index = firstRow * layout.columns;
@@ -180,6 +187,7 @@ export default function PhotoGrid({
         focused={photo.key === focusKey}
         rating={record?.rating || 0}
         edited={!!record?.edit}
+        look={record?.edit ? record : null}
         thumbnails={thumbnails}
         onPress={onPress}
         onOpen={onOpen}

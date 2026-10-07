@@ -68,18 +68,32 @@ async function hostThumbnail(photo) {
 // Workers decode and resample; the newest request runs first, because it is the
 // tile the user just scrolled to. Results are cached in the library database under
 // the file's size and date, so a replaced file gets a new thumbnail.
+//
+// A photo with a kept edit, and a scanned negative, is drawn as it is edited instead:
+// `render({photo, file, look})` develops it through the editor, one at a time, and resolves
+// a picture or null. `look` is the photo's kept edit, `{edit, edited}`, or null; a new edit
+// draws a new thumbnail.
 export function createThumbnails({
   workers = Math.min(4, Math.max(2, (navigator.hardwareConcurrency || 4) >> 1)),
+  render = null,
 } = {}) {
   const pool = [],
     queue = [],
+    developing = [],
     urls = new Map(),
     pending = new Map(),
     reads = new Map();
   let serial = 0,
     saves = 0,
+    busy = false,
     disposed = false;
-  const stamp = (photo) => `${photo.size}:${photo.modified}`;
+  const develops = (photo, look) =>
+    !!render && photo.kind !== "video" && (!!look?.edit || !!photo.negative);
+  const stamp = (photo, look) =>
+    `${photo.size}:${photo.modified}` +
+    (develops(photo, look)
+      ? `:${photo.negative ? "negative" : "edit"}:${look?.edited ?? 0}`
+      : "");
 
   function spawn() {
     const worker = new Worker(
@@ -170,6 +184,36 @@ export function createThumbnails({
       pump();
     });
   }
+  // Develops photos one at a time, the newest request first; one the editor cannot draw yet is
+  // drawn as it was decoded, and is not kept.
+  function develop(photo, look, prefetch) {
+    return new Promise((resolve) => {
+      const job = { photo, look, done: resolve };
+      if (prefetch) developing.unshift(job);
+      else developing.push(job);
+      pumpDevelops();
+    });
+  }
+  async function pumpDevelops() {
+    if (busy || disposed || !developing.length) return;
+    busy = true;
+    const job = developing.pop();
+    let blob = null;
+    try {
+      blob = await render({
+        photo: job.photo,
+        file: await currentFile(job.photo),
+        look: job.look,
+      });
+    } catch {
+      blob = null;
+    }
+    busy = false;
+    pumpDevelops();
+    if (blob) return job.done({ blob });
+    const plain = await generate(job.photo, ++serial, false);
+    job.done(plain && { ...plain, kept: false });
+  }
   function retain(key, url) {
     urls.delete(key);
     urls.set(key, url);
@@ -194,15 +238,18 @@ export function createThumbnails({
     });
   }
   // Resolves {blob, fresh}; fresh when generated now rather than read back.
-  async function load(photo, entry, prefetch) {
+  async function load(photo, look, entry, prefetch) {
     const cached = await readCached(photo.key);
-    if (cached?.stamp === stamp(photo)) return { blob: cached.blob };
+    if (cached?.stamp === stamp(photo, look)) return { blob: cached.blob };
     if (entry.cancelled) return null;
-    const result = await generate(photo, ++serial, prefetch);
+    const result = develops(photo, look)
+      ? await develop(photo, look, prefetch)
+      : await generate(photo, ++serial, prefetch);
     if (!result) return null;
+    if (result.kept === false) return { blob: result.blob, fresh: true };
     saveThumbnail({
       key: photo.key,
-      stamp: stamp(photo),
+      stamp: stamp(photo, look),
       blob: result.blob,
     })
       .then(() => {
@@ -214,14 +261,14 @@ export function createThumbnails({
 
   return {
     // The URL of a thumbnail already in memory, without waiting.
-    peek(photo) {
-      return urls.get(`${photo.key}@${stamp(photo)}`) ?? null;
+    peek(photo, look = null) {
+      return urls.get(`${photo.key}@${stamp(photo, look)}`) ?? null;
     },
     // Resolves {url, fresh}; url is null for formats with no quick preview
     // (EXR, raws without an embedded JPEG). `cancel` drops the request if it
     // has not started. A prefetch runs only when nothing visible is waiting.
-    request(photo, { prefetch = false } = {}) {
-      const key = `${photo.key}@${stamp(photo)}`;
+    request(photo, { prefetch = false, look = null } = {}) {
+      const key = `${photo.key}@${stamp(photo, look)}`;
       if (urls.has(key)) {
         const url = urls.get(key);
         retain(key, url);
@@ -232,13 +279,15 @@ export function createThumbnails({
         entry.cancelled = false;
         entry.wanted++;
         // A tile now needs what was prefetched: move it to the front.
-        const index = prefetch
-          ? -1
-          : queue.findIndex((job) => job.photo.key === photo.key);
-        if (index >= 0) queue.push(...queue.splice(index, 1));
+        for (const list of [queue, developing]) {
+          const index = prefetch
+            ? -1
+            : list.findIndex((job) => job.photo.key === photo.key);
+          if (index >= 0) list.push(...list.splice(index, 1));
+        }
       } else {
         entry = { cancelled: false, wanted: 1 };
-        entry.promise = load(photo, entry, prefetch).then((loaded) => {
+        entry.promise = load(photo, look, entry, prefetch).then((loaded) => {
           if (pending.get(key) === entry) pending.delete(key);
           if (!loaded || disposed) return { url: null };
           const url = URL.createObjectURL(loaded.blob);
@@ -255,16 +304,19 @@ export function createThumbnails({
           if (cancelled || --entry.wanted > 0) return void (cancelled = true);
           cancelled = true;
           entry.cancelled = true;
-          const index = queue.findIndex((job) => job.photo.key === photo.key);
-          if (index < 0) return;
-          pending.delete(key);
-          queue.splice(index, 1)[0].done(null);
+          for (const list of [queue, developing]) {
+            const index = list.findIndex((job) => job.photo.key === photo.key);
+            if (index < 0) continue;
+            pending.delete(key);
+            list.splice(index, 1)[0].done(null);
+            return;
+          }
         },
       };
     },
     dispose() {
       disposed = true;
-      for (const job of queue.splice(0)) job.done(null);
+      for (const job of [...queue.splice(0), ...developing.splice(0)]) job.done(null);
       for (const slot of pool) slot.worker.terminate();
       for (const url of urls.values()) URL.revokeObjectURL(url);
       urls.clear();

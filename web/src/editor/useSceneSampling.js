@@ -33,6 +33,14 @@ export function useSceneSampling({
       current.current?.shownResult === shownResult &&
       current.current?.edit === edit;
     try {
+      // Film Base: clear film on a scanned negative, which the scan is read against.
+      if (sampling === "filmBase") {
+        const border = await backend.negativeScans.sampleFilmBase(shownResult, point);
+        if (!valid()) return;
+        patch({ negative: { ...edit.negative, border } });
+        setSampling(false);
+        return;
+      }
       const sample = await backend.sampleScene(shownResult, point);
       if (!sample || !valid()) return;
       patch({

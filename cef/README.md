@@ -289,35 +289,30 @@ photos; Automatic and Full Range keep the decoded highlights. RAW remains scene-
 
 ### Negative scans
 
-File › Import Scanned Negative… opens the apps' negative-scan session
-(`web/src/negative-scan/`, `Sources/FotufilmHost/HostService+NegativeScan.swift`) when the engine
-reports `negativeScans`. The scan is decoded once as the apps' importer reads it
-(`NegativeScanImport` behind `HostPlatform.scans`: a camera RAW with no rendering choices, other
-files through their colour profile or, by choice, as linear samples) and held as linear
-Rec. 2020. Every preview prints the page's `NegativeScanRecipe` from it: the automatic reading,
-or the scan's densities on a chosen negative film through the engine's print stage on Digital
-Reference, an RA-4 paper or the lab scanner (`HalideMetalFilmRenderer.printScan`, or the Halide
-CPU print stage without a GPU), with the film base sampled by dragging over clear film or
-estimated from the thinnest film, exposure, warmth, tint, contrast (paper grade in black and
-white), highlights and shadows, a light frame divided out, and rotate, flip, straighten and crop
-with Find Frame. The recipe's print arithmetic is the apps' own
-(`Sources/FotufilmEditModel/NegativeScanPrint.swift`); turning, straightening, cropping and the
-light are plain arithmetic in `HostNegativeScan`, so a Linux or Windows port needs only a scan
-decoder. Framings, automatic plans and film balances are kept per framing, so a slider prints
-without reading the scan again. Import Positive opens the full-resolution print in the editor with
-no film, as the Mac app's importer does. Light frames live in
-`Application Support/Fotufilm Desktop/LightFrames`, in the apps' JSON form.
+File › Import Scanned Negative… opens the scans as documents when the engine reports
+`negativeScans` (`web/src/negative-document.js`, `Sources/FotufilmHost/HostService+NegativeScan.swift`).
+A scan is decoded once as the apps' importer reads it (`NegativeScanImport` behind
+`HostPlatform.scans`: a camera RAW with no rendering choices, other files through their colour
+profile, an untagged file as linear samples) and held as linear Rec. 2020 under an ordinary image
+handle. The scan is the film after development, so its edit is a photograph's with
+`negative: {border, lightFrame}`: the film library chooses the film it is read as (negative films
+only), and the Print panel, crop and export are the editor's own. `HostService.prepare` resolves
+the reading for every render, export and thumbnail — the scan evened under the light frame, the
+framed picture's balance against the sampled or estimated film base
+(`NegativeScanPrint.Reading`) — and `HostEngine.develop` prints the framed scan through the
+pipeline's print span (`PipelineStage.print`, `HalideMetalFilmRenderer.printScan`, or the Halide
+CPU print stage without a GPU) with the edit's options; an enlarged paper is timed to the
+negative's density. Light frames live in `Application Support/Fotufilm Desktop/LightFrames`, in the
+apps' JSON form.
 
 ## Roadmap
 
-1. **Engine methods.** `prepare` (with the film library), `import`, `preview`, `release`,
+1. **Engine methods.** `prepare` (with the film library), `import`, `release`,
    `render` (geometry, viewport tiles cut from one develop), `autoAdjust`, `sampleScene`,
    `export` (PNG, 16-bit TIFF, JPEG, HEIC, to a native save panel), `importPath`, `copyImage`,
    print frames (`printFrame`, framed renders and exports), lens correction (`lensPlan`, the
-   catalogue, and the correction in the geometry resample), negatives (the negative-scan
-   session's `negativeScanOpen`, `negativeScanRender`, `negativeScanSampleBorder`,
-   `negativeScanDetectFrame`, `negativeScanCommit` and light frames; the older automatic
-   `analyseNegative`, `convertNegative` and `suggestNegativeFilms`), the pipeline inspector (`stages`,
+   catalogue, and the correction in the geometry resample), negatives (`import`/`importPath`
+   with `negative`, `negativeSampleFilmBase` and light frames), the pipeline inspector (`stages`,
    stage and difference renders), selective edits by colour, light or subject (Vision's
    foreground instances, as the Mac app selects), film suggestion, the Resolve and Final Cut
    plug-ins (`plugins`, `installPlugin`, `revealPlugin`), film packs (`filmPacks`,

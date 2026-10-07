@@ -2,6 +2,7 @@ import { withProfileField } from "../profile-settings.js";
 import { useAutoAdjustment } from "../useAutoAdjustment.js";
 import { useCallback } from "react";
 import { defaultEdit } from "../editor-state.js";
+import { printsNegative } from "../negative-document.js";
 export default function useEditingActions({
   compactLayout,
   active,
@@ -27,7 +28,8 @@ export default function useEditingActions({
     session,
     history,
     dispatch: historyDispatch,
-    disabled: exporting || fixedSettings,
+    // A scanned negative has no scene to meter: its scan is the film.
+    disabled: exporting || fixedSettings || printsNegative(edit),
     onError: setError,
     onApplied: () => {
       setStage(null);

@@ -19,6 +19,8 @@ import useFilmSuggestion from "./useFilmSuggestion.js";
 import usePlugins from "./usePlugins.js";
 import useDocumentTitle from "./useDocumentTitle.js";
 import useUpdates from "./useUpdates.js";
+import { inspectorPanels } from "../editor-catalogue.js";
+import { documentPanels } from "../negative-document.js";
 export default function useEditorModel() {
   let editor = { backend: useBackend() };
   editor = {
@@ -32,6 +34,10 @@ export default function useEditorModel() {
   editor = {
     ...editor,
     ...useEditingActions(editor),
+  };
+  editor = {
+    ...editor,
+    ...documentPanels(editor.edit, inspectorPanels, editor.panel),
   };
   editor = {
     ...editor,

@@ -26,6 +26,7 @@ export default function FilmLibrary() {
     selectStock,
     active,
     visibleStocks,
+    libraryStocks,
     session,
     setPanel,
     setFilmOpen,
@@ -45,7 +46,7 @@ export default function FilmLibrary() {
   const settled = useThumbnailSource({ active, edit, videoTime, backend });
   const list = useRef(null);
   const reducedMotion = useReducedMotion();
-  const displayedStocks = compactLayout ? stocks : visibleStocks;
+  const displayedStocks = compactLayout ? libraryStocks : visibleStocks;
   const previewSize = compactLayout
     ? Math.max(
         160,
@@ -164,14 +165,30 @@ export default function FilmLibrary() {
           </>
         ) : (
           <>
-            <StockButton
-              name="Normal"
-              kind="No film"
-              normal
-              url={active?.url}
-              selected={edit.stock === null}
-              onSelect={() => selectStock(null)}
-            />
+            {edit.negative ? (
+              // A negative's own picture is the scan: Normal shows its plain positive.
+              <StockRow
+                stock={null}
+                name="Normal"
+                kind="No film"
+                active={edit.stock === null}
+                image={settled.image}
+                edit={settled.edit}
+                videoTime={settled.videoTime}
+                session={session}
+                previewSize={previewSize}
+                onSelect={() => selectStock(null)}
+              />
+            ) : (
+              <StockButton
+                name="Normal"
+                kind="No film"
+                normal
+                url={active?.url}
+                selected={edit.stock === null}
+                onSelect={() => selectStock(null)}
+              />
+            )}
             {displayedStocks.map((stock) => (
               <StockRow
                 key={stock.id}

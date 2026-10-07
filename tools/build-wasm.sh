@@ -232,7 +232,7 @@ tools/build-raw-wasm.sh
 bash tools/build-hdr-wasm.sh
 bash tools/build-png-wasm.sh
 bash tools/build-tiff-wasm.sh
-FOTUFILM_WEBGPU_HALIDE="$WEBGPU_HALIDE" HALIDE_ROOT="$HALIDE_PREFIX" EMSDK_ROOT="$EMSDK" bash tools/build-negative-wasm.sh
+HALIDE_ROOT="$HALIDE_PREFIX" EMSDK_ROOT="$EMSDK" bash tools/build-negative-wasm.sh
 HALIDE_ROOT="$HALIDE_PREFIX" EMSDK_ROOT="$EMSDK" bash tools/build-library-wasm.sh
 bash tools/build-web-scene.sh
 bash tools/build-web-profile.sh

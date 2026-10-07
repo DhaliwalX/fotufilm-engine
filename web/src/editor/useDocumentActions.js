@@ -1,8 +1,10 @@
 import { useCallback, useRef } from "react";
-import { VIDEO_ACCEPT } from "../media-types.js";
-import { IMAGE_ACCEPT } from "../media-types.js";
+import { IMAGE_ACCEPT, NEGATIVE_ACCEPT, VIDEO_ACCEPT } from "../media-types.js";
 import { defaultEdit, initialHistory } from "../editor-state.js";
 import { newPhotoEdit } from "../app-settings.js";
+import { negativeStartingStock, newNegative } from "../negative-document.js";
+import { copySettings, pastedEdit } from "../edit-settings.js";
+import { restoreEdit } from "../saved-edits.js";
 export default function useDocumentActions({
   backend,
   exporting,
@@ -38,6 +40,7 @@ export default function useDocumentActions({
         return;
       }
       if (!input.current) return;
+      input.current.dataset.negative = "";
       input.current.accept =
         kind === "image"
           ? IMAGE_ACCEPT
@@ -48,12 +51,46 @@ export default function useDocumentActions({
     },
     [backend, exporting, input],
   );
+  // Scanned negatives open as documents, where the backend reads them as a film.
+  const chooseNegatives = useCallback(() => {
+    if (exporting || !input.current) return;
+    input.current.dataset.negative = "true";
+    input.current.accept = NEGATIVE_ACCEPT;
+    input.current.click();
+  }, [exporting, input]);
+  const importNegatives = backend.negativeScans ? chooseNegatives : null;
 
   // A new document starts from its kept edit (useSavedEdits), or from the settings' starting film
   // and film model (the current film unless one is chosen).
-  const startingEdit = (file) =>
-    file?.savedEdit ||
-    newPhotoEdit(defaultEdit(edit.stock), stocks?.length ? stocks.map((s) => s.id) : null);
+  // A negative opens on the film its base looks like, read against an estimated base; one kept
+  // as a photograph opens as a negative afresh. A new frame of a roll (a library folder of
+  // negatives) starts as the frame edited last reads it: its film, the film's settings, its
+  // clear film and its light source, as pasting the Film section carries them.
+  const startingEdit = (file) => {
+    if (file?.image?.negative || file?.source?.negative) {
+      if (file.savedEdit?.negative) return file.savedEdit;
+      const start = {
+        ...defaultEdit(negativeStartingStock(file.image, stocks ?? [], edit.stock)),
+        negative: newNegative(),
+      };
+      const roll = rollEdit(file.source?.roll);
+      return roll ? pastedEdit(start, copySettings(roll, ["filmStock"]), stocks) : start;
+    }
+    return (
+      file?.savedEdit ||
+      newPhotoEdit(defaultEdit(edit.stock), stocks?.length ? stocks.map((s) => s.id) : null)
+    );
+  };
+  // A roll's kept edit, when it still reads with the films installed.
+  const rollEdit = (text) => {
+    if (!text || !stocks?.length) return null;
+    try {
+      const kept = restoreEdit(text, stocks);
+      return kept.negative ? kept : null;
+    } catch {
+      return null;
+    }
+  };
   // Each document's edit as it stands: the one being edited, one edited before as it was left,
   // and one not opened yet as it would open, with the edit kept for its file (Export All).
   async function documentEdits(docs) {
@@ -73,7 +110,7 @@ export default function useDocumentActions({
           identity: identity.get(doc.id),
           file: identity.has(doc.id) ? undefined : doc.source.file,
         });
-        return startingEdit({ savedEdit });
+        return startingEdit({ savedEdit, source: doc.source });
       }),
     );
   }
@@ -87,21 +124,26 @@ export default function useDocumentActions({
   };
   // Decodes a file for editing, and finds the edit kept for it: a file handed over is known while
   // it decodes, one the host opens by its answer.
-  async function decode({ file, path, name, editKey = null }, signal) {
+  // A negative is decoded as a scan: one chosen as a negative, or one whose kept edit reads it.
+  async function decode({ file, path, name, editKey = null, negative = false }, signal) {
     const options = {
       signal,
+      negative: negative && !!backend.negativeScans,
       onProgress: (text) => {
         if (!signal.aborted) setImportStatus(`${text}: ${name}`);
       },
     };
+    const open = () =>
+      path ? backend.importPath(path, options) : backend.importMedia(file, options);
     const known = path ? null : savedEditFor({ editKey, file });
-    const { identity, ...decoded } = path
-      ? await backend.importPath(path, options)
-      : await backend.importMedia(file, options);
-    return {
-      decoded,
-      saved: await (known ?? savedEditFor({ editKey, identity })),
-    };
+    let { identity, ...decoded } = await open();
+    const saved = await (known ?? savedEditFor({ editKey, identity }));
+    if (saved.savedEdit?.negative && !decoded.image.negative && backend.negativeScans) {
+      release(decoded);
+      options.negative = true;
+      ({ identity, ...decoded } = await open());
+    }
+    return { decoded, saved };
   }
   // Whether an open document came from this file: the same path, library photo or File.
   const opensFrom = (doc, item) =>
@@ -124,9 +166,15 @@ export default function useDocumentActions({
       errors = [];
     let shown = null;
     for (const entry of Array.from(incoming || [])) {
-      const { file, path, name = file?.name, editKey = null } =
-        entry instanceof Blob ? { file: entry } : entry;
-      const item = { file, path, name, editKey };
+      const {
+        file,
+        path,
+        name = file?.name,
+        editKey = null,
+        negative = false,
+        roll = null,
+      } = entry instanceof Blob ? { file: entry } : entry;
+      const item = { file, path, name, editKey, negative, roll };
       if (controller.signal.aborted) break;
       const already = [...files, ...loaded, ...waiting].find((doc) =>
         opensFrom(doc, item),
@@ -344,6 +392,7 @@ export default function useDocumentActions({
   latest.current = { files, selectFile, removeFile };
   return {
     openFiles,
+    importNegatives,
     acceptFiles,
     selectFile,
     removeFile,

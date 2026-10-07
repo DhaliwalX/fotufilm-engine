@@ -70,11 +70,8 @@ struct HostPlatform {
         [
             "importPath": decoder != nil,
             "thumbnails": thumbnails != nil,
-            "negativeContrast": true,
-            // The negative-scan session: a recipe printed from the scan, film or automatic.
+            // Scanned negatives open as documents, read as the edit's film and printed.
             "negativeScans": decoder != nil || scans != nil,
-            // Whether a scan's samples may be read as linear light rather than through its profile.
-            "negativeScanEncoding": scans != nil,
             "subjectSelection": subjects != nil,
             "copyImage": clipboard != nil,
             "printFrames": frames != nil,
@@ -111,18 +108,12 @@ protocol HostImageDecoder {
     func decode(_ url: URL) throws -> HostImage
 }
 
-/// A scanned negative as decoded: linear Rec. 2020 light, and whether it came from camera RAW.
-struct HostScanFile {
-    var image: HostImage
-    var isRAW: Bool
-}
-
 /// Decodes scanned negatives with no rendering choices of its own, as the apps'
 /// `NegativeScanImport` does, and measures photographs of a bare light source.
 protocol HostScanDecoder {
-    /// The scan in linear Rec. 2020: through the file's colour profile, or with its samples read
-    /// as linear light when `linearSamples` (ignored for camera RAW).
-    func decodeScan(_ url: URL, linearSamples: Bool) throws -> HostScanFile
+    /// The scan in linear Rec. 2020: through the file's colour profile, its samples read as
+    /// linear light where it has none, a camera RAW with every rendering choice off.
+    func decodeScan(_ url: URL) throws -> HostImage
     /// The unevenness of the light a photograph of the bare light source shows.
     func measureLight(_ url: URL) throws -> NegativeLightFrame
 }

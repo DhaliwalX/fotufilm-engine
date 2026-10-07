@@ -212,16 +212,26 @@ extension HostService {
         var body = item
         body["viewport"] = nil
         body["maxEdge"] = nil
-        var source: HostImage?
+        var source: HostImage?, negative: HostNegativeScan?
         if let path = item["path"] as? String, !path.isEmpty {
             guard FileManager.default.isReadableFile(atPath: path) else {
                 throw HostEngine.Failure(description: "The file cannot be read.")
             }
-            source = try HostImage.open(URL(fileURLWithPath: path))
+            let url = URL(fileURLWithPath: path)
+            // A scanned negative's edit reads its scan as a film.
+            if (item["edit"] as? [String: Any])?["negative"] is [String: Any] {
+                let scan = try HostPlatform.current.scans?.decodeScan(url) ?? HostImage.open(url)
+                let lights = negativeScans.lights
+                negative = HostNegativeScan(scan: scan) { lights.frame($0)?.measured }
+                source = scan
+            } else {
+                source = try HostImage.open(url)
+            }
         } else if item["handle"] == nil {
             throw HostEngine.Failure(description: "The photograph is not open.")
         }
-        let whole = try prepare(JSONSerialization.data(withJSONObject: body), image: source)
+        let whole = try prepare(JSONSerialization.data(withJSONObject: body), image: source,
+                                negative: negative)
         if whole.image.video != nil {
             throw HostEngine.Failure(description: "Movies are exported one at a time.")
         }

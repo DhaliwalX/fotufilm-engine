@@ -300,6 +300,10 @@ public final class HostEngine {
     public func develop(_ scene: [Float], width: Int, height: Int, contentHeadroom: Float,
                         edit: WebNativeEdit, frameIndex: UInt64 = 0, realtime: Bool = false,
                         exactMath: Bool = false, into target: Target) throws {
+        if let reading = edit.negativeReading {
+            return try printNegative(scene, width: width, height: height, reading: reading,
+                                     edit: edit, into: target)
+        }
         let film: FilmStock?
         if let stockID = edit.edit.stock {
             guard let stock = stocks[stockID] else {
@@ -383,6 +387,32 @@ public final class HostEngine {
                 self.deliver(rows, rows: range, width: width, encoded: encoded, knee: knee,
                              seed: seed, target: target)
             })
+    }
+
+    /// A scanned negative's framed scan printed as the edit's film: the scan read as the film's
+    /// densities, then the edit's own print, exactly the stages a develop runs after grain.
+    private func printNegative(_ scan: [Float], width: Int, height: Int,
+                               reading: NegativeScanPrint.Reading, edit: WebNativeEdit,
+                               into target: Target) throws {
+        guard let stock = stock(edit.edit.stock) else {
+            throw Failure(description: "Choose the film this negative was shot on.")
+        }
+        let options = reading.printing(try options(edit, stock: stock, contentHeadroom: 1),
+                                       stock: stock)
+        let knee = options.sdrShoulderKnee(for: stock)
+        let seed = UInt32(truncatingIfNeeded: options.seed)
+        try printScan(width: width, height: height, stock: stock, options: options,
+                      calibration: reading.calibration,
+                      readScan: { rows, into in
+                          scan.withUnsafeBufferPointer {
+                              into.baseAddress!.update(from: $0.baseAddress! + rows.lowerBound * width * 4,
+                                                       count: rows.count * width * 4)
+                          }
+                      },
+                      writeRows: { range, rows in
+                          self.deliver(rows, rows: range, width: width, encoded: false, knee: knee,
+                                       seed: seed, target: target)
+                      })
     }
 
     /// Prints a scanned negative's rows through the developer's print stage, one print or develop

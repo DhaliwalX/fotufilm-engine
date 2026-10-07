@@ -4,7 +4,7 @@ import { Icon } from "../icons.jsx";
 import { useEditor } from "./EditorContext.jsx";
 
 export default function ImportMenu() {
-  const { exporting, openFiles, setDialog } = useEditor();
+  const { exporting, openFiles, importNegatives } = useEditor();
   return (
     <MenuTrigger>
       <ActionButton
@@ -18,12 +18,12 @@ export default function ImportMenu() {
       <Menu
         aria-label="Add media"
         onAction={(kind) =>
-          kind === "negative" ? setDialog("negative") : openFiles(kind)
+          kind === "negative" ? importNegatives() : openFiles(kind)
         }
       >
         <MenuItem id="image">Image</MenuItem>
         <MenuItem id="video">Video</MenuItem>
-        <MenuItem id="negative">Negative</MenuItem>
+        {importNegatives && <MenuItem id="negative">Negative</MenuItem>}
       </Menu>
     </MenuTrigger>
   );

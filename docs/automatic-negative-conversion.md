@@ -1,13 +1,9 @@
 # Automatic scanned-negative conversion
 
-Mac: **File → Import Scanned Negative… → Preview Positive**. Web: **More options →
-Import Scanned Negative…**. No drawn reference is required. Review the preview,
-then import the positive and refine its crop, colour and tone. On web, Contrast
-(the curve's mid-grey slope, in stops from the automatic value) and the editor's
-tone and colour adjustments can be set before import and stay editable afterwards.
-Cancelling preserves the current photograph. Both accept unadjusted TIFF, PNG, JPEG and supported camera RAW negatives.
-Browser RAW-negative decoding preserves linear values without photographic
-highlight reconstruction, DNG baseline exposure or scene spectral correction.
+The native apps convert a scanned negative into a positive automatically, without a drawn
+reference. Review the preview, then import the positive and refine its crop, colour and tone.
+They accept unadjusted TIFF, PNG, JPEG and supported camera RAW negatives. The desktop and
+browser editors read a scan as a film instead ([scanned negatives](scanned-negatives.md)).
 
 ## Research and choice
 
@@ -36,7 +32,7 @@ usable transmission range**, not a recovered physical film base.
 encoded with the sRGB transfer before inversion and endpoint normalization. The
 normal range maps to 0.02…0.98, with continuous exponential tails outside it. The
 symmetric inverse sigmoid uses exponent 0.6, which is also its slope at mid-grey;
-web Contrast multiplies it by 2 raised to the slider value. These numerical defaults and the
+These numerical defaults and the
 exponential shoulder are our choices; they have not been fitted to a scanner corpus.
 The result is decoded to linear RGB. No stock simulation, new grain or second
 film development is applied.
@@ -52,11 +48,8 @@ black. The calibrated density API retains its stricter measurement validation.
 Monochrome uses the green capture channel. Full-resolution processing reuses one analysis across all tiles;
 zoom and preview resolution do not recompute the balance.
 
-The same stage compiles to native CPU/Metal, Apple AOT CPU/Metal, and browser
-WebAssembly SIMD/WebGPU. Browser colour-space adaptation also runs in Halide.
-Analysis uses shared Swift, compiled to WASI in a worker. Browser conversion runs
-in a cancellable worker with bounded 512×512 tiles and GPU-to-CPU fallback.
-The imported positive remains floating point; export can deliver 16-bit TIFF.
+The same stage compiles to native CPU/Metal and Apple AOT CPU/Metal. The imported positive
+remains floating point; export can deliver 16-bit TIFF.
 
 This is an automatic starting point, not calibrated colour recovery. Coloured
 lighting, nearly monochromatic subjects, clipped scans, thick holders or borders
@@ -67,16 +60,9 @@ manual conversion; **Auto** restores the automatic method.
 ## Verification
 
 ```sh
-FOTUFILM_SCAN_REFERENCE_DIRECTORY="$PWD/build/negative-reference" \
-  swift test -c release --parallel --filter WebAutomaticNegativeRequestTests
+swift test -c release --parallel --filter AutomaticNegativeScanTests
 bash tools/test-stages.sh
-bash tools/build-negative-wasm.sh
-bash tools/build-web-profile.sh
-node tools/test-automatic-negative.mjs http://127.0.0.1:5173/
 ```
 
-The browser check requires actual WebGPU and compares synthetic colour and
-monochrome samples to native output, across a tile boundary, before display
-encoding. It also checks cancellation and TIFF import through the dialog.
 Synthetic checks verify implementation and precision; they do not establish
 photographic accuracy across real scanners and films.

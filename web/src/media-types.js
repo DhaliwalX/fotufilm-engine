@@ -30,6 +30,9 @@ export const RAW_EXTENSIONS = [
   'x3f',
 ]
 export const IMAGE_ACCEPT = ['image/*', '.exr', ...RAW_EXTENSIONS.map((ext) => `.${ext}`)].join(',')
+// Scans of negatives: unadjusted TIFFs and camera RAW, and the common still formats.
+export const NEGATIVE_ACCEPT = ['.tif', '.tiff', '.png', '.jpg', '.jpeg', '.heic',
+  ...RAW_EXTENSIONS.map((ext) => `.${ext}`)].join(',')
 export const isRawFile = (file) =>
   RAW_EXTENSIONS.includes(file.name.split('.').at(-1).toLowerCase()) ||
   /(?:raw|dng|cr2|cr3|nef|arw|raf)/i.test(file.type)

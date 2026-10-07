@@ -45,7 +45,6 @@ self.onmessage = async ({ data: { id, request, base } }) => {
     const autoRequest = request.kind === "auto-adjust";
     const frameRequest = request.kind === "print-frame";
     const needsStock =
-      request.kind !== "negative-auto" &&
       request.kind !== "negative-film" &&
       !perspectiveRequest &&
       !lensRequest &&

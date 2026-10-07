@@ -13,7 +13,9 @@ export default function useFilmSuggestion({ backend, active, edit, dispatch }) {
 
   useEffect(() => {
     if (!backend.suggestFilm || !appSetting("autoFilm") || !active) return;
-    if (active.image.video || active.savedEdit || active.filmSuggested) return;
+    // A negative's film is the one it was shot on, not a look to rank.
+    if (active.image.video || active.image.negative || active.savedEdit || active.filmSuggested)
+      return;
     active.filmSuggested = true;
     const startingFilm = edit.stock;
     let live = true;
@@ -35,7 +37,8 @@ export default function useFilmSuggestion({ backend, active, edit, dispatch }) {
 
   // The film a photograph settles on, once it has stayed a moment.
   useEffect(() => {
-    if (!backend.recordFilmChoice || !photoID || !edit.stock || active?.image.video) return;
+    if (!backend.recordFilmChoice || !photoID || !edit.stock || active?.image.video ||
+      edit.negative) return;
     const timer = setTimeout(
       () => backend.recordFilmChoice(photoID, edit.stock).then(recordedFilmChoice).catch(() => {}),
       1500,

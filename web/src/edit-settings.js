@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { EDITOR_CONTROLS, SETTINGS_SECTIONS } from "./generated/controls.js";
 import { editText, restoreEdit } from "./saved-edits.js";
+import { readsNegative } from "./negative-document.js";
 
 // Copy Settings, Paste Settings and presets. An edit travels by inspector section, the same
 // sections the Mac and iOS apps copy (EditorControlSection.transferable in the catalogue).
@@ -25,8 +26,9 @@ const FIELD = {
   ev: "exposure",
   temperature: "warmth",
 };
-// The photograph's own: its grain pattern and its clip.
-export const PHOTO_KEYS = ["seed", "video"];
+// The photograph's own: its grain pattern, its clip and a scanned negative's reading, which only
+// another frame of the roll takes (pastedEdit).
+export const PHOTO_KEYS = ["seed", "video", "negative"];
 
 const sectionOfField = Object.fromEntries(
   EDITOR_CONTROLS.map((c) => [c.field, c.section]),
@@ -73,6 +75,14 @@ export function pastedEdit(edit, settings, stocks) {
     const stock = stocks.find(({ id }) => id === pasted.stock);
     if (pasted.mediumFollowsFilm) pasted.medium = stock?.filmMedium ?? null;
     else if (!stock?.media.some(({ id }) => id === pasted.medium)) pasted.medium = null;
+  }
+  // A negative stays a negative, read as a film it can be or as none; frames of one roll share
+  // their film base and light source with the film.
+  if (edit.negative) {
+    if (pasted.stock !== null && !readsNegative(stocks.find(({ id }) => id === pasted.stock)))
+      pasted.stock = edit.stock;
+    if (settings.sections.includes("filmStock") && settings.edit.negative)
+      pasted.negative = settings.edit.negative;
   }
   return restoreEdit(editText(pasted), stocks);
 }

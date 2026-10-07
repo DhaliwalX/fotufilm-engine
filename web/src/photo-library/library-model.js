@@ -133,3 +133,19 @@ export function steppedKey(photos, key, step) {
   if (index < 0) return photos[0].key;
   return photos[Math.min(photos.length - 1, Math.max(0, index + step))].key;
 }
+
+// The kept edit, as text, of the frame of a folder of negatives edited last: a new frame of the
+// roll starts from its film and reading. Null when no frame of `folderId` is a negative edit.
+export function rollEdit(records, folderId) {
+  let newest = null;
+  for (const [key, record] of records) {
+    if (!key.startsWith(`${folderId}/`) || !record?.edit) continue;
+    if ((record.edited ?? 0) <= (newest?.edited ?? -1)) continue;
+    try {
+      if (JSON.parse(record.edit)?.edit?.negative) newest = record;
+    } catch {
+      // An edit this version cannot read starts no roll.
+    }
+  }
+  return newest?.edit ?? null;
+}

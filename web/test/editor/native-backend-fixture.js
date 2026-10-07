@@ -1,6 +1,8 @@
 // Contract double only: proves that the editor can run without any browser engine assets.
-export function installNativeBackend({ failPreparation = false } = {}) {
+export function installNativeBackend({ failPreparation = false, negativeScans = false } = {}) {
   const calls = (window.nativeCalls = []);
+  // Every edit a render was asked for, newest last.
+  const renders = (window.nativeRenders = []);
   const buffers = new Map(),
     catalogue = { profiles: [], revision: 0, loaded: true };
   window.nativeSampleDelay = 0;
@@ -30,6 +32,7 @@ export function installNativeBackend({ failPreparation = false } = {}) {
                 ? "thumbnail"
                 : "render",
           );
+          if (!request.background) renders.push(request.edit);
           const blob = buffers.get(request.image.handle);
           if (!blob) throw new Error("Image handle was released too early");
           return {
@@ -60,7 +63,11 @@ export function installNativeBackend({ failPreparation = false } = {}) {
       report({ value: 100, label: "Ready", done: true });
     },
     async loadStocks() {
-      return [{ id: "gold200", name: "Gold 200", media: [], available: [] }];
+      return [
+        { id: "gold200", name: "Gold 200", media: [], available: [], readsNegative: true },
+        { id: "portra400", name: "Portra 400", media: [], available: [], readsNegative: true },
+        { id: "e100", name: "E100", media: [], available: [], readsNegative: false },
+      ];
     },
     async importMedia(file, options) {
       calls.push(options.negative ? "importNegative" : "importMedia");
@@ -68,6 +75,12 @@ export function installNativeBackend({ failPreparation = false } = {}) {
       const bitmap = await createImageBitmap(file);
       const result = image(file, bitmap.width, bitmap.height);
       bitmap.close();
+      // A scan opened as a negative document says which films its base looks like.
+      if (options.negative && negativeScans)
+        result.negative = {
+          suggestions: [{ films: [{ id: "portra400", name: "Portra 400" }], likelihood: 0.6 }],
+          lightFrames: [],
+        };
       if (window.nativeHoldImports)
         await new Promise((resolve) => {
           window.nativeResolveImport = resolve;
@@ -81,25 +94,6 @@ export function installNativeBackend({ failPreparation = false } = {}) {
     releaseImage(value) {
       calls.push("releaseImage");
       buffers.delete(value.handle);
-    },
-    async analyseNegative() {
-      calls.push("analyseNegative");
-      return { weak: false };
-    },
-    async convertNegative(value) {
-      calls.push("convertNegative");
-      return {
-        image: image(
-          buffers.get(value.handle),
-          value.naturalWidth,
-          value.naturalHeight,
-        ),
-        backend: "metal",
-      };
-    },
-    async makePreview(value) {
-      calls.push("makePreview");
-      return preview(value);
     },
     createHistogram() {
       return {
@@ -131,6 +125,7 @@ export function installNativeBackend({ failPreparation = false } = {}) {
       calls.push("planPrintFrame");
       return {
         configuration: { frame: "none" },
+        available: ["none"],
         placement: {
           size: { width, height },
           image: { x: 0, y: 0, width, height },
@@ -163,6 +158,21 @@ export function installNativeBackend({ failPreparation = false } = {}) {
       calls.push("exportVideo");
       return { filename: request.filename, dispose() {} };
     },
+    ...(negativeScans && {
+      negativeScans: {
+        async sampleFilmBase() {
+          calls.push("sampleFilmBase");
+          return [0.8, 0.45, 0.2];
+        },
+        async lightFrames() {
+          return [];
+        },
+        async addLightFrame() {
+          return { id: "light", name: "Light 1" };
+        },
+        async removeLightFrame() {},
+      },
+    }),
     lenses: {
       snapshot: () => catalogue,
       subscribe: () => () => {},
