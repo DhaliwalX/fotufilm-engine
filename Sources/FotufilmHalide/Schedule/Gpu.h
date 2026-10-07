@@ -29,7 +29,7 @@ inline Expr typed_zero(const Func &function) {
     return Halide::cast(function.value().type(), 0);
 }
 
-/// Scheduling state belongs to one graph; folded stores never leak into another build.
+/// Scheduling state belongs to one graph; row-window stores never leak into another build.
 class GpuSchedule {
 public:
     explicit GpuSchedule(GpuConfiguration configuration = default_gpu_configuration(),
