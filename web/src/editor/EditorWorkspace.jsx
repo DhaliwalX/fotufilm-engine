@@ -23,10 +23,13 @@ import { useEditor } from "./EditorContext.jsx";
 import { PhotoLibrary } from "../photo-library/index.js";
 import { libraryThumbnailRenderer } from "./libraryThumbnails.js";
 import LibraryHandoff from "./LibraryHandoff.jsx";
+import PanelResizer from "./PanelResizer.jsx";
+import usePanelWidths from "./usePanelWidths.js";
 export default function Workspace() {
   const {
     filmOpen,
     inspectorOpen,
+    compactLayout,
     input,
     acceptFiles,
     editInput,
@@ -50,9 +53,13 @@ export default function Workspace() {
     () => libraryThumbnailRenderer({ backend, session, stocks }),
     [backend, session, stocks],
   );
+  const { panelWidths, setPanelWidth, panelWidthStyle } = usePanelWidths();
+  // Side panels resize beside the picture; the phone's stacked layout has no edges to drag.
+  const resizable = !compactLayout;
   return (
     <div
       className={`editor ${filmOpen ? "" : "film-collapsed"} ${inspectorOpen ? "" : "inspector-collapsed"} ${libraryOpen ? "library-open" : ""}`}
+      style={resizable ? panelWidthStyle : undefined}
     >
       <EditorToolbar />
       <div className="editor-panels" inert={libraryOpen}>
@@ -60,6 +67,16 @@ export default function Workspace() {
         <EditorViewer />
         <InspectorRail />
         <EditorInspector />
+        {resizable && filmOpen && (
+          <PanelResizer side="film" width={panelWidths.film} onResize={setPanelWidth} />
+        )}
+        {resizable && inspectorOpen && (
+          <PanelResizer
+            side="inspector"
+            width={panelWidths.inspector}
+            onResize={setPanelWidth}
+          />
+        )}
       </div>
       <PhotoLibrary
         open={libraryOpen}

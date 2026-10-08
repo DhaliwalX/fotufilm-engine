@@ -41,7 +41,10 @@
     font-size: 12px;
     height: 100dvh;
     display: grid;
-    grid-template-columns: 236px minmax(0, 1fr) 330px;
+    grid-template-columns: var(--film-width, 236px) minmax(0, 1fr) var(
+        --inspector-width,
+        330px
+      );
     grid-template-rows: 52px minmax(0, 1fr);
     overflow: hidden;
   }
@@ -67,7 +70,52 @@
     min-width: 0;
   }
   .film-collapsed {
-    grid-template-columns: 60px minmax(0, 1fr) 330px;
+    grid-template-columns: 60px minmax(0, 1fr) var(--inspector-width, 330px);
+  }
+  /* The edges between the picture and the side panels (PanelResizer), drawn over the panel's
+     border: a thin hit area that shows the accent line while it is hovered, focused or dragged. */
+  /* Out of the grid's flow, so the panels keep their own cells: each lies along the inner edge
+     of its panel's grid area. Out of flow, an unnamed end line would reach the grid's far edge. */
+  .panel-resizer {
+    grid-row: 2 / 3;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    z-index: 5;
+    width: 8px;
+    cursor: col-resize;
+    touch-action: none;
+    outline: none;
+  }
+  .panel-resizer-film {
+    grid-column: 1 / 2;
+    right: -4px;
+  }
+  .panel-resizer-inspector {
+    grid-column: 3 / 4;
+    left: -4px;
+  }
+  .panel-resizer::after {
+    content: "";
+    position: absolute;
+    inset: 0 3px;
+    border-radius: 1px;
+    background: transparent;
+    transition: background 120ms ease;
+  }
+  .panel-resizer:hover::after,
+  .panel-resizer:focus-visible::after,
+  .panel-resizing .panel-resizer::after {
+    background: var(--accent);
+  }
+  /* A drag follows the pointer: no easing, and no text selection or picture hover underneath. */
+  .editor.panel-resizing {
+    transition: none;
+    cursor: col-resize;
+    user-select: none;
+  }
+  .editor.panel-resizing .viewer {
+    pointer-events: none;
   }
   /* SessionEditor dimensions: list 236, strip 60, inspector 330, rail 46.
    Preserve a 420px picture; tight windows use floating columns. */
