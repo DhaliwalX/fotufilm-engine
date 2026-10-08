@@ -552,13 +552,14 @@ export class RenderSession {
         )
         if (!prepared || stale()) return null
         const { source: scan } = prepared
-        const framed = edit.negative
+        // Not `framed`, which says whether the picture takes a print frame.
+        const reading = edit.negative
           ? await this.negativeFraming(image, edit, report, stale)
           : null
-        if (edit.negative && (!framed || stale())) return null
+        if (edit.negative && (!reading || stale())) return null
         // A negative without a film is a positive photograph (plainReading); one read as a film
         // prints from its scan, which the kernels read as the film.
-        const plain = edit.negative && !negative ? plainReading(framed.border, framed.dense) : null
+        const plain = edit.negative && !negative ? plainReading(reading.border, reading.dense) : null
         const preparation = plain ? await loadScanPreparation() : null
         if (stale()) return null
         const scene = (pixels) => (plain ? positiveSource(pixels, plain, preparation) : pixels)
@@ -622,8 +623,8 @@ export class RenderSession {
                   ...(negative
                     ? {
                         negative: {
-                          border: framed.border,
-                          denseEnd: framed.dense,
+                          border: reading.border,
+                          denseEnd: reading.dense,
                           light: negativeLight(edit.params),
                         },
                       }
