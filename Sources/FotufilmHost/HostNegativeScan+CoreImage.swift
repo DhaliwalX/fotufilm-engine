@@ -28,10 +28,9 @@ struct CoreImageScanDecoder: HostScanDecoder {
         return HostImage(rgba: rgba, width: width, height: height, contentHeadroom: 1)
     }
 
-    func decodeExposure(_ url: URL, longEdge: Int?) throws -> (rgba: [Float], width: Int, height: Int) {
+    func decodeExposure(_ url: URL) throws -> (rgba: [Float], width: Int, height: Int) {
         try NegativeScanImport.exposure(data: Data(contentsOf: url),
-                                        identifierHint: UTType(filenameExtension: url.pathExtension)?.identifier,
-                                        longEdge: longEdge)
+                                        identifierHint: UTType(filenameExtension: url.pathExtension)?.identifier)
     }
 
     func measureLight(_ url: URL) throws -> NegativeLightFrame {

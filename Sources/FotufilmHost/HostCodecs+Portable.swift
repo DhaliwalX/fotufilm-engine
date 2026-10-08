@@ -138,10 +138,10 @@ struct PortableScanDecoder: HostScanDecoder {
                          contentHeadroom: 1)
     }
 
-    func decodeExposure(_ url: URL, longEdge: Int?) throws -> (rgba: [Float], width: Int, height: Int) {
+    func decodeExposure(_ url: URL) throws -> (rgba: [Float], width: Int, height: Int) {
         let exposure = try PortableCodecs.decode(
             url, options: UInt32(FFC_DECODE_SCAN) | UInt32(FFC_DECODE_EXPOSURE)
-                | UInt32(FFC_DECODE_LINEAR_SAMPLES), rawLongEdge: longEdge ?? 0)
+                | UInt32(FFC_DECODE_LINEAR_SAMPLES))
         return (exposure.rgba, exposure.width, exposure.height)
     }
 

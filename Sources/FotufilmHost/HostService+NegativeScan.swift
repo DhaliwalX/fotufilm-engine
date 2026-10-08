@@ -153,7 +153,7 @@ extension HostService {
         do {
             outcome = try HostActivity.during("Merging trichromatic scans") {
                 try TrichromaticRoll.merge(
-                    files, decode: scans.decodeExposure,
+                    files, decode: scans.decodeExposure, readers: TrichromaticRoll.readers,
                     store: { scan, red in
                         let url = TrichromaticRoll.scanURL(red: red)
                         try scan.write(to: url, options: .atomic)

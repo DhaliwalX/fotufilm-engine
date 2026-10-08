@@ -12,10 +12,16 @@
 #include "FotufilmTrichromatic.h"
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <complex>
 #include <cstring>
+#include <thread>
 #include <vector>
+#ifndef PASSES_SMALL
+#define PASSES_SMALL {{128, 24, 4, 6}, {128, 6, 5, 7}}
+#define PASSES_FULL {{256, 10, 6, 8}, {256, 3, 7, 10}, {256, 2, 7, 10}}
+#endif
 
 namespace fotufilm::trichromatic {
 
@@ -57,103 +63,166 @@ inline float level(const float *samples, int64_t count, double fraction) {
 
 constexpr double kPi = 3.14159265358979323846;
 
-using Complex = std::complex<double>;
+using Complex = std::complex<float>;
 
-inline void fft(Complex *a, int n, bool inverse) {
-    for (int i = 1, j = 0; i < n; ++i) {
-        int bit = n >> 1;
-        for (; j & bit; bit >>= 1) j ^= bit;
-        j ^= bit;
-        if (i < j) std::swap(a[i], a[j]);
+// Runs `body(i)` for i in [0, count) across the cores; in order on one thread where there are no
+// threads (the browser's module).
+template<typename Body>
+inline void parallel_for(int count, const Body &body) {
+#if defined(__EMSCRIPTEN__) && !defined(__EMSCRIPTEN_PTHREADS__)
+    for (int i = 0; i < count; ++i) body(i);
+#else
+    const int workers = std::min(count, int(std::max(1u, std::thread::hardware_concurrency())));
+    if (workers <= 1) {
+        for (int i = 0; i < count; ++i) body(i);
+        return;
     }
-    for (int length = 2; length <= n; length <<= 1) {
-        const double angle = (inverse ? 2 : -2) * kPi / length;
-        for (int i = 0; i < n; i += length)
-            for (int k = 0; k < length / 2; ++k) {
-                const Complex w = std::polar(1.0, angle * k);
-                const Complex u = a[i + k], v = a[i + k + length / 2] * w;
-                a[i + k] = u + v;
-                a[i + k + length / 2] = u - v;
+    std::atomic<int> next{0};
+    auto work = [&] { for (int i; (i = next++) < count;) body(i); };
+    std::vector<std::thread> threads;
+    for (int t = 1; t < workers; ++t) threads.emplace_back(work);
+    work();
+    for (auto &thread : threads) thread.join();
+#endif
+}
+
+// A power-of-two transform's tables: bit reversal and twiddles.
+struct Transform {
+    int n = 0;
+    std::vector<int> reversed;
+    std::vector<Complex> twiddles;  // e^(-2 pi i k / n), k < n / 2
+
+    explicit Transform(int size) : n(size), reversed(size), twiddles(size / 2) {
+        for (int i = 1, j = 0; i < n; ++i) {
+            int bit = n >> 1;
+            for (; j & bit; bit >>= 1) j ^= bit;
+            j ^= bit;
+            reversed[i] = j;
+        }
+        for (int k = 0; k < n / 2; ++k)
+            twiddles[k] = Complex(float(std::cos(2 * kPi * k / n)), float(-std::sin(2 * kPi * k / n)));
+    }
+
+    // One row in place; the inverse is unnormalised.
+    void row(Complex *a, bool inverse) const {
+        for (int i = 1; i < n; ++i)
+            if (i < reversed[i]) std::swap(a[i], a[reversed[i]]);
+        for (int length = 2, step = n / 2; length <= n; length <<= 1, step >>= 1) {
+            const int half = length / 2;
+            for (int i = 0; i < n; i += length)
+                for (int k = 0; k < half; ++k) {
+                    const Complex t = twiddles[size_t(k) * step];
+                    const Complex w = inverse ? std::conj(t) : t;
+                    const Complex u = a[i + k];
+                    const Complex v(a[i + k + half].real() * w.real() - a[i + k + half].imag() * w.imag(),
+                                    a[i + k + half].real() * w.imag() + a[i + k + half].imag() * w.real());
+                    a[i + k] = u + v;
+                    a[i + k + half] = u - v;
+                }
+        }
+    }
+
+};
+
+// width x height, rows then columns (through a transpose, so both run along memory).
+inline void transform2(std::vector<Complex> &a, std::vector<Complex> &scratch,
+                       const Transform &rows, const Transform &columns, bool inverse) {
+    const int width = rows.n, height = columns.n;
+    scratch.resize(a.size());
+    for (int y = 0; y < height; ++y) rows.row(&a[size_t(y) * width], inverse);
+    for (int y = 0; y < height; ++y)
+        for (int x = 0; x < width; ++x) scratch[size_t(x) * height + y] = a[size_t(y) * width + x];
+    for (int x = 0; x < width; ++x) columns.row(&scratch[size_t(x) * height], inverse);
+    for (int x = 0; x < width; ++x)
+        for (int y = 0; y < height; ++y) a[size_t(y) * width + x] = scratch[size_t(x) * height + y];
+}
+
+struct Shift { double dy = 0, dx = 0, peak = 0; };
+
+// Phase correlation of `width` x `height` patches (powers of two) in log transmittance, weighted
+// to the band between Gaussian scales `fine` and `coarse` (pixels): grain finer than one, density
+// ramps broader than the other, count for nothing. The window and the band's weights are made once
+// for every patch of a pass.
+struct Correlator {
+    int width, height;
+    Transform rows, columns;
+    std::vector<float> window, band;
+    double weights = 0;
+
+    Correlator(int w, int h, double fine, double coarse)
+        : width(w), height(h), rows(w), columns(h), window(size_t(w) * h), band(size_t(w) * h) {
+        for (int y = 0; y < h; ++y) {
+            const double fy = double(y < h / 2 ? y : y - h) / h;
+            const double hann_y = 0.5 - 0.5 * std::cos(2 * kPi * y / (h - 1));
+            for (int x = 0; x < w; ++x) {
+                const double fx = double(x < w / 2 ? x : x - w) / w;
+                const double hann_x = 0.5 - 0.5 * std::cos(2 * kPi * x / (w - 1));
+                const double f2 = 2 * kPi * kPi * (fx * fx + fy * fy);
+                const double weight = std::exp(-fine * fine * f2) - std::exp(-coarse * coarse * f2);
+                window[size_t(y) * w + x] = float(hann_x * hann_y);
+                band[size_t(y) * w + x] = float(weight);
+                weights += weight;
             }
+        }
     }
-}
 
-inline void fft2(std::vector<Complex> &a, int width, int height, bool inverse) {
-    for (int y = 0; y < height; ++y) fft(&a[size_t(y) * width], width, inverse);
-    std::vector<Complex> column(height);
-    for (int x = 0; x < width; ++x) {
-        for (int y = 0; y < height; ++y) column[y] = a[size_t(y) * width + x];
-        fft(column.data(), height, inverse);
-        for (int y = 0; y < height; ++y) a[size_t(y) * width + x] = column[y];
+    // The shift that moves patch b onto patch a (a(p) = b(p - shift)). `peak` is 1 for a perfect
+    // match. Both patches go through one transform, a as its real part and b as its imaginary.
+    Shift operator()(const float *a, const float *b, std::vector<Complex> &z,
+                     std::vector<Complex> &scratch) const {
+        const int w = width, h = height;
+        const size_t count = size_t(w) * h;
+        double mean_a = 0, mean_b = 0;
+        for (size_t i = 0; i < count; ++i) { mean_a += a[i]; mean_b += b[i]; }
+        mean_a /= double(count);
+        mean_b /= double(count);
+        z.resize(count);
+        for (size_t i = 0; i < count; ++i)
+            z[i] = Complex(float(a[i] - mean_a) * window[i], float(b[i] - mean_b) * window[i]);
+        transform2(z, scratch, rows, columns, false);
+        // With p = Z(k) + conj Z(-k) = 2A and q = Z(k) - conj Z(-k) = 2iB, the cross power
+        // A conj(B) is i p conj(q) / 4; normalised, then weighted.
+        std::vector<Complex> &cross = scratch;
+        for (int y = 0; y < h; ++y) {
+            const int my = (h - y) & (h - 1);
+            for (int x = 0; x < w; ++x) {
+                const int mx = (w - x) & (w - 1);
+                const size_t i = size_t(y) * w + x;
+                const Complex zk = z[i], zm = std::conj(z[size_t(my) * w + mx]);
+                const Complex p = zk + zm, q = zk - zm;
+                const Complex c = Complex(0, 1) * p * std::conj(q);
+                const float magnitude = std::abs(c);
+                cross[i] = magnitude > 1e-30f ? c * (band[i] / magnitude) : Complex(0, 0);
+            }
+        }
+        z.swap(cross);
+        transform2(z, scratch, rows, columns, true);
+        const double norm = weights > 0 ? 1 / weights : 0;
+        size_t best = 0;
+        for (size_t i = 1; i < count; ++i)
+            if (z[i].real() > z[best].real()) best = i;
+        const int iy = int(best / w), ix = int(best % w);
+        auto value = [&](int x, int y) {
+            return double(z[size_t((y + h) % h) * w + size_t((x + w) % w)].real());
+        };
+        auto vertex = [](double minus, double centre, double plus) {
+            const double d = minus - 2 * centre + plus;
+            return std::abs(d) < 1e-20 ? 0.0 : 0.5 * (minus - plus) / d;
+        };
+        Shift shift;
+        shift.peak = value(ix, iy) * norm;
+        shift.dy = iy + vertex(value(ix, iy - 1), value(ix, iy), value(ix, iy + 1));
+        shift.dx = ix + vertex(value(ix - 1, iy), value(ix, iy), value(ix + 1, iy));
+        if (shift.dy > h / 2.0) shift.dy -= h;
+        if (shift.dx > w / 2.0) shift.dx -= w;
+        return shift;
     }
-}
+};
 
 inline int power_of_two_below(int n) {
     int p = 1;
     while (p * 2 <= n) p *= 2;
     return p;
-}
-
-struct Shift { double dy = 0, dx = 0, peak = 0; };
-
-// The shift that moves patch b onto patch a (a(p) = b(p - shift)), both `width` x `height`, powers
-// of two, in log transmittance. Phase correlation weighted to the band between Gaussian scales
-// `fine` and `coarse` (pixels): grain finer than one, density ramps broader than the other, count
-// for nothing. `peak` is 1 for a perfect match.
-inline Shift phase_shift(const std::vector<float> &a, const std::vector<float> &b, int width,
-                         int height, double fine, double coarse) {
-    const size_t count = size_t(width) * height;
-    double mean_a = 0, mean_b = 0;
-    for (size_t i = 0; i < count; ++i) { mean_a += a[i]; mean_b += b[i]; }
-    mean_a /= double(count);
-    mean_b /= double(count);
-    std::vector<double> hann_x(width), hann_y(height);
-    for (int i = 0; i < width; ++i) hann_x[i] = 0.5 - 0.5 * std::cos(2 * kPi * i / (width - 1));
-    for (int i = 0; i < height; ++i) hann_y[i] = 0.5 - 0.5 * std::cos(2 * kPi * i / (height - 1));
-    std::vector<Complex> fa(count), fb(count);
-    for (int y = 0; y < height; ++y)
-        for (int x = 0; x < width; ++x) {
-            const size_t i = size_t(y) * width + x;
-            const double window = hann_x[x] * hann_y[y];
-            fa[i] = (a[i] - mean_a) * window;
-            fb[i] = (b[i] - mean_b) * window;
-        }
-    fft2(fa, width, height, false);
-    fft2(fb, width, height, false);
-    double weights = 0;
-    for (int y = 0; y < height; ++y) {
-        const double fy = double(y < height / 2 ? y : y - height) / height;
-        for (int x = 0; x < width; ++x) {
-            const double fx = double(x < width / 2 ? x : x - width) / width;
-            const double f2 = 2 * kPi * kPi * (fx * fx + fy * fy);
-            const double weight = std::exp(-fine * fine * f2) - std::exp(-coarse * coarse * f2);
-            const size_t i = size_t(y) * width + x;
-            const Complex cross = fa[i] * std::conj(fb[i]);
-            fa[i] = cross / (std::abs(cross) + 1e-20) * weight;
-            weights += weight;
-        }
-    }
-    fft2(fa, width, height, true);
-    // The inverse is unnormalised; a perfect match peaks at the weights' sum.
-    const double norm = weights > 0 ? 1 / weights : 0;
-    size_t best = 0;
-    for (size_t i = 1; i < count; ++i)
-        if (fa[i].real() > fa[best].real()) best = i;
-    const int iy = int(best / width), ix = int(best % width);
-    auto value = [&](int x, int y) {
-        return fa[size_t((y + height) % height) * width + size_t((x + width) % width)].real();
-    };
-    auto vertex = [](double minus, double centre, double plus) {
-        const double d = minus - 2 * centre + plus;
-        return std::abs(d) < 1e-20 ? 0.0 : 0.5 * (minus - plus) / d;
-    };
-    Shift shift;
-    shift.peak = value(ix, iy) * norm;
-    shift.dy = iy + vertex(value(ix, iy - 1), value(ix, iy), value(ix, iy + 1));
-    shift.dx = ix + vertex(value(ix - 1, iy), value(ix, iy), value(ix + 1, iy));
-    if (shift.dy > height / 2.0) shift.dy -= height;
-    if (shift.dx > width / 2.0) shift.dx -= width;
-    return shift;
 }
 
 // ---- Registration ----
@@ -174,18 +243,19 @@ struct LogLayer {
     const float *samples;
     int width, height;
     float floor;
-    float at(int x, int y) const {
+    float transmittance(int x, int y) const {
         x = std::clamp(x, 0, width - 1);
         y = std::clamp(y, 0, height - 1);
         const float v = samples[size_t(y) * width + x];
-        return std::log(std::isfinite(v) ? std::max(v, floor) : floor);
+        return std::isfinite(v) ? std::max(v, floor) : floor;
     }
+    float at(int x, int y) const { return std::log(transmittance(x, y)); }
     float sample(double row, double col) const {
         const double fr = std::floor(row), fc = std::floor(col);
         const int r = int(fr), c = int(fc);
         const float ty = float(row - fr), tx = float(col - fc);
-        return (1 - ty) * ((1 - tx) * at(c, r) + tx * at(c + 1, r))
-            + ty * ((1 - tx) * at(c, r + 1) + tx * at(c + 1, r + 1));
+        return std::log((1 - ty) * ((1 - tx) * transmittance(c, r) + tx * transmittance(c + 1, r))
+                        + ty * ((1 - tx) * transmittance(c, r + 1) + tx * transmittance(c + 1, r + 1)));
     }
 };
 
@@ -203,27 +273,35 @@ inline Patches patch_shifts(const LogLayer &reference, const LogLayer &moving, c
     const int height = reference.height, width = reference.width;
     const bool wide = width >= height;
     const int rows = wide ? across_short : across_long, cols = wide ? across_long : across_short;
-    Patches found;
-    std::vector<float> a(size_t(size) * size), b(a.size());
-    for (int j = 0; j < rows; ++j)
-        for (int i = 0; i < cols; ++i) {
-            const double cy = height * (0.18 + 0.64 * (rows > 1 ? double(j) / (rows - 1) : 0.5));
-            const double cx = width * (0.15 + 0.70 * (cols > 1 ? double(i) / (cols - 1) : 0.5));
-            const int top = int(cy - size / 2.0), left = int(cx - size / 2.0);
-            for (int y = 0; y < size; ++y)
-                for (int x = 0; x < size; ++x) {
-                    double row, col;
-                    warp.apply(top + y, left + x, row, col);
-                    a[size_t(y) * size + x] = reference.at(left + x, top + y);
-                    b[size_t(y) * size + x] = moving.sample(row, col);
-                }
-            const Shift shift = phase_shift(a, b, size, size, fine, coarse);
-            if (shift.peak > 0.03 && std::abs(shift.dy) < limit && std::abs(shift.dx) < limit) {
-                found.centres.push_back({top + (size - 1) / 2.0, left + (size - 1) / 2.0});
-                found.shifts.push_back({shift.dy, shift.dx});
-                found.peaks.push_back(shift.peak);
+    const Correlator correlate(size, size, fine, coarse);
+    std::vector<Shift> shifts(size_t(rows) * cols);
+    std::vector<std::array<int, 2>> corners(shifts.size());
+    parallel_for(rows * cols, [&](int k) {
+        const int j = k / cols, i = k % cols;
+        const double cy = height * (0.18 + 0.64 * (rows > 1 ? double(j) / (rows - 1) : 0.5));
+        const double cx = width * (0.15 + 0.70 * (cols > 1 ? double(i) / (cols - 1) : 0.5));
+        const int top = int(cy - size / 2.0), left = int(cx - size / 2.0);
+        std::vector<float> a(size_t(size) * size), b(a.size());
+        for (int y = 0; y < size; ++y)
+            for (int x = 0; x < size; ++x) {
+                double row, col;
+                warp.apply(top + y, left + x, row, col);
+                a[size_t(y) * size + x] = reference.at(left + x, top + y);
+                b[size_t(y) * size + x] = moving.sample(row, col);
             }
+        std::vector<Complex> z, scratch;
+        shifts[k] = correlate(a.data(), b.data(), z, scratch);
+        corners[k] = {top, left};
+    });
+    Patches found;
+    for (size_t k = 0; k < shifts.size(); ++k) {
+        const Shift &shift = shifts[k];
+        if (shift.peak > 0.03 && std::abs(shift.dy) < limit && std::abs(shift.dx) < limit) {
+            found.centres.push_back({corners[k][0] + (size - 1) / 2.0, corners[k][1] + (size - 1) / 2.0});
+            found.shifts.push_back({shift.dy, shift.dx});
+            found.peaks.push_back(shift.peak);
         }
+    }
     return found;
 }
 
@@ -296,10 +374,11 @@ inline bool fit_affine(const std::vector<std::array<double, 2>> &from,
 struct Pass { int size; double limit; int across_short, across_long; };
 
 // Refines `warp` pass by pass: patch shifts measured through the current warp say where each
-// patch's reference point lands in the moving layer.
+// patch's reference point lands in the moving layer. `residuals` are the last pass's patches' own
+// disagreement with the fitted warp.
 inline bool refine(const LogLayer &reference, const LogLayer &moving, Affine &warp,
                    const std::vector<Pass> &passes, double fine, double coarse,
-                   std::vector<char> &kept) {
+                   std::vector<char> &kept, std::vector<double> &residuals) {
     const int shortest = std::min(reference.width, reference.height);
     for (const Pass &pass : passes) {
         const int size = std::max(32, std::min(pass.size, power_of_two_below(shortest / 3)));
@@ -311,7 +390,6 @@ inline bool refine(const LogLayer &reference, const LogLayer &moving, Affine &wa
         for (size_t i = 0; i < to.size(); ++i)
             warp.apply(found.centres[i][0] - found.shifts[i][0],
                        found.centres[i][1] - found.shifts[i][1], to[i][0], to[i][1]);
-        std::vector<double> residuals;
         if (!fit_affine(found.centres, to, found.peaks, warp, residuals, kept)) return false;
     }
     return true;
@@ -363,30 +441,27 @@ inline int32_t register_layers(const float *reference_samples, const float *movi
             a[size_t(y) * region_w + x] = small_a.at(left + x, top + y);
             b[size_t(y) * region_w + x] = small_b.at(left + x, top + y);
         }
-    const Shift global = phase_shift(a, b, region_w, region_h, 0.7, 6);
+    std::vector<Complex> z, scratch;
+    const Shift global = Correlator(region_w, region_h, 0.7, 6)(a.data(), b.data(), z, scratch);
     Affine warp;
     warp.t[0] = -global.dy;
     warp.t[1] = -global.dx;
     std::vector<char> kept;
-    if (!refine(small_a, small_b, warp, {{128, 24, 4, 6}, {128, 6, 5, 7}}, 0.7, 6, kept))
+    std::vector<double> residuals;
+    if (!refine(small_a, small_b, warp, PASSES_SMALL, 0.7, 6, kept, residuals))
         return -4;
     // To the full layers: a reduced sample's centre is factor x + (factor - 1) / 2.
     const double centre = (factor - 1) / 2.0;
     for (int r = 0; r < 2; ++r)
         warp.t[r] = factor * warp.t[r] + centre * (1 - warp.a[r][0] - warp.a[r][1]);
-    if (!refine(reference, moving, warp, {{256, 10, 6, 8}, {256, 3, 7, 10}, {256, 2, 7, 10}},
-                1, 12, kept))
+    if (!refine(reference, moving, warp, PASSES_FULL, 1, 12, kept, residuals))
         return -4;
 
-    // How far the patches still disagree once lined up.
-    const int size = std::max(32, std::min(256, power_of_two_below(std::min(width, height) / 3)));
-    Patches left_over = patch_shifts(reference, moving, warp, size, 2, 7, 10, 1, 12);
-    std::vector<double> distances;
-    for (const auto &shift : left_over.shifts) distances.push_back(std::hypot(shift[0], shift[1]));
-    std::sort(distances.begin(), distances.end());
+    // How far the last pass's patches still disagree once lined up.
+    std::sort(residuals.begin(), residuals.end());
     report[0] = float(std::count(kept.begin(), kept.end(), 1));
-    report[1] = distances.empty() ? NAN : float(distances[distances.size() / 2]);
-    report[2] = distances.empty() ? NAN : float(distances[distances.size() * 9 / 10]);
+    report[1] = float(residuals[residuals.size() / 2]);
+    report[2] = float(residuals[residuals.size() * 9 / 10]);
 
     // (row, col) to x/y: x' = a11 x + a10 y + t1, y' = a01 x + a00 y + t0.
     affine[0] = float(warp.a[1][1]);

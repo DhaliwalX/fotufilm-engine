@@ -418,7 +418,7 @@ enum NegativeScanOpening {
 
     private static func merge(_ urls: [URL], from presenter: UIViewController,
                               then open: @escaping (NegativeScanSource) -> Void) {
-        let working = UIAlertController(title: "Merging Exposures", message: "Measuring…",
+        let working = UIAlertController(title: "Merging Exposures", message: "Reading…",
                                         preferredStyle: .alert)
         let cancelled = MergeCancel()
         working.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in cancelled.set() })
@@ -431,11 +431,10 @@ enum NegativeScanOpening {
                     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
                     return try TrichromaticRoll.merge(
                         urls,
-                        decode: { url, longEdge in
+                        decode: { url in
                             try NegativeScanImport.exposure(
                                 data: Data(contentsOf: url),
-                                identifierHint: UTType(filenameExtension: url.pathExtension)?.identifier,
-                                longEdge: longEdge)
+                                identifierHint: UTType(filenameExtension: url.pathExtension)?.identifier)
                         },
                         store: { scan, red in
                             let url = folder.appendingPathComponent(

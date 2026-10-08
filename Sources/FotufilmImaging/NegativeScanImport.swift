@@ -65,9 +65,8 @@ public enum NegativeScanImport {
     /// One exposure of a trichromatic scan (`TrichromaticRoll`), as interleaved RGBA in the film
     /// space: a camera RAW through a fixed daylight balance, so each light keeps its colour, at
     /// half its size (each colour has only a quarter of the photosites); anything else as a scan.
-    /// About `longEdge` long when given.
-    public static func exposure(data: Data, identifierHint: String?,
-                                longEdge: Int?) throws -> (rgba: [Float], width: Int, height: Int) {
+    public static func exposure(data: Data, identifierHint: String?) throws
+        -> (rgba: [Float], width: Int, height: Int) {
         var image: CIImage
         if RawDecode.isRaw(data: data, identifierHint: identifierHint) {
             guard let filter = RawDecode.filter(data: data, identifierHint: identifierHint) else {
@@ -75,9 +74,8 @@ public enum NegativeScanImport {
             }
             RawDecode.configure(filter, recipe: .init(neutralKelvin: 6500, correctsLens: false,
                 extendedDynamicRangeAmount: 0, recoversHighlights: false))
-            // Exactly the size asked for: the policy's demosaic margin would double it.
-            let native = Float(max(filter.nativeSize.width, filter.nativeSize.height))
-            filter.scaleFactor = longEdge.map { min(0.5, Float($0) / native) } ?? 0.5
+            // Exactly half: the policy's demosaic margin would make it whole.
+            filter.scaleFactor = 0.5
             filter.exposure = 0
             filter.baselineExposure = 0
             if filter.isLuminanceNoiseReductionSupported { filter.luminanceNoiseReductionAmount = 0 }
@@ -87,23 +85,38 @@ public enum NegativeScanImport {
         } else {
             image = try decode(data: data, identifierHint: identifierHint,
                                linearSamples: !statesEncoding(data))
-            if let longEdge {
-                let scale = min(1, CGFloat(longEdge) / max(image.extent.width, image.extent.height))
-                if scale < 1 {
-                    image = atOrigin(image.samplingLinear()
-                        .transformed(by: CGAffineTransform(scaleX: scale, y: scale)))
-                }
-            }
         }
         let width = Int(image.extent.width), height = Int(image.extent.height)
         guard width > 0, height > 0, width <= 40000, height <= 40000,
               width * height <= 150_000_000 else { throw Failure.unreadable }
         var rgba = [Float](repeating: 1, count: width * height * 4)
-        CIContext(options: [.workingColorSpace: linearSpace, .cacheIntermediates: false])
-            .render(image, toBitmap: &rgba, rowBytes: width * 16,
-                    bounds: CGRect(x: 0, y: 0, width: width, height: height), format: .RGBAf,
-                    colorSpace: filmSpace)
+        let context = ExposureContexts.shared.take()
+        defer { ExposureContexts.shared.give(context) }
+        context.render(image, toBitmap: &rgba, rowBytes: width * 16,
+                       bounds: CGRect(x: 0, y: 0, width: width, height: height),
+                       format: .RGBAf, colorSpace: filmSpace)
         return (rgba, width, height)
+    }
+
+    /// Contexts kept for the exposures of a roll: making one costs as much as a decode, and
+    /// exposures read at once each need their own to run side by side.
+    private final class ExposureContexts: @unchecked Sendable {
+        static let shared = ExposureContexts()
+        private let lock = NSLock()
+        private var idle: [CIContext] = []
+
+        func take() -> CIContext {
+            lock.lock()
+            defer { lock.unlock() }
+            return idle.popLast()
+                ?? CIContext(options: [.workingColorSpace: linearSpace, .cacheIntermediates: false])
+        }
+
+        func give(_ context: CIContext) {
+            lock.lock()
+            idle.append(context)
+            lock.unlock()
+        }
     }
 
     public static func sampleBorder(image: CIImage, rect: CGRect,

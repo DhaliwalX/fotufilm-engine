@@ -118,7 +118,7 @@ protocol HostScanDecoder {
     /// linear light where it has none, a camera RAW with every rendering choice off.
     func decodeScan(_ url: URL) throws -> HostImage
     /// One exposure of a trichromatic scan (`TrichromaticRoll.Decode`).
-    func decodeExposure(_ url: URL, longEdge: Int?) throws -> (rgba: [Float], width: Int, height: Int)
+    func decodeExposure(_ url: URL) throws -> (rgba: [Float], width: Int, height: Int)
     /// The unevenness of the light a photograph of the bare light source shows.
     func measureLight(_ url: URL) throws -> NegativeLightFrame
 }

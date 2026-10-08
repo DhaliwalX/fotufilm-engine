@@ -154,7 +154,9 @@ negative.
   pixel is that light's colour scaled by the film's transmittance, whatever the camera's
   balance or matrix did, so that scale is the exposure's layer (`TrichromaticScan`).
 - **Decoding.** Camera RAW files are decoded through a fixed daylight balance rather than
-  the shot's, and at half size, since each colour has only a quarter of the photosites.
+  the shot's, and at half size, since each colour has only a quarter of the photosites. Each
+  exposure is decoded once, several side by side, and only its layer is kept until the
+  exposures are grouped.
 - **Blank exposures.** Exposures of no picture are left out: a light frame, or the film's
   leader.
 - **Grouping.** The remaining exposures are grouped into frames in the order of their names.

@@ -175,12 +175,12 @@ if flags["--merge-trichromatic"] != nil {
     do {
         let outcome = try TrichromaticRoll.merge(
             positional.map { URL(fileURLWithPath: $0) },
-            decode: { url, longEdge in
+            decode: { url in
                 try NegativeScanImport.exposure(
                     data: Data(contentsOf: url),
-                    identifierHint: UTType(filenameExtension: url.pathExtension)?.identifier,
-                    longEdge: longEdge)
+                    identifierHint: UTType(filenameExtension: url.pathExtension)?.identifier)
             },
+            readers: TrichromaticRoll.readers,
             store: { scan, red in
                 let url = TrichromaticRoll.scanURL(red: red)
                 try scan.write(to: url, options: .atomic)
