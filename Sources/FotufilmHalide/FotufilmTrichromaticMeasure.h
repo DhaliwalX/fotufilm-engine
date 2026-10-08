@@ -519,8 +519,7 @@ inline int32_t measure(const Sample *pixels, int channels, int width, int height
         return 0;
     }
     // How far the layer's log transmittance spreads over the middle of the frame. A blank's spread
-    // is its light's falloff and the leader's fog; on a test roll blanks spread 0.05 to
-    // 0.12, pictures 0.21 and more.
+    // is only its light's falloff and the leader's fog.
     double sum = 0, sum2 = 0;
     int counted = 0;
     float most = 0;

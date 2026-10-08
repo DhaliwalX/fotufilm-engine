@@ -170,9 +170,8 @@ negative.
   clear end sits near the top of the range. The desktop saves it beside the red exposure as
   `<name>-rgb.tif`; the browser downloads it; iOS keeps it on the shelf.
 
-On a test roll of 35 mm colour negative the layers lined up to a median of 0.3 to 0.5 pixel. A merged scan has the same
-balance under each light, so its film base shows no orange mask and film suggestions read it as
-black-and-white; choose the film yourself.
+A merged scan has the same balance under each light, so its film base shows no orange mask and
+film suggestions read it as black-and-white; choose the film yourself.
 
 ```sh
 swift run -c release fotufilm --merge-trichromatic exposures/*.ARW
