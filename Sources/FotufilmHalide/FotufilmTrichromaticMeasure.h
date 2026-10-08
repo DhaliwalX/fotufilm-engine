@@ -18,16 +18,16 @@
 #include <cstring>
 #include <thread>
 #include <vector>
-#ifndef PASSES_SMALL
-#define PASSES_SMALL {{128, 24, 4, 6}, {128, 6, 5, 7}}
-#define PASSES_FULL {{256, 10, 6, 8}, {256, 3, 7, 10}, {256, 2, 7, 10}}
-#endif
 
 namespace fotufilm::trichromatic {
 
-// One light when one channel holds at least this share of the colour. White light through a colour
-// negative's orange mask can pass too (red); grouping then finds too many red exposures.
+// One light when one channel holds at least this share of the colour.
 constexpr float kNarrowShare = 0.5f;
+// Red as well when its colour holds across the picture: the median cell's colour strays from the
+// mean by less than this, relative to its length. White light through a colour negative's orange
+// mask is mostly red too, but its colour changes with the dyes from place to place, where a red
+// light's stays put.
+constexpr float kSteadyColour = 0.02f;
 // A blank exposure's spread of log transmittance (measure).
 constexpr float kBlankSpread = 0.13f;
 
@@ -373,6 +373,13 @@ inline bool fit_affine(const std::vector<std::array<double, 2>> &from,
 
 struct Pass { int size; double limit; int across_short, across_long; };
 
+// Layers line up loosely when their patches still disagree by more than this, median or 90th
+// percentile (pixels), as where the film bowed between exposures.
+constexpr float kLooseMedian = 1.0f, kLoose90 = 3.0f;
+// A repeat matches its patches grain for grain, with a phase-correlation peak above this, within
+// this many pixels; another frame's patches match only by chance.
+constexpr double kRepeatPeak = 0.25, kRepeatShift = 2;
+
 // Refines `warp` pass by pass: patch shifts measured through the current warp say where each
 // patch's reference point lands in the moving layer. `residuals` are the last pass's patches' own
 // disagreement with the fitted warp.
@@ -448,13 +455,17 @@ inline int32_t register_layers(const float *reference_samples, const float *movi
     warp.t[1] = -global.dx;
     std::vector<char> kept;
     std::vector<double> residuals;
-    if (!refine(small_a, small_b, warp, PASSES_SMALL, 0.7, 6, kept, residuals))
+    if (!refine(small_a, small_b, warp, {{128, 24, 4, 6}, {128, 6, 5, 7}}, 0.7, 6, kept,
+                residuals))
         return -4;
     // To the full layers: a reduced sample's centre is factor x + (factor - 1) / 2.
     const double centre = (factor - 1) / 2.0;
     for (int r = 0; r < 2; ++r)
         warp.t[r] = factor * warp.t[r] + centre * (1 - warp.a[r][0] - warp.a[r][1]);
-    if (!refine(reference, moving, warp, PASSES_FULL, 1, 12, kept, residuals))
+    // The last pass admits patches up to 6 pixels out, so a bow the fit cannot follow shows in the
+    // residuals; the fit drops them as it drops specks.
+    if (!refine(reference, moving, warp, {{256, 10, 6, 8}, {256, 3, 7, 10}, {256, 6, 7, 10}}, 1,
+                12, kept, residuals))
         return -4;
 
     // How far the last pass's patches still disagree once lined up.
@@ -471,7 +482,23 @@ inline int32_t register_layers(const float *reference_samples, const float *movi
     affine[4] = float(warp.a[0][0]);
     affine[5] = float(warp.t[0]);
     for (int i = 0; i < 6; ++i) if (!std::isfinite(affine[i])) return -4;
-    return 0;
+    return report[1] > kLooseMedian || report[2] > kLoose90 ? 1 : 0;
+}
+
+// Whether the later of two layers repeats the earlier: on patches across the middle, unmoved, the
+// same film matches grain for grain where the next frame matches nothing.
+inline int32_t repeats(const float *earlier, const float *later, int width, int height) {
+    const int64_t count = int64_t(width) * height;
+    const LogLayer a{earlier, width, height, std::max(level(earlier, count, 0.999) * 1e-4f, 1e-20f)};
+    const LogLayer b{later, width, height, std::max(level(later, count, 0.999) * 1e-4f, 1e-20f)};
+    const int size = std::max(32, std::min(128, power_of_two_below(std::min(width, height) / 4)));
+    const Patches found = patch_shifts(a, b, Affine{}, size, size / 2.0, 3, 3, 1, 12);
+    if (found.peaks.size() < 5) return 0;
+    std::vector<double> peaks = found.peaks, distances;
+    for (const auto &shift : found.shifts) distances.push_back(std::hypot(shift[0], shift[1]));
+    std::sort(peaks.begin(), peaks.end());
+    std::sort(distances.begin(), distances.end());
+    return peaks[peaks.size() / 2] > kRepeatPeak && distances[distances.size() / 2] < kRepeatShift;
 }
 
 // ---- Measuring an exposure ----
@@ -514,7 +541,26 @@ inline int32_t measure(const Sample *pixels, int channels, int width, int height
     const int strongest = int(std::max_element(positive, positive + 3) - positive);
     const float length2 = measured[0] * measured[0] + measured[1] * measured[1]
         + measured[2] * measured[2];
-    if (!(total > 0) || !(length2 > 0) || positive[strongest] < kNarrowShare * total) {
+    bool steady = true;
+    if (strongest == FOTUFILM_TRICHROMATIC_RED && length2 > 0) {
+        const float length = std::sqrt(length2);
+        const float unit[3] = {measured[0] / length, measured[1] / length, measured[2] / length};
+        std::vector<float> strays;
+        for (int y = y0; y < y1; ++y)
+            for (int x = x0; x < x1; ++x) {
+                const auto &cell = cells[size_t(y) * cols + x];
+                const float along = cell[0] * unit[0] + cell[1] * unit[1] + cell[2] * unit[2];
+                if (!(along > 0)) continue;
+                float off = 0;
+                for (int c = 0; c < 3; ++c) off += (cell[c] - along * unit[c]) * (cell[c] - along * unit[c]);
+                strays.push_back(std::sqrt(off) / along);
+            }
+        if (!strays.empty()) {
+            std::nth_element(strays.begin(), strays.begin() + strays.size() / 2, strays.end());
+            steady = strays[strays.size() / 2] < kSteadyColour;
+        }
+    }
+    if (!(total > 0) || !(length2 > 0) || positive[strongest] < kNarrowShare * total || !steady) {
         light = FOTUFILM_TRICHROMATIC_OTHER;
         return 0;
     }
@@ -678,6 +724,12 @@ extern "C" int32_t fotufilm_trichromatic_register(const float *reference, const 
         || !fotufilm::trichromatic::valid_size(width, height))
         return -1;
     return fotufilm::trichromatic::register_layers(reference, moving, width, height, affine, report);
+}
+
+extern "C" int32_t fotufilm_trichromatic_repeats(const float *earlier, const float *later,
+                                                 int32_t width, int32_t height) {
+    if (!earlier || !later || !fotufilm::trichromatic::valid_size(width, height)) return -1;
+    return fotufilm::trichromatic::repeats(earlier, later, width, height);
 }
 
 extern "C" int64_t fotufilm_trichromatic_file_size(int32_t width, int32_t height) {

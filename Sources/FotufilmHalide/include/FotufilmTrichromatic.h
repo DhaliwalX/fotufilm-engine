@@ -16,7 +16,9 @@ enum {
     FOTUFILM_TRICHROMATIC_BLUE = 2,
     // One of the three lights through no picture: a light frame, or the film's leader.
     FOTUFILM_TRICHROMATIC_BLANK = 3,
-    // White or mixed light: not part of a trichromatic scan.
+    // White or mixed light: not part of a trichromatic scan. White light through a colour
+    // negative's orange mask is mostly red, but its colour changes across the picture with the
+    // dyes, where a red light's holds.
     FOTUFILM_TRICHROMATIC_OTHER = -1,
 };
 
@@ -40,11 +42,18 @@ int32_t fotufilm_trichromatic_layer(const float *rgba, int32_t width, int32_t he
 
 // Lines `moving` up with `reference`: the moving layer's sample for reference pixel (x, y) is at
 // (a0 x + a1 y + a2, a3 x + a4 y + a5). `report` gets the patches that agreed and the median and
-// 90th-percentile distance (pixels) by which they still disagree. Returns 0, -1 for bad input, or
-// -4 when the layers share too little detail to line up.
+// 90th-percentile distance (pixels) by which they still disagree. Returns 0; 1 when they line up
+// only loosely (a median above a pixel, or a 90th percentile above three), as film that bowed
+// between exposures does; -1 for bad input; or -4 when the layers share too little detail to line
+// up, as exposures of different frames do.
 int32_t fotufilm_trichromatic_register(const float *reference, const float *moving,
                                        int32_t width, int32_t height, float affine[6],
                                        float report[3]);
+
+// Whether `later` repeats `earlier`, two layers under one light: the same film in the same place,
+// as when a frame was exposed twice. Returns 1 when it does, 0 when not, -1 for bad input.
+int32_t fotufilm_trichromatic_repeats(const float *earlier, const float *later, int32_t width,
+                                      int32_t height);
 
 // The size of the merged scan's file: an uncompressed, untagged 16-bit RGB TIFF, which the
 // editors read as linear samples.

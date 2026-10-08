@@ -14,6 +14,8 @@ public enum TrichromaticRoll {
         public var scan: URL
         public var green: TrichromaticScan.Registration
         public var blue: TrichromaticScan.Registration
+        /// Green or blue lined up only loosely: the scan fringes where the layers part.
+        public var loose: Bool { green.loose || blue.loose }
     }
 
     /// What became of every exposure.
@@ -24,6 +26,9 @@ public enum TrichromaticRoll {
         /// Exposures of no picture, and exposures under white or mixed light, left out.
         public var blanks: [URL] = []
         public var others: [URL] = []
+        /// Exposures repeated by the next exposure under the same light, left out for the
+        /// repeat, as a frame retaken.
+        public var repeats: [URL] = []
     }
 
     public struct Cancelled: Error {}
@@ -108,11 +113,30 @@ public enum TrichromaticRoll {
         var outcome = Outcome()
         outcome.blanks = zip(files, lights).filter { $1 == .blank }.map(\.0)
         outcome.others = zip(files, lights).filter { $1 == .other }.map(\.0)
+        // A frame exposed twice under one light: the later exposure is kept.
+        let pictures = layers.keys.sorted()
+        var grouped = lights
+        for (earlier, later) in zip(pictures, pictures.dropFirst())
+        where lights[earlier] == lights[later] {
+            guard shouldContinue() else { throw Cancelled() }
+            let a = layers[earlier]!, b = layers[later]!
+            guard a.width == b.width, a.height == b.height,
+                  try b.withSamples({ later in
+                      try a.withSamples { earlier in
+                          try TrichromaticScan.repeats(later, earlier: earlier, width: a.width,
+                                                       height: a.height)
+                      }
+                  })
+            else { continue }
+            grouped[earlier] = .other
+            outcome.repeats.append(files[earlier])
+            try? FileManager.default.removeItem(at: a.url)
+        }
         let frames: [[Int]]
         do {
-            frames = try TrichromaticScan.frames(lights)
+            frames = try TrichromaticScan.frames(grouped)
         } catch TrichromaticScan.Failure.ungrouped(let index) {
-            throw Ungrouped(at: files[index], lights: lights)
+            throw Ungrouped(at: files[index], lights: grouped)
         }
 
         for (number, frame) in frames.enumerated() {
@@ -157,10 +181,12 @@ public enum TrichromaticRoll {
             try samples.withUnsafeBytes { try Data($0).write(to: url) }
         }
 
-        func read() throws -> [Float] {
+        func read() throws -> [Float] { try withSamples(Array.init) }
+
+        func withSamples<T>(_ body: (UnsafeBufferPointer<Float>) throws -> T) throws -> T {
             let data = try Data(contentsOf: url, options: .alwaysMapped)
             guard data.count == width * height * MemoryLayout<Float>.size else { throw Mismatch() }
-            return data.withUnsafeBytes { Array($0.bindMemory(to: Float.self)) }
+            return try data.withUnsafeBytes { try body($0.bindMemory(to: Float.self)) }
         }
     }
 

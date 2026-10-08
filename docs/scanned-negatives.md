@@ -159,13 +159,19 @@ negative.
   exposures are grouped.
 - **Blank exposures.** Exposures of no picture are left out: a light frame, or the film's
   leader.
+- **White light.** White light through a colour negative's orange mask is mostly red too, but
+  its colour changes across the picture with the dyes, where a red light's holds: such
+  exposures are left out.
+- **Repeats.** An exposure that the next one under the same light repeats, the same film in the
+  same place, is left out for the later one, as a frame retaken.
 - **Grouping.** The remaining exposures are grouped into frames in the order of their names.
   They may alternate light by light, or come in whole passes of a roll, one light at a time.
-  Exposures under white light, and passes of unequal length, stop the merge with a count of
-  each light.
+  Passes of unequal length stop the merge with a count of each light.
 - **Registration.** Green and blue are lined up with red by an affine fit. Phase correlation
   runs on patches across the middle of the frame, and patches that disagree, such as a speck
-  on one layer, are dropped.
+  on one layer, are dropped. Exposures of different frames share too little detail to line up
+  and are not merged. Layers that line up only loosely, as film that bowed between exposures
+  does, are merged and named, since their colours may fringe.
 - **The file.** The three layers are merged into an untagged 16-bit TIFF, each scaled so its
   clear end sits near the top of the range. The desktop saves it beside the red exposure as
   `<name>-rgb.tif`; the browser downloads it; iOS keeps it on the shelf.

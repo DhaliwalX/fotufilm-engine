@@ -471,6 +471,11 @@ enum NegativeScanOpening {
             let notes = outcome.failures.map { "\(names($0.sources)): \($0.reason)" }
                 + (outcome.blanks.isEmpty ? [] : ["Left out as blank: \(names(outcome.blanks))."])
                 + (outcome.others.isEmpty ? [] : ["Left out, not under one light: \(names(outcome.others))."])
+                + (outcome.repeats.isEmpty ? []
+                   : ["Left out, repeated by the next exposure: \(names(outcome.repeats))."])
+                + (outcome.frames.contains(where: \.loose)
+                   ? ["Lined up loosely, so colours may fringe: \(names(outcome.frames.filter(\.loose).map(\.sources[0])))."]
+                   : [])
             working.dismiss(animated: true) {
                 if let first { open(.picked(first, typeHint: UTType.tiff.identifier)) }
                 if !notes.isEmpty {

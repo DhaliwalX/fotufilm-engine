@@ -188,15 +188,17 @@ if flags["--merge-trichromatic"] != nil {
             },
             progress: { _, status in FileHandle.standardError.write(Data("\(status)\n".utf8)) })
         for frame in outcome.frames {
-            print(String(format: "%@ <- %@  green %.2f px, blue %.2f px", frame.scan.path,
+            print(String(format: "%@ <- %@  green %.2f px, blue %.2f px%@", frame.scan.path,
                          frame.sources.map(\.lastPathComponent).joined(separator: " "),
-                         frame.green.residual, frame.blue.residual))
+                         frame.green.residual, frame.blue.residual,
+                         frame.loose ? ", lined up loosely" : ""))
         }
         for failure in outcome.failures {
             print("not merged: \(failure.sources.map(\.lastPathComponent).joined(separator: " ")): \(failure.reason)")
         }
         if !outcome.blanks.isEmpty { print("blank: " + outcome.blanks.map(\.lastPathComponent).joined(separator: " ")) }
         if !outcome.others.isEmpty { print("not one light: " + outcome.others.map(\.lastPathComponent).joined(separator: " ")) }
+        if !outcome.repeats.isEmpty { print("repeated: " + outcome.repeats.map(\.lastPathComponent).joined(separator: " ")) }
         exit(outcome.failures.isEmpty ? 0 : 1)
     } catch {
         fail(error.localizedDescription)

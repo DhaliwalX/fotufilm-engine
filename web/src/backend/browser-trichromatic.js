@@ -127,9 +127,28 @@ export async function mergeTrichromatic(files, { signal, onProgress = () => {} }
       }
     };
     await Promise.all(Array.from({ length: Math.min(readers, ordered.length) }, reader));
-    const { frames, broken } = await first.call("group", { lights });
+    // A frame exposed twice under one light: the later exposure is kept.
+    const grouped = [...lights];
+    const repeats = [];
+    const pictures = layers.flatMap((layer, index) => (layer ? [index] : []));
+    for (const [n, earlier] of pictures.slice(0, -1).entries()) {
+      const later = pictures[n + 1];
+      const [a, b] = [layers[earlier], layers[later]];
+      if (lights[earlier] !== lights[later] || a.width !== b.width || a.height !== b.height) continue;
+      cancelled();
+      const repeated = await (n % 2 ? second : first).call("repeats", {
+        earlier: a.blob,
+        later: b.blob,
+        width: a.width,
+        height: a.height,
+      });
+      if (!repeated) continue;
+      grouped[earlier] = -1;
+      repeats.push(ordered[earlier].name);
+    }
+    const { frames, broken } = await first.call("group", { lights: grouped });
     if (frames == null) {
-      const tally = (light) => lights.filter((l) => l === light).length;
+      const tally = (light) => grouped.filter((l) => l === light).length;
       throw new Error(
         `The exposures do not group into frames from ${ordered[broken].name} on (red ${tally(0)}, ` +
           `green ${tally(1)}, blue ${tally(2)}). Choose each frame's red, green and blue ` +
@@ -141,6 +160,8 @@ export async function mergeTrichromatic(files, { signal, onProgress = () => {} }
       failures: [],
       blanks: ordered.filter((_, i) => lights[i] === BLANK).map(({ name }) => name),
       others: ordered.filter((_, i) => lights[i] < 0).map(({ name }) => name),
+      repeats,
+      loose: [],
     };
     for (const [number, frame] of frames.entries()) {
       const sources = frame.map((i) => ordered[i]);
@@ -163,14 +184,15 @@ export async function mergeTrichromatic(files, { signal, onProgress = () => {} }
           stored: [red, green, blue],
           width,
           height,
-          green: placed[0],
-          blue: placed[1],
+          green: placed[0].affine,
+          blue: placed[1].affine,
         });
         frame.forEach((i) => (layers[i] = null));
         const name = `${sources[0].name.replace(/\.[^.]*$/, "")}-rgb.tif`;
         const scan = new File([bytes], name, { type: "image/tiff" });
         download(scan);
         result.scans.push({ file: scan, name, sources: sources.map(({ name }) => name) });
+        if (placed.some(({ loose }) => loose)) result.loose.push(name);
       } catch (error) {
         if (error.name === "AbortError") throw error;
         result.failures.push({ sources: sources.map(({ name }) => name), reason: error.message });

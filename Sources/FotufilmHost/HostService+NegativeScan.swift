@@ -178,6 +178,8 @@ extension HostService {
             "failures": outcome.failures.map { ["sources": names($0.sources), "reason": $0.reason] },
             "blanks": names(outcome.blanks),
             "others": names(outcome.others),
+            "repeats": names(outcome.repeats),
+            "loose": names(outcome.frames.filter(\.loose).map(\.scan)),
         ]
     }
 

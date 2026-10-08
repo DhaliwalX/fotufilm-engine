@@ -165,6 +165,8 @@ extern "C" FOTUFILM_FALLBACK int32_t fotufilm_trichromatic_layer(
     const float *, int32_t, int32_t, const float *, float *) { return -3; }
 extern "C" FOTUFILM_FALLBACK int32_t fotufilm_trichromatic_register(
     const float *, const float *, int32_t, int32_t, float *, float *) { return -3; }
+extern "C" FOTUFILM_FALLBACK int32_t fotufilm_trichromatic_repeats(
+    const float *, const float *, int32_t, int32_t) { return -3; }
 extern "C" FOTUFILM_FALLBACK int64_t fotufilm_trichromatic_file_size(int32_t, int32_t) { return -3; }
 extern "C" FOTUFILM_FALLBACK int32_t fotufilm_trichromatic_merge(const float *, const float *,
     const float *, int32_t, int32_t, const float *, const float *, uint8_t *, int64_t) {

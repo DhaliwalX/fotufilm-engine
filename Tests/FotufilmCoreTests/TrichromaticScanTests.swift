@@ -32,14 +32,17 @@ final class TrichromaticScanTests: XCTestCase {
     }
 
     /// The exposure under a light of `colour` of the film moved by `turn` degrees and `shift`
-    /// pixels: its pixel (x, y) shows the film at the turned and shifted point.
-    private func exposure(colour: SIMD3<Float>, turn: Double, shift: (Double, Double)) -> [Float] {
+    /// pixels, and its middle pushed `bow` pixels along: its pixel (x, y) shows the film at the
+    /// turned, shifted and bowed point.
+    private func exposure(colour: SIMD3<Float>, turn: Double, shift: (Double, Double),
+                          bow: Double = 0) -> [Float] {
         let angle = turn * .pi / 180, cx = Double(width) / 2, cy = Double(height) / 2
         var rgba = [Float](repeating: 1, count: width * height * 4)
         for y in 0..<height {
             for x in 0..<width {
                 let dx = Double(x) - cx, dy = Double(y) - cy
-                let fx = cos(angle) * dx - sin(angle) * dy + cx + shift.0
+                let bulge = bow * sin(.pi * Double(x) / Double(width)) * sin(.pi * Double(y) / Double(height))
+                let fx = cos(angle) * dx - sin(angle) * dy + cx + shift.0 + bulge
                 let fy = sin(angle) * dx + cos(angle) * dy + cy + shift.1
                 let t = film(fx, fy)
                 for c in 0..<3 { rgba[(y * width + x) * 4 + c] = colour[c] * t }
@@ -64,6 +67,77 @@ final class TrichromaticScanTests: XCTestCase {
         // Grey light through a black-and-white negative is no one light.
         let grey = exposure(colour: SIMD3(0.3, 0.3, 0.3), turn: 0, shift: (0, 0))
         XCTAssertEqual(try TrichromaticScan.measure(grey, width: width, height: height).light, .other)
+        // White light through a colour negative's orange mask: mostly red, but each dye layer
+        // holds its own picture, so the colour changes from place to place.
+        var masked = [Float](repeating: 1, count: width * height * 4)
+        for y in 0..<height {
+            for x in 0..<width {
+                let i = (y * width + x) * 4
+                masked[i] = 0.5 * film(Double(x), Double(y))
+                masked[i + 1] = 0.15 * film(Double(x) + 2000, Double(y))
+                masked[i + 2] = 0.03 * film(Double(x), Double(y) + 2000)
+            }
+        }
+        XCTAssertEqual(try TrichromaticScan.measure(masked, width: width, height: height).light, .other)
+    }
+
+    private func layer(_ rgba: [Float]) throws -> [Float] {
+        let measured = try TrichromaticScan.measure(rgba, width: width, height: height)
+        return try TrichromaticScan.layer(rgba, width: width, height: height, colour: measured.colour)
+    }
+
+    func testARepeatedExposureIsTold() throws {
+        let colour = SIMD3<Float>(0.4, 0.01, 0)
+        let first = try layer(exposure(colour: colour, turn: 0, shift: (0, 0)))
+        // The same frame again, the film unmoved; and the next frame, further along.
+        let again = try layer(exposure(colour: colour * 0.9, turn: 0, shift: (0, 0)))
+        let next = try layer(exposure(colour: colour, turn: 0.2, shift: (1500, 7)))
+        func repeats(_ later: [Float], _ earlier: [Float]) throws -> Bool {
+            try later.withUnsafeBufferPointer { later in
+                try earlier.withUnsafeBufferPointer { earlier in
+                    try TrichromaticScan.repeats(later, earlier: earlier, width: width, height: height)
+                }
+            }
+        }
+        XCTAssertTrue(try repeats(again, first))
+        XCTAssertFalse(try repeats(next, first))
+    }
+
+    func testABowedLayerLinesUpLoosely() throws {
+        let red = try layer(exposure(colour: SIMD3(0.5, 0.02, 0), turn: 0, shift: (0, 0)))
+        let flat = try layer(exposure(colour: SIMD3(0.01, 0.4, 0.05), turn: 0.3, shift: (9, -4)))
+        let bowed = try layer(exposure(colour: SIMD3(0.01, 0.4, 0.05), turn: 0.3, shift: (9, -4),
+                                       bow: 6))
+        XCTAssertFalse(try TrichromaticScan.register(flat, to: red, width: width, height: height).loose)
+        XCTAssertTrue(try TrichromaticScan.register(bowed, to: red, width: width, height: height).loose)
+    }
+
+    func testARollWithARetakeMerges() throws {
+        let lights: [SIMD3<Float>] = [SIMD3(0.5, 0.02, 0), SIMD3(0.01, 0.4, 0.05), SIMD3(0.04, 0.02, 0.3)]
+        // Two frames a pass at a time, red then green then blue; the first red frame retaken.
+        let shots: [(name: String, light: Int, frame: Double)] = [
+            ("01", 0, 0), ("02", 0, 0), ("03", 0, 1500), ("04", 1, 0), ("05", 1, 1500),
+            ("06", 2, 0), ("07", 2, 1500),
+        ]
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("trichromatic-roll-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let files = shots.map { folder.appendingPathComponent("\($0.name).raw") }
+        let outcome = try TrichromaticRoll.merge(
+            files,
+            decode: { url in
+                let shot = shots.first { url.lastPathComponent.hasPrefix($0.name) }!
+                return (self.exposure(colour: lights[shot.light], turn: 0.1 * Double(shot.light),
+                                      shift: (shot.frame + 3 * Double(shot.light), 0)),
+                        self.width, self.height)
+            },
+            readers: 2,
+            store: { _, red in red })
+        XCTAssertEqual(outcome.repeats.map(\.lastPathComponent), ["01.raw"])
+        XCTAssertEqual(outcome.frames.map { $0.sources.map(\.lastPathComponent) },
+                       [["02.raw", "04.raw", "06.raw"], ["03.raw", "05.raw", "07.raw"]])
+        XCTAssertTrue(outcome.failures.isEmpty)
     }
 
     func testExposuresGroupAlternatingOrInPasses() throws {

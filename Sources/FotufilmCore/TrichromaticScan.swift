@@ -64,6 +64,9 @@ public enum TrichromaticScan {
         public var patches: Int
         public var residual: Float
         public var residual90: Float
+        /// Lined up only loosely, as film that bowed between exposures does: the merged scan
+        /// fringes where the layers part.
+        public var loose: Bool
     }
 
     public static func register(_ moving: [Float], to reference: [Float], width: Int,
@@ -74,9 +77,23 @@ public enum TrichromaticScan {
         var affine = [Float](repeating: 0, count: 6), report = [Float](repeating: 0, count: 3)
         let status = fotufilm_trichromatic_register(reference, moving, Int32(width), Int32(height),
                                                     &affine, &report)
-        guard status == 0 else { throw status == -4 ? Failure.unaligned : Failure.unmerged }
+        guard status >= 0 else { throw status == -4 ? Failure.unaligned : Failure.unmerged }
         return Registration(affine: affine, patches: Int(report[0]), residual: report[1],
-                            residual90: report[2])
+                            residual90: report[2], loose: status == 1)
+    }
+
+    /// Whether `later` repeats `earlier`, two layers under one light: the same film in the same
+    /// place, as when a frame was exposed twice.
+    public static func repeats(_ later: UnsafeBufferPointer<Float>,
+                               earlier: UnsafeBufferPointer<Float>, width: Int,
+                               height: Int) throws -> Bool {
+        guard later.count == width * height, earlier.count == later.count else {
+            throw Failure.unreadable
+        }
+        let status = fotufilm_trichromatic_repeats(earlier.baseAddress, later.baseAddress,
+                                                   Int32(width), Int32(height))
+        guard status >= 0 else { throw Failure.unmerged }
+        return status == 1
     }
 
     /// The merged scan's file: red as it is, green and blue through their registrations.

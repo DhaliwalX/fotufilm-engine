@@ -64,7 +64,19 @@ async function layers(blobs) {
   return Promise.all(blobs.map(async (blob) => new Uint8Array(await blob.arrayBuffer())));
 }
 
-// Where the moving layer lies under the reference.
+// Whether the later layer repeats the earlier: the same frame exposed twice under one light.
+async function repeats(module, { earlier, later, width, height }) {
+  const [a, b] = await layers([earlier, later]);
+  return withHeap(module, [a.byteLength, b.byteLength], (first, second) => {
+    module.HEAPU8.set(a, first);
+    module.HEAPU8.set(b, second);
+    const status = module._fotufilm_trichromatic_repeats(first, second, width, height);
+    if (status < 0) throw new Error("The exposures could not be compared.");
+    return status === 1;
+  });
+}
+
+// Where the moving layer lies under the reference, and whether only loosely.
 async function register(module, { reference, moving, width, height }) {
   const [a, b] = await layers([reference, moving]);
   return withHeap(module, [a.byteLength, b.byteLength, 24 + 12], (first, second, affine) => {
@@ -75,8 +87,8 @@ async function register(module, { reference, moving, width, height }) {
       throw new Error(
         "The exposures share too little detail to line up: pick three exposures of the same frame.",
       );
-    if (status) throw new Error("The exposures could not be merged.");
-    return Array.from(module.HEAPF32.subarray(affine / 4, affine / 4 + 6));
+    if (status < 0) throw new Error("The exposures could not be merged.");
+    return { affine: Array.from(module.HEAPF32.subarray(affine / 4, affine / 4 + 6)), loose: status === 1 };
   });
 }
 
@@ -93,7 +105,7 @@ async function merge(module, { stored, width, height, green, blue }) {
   });
 }
 
-const tasks = { read, group, register, merge };
+const tasks = { read, group, repeats, register, merge };
 
 self.onmessage = async ({ data: { id, task, url, ...input } }) => {
   try {

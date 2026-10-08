@@ -7,12 +7,14 @@ import { copySettings, pastedEdit } from "../edit-settings.js";
 import { restoreEdit } from "../saved-edits.js";
 // What a trichromatic merge left out, in a sentence each: frames it could not merge, blank
 // exposures and exposures under white light.
-export function trichromaticNotes({ failures = [], blanks = [], others = [] }) {
+export function trichromaticNotes({ failures = [], blanks = [], others = [], repeats = [], loose = [] }) {
   const list = (names) => names.join(", ");
   return [
     ...failures.map(({ sources, reason }) => `${list(sources)}: ${reason}`),
     blanks.length ? `Left out as blank: ${list(blanks)}.` : "",
     others.length ? `Left out, not under one light: ${list(others)}.` : "",
+    repeats.length ? `Left out, repeated by the next exposure: ${list(repeats)}.` : "",
+    loose.length ? `Lined up loosely, so colours may fringe: ${list(loose)}.` : "",
   ]
     .filter(Boolean)
     .join(" ");

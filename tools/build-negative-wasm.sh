@@ -17,5 +17,5 @@ em++ -std=c++17 -O3 -msimd128 web/engine/negative_wasm.cpp "$OUT/scan_prepare.a"
     -I"$OUT" -ISources/FotufilmHalide/include -ISources/FotufilmHalide \
     -sALLOW_MEMORY_GROWTH=1 -sMAXIMUM_MEMORY=4GB -sMODULARIZE=1 -sEXPORT_ES6=1 \
     -sENVIRONMENT=web,worker -sEXPORTED_RUNTIME_METHODS=HEAPF32,HEAPU8,HEAPU16,HEAP32 \
-    -sEXPORTED_FUNCTIONS=_scan_prepare_plain,_fotufilm_trichromatic_measure,_trichromatic_measure_rgb16,_fotufilm_trichromatic_group,_fotufilm_trichromatic_layer,_trichromatic_layer_rgb16,_fotufilm_trichromatic_register,_fotufilm_trichromatic_file_size,_fotufilm_trichromatic_merge,_malloc,_free \
+    -sEXPORTED_FUNCTIONS=_scan_prepare_plain,_fotufilm_trichromatic_measure,_trichromatic_measure_rgb16,_fotufilm_trichromatic_group,_fotufilm_trichromatic_layer,_trichromatic_layer_rgb16,_fotufilm_trichromatic_register,_fotufilm_trichromatic_repeats,_fotufilm_trichromatic_file_size,_fotufilm_trichromatic_merge,_malloc,_free \
     -o web/public/negative/prepare.mjs
