@@ -25,6 +25,26 @@ const COMPARE = {
 export const sortedPhotos = (lists, records, sort = "name") =>
   lists.flat().sort(COMPARE[sort](records));
 
+// The directory a photo sits in, within its library folder: "" at the folder's top.
+export const photoDirectory = (photo) =>
+  photo.path.slice(0, Math.max(0, photo.path.lastIndexOf("/")));
+
+// What opening `list` brings into the editor's strip, in the library's order, and the photo shown
+// first. One photo opens with every picture beside it, its roll: the photos of its directory, not
+// those of subfolders below. Several chosen photos open as chosen.
+export function openedPhotos(list, folders, records, sort = "name") {
+  if (list.length !== 1) return { photos: list, shown: list[0]?.key ?? null };
+  const [photo] = list;
+  const folder = folders.find((item) => item.id === photo.folderId);
+  const directory = photoDirectory(photo);
+  const roll = (folder?.photos ?? []).filter(
+    (item) => photoDirectory(item) === directory,
+  );
+  if (!roll.some((item) => item.key === photo.key))
+    return { photos: list, shown: photo.key };
+  return { photos: sortedPhotos([roll], records, sort), shown: photo.key };
+}
+
 // `path` narrows a folder to one of its subfolders and everything below it.
 export function filteredPhotos(
   photos,
@@ -134,12 +154,16 @@ export function steppedKey(photos, key, step) {
   return photos[Math.min(photos.length - 1, Math.max(0, index + step))].key;
 }
 
-// The kept edit, as text, of the frame of a folder of negatives edited last: a new frame of the
-// roll starts from its film and reading. Null when no frame of `folderId` is a negative edit.
-export function rollEdit(records, folderId) {
+// The kept edit, as text, of the frame of a roll of negatives edited last: a new frame of the
+// roll starts from its film and reading. The roll is `directory` of the folder `folderId`, its
+// subfolders being rolls of their own; without one, the whole folder. Null when no frame of the
+// roll is a negative edit.
+export function rollEdit(records, folderId, directory = null) {
+  const prefix = directory ? `${folderId}/${directory}/` : `${folderId}/`;
   let newest = null;
   for (const [key, record] of records) {
-    if (!key.startsWith(`${folderId}/`) || !record?.edit) continue;
+    if (!key.startsWith(prefix) || !record?.edit) continue;
+    if (directory !== null && key.slice(prefix.length).includes("/")) continue;
     if ((record.edited ?? 0) <= (newest?.edited ?? -1)) continue;
     try {
       if (JSON.parse(record.edit)?.edit?.negative) newest = record;
