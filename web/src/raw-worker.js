@@ -2,7 +2,9 @@ import { loadCameraProfiles, resolveCameraProfile, estimateAsShotKelvin } from '
 import { relatedAssetUrl } from './runtime-assets.js'
 
 // One worker per import releases the decoder's entire WASM heap on completion.
-self.onmessage = async ({ data: { bytes, decoderURL, negative = false } }) => {
+// An exposure of a trichromatic scan is read as a negative is, through the camera's daylight
+// balance and at half size (raw_open_exposure).
+self.onmessage = async ({ data: { bytes, decoderURL, negative = false, exposure = false } }) => {
   let module, input
   try {
     let lastStage,
@@ -43,7 +45,13 @@ self.onmessage = async ({ data: { bytes, decoderURL, negative = false } }) => {
     module.HEAPU8.set(new Uint8Array(bytes), input)
     if (negative && typeof module._raw_open_negative !== 'function')
       throw new Error('The RAW decoder needs updating for negative import. Reload the editor.')
-    const open = negative ? module._raw_open_negative : module._raw_open
+    if (exposure && typeof module._raw_open_exposure !== 'function')
+      throw new Error('The RAW decoder needs updating for trichromatic scans. Reload the editor.')
+    const open = exposure
+      ? module._raw_open_exposure
+      : negative
+        ? module._raw_open_negative
+        : module._raw_open
     if (open(input, bytes.byteLength))
       throw new Error(module.UTF8ToString(module._raw_error()))
     const camera = {
@@ -61,7 +69,7 @@ self.onmessage = async ({ data: { bytes, decoderURL, negative = false } }) => {
       aperture: positive(module._raw_aperture()),
     } : null
     let profile = null, sceneKelvin = null
-    if (negative) {
+    if (negative || exposure) {
       // Reflectance-based scene corrections and photographic highlight recovery
       // are inappropriate for transmission through an already-developed negative.
       self.postMessage({ status: 'Decoding RAW negative without highlight reconstruction' })

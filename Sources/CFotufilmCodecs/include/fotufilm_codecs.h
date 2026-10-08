@@ -20,6 +20,9 @@ enum {
     FFC_DECODE_SCAN = 1 << 0,
     /* Read samples with no stated colour encoding as linear sRGB light (not RAW). */
     FFC_DECODE_LINEAR_SAMPLES = 1 << 1,
+    /* With FFC_DECODE_SCAN, one exposure of a trichromatic scan (RAW): the camera's daylight
+     * balance rather than the shot's, each colour from its own photosites (half size). */
+    FFC_DECODE_EXPOSURE = 1 << 2,
 };
 
 /* What the file records about how it was made; strings are empty when unknown. */

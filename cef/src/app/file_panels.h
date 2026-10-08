@@ -12,8 +12,9 @@
 
 namespace fotufilm {
 
-// Files to open: "image", "video", "filmPack" or "all" (photographs and movies). `done` gets the
-// chosen paths, none when the panel was dismissed.
+// Files to open: "image", "video", "filmPack", "exposures" (the images and RAW files of a
+// trichromatic scan) or "all" (photographs and movies). `done` gets the chosen paths, none when
+// the panel was dismissed.
 void ChooseFilesToOpen(CefRefPtr<CefBrowser> browser, const std::string& kind,
                        std::function<void(std::vector<std::string>)> done);
 

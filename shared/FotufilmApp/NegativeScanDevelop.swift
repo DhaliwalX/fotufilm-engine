@@ -52,7 +52,10 @@ final class NegativeScan: @unchecked Sendable {
     init(data: Data, typeHint: String?) throws {
         original = data
         self.typeHint = typeHint
-        image = try NegativeScanImport.decode(data: data, identifierHint: typeHint)
+        // An untagged scan is the scanner's raw output, read as linear samples as the desktop
+        // reads it: a merged trichromatic scan is one.
+        image = try NegativeScanImport.decode(data: data, identifierHint: typeHint,
+                                              linearSamples: !NegativeScanImport.statesEncoding(data))
     }
 
     /// The films a scan can be read as: every installed negative.

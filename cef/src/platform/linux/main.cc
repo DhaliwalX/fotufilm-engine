@@ -163,6 +163,9 @@ NO_STACK_PROTECTOR int main(int argc, char* argv[]) {
       [shown, export_dir](const std::string& type, std::function<void(const std::string&)> done) {
         fotufilm::ChooseExportFolder(shown->browser(), type, export_dir, std::move(done));
       });
+  engine->SetExposurePicker([shown](std::function<void(std::vector<std::string>)> done) {
+    fotufilm::ChooseFilesToOpen(shown->browser(), "exposures", std::move(done));
+  });
   fotufilm::RegisterOpenExport(*dispatcher, fotufilm::OpenWithSystem);
 #endif
 

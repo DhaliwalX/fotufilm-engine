@@ -11,7 +11,8 @@ import FotufilmEditModel
 /// exports frame by frame through the same geometry and develop as its previews.
 extension HostService {
     /// `call` for hosts that show progress: a movie export reports `{progress, frames,
-    /// finalizing}`, Export All `{progress, done, total, name?, current?}`.
+    /// finalizing}`, Export All `{progress, done, total, name?, current?}`, Merge Trichromatic
+    /// Scans `{progress, status}`.
     public func call(_ method: String, params: Data, payload: UnsafeRawBufferPointer?,
                      progress: @escaping ([String: Any]) -> Void) throws -> Answer {
         switch method {
@@ -20,6 +21,9 @@ extension HostService {
         case "exportBatch":
             let parameters = (try? JSONSerialization.jsonObject(with: params)) as? [String: Any] ?? [:]
             return try answer(exportBatch(parameters, progress: progress))
+        case "mergeTrichromatic":
+            let parameters = (try? JSONSerialization.jsonObject(with: params)) as? [String: Any] ?? [:]
+            return try answer(mergeTrichromatic(parameters, progress: progress))
         default:
             return try call(method, params: params, payload: payload)
         }

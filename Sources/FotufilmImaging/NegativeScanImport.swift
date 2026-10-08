@@ -49,6 +49,63 @@ public enum NegativeScanImport {
         return atOrigin(image.oriented(forExifOrientation: orientation))
     }
 
+    /// Whether a file says how its samples encode light: an embedded profile, or a PNG's colour
+    /// chunks, as `Sources/CFotufilmCodecs` reads them. ImageIO gives every other file sRGB, and a
+    /// scan without one is the scanner's raw output, read as linear samples.
+    public static func statesEncoding(_ data: Data) -> Bool {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
+        else { return true }
+        let png = properties[kCGImagePropertyPNGDictionary] as? [CFString: Any] ?? [:]
+        return properties[kCGImagePropertyProfileName] != nil
+            || [kCGImagePropertyPNGsRGBIntent, kCGImagePropertyPNGGamma,
+                kCGImagePropertyPNGChromaticities].contains { png[$0] != nil }
+    }
+
+    /// One exposure of a trichromatic scan (`TrichromaticRoll`), as interleaved RGBA in the film
+    /// space: a camera RAW through a fixed daylight balance, so each light keeps its colour, at
+    /// half its size (each colour has only a quarter of the photosites); anything else as a scan.
+    /// About `longEdge` long when given.
+    public static func exposure(data: Data, identifierHint: String?,
+                                longEdge: Int?) throws -> (rgba: [Float], width: Int, height: Int) {
+        var image: CIImage
+        if RawDecode.isRaw(data: data, identifierHint: identifierHint) {
+            guard let filter = RawDecode.filter(data: data, identifierHint: identifierHint) else {
+                throw Failure.unreadable
+            }
+            RawDecode.configure(filter, recipe: .init(neutralKelvin: 6500, correctsLens: false,
+                extendedDynamicRangeAmount: 0, recoversHighlights: false))
+            // Exactly the size asked for: the policy's demosaic margin would double it.
+            let native = Float(max(filter.nativeSize.width, filter.nativeSize.height))
+            filter.scaleFactor = longEdge.map { min(0.5, Float($0) / native) } ?? 0.5
+            filter.exposure = 0
+            filter.baselineExposure = 0
+            if filter.isLuminanceNoiseReductionSupported { filter.luminanceNoiseReductionAmount = 0 }
+            if filter.isColorNoiseReductionSupported { filter.colorNoiseReductionAmount = 0 }
+            guard let output = filter.outputImage else { throw Failure.unreadable }
+            image = atOrigin(output)
+        } else {
+            image = try decode(data: data, identifierHint: identifierHint,
+                               linearSamples: !statesEncoding(data))
+            if let longEdge {
+                let scale = min(1, CGFloat(longEdge) / max(image.extent.width, image.extent.height))
+                if scale < 1 {
+                    image = atOrigin(image.samplingLinear()
+                        .transformed(by: CGAffineTransform(scaleX: scale, y: scale)))
+                }
+            }
+        }
+        let width = Int(image.extent.width), height = Int(image.extent.height)
+        guard width > 0, height > 0, width <= 40000, height <= 40000,
+              width * height <= 150_000_000 else { throw Failure.unreadable }
+        var rgba = [Float](repeating: 1, count: width * height * 4)
+        CIContext(options: [.workingColorSpace: linearSpace, .cacheIntermediates: false])
+            .render(image, toBitmap: &rgba, rowBytes: width * 16,
+                    bounds: CGRect(x: 0, y: 0, width: width, height: height), format: .RGBAf,
+                    colorSpace: filmSpace)
+        return (rgba, width, height)
+    }
+
     public static func sampleBorder(image: CIImage, rect: CGRect,
                                     colorSpace: CGColorSpace = linearSpace) throws -> SIMD3<Float> {
         let e = image.extent

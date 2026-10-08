@@ -17,8 +17,9 @@ export function isTIFF(header) {
         (header[3] === 42 || header[3] === 43)))
   );
 }
-export async function importTIFF(file, options = {}) {
-  const decoded = await decodeImageWorker(
+// The TIFF's pixels: `{pixels, width, height, bitDepth}`, interleaved linear Rec. 2020 RGBA.
+export function decodeTIFF(file, options = {}) {
+  return decodeImageWorker(
     file,
     () =>
       new Worker(new URL("./tiff-import-worker.js", import.meta.url), {
@@ -33,6 +34,9 @@ export async function importTIFF(file, options = {}) {
       },
     },
   );
+}
+export async function importTIFF(file, options = {}) {
+  const decoded = await decodeTIFF(file, options);
   const image = new LinearImage(decoded);
   image.deep = { format: "TIFF", bitDepth: decoded.bitDepth };
   image.lensMetadata = await readPhotoMetadata(file, options);

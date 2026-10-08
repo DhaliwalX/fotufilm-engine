@@ -72,6 +72,9 @@ struct HostPlatform {
             "thumbnails": thumbnails != nil,
             // Scanned negatives open as documents, read as the edit's film and printed.
             "negativeScans": decoder != nil || scans != nil,
+            // Merge Trichromatic Scans: exposures under red, green and blue light merged into
+            // scans beside them (`mergeTrichromatic`).
+            "trichromaticScans": scans != nil,
             "subjectSelection": subjects != nil,
             "copyImage": clipboard != nil,
             "printFrames": frames != nil,
@@ -114,6 +117,8 @@ protocol HostScanDecoder {
     /// The scan in linear Rec. 2020: through the file's colour profile, its samples read as
     /// linear light where it has none, a camera RAW with every rendering choice off.
     func decodeScan(_ url: URL) throws -> HostImage
+    /// One exposure of a trichromatic scan (`TrichromaticRoll.Decode`).
+    func decodeExposure(_ url: URL, longEdge: Int?) throws -> (rgba: [Float], width: Int, height: Int)
     /// The unevenness of the light a photograph of the bare light source shows.
     func measureLight(_ url: URL) throws -> NegativeLightFrame
 }

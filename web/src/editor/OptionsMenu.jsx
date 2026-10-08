@@ -33,6 +33,7 @@ export default function OptionsMenu() {
     pasteSettings,
     applyPreset,
     importNegatives,
+    importTrichromatic,
   } = useEditor();
   const noPhoto = !active || exporting;
   const imageOnlyDisabled = !active || !!active.image.video || exporting;
@@ -53,6 +54,16 @@ export default function OptionsMenu() {
             >
               <Icon slot="icon" name="negative" />
               <Text>Import Scanned Negative…</Text>
+            </MenuItem>
+          )}
+          {importTrichromatic && (
+            <MenuItem
+              id="trichromatic"
+              isDisabled={exporting}
+              onAction={importTrichromatic}
+            >
+              <Icon slot="icon" name="negative" />
+              <Text>Import Trichromatic Scan…</Text>
             </MenuItem>
           )}
           {filmPacks && (

@@ -39,6 +39,9 @@ Usage:
   fotufilm --suggest-film <scan>           Suggest which films a scanned negative could be, from
                                            its clear film base; add --light-frame <image> of the
                                            bare light source to weigh the base's density too
+  fotufilm --merge-trichromatic <exposure>...
+                                           Merge exposures of negatives under red, green and
+                                           blue light into scans beside the red ones
   fotufilm --list-web-media                Export browser output-medium choices as JSON
   fotufilm --dump-web-camera-profiles <f>  Export native camera correction anchors (or - for stdout)
   fotufilm --dump-web-scene <directory>    Export scene-light spectral reconstruction for the browser
@@ -124,7 +127,7 @@ var args = Array(CommandLine.arguments.dropFirst())
 while !args.isEmpty {
     let a = args.removeFirst()
     if a == "--list-web-media" || a == "--list-stocks" || a == "--list-stock-capabilities" || a == "--list-formats" || a == "--dump-curves"
-        || a == "--list-film-bases"
+        || a == "--list-film-bases" || a == "--merge-trichromatic"
         || a == "--dump-spectra" || a == "--help" || a == "-h"
         || a == "--autoexpose" || a == "--check-stocks" || a == "--make-pack-key"
         || a == "--stages" || a == "--hlg" || a == "--edge" || valuelessControlFlags.contains(a) {
@@ -165,6 +168,41 @@ if flags["--list-film-bases"] != nil {
     }
     exit(0)
 }
+
+#if canImport(CoreImage)
+if flags["--merge-trichromatic"] != nil {
+    guard !positional.isEmpty else { fail("--merge-trichromatic needs the exposures to merge") }
+    do {
+        let outcome = try TrichromaticRoll.merge(
+            positional.map { URL(fileURLWithPath: $0) },
+            decode: { url, longEdge in
+                try NegativeScanImport.exposure(
+                    data: Data(contentsOf: url),
+                    identifierHint: UTType(filenameExtension: url.pathExtension)?.identifier,
+                    longEdge: longEdge)
+            },
+            store: { scan, red in
+                let url = TrichromaticRoll.scanURL(red: red)
+                try scan.write(to: url, options: .atomic)
+                return url
+            },
+            progress: { _, status in FileHandle.standardError.write(Data("\(status)\n".utf8)) })
+        for frame in outcome.frames {
+            print(String(format: "%@ <- %@  green %.2f px, blue %.2f px", frame.scan.path,
+                         frame.sources.map(\.lastPathComponent).joined(separator: " "),
+                         frame.green.residual, frame.blue.residual))
+        }
+        for failure in outcome.failures {
+            print("not merged: \(failure.sources.map(\.lastPathComponent).joined(separator: " ")): \(failure.reason)")
+        }
+        if !outcome.blanks.isEmpty { print("blank: " + outcome.blanks.map(\.lastPathComponent).joined(separator: " ")) }
+        if !outcome.others.isEmpty { print("not one light: " + outcome.others.map(\.lastPathComponent).joined(separator: " ")) }
+        exit(outcome.failures.isEmpty ? 0 : 1)
+    } catch {
+        fail(error.localizedDescription)
+    }
+}
+#endif
 
 if let scanPath = flags["--suggest-film"] {
     /// A 512-pixel preview of a scan in the film reading's linear Rec.2020, and its median.

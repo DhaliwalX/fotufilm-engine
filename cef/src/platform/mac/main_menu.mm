@@ -183,6 +183,7 @@ NSMenu* FotufilmMainMenu(NSArray<NSDictionary*>* plugins) {
   NSMenu* file = Submenu(bar, @"File");
   Add(file, @"Open…", @selector(openDocument:), @"o");
   Command(file, @"Import Scanned Negative…", @"importNegative");
+  Command(file, @"Import Trichromatic Scan…", @"importTrichromatic");
   NSMenu* recents = Submenu(file, @"Open Recent");
   recents.delegate = recent;
   Add(file, @"Use Sample Photo", @selector(useSamplePhoto:));

@@ -127,7 +127,10 @@ export function createDesktopBackend(channel) {
     longEdgeOfCrop: true,
     // Scanned negatives: `importMedia`/`importPath` with `negative` open one as a document.
     negativeScans: can.negativeScans
-      ? createNegativeScans(call, { binary: channel.binary === true })
+      ? createNegativeScans(call, {
+          binary: channel.binary === true,
+          trichromatic: can.trichromaticScans === true,
+        })
       : undefined,
     subjectSelection: can.subjectSelection === true,
     previewBudget: can.previewBudget,

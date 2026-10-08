@@ -5,6 +5,19 @@ import { newPhotoEdit } from "../app-settings.js";
 import { negativeStartingStock, newNegative } from "../negative-document.js";
 import { copySettings, pastedEdit } from "../edit-settings.js";
 import { restoreEdit } from "../saved-edits.js";
+// What a trichromatic merge left out, in a sentence each: frames it could not merge, blank
+// exposures and exposures under white light.
+export function trichromaticNotes({ failures = [], blanks = [], others = [] }) {
+  const list = (names) => names.join(", ");
+  return [
+    ...failures.map(({ sources, reason }) => `${list(sources)}: ${reason}`),
+    blanks.length ? `Left out as blank: ${list(blanks)}.` : "",
+    others.length ? `Left out, not under one light: ${list(others)}.` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
 export default function useDocumentActions({
   backend,
   exporting,
@@ -59,6 +72,53 @@ export default function useDocumentActions({
     input.current.click();
   }, [exporting, input]);
   const importNegatives = backend.negativeScans ? chooseNegatives : null;
+  // Trichromatic scans: exposures of negatives under red, green and blue light, merged into scans
+  // (backend.negativeScans.mergeTrichromatic) that open as negatives. A host with its own open
+  // panel asks for the exposures; otherwise they are chosen here.
+  const trichromatic = backend.negativeScans?.mergeTrichromatic;
+  const chooseExposures = () => {
+    if (exporting) return;
+    if (backend.negativeScans.choosesExposures) {
+      mergeExposures();
+      return;
+    }
+    if (!input.current) return;
+    input.current.dataset.negative = "trichromatic";
+    input.current.accept = NEGATIVE_ACCEPT;
+    input.current.click();
+  };
+  const importTrichromatic = trichromatic ? chooseExposures : null;
+  async function mergeExposures(chosen) {
+    if (exporting) return;
+    importController.current?.abort();
+    const controller = new AbortController();
+    importController.current = controller;
+    setImportStatus("Merging exposures");
+    let merged;
+    try {
+      merged = await trichromatic(chosen, {
+        signal: controller.signal,
+        onProgress: (progress) => {
+          if (controller.signal.aborted || !progress?.status) return;
+          setImportStatus(`${progress.status} · ${Math.round(100 * (progress.progress ?? 0))}%`);
+        },
+      });
+    } catch (e) {
+      if (importController.current === controller) {
+        importController.current = null;
+        setImportStatus(null);
+      }
+      if (e.name !== "AbortError") setError(e.message || "The exposures could not be merged.");
+      return;
+    }
+    if (importController.current !== controller) return;
+    importController.current = null;
+    setImportStatus(null);
+    const left = trichromaticNotes(merged);
+    if (merged.scans.length)
+      await acceptFiles(merged.scans.map(({ file, path, name }) => ({ file, path, name, negative: true })));
+    if (left) setError(left);
+  }
 
   // A new document starts from its kept edit (useSavedEdits), or from the settings' starting film
   // and film model (the current film unless one is chosen).
@@ -412,6 +472,8 @@ export default function useDocumentActions({
   return {
     openFiles,
     importNegatives,
+    importTrichromatic,
+    mergeExposures,
     acceptFiles,
     selectFile,
     removeFile,

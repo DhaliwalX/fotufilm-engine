@@ -392,7 +392,112 @@ enum NegativeScanOpening {
                 guard let presenter = presenter() else { return }
                 pickFromFiles(from: presenter) { open(editor($0), from: presenter) }
             },
+            UIAction(title: "Trichromatic Scan", image: Glyph.image(Glyph.lamp)) { _ in
+                guard let presenter = presenter() else { return }
+                mergeExposures(from: presenter) { open(editor($0), from: presenter) }
+            },
         ])
+    }
+
+    /// A trichromatic scan: exposures of negatives under red, green and blue light, chosen in
+    /// Files and merged frame by frame (`TrichromaticRoll`). The first frame opens; the rest join
+    /// the shelf as scans.
+    static func mergeExposures(from presenter: UIViewController,
+                               then open: @escaping (NegativeScanSource) -> Void) {
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.image], asCopy: true)
+        picker.allowsMultipleSelection = true
+        let delegate = ExposuresDelegate { urls in
+            pending = nil
+            guard !urls.isEmpty else { return }
+            merge(urls, from: presenter, then: open)
+        }
+        pending = delegate
+        picker.delegate = delegate
+        presenter.present(picker, animated: true)
+    }
+
+    private static func merge(_ urls: [URL], from presenter: UIViewController,
+                              then open: @escaping (NegativeScanSource) -> Void) {
+        let working = UIAlertController(title: "Merging Exposures", message: "Measuring…",
+                                        preferredStyle: .alert)
+        let cancelled = MergeCancel()
+        working.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in cancelled.set() })
+        presenter.present(working, animated: true)
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("trichromatic-\(UUID().uuidString)", isDirectory: true)
+        Task {
+            let result = await Task.detached(priority: .userInitiated) {
+                Result {
+                    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                    return try TrichromaticRoll.merge(
+                        urls,
+                        decode: { url, longEdge in
+                            try NegativeScanImport.exposure(
+                                data: Data(contentsOf: url),
+                                identifierHint: UTType(filenameExtension: url.pathExtension)?.identifier,
+                                longEdge: longEdge)
+                        },
+                        store: { scan, red in
+                            let url = folder.appendingPathComponent(
+                                TrichromaticRoll.scanURL(red: red).lastPathComponent)
+                            try scan.write(to: url)
+                            return url
+                        },
+                        progress: { done, status in
+                            Task { @MainActor in working.message = "\(status) · \(Int(done * 100))%" }
+                        },
+                        shouldContinue: { !cancelled.isSet })
+                }
+            }.value
+            defer { try? FileManager.default.removeItem(at: folder) }
+            let outcome: TrichromaticRoll.Outcome
+            switch result {
+            case let .success(merged):
+                outcome = merged
+            case .failure(let error):
+                working.dismiss(animated: true) {
+                    guard !(error is TrichromaticRoll.Cancelled) else { return }
+                    alert("Exposures Not Merged", error.localizedDescription, from: presenter)
+                }
+                return
+            }
+            // Every frame but the first goes on the shelf; the first opens.
+            for frame in outcome.frames.dropFirst() {
+                guard let data = try? Data(contentsOf: frame.scan) else { continue }
+                _ = await EditLibrary.shared.create(scan: data, rawTypeHint: UTType.tiff.identifier,
+                                                    recipe: NegativeScanRecipe())
+            }
+            let first = outcome.frames.first.flatMap { try? Data(contentsOf: $0.scan) }
+            let names = { (urls: [URL]) in urls.map(\.lastPathComponent).joined(separator: ", ") }
+            let notes = outcome.failures.map { "\(names($0.sources)): \($0.reason)" }
+                + (outcome.blanks.isEmpty ? [] : ["Left out as blank: \(names(outcome.blanks))."])
+                + (outcome.others.isEmpty ? [] : ["Left out, not under one light: \(names(outcome.others))."])
+            working.dismiss(animated: true) {
+                if let first { open(.picked(first, typeHint: UTType.tiff.identifier)) }
+                if !notes.isEmpty {
+                    alert(first == nil ? "Exposures Not Merged" : "Some Exposures Left Out",
+                          notes.joined(separator: "\n"), from: presenter)
+                }
+            }
+        }
+    }
+
+    private static func alert(_ title: String, _ message: String, from presenter: UIViewController) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        var top = presenter
+        while let presented = top.presentedViewController, !presented.isBeingDismissed {
+            top = presented
+        }
+        top.present(alert, animated: true)
+    }
+
+    /// The Cancel of a merge in progress, read between its steps.
+    private final class MergeCancel: @unchecked Sendable {
+        private let lock = NSLock()
+        private var value = false
+        func set() { lock.withLock { value = true } }
+        var isSet: Bool { lock.withLock { value } }
     }
 
     /// Presents over whatever is already up, so a shelf or widget open lands on top.
@@ -457,6 +562,20 @@ enum NegativeScanOpening {
                     picker.dismiss(animated: true) { finish(data, type.identifier) }
                 }
             }
+        }
+    }
+
+    private final class ExposuresDelegate: NSObject, UIDocumentPickerDelegate {
+        private let finish: @MainActor ([URL]) -> Void
+        init(finish: @escaping @MainActor ([URL]) -> Void) { self.finish = finish }
+
+        func documentPicker(_ controller: UIDocumentPickerViewController,
+                            didPickDocumentsAt urls: [URL]) {
+            finish(urls)
+        }
+
+        func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+            finish([])
         }
     }
 

@@ -71,6 +71,7 @@ const COMMANDS = {
   undo: (e) => e.dispatch({ type: "undo" }),
   redo: (e) => e.dispatch({ type: "redo" }),
   importNegative: (e) => e.importNegatives?.(),
+  importTrichromatic: (e) => e.importTrichromatic?.(),
   export: (e) => e.setDialog("export"),
   settings: (e) => e.setDialog("settings"),
   plugins: (e) => e.setDialog("plugins"),
@@ -165,6 +166,7 @@ export function menuState(e) {
   const enabled = {
     open: !e.exporting,
     importNegative: !!e.importNegatives && !e.exporting && !e.dialog,
+    importTrichromatic: !!e.importTrichromatic && !e.exporting && !e.dialog,
     export: photo && e.stocks.length > 0,
     closePhoto: photo,
     undo: free && e.history.past.length > 0,

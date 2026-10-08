@@ -48,6 +48,11 @@ EngineBridge::EngineBridge(Dispatcher& dispatcher) : dispatcher_(dispatcher) {
                         [this](const Call& call, std::shared_ptr<Reply> reply) {
                           Export(call, std::move(reply));
                         });
+  // The exposures to merge are the host's to ask for; reading and merging them the engine's.
+  dispatcher.Register("mergeTrichromatic", Dispatcher::Thread::kUi,
+                      [this](const Call& call, std::shared_ptr<Reply> reply) {
+                        MergeExposures(call, std::move(reply));
+                      });
   // A cancel for the call being answered stops the develop inside the engine; calls still
   // queued see their own flag before they start.
   dispatcher.SetCancelHook([this] {
@@ -169,6 +174,21 @@ void EngineBridge::Export(const Call& call, std::shared_ptr<Reply> reply) {
     folder_picker_(type, std::move(chosen));
   else
     picker_(filename, type, std::move(chosen));
+}
+
+void EngineBridge::MergeExposures(const Call& call, std::shared_ptr<Reply> reply) {
+  if (!exposure_picker_) return reply->Reject("This host cannot choose exposures.");
+  auto pending = std::make_shared<Call>(call);
+  exposure_picker_([this, pending, reply](std::vector<std::string> paths) {
+    if (paths.empty()) return reply->Reject("No exposures were chosen.", "AbortError");
+    CefRefPtr<CefListValue> list = CefListValue::Create();
+    for (size_t i = 0; i < paths.size(); ++i) list->SetString(i, paths[i]);
+    CefRefPtr<CefDictionaryValue> fields = CefDictionaryValue::Create();
+    fields->SetList("paths", list);
+    pending->params = CefValue::Create();
+    pending->params->SetDictionary(fields);
+    dispatcher_.PostCall(pending, [this, pending, reply] { Handle(*pending, reply); });
+  });
 }
 
 namespace {

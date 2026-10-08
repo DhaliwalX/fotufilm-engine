@@ -4,6 +4,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 #include "bridge/dispatcher.h"
 #include "fotufilm.h"
@@ -35,6 +36,11 @@ class EngineBridge {
                                           std::function<void(const std::string& folder)> done)>;
   void SetFolderPicker(FolderPicker picker) { folder_picker_ = std::move(picker); }
 
+  // Asks for the exposures of a trichromatic scan (Merge, `mergeTrichromatic`): several image or
+  // RAW files out (none: cancelled). Called and answered on the UI thread.
+  using FilesPicker = std::function<void(std::function<void(std::vector<std::string>)> done)>;
+  void SetExposurePicker(FilesPicker picker) { exposure_picker_ = std::move(picker); }
+
   // Lends the engine the platform compositor's surfaces, so renders that name a layer go
   // straight to the screen (presentation/presentation.h); null takes them away.
   void SetPresenter(std::shared_ptr<ImagePresenter> presenter);
@@ -45,10 +51,12 @@ class EngineBridge {
   void Handle(const Call& call, std::shared_ptr<Reply> reply);
 
   void Export(const Call& call, std::shared_ptr<Reply> reply);
+  void MergeExposures(const Call& call, std::shared_ptr<Reply> reply);
 
   Dispatcher& dispatcher_;
   DestinationPicker picker_;
   FolderPicker folder_picker_;
+  FilesPicker exposure_picker_;
   fotufilm_engine* engine_ = nullptr;
   std::string failure_;
   // Engine thread.

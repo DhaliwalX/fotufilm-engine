@@ -1,7 +1,10 @@
 #include "FotufilmNegativeScan.h"
+#include "FotufilmTrichromatic.h"
 #include "FotufilmHalide.h"
 #if defined(FOTUFILM_HALIDE_ENABLED)
 #include "Pipeline/NegativeScan.h"
+#include "Pipeline/Trichromatic.h"
+#include "FotufilmTrichromaticMeasure.h"
 #include <mutex>
 #include <memory>
 #include <cmath>
@@ -82,12 +85,89 @@ extern "C" int32_t fotufilm_scan_prepare(const float *in, float *out, int32_t w,
         std::fprintf(stderr, "Scan preparation: %s\n", error.what()); return -2;
     }
 }
+extern "C" int32_t fotufilm_trichromatic_layer(const float *rgba, int32_t w, int32_t h,
+    const float colour[3], float *layer) {
+    float weights[3];
+    if (!rgba || !layer || !fotufilm::trichromatic::valid_size(w, h)
+        || !fotufilm::trichromatic::layer_weights(colour, weights)) return -1;
+    static std::mutex &mutex = *new std::mutex;
+    static auto *pipeline = (fotufilm::pipelines::TrichromaticLayerPipeline *)nullptr;
+    std::lock_guard<std::mutex> lock(mutex);
+    try {
+        auto target = Halide::get_host_target().with_feature(Halide::Target::StrictFloat);
+        if (!pipeline) {
+            auto candidate = std::make_unique<fotufilm::pipelines::TrichromaticLayerPipeline>();
+            candidate->output.compile_jit(target);
+            pipeline = candidate.release();
+        }
+        auto input = Halide::Buffer<float>::make_interleaved(const_cast<float *>(rgba), w, h, 4);
+        Halide::Buffer<float> output(layer, w, h), params(weights, 3);
+        pipeline->input.set(input); pipeline->parameters.set(params);
+        struct Unbind {
+            fotufilm::pipelines::TrichromaticLayerPipeline &pipeline;
+            ~Unbind() { pipeline.input.reset(); pipeline.parameters.reset(); }
+        } unbind{*pipeline};
+        pipeline->output.realize(output, target);
+        return 0;
+    } catch (const std::exception &error) {
+        std::fprintf(stderr, "Trichromatic layer: %s\n", error.what()); return -2;
+    }
+}
+
+extern "C" int32_t fotufilm_trichromatic_merge(const float *red, const float *green,
+    const float *blue, int32_t w, int32_t h, const float green_affine[6],
+    const float blue_affine[6], uint8_t *file, int64_t size) {
+    float p[15];
+    if (!fotufilm::trichromatic::merge_header(red, green, blue, w, h, green_affine, blue_affine,
+                                               file, size, p)) return -1;
+    static std::mutex &mutex = *new std::mutex;
+    static auto *pipeline = (fotufilm::pipelines::TrichromaticMergePipeline *)nullptr;
+    std::lock_guard<std::mutex> lock(mutex);
+    try {
+        auto target = Halide::get_host_target().with_feature(Halide::Target::StrictFloat);
+        if (!pipeline) {
+            auto candidate = std::make_unique<fotufilm::pipelines::TrichromaticMergePipeline>();
+            candidate->output.compile_jit(target);
+            pipeline = candidate.release();
+        }
+        Halide::Buffer<float> r(const_cast<float *>(red), w, h), g(const_cast<float *>(green), w, h),
+            b(const_cast<float *>(blue), w, h), params(p, 15);
+        auto output = Halide::Buffer<uint16_t>::make_interleaved(
+            reinterpret_cast<uint16_t *>(file + fotufilm::trichromatic::pixel_offset(h)), w, h, 3);
+        pipeline->red.set(r); pipeline->green.set(g); pipeline->blue.set(b);
+        pipeline->parameters.set(params);
+        struct Unbind {
+            fotufilm::pipelines::TrichromaticMergePipeline &pipeline;
+            ~Unbind() {
+                pipeline.red.reset(); pipeline.green.reset(); pipeline.blue.reset();
+                pipeline.parameters.reset();
+            }
+        } unbind{*pipeline};
+        pipeline->output.realize(output, target);
+        return 0;
+    } catch (const std::exception &error) {
+        std::fprintf(stderr, "Trichromatic merge: %s\n", error.what()); return -2;
+    }
+}
 #elif !defined(FOTUFILM_HALIDE_IOS_AOT)
 // SwiftPM can supply the unavailable stub beside the app's AOT implementation.
 extern "C" FOTUFILM_FALLBACK int32_t fotufilm_negative_scan(
     const float *, float *, int32_t, int32_t, const float *, int32_t) { return -3; }
 extern "C" FOTUFILM_FALLBACK int32_t fotufilm_scan_prepare(
     const float *, float *, int32_t, int32_t, const float *, int32_t, int32_t, const float *) {
+    return -3;
+}
+extern "C" FOTUFILM_FALLBACK int32_t fotufilm_trichromatic_measure(
+    const float *, int32_t, int32_t, float *, int32_t *) { return -3; }
+extern "C" FOTUFILM_FALLBACK int32_t fotufilm_trichromatic_group(
+    const int32_t *, int32_t, int32_t *) { return -3; }
+extern "C" FOTUFILM_FALLBACK int32_t fotufilm_trichromatic_layer(
+    const float *, int32_t, int32_t, const float *, float *) { return -3; }
+extern "C" FOTUFILM_FALLBACK int32_t fotufilm_trichromatic_register(
+    const float *, const float *, int32_t, int32_t, float *, float *) { return -3; }
+extern "C" FOTUFILM_FALLBACK int64_t fotufilm_trichromatic_file_size(int32_t, int32_t) { return -3; }
+extern "C" FOTUFILM_FALLBACK int32_t fotufilm_trichromatic_merge(const float *, const float *,
+    const float *, int32_t, int32_t, const float *, const float *, uint8_t *, int64_t) {
     return -3;
 }
 #endif

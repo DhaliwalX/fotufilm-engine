@@ -473,6 +473,95 @@ final class HostNegativeScanTests: XCTestCase {
         XCTAssertNil(service.negativeScans.scan(photo.json["handle"]))
     }
 
+    /// Writes `samples`, interleaved 16-bit RGB, as an uncompressed TIFF with no profile.
+    private func writeUntaggedTIFF(_ samples: [UInt16], width: Int, height: Int, to url: URL) throws {
+        var bytes: [UInt8] = Array("II".utf8) + [42, 0, 8, 0, 0, 0]
+        func short(_ v: Int) -> [UInt8] { [UInt8(v & 255), UInt8(v >> 8)] }
+        func long(_ v: Int) -> [UInt8] { short(v & 0xffff) + short(v >> 16) }
+        let entries: [(tag: Int, type: Int, count: Int, value: Int)] = [
+            (256, 3, 1, width), (257, 3, 1, height), (258, 3, 3, 0), (259, 3, 1, 1), (262, 3, 1, 2),
+            (273, 4, 1, 0), (277, 3, 1, 3), (278, 3, 1, height), (279, 4, 1, width * height * 6),
+            (284, 3, 1, 1),
+        ]
+        let ifdEnd = 8 + 2 + entries.count * 12 + 4, depths = ifdEnd, pixels = depths + 6
+        bytes += short(entries.count)
+        for entry in entries {
+            let value = entry.tag == 258 ? depths : entry.tag == 273 ? pixels : entry.value
+            bytes += short(entry.tag) + short(entry.type) + long(entry.count)
+                + (entry.type == 3 && entry.count == 1 ? short(value) + [0, 0] : long(value))
+        }
+        bytes += long(0) + short(16) + short(16) + short(16)
+        for v in samples { bytes += short(Int(v)) }
+        try Data(bytes).write(to: url)
+    }
+
+    /// Import Trichromatic Scan: three exposures, chosen by the host's panel, merge into a scan
+    /// beside the red one that opens as a negative; exposures that make no frame are refused.
+    func testTrichromaticExposuresMergeIntoANegative() throws {
+        let (service, engine) = try service()
+        defer { fotufilm_engine_destroy(engine) }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("trichromatic-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let width = 400, height = 300
+        // Detail at every scale that never repeats: smoothly interpolated lattice noise.
+        func film(_ x: Double, _ y: Double) -> Double {
+            func lattice(_ i: Int, _ j: Int, _ octave: Int) -> Double {
+                var h = UInt64(bitPattern: Int64(i &* 73_856_093 ^ j &* 19_349_663 ^ octave &* 83_492_791))
+                h = (h ^ (h >> 33)) &* 0xff51afd7ed558ccd
+                h = (h ^ (h >> 33)) &* 0xc4ceb9fe1a85ec53
+                return Double(h >> 11) / Double(1 << 53) - 0.5
+            }
+            var value = 0.0, cell = 32.0, amplitude = 1.0
+            for octave in 0..<5 {
+                let fx = x / cell, fy = y / cell
+                let i = Int(fx.rounded(.down)), j = Int(fy.rounded(.down))
+                let tx = fx - Double(i), ty = fy - Double(j)
+                let sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty)
+                let top = lattice(i, j, octave) * (1 - sx) + lattice(i + 1, j, octave) * sx
+                let bottom = lattice(i, j + 1, octave) * (1 - sx) + lattice(i + 1, j + 1, octave) * sx
+                value += amplitude * (top * (1 - sy) + bottom * sy)
+                cell /= 2
+                amplitude *= 0.7
+            }
+            return pow(10, -0.5 - 0.8 * value)
+        }
+        // Red, green and blue light, each exposure a few pixels from the last, named in order.
+        let lights: [SIMD3<Double>] = [SIMD3(0.8, 0.03, 0), SIMD3(0.02, 0.7, 0.06), SIMD3(0.05, 0.03, 0.6)]
+        let shifts: [(Double, Double)] = [(0, 0), (6.5, -3.25), (-4.75, 5.5)]
+        var paths: [String] = []
+        for (index, (light, shift)) in zip(lights, shifts).enumerated() {
+            var samples = [UInt16](repeating: 0, count: width * height * 3)
+            for y in 0..<height {
+                for x in 0..<width {
+                    let t = film(Double(x) + shift.0, Double(y) + shift.1)
+                    for c in 0..<3 {
+                        samples[(y * width + x) * 3 + c] = UInt16(min(light[c] * t, 1) * 65535)
+                    }
+                }
+            }
+            let url = directory.appendingPathComponent("frame-\(index + 1).tif")
+            try writeUntaggedTIFF(samples, width: width, height: height, to: url)
+            paths.append(url.path)
+        }
+
+        let merged = try call(service, "mergeTrichromatic", ["paths": Array(paths.reversed())]).json
+        let scans = try XCTUnwrap(merged["scans"] as? [[String: Any]])
+        XCTAssertEqual(scans.count, 1)
+        XCTAssertEqual(scans.first?["name"] as? String, "frame-1-rgb.tif")
+        XCTAssertEqual(scans.first?["sources"] as? [String], ["frame-1.tif", "frame-2.tif", "frame-3.tif"])
+        XCTAssertEqual((merged["failures"] as? [Any])?.count, 0)
+        let path = try XCTUnwrap(scans.first?["path"] as? String)
+        let opened = try call(service, "importPath", ["path": path, "negative": true])
+        XCTAssertEqual(opened.json["naturalWidth"] as? Int, width)
+        XCTAssertNotNil(opened.json["negative"])
+
+        XCTAssertThrowsError(try call(service, "mergeTrichromatic", ["paths": Array(paths.prefix(2))])) {
+            XCTAssertTrue(String(describing: $0).contains("do not group into frames"))
+        }
+    }
+
     /// A scan with no colour profile is the scanner's raw output: its samples are linear light,
     /// though ImageIO would read them as sRGB.
     func testAnUntaggedScanIsReadAsLinearSamples() throws {
@@ -499,7 +588,7 @@ final class HostNegativeScanTests: XCTestCase {
             .appendingPathComponent("untagged-\(UUID().uuidString).tiff")
         defer { try? FileManager.default.removeItem(at: url) }
         try Data(bytes).write(to: url)
-        XCTAssertFalse(CoreImageScanDecoder.statesEncoding(Data(bytes)))
+        XCTAssertFalse(NegativeScanImport.statesEncoding(Data(bytes)))
 
         let scan = try CoreImageScanDecoder().decodeScan(url)
         let rgba = scan.scene(width: width, height: height)

@@ -278,6 +278,27 @@ int main(int argc, char* argv[]) {
         [export_dir](const std::string& type, std::function<void(const std::string&)> done) {
           fotufilm::ChooseExportFolder(type, export_dir, std::move(done));
         });
+    // Import Trichromatic Scan…: each frame's exposures under red, green and blue light.
+    g_engine->SetExposurePicker([](std::function<void(std::vector<std::string>)> done) {
+      NSOpenPanel* panel = [NSOpenPanel openPanel];
+      panel.allowedContentTypes = @[ UTTypeImage ];
+      panel.allowsMultipleSelection = YES;
+      panel.canChooseDirectories = NO;
+      panel.prompt = @"Merge";
+      panel.message = @"Choose each frame's exposures under red, green and blue light, or whole "
+                      @"passes of a roll. Each frame's scan is saved beside its red exposure.";
+      auto finish = ^(NSModalResponse response) {
+        std::vector<std::string> paths;
+        if (response == NSModalResponseOK)
+          for (NSURL* url in panel.URLs)
+            if (url.isFileURL) paths.push_back(url.path.UTF8String);
+        done(std::move(paths));
+      };
+      if (NSWindow* window = g_window.window)
+        [panel beginSheetModalForWindow:window completionHandler:finish];
+      else
+        finish([panel runModal]);
+    });
     fotufilm::RegisterExportFiles(*g_dispatcher);
 #endif
     CefRefPtr<fotufilm::BrowserApp> app =

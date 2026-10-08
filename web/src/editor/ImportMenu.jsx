@@ -4,7 +4,7 @@ import { Icon } from "../icons.jsx";
 import { useEditor } from "./EditorContext.jsx";
 
 export default function ImportMenu() {
-  const { exporting, openFiles, importNegatives } = useEditor();
+  const { exporting, openFiles, importNegatives, importTrichromatic } = useEditor();
   return (
     <MenuTrigger>
       <ActionButton
@@ -18,12 +18,17 @@ export default function ImportMenu() {
       <Menu
         aria-label="Add media"
         onAction={(kind) =>
-          kind === "negative" ? importNegatives() : openFiles(kind)
+          kind === "negative"
+            ? importNegatives()
+            : kind === "trichromatic"
+              ? importTrichromatic()
+              : openFiles(kind)
         }
       >
         <MenuItem id="image">Image</MenuItem>
         <MenuItem id="video">Video</MenuItem>
         {importNegatives && <MenuItem id="negative">Negative</MenuItem>}
+        {importTrichromatic && <MenuItem id="trichromatic">Trichromatic Negative</MenuItem>}
       </Menu>
     </MenuTrigger>
   );

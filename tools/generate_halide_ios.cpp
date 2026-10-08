@@ -2,6 +2,7 @@
 #define FOTUFILM_HALIDE_AOT_GENERATOR 1
 #include "../Sources/FotufilmHalide/Pipeline/Gpu.h"
 #include "../Sources/FotufilmHalide/Pipeline/NegativeScan.h"
+#include "../Sources/FotufilmHalide/Pipeline/Trichromatic.h"
 #include "../Sources/FotufilmHalide/Pipeline/Transport.h"
 
 using namespace fotufilm;
@@ -214,6 +215,16 @@ int main(int argc, char **argv) {
         prepare.output.compile_to_static_library(
             (output / (prefix + "scan_prepare_cpu")).string(),
             {prepare.input, prepare.light, prepare.parameters}, prefix + "scan_prepare_cpu", host);
+        // A trichromatic scan's layers and their merge.
+        TrichromaticLayerPipeline layer;
+        layer.output.compile_to_static_library(
+            (output / (prefix + "trichromatic_layer_cpu")).string(),
+            {layer.input, layer.parameters}, prefix + "trichromatic_layer_cpu", host);
+        TrichromaticMergePipeline merge;
+        merge.output.compile_to_static_library(
+            (output / (prefix + "trichromatic_merge_cpu")).string(),
+            {merge.red, merge.green, merge.blue, merge.parameters},
+            prefix + "trichromatic_merge_cpu", host);
         // Layered Transport's spreading, on the CPU too, of a component's light or of the scene.
         for (const bool scene : {false, true}) {
             const std::string name = prefix + (scene ? "transport_scene_cpu" : "transport_cpu");
@@ -283,6 +294,20 @@ int main(int argc, char **argv) {
             {pipeline.input, pipeline.light, pipeline.parameters},
             "fotufilm_halide_ios_scan_prepare_cpu",
             target.with_feature(Halide::Target::NoRuntime).with_feature(Halide::Target::StrictFloat));
+    }
+    // A trichromatic scan's layers and their merge.
+    {
+        const auto cpu = target.with_feature(Halide::Target::NoRuntime)
+                             .with_feature(Halide::Target::StrictFloat);
+        TrichromaticLayerPipeline layer;
+        layer.output.compile_to_static_library(
+            (output / "fotufilm_halide_ios_trichromatic_layer_cpu").string(),
+            {layer.input, layer.parameters}, "fotufilm_halide_ios_trichromatic_layer_cpu", cpu);
+        TrichromaticMergePipeline merge;
+        merge.output.compile_to_static_library(
+            (output / "fotufilm_halide_ios_trichromatic_merge_cpu").string(),
+            {merge.red, merge.green, merge.blue, merge.parameters},
+            "fotufilm_halide_ios_trichromatic_merge_cpu", cpu);
     }
     // Layered Transport spreads each component's light with the same pipeline as the JIT hosts,
     // and exposes a component from the scene for a frame kept on the device.

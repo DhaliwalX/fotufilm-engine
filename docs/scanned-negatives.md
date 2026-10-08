@@ -143,6 +143,39 @@ swift run -c release fotufilm --suggest-film scan.dng [--light-frame light.dng]
 swift run -c release fotufilm --list-film-bases
 ```
 
+## Trichromatic scans
+
+A trichromatic scan photographs each frame three times, under red, green and blue light, so
+each exposure records one dye layer without the camera's broad channels mixing them. **Import
+Trichromatic Scan…** merges the exposures into one scan per frame, then opens each as a scanned
+negative.
+
+- **Light.** Each exposure's light is measured from its colour. Under one narrow light every
+  pixel is that light's colour scaled by the film's transmittance, whatever the camera's
+  balance or matrix did, so that scale is the exposure's layer (`TrichromaticScan`).
+- **Decoding.** Camera RAW files are decoded through a fixed daylight balance rather than
+  the shot's, and at half size, since each colour has only a quarter of the photosites.
+- **Blank exposures.** Exposures of no picture are left out: a light frame, or the film's
+  leader.
+- **Grouping.** The remaining exposures are grouped into frames in the order of their names.
+  They may alternate light by light, or come in whole passes of a roll, one light at a time.
+  Exposures under white light, and passes of unequal length, stop the merge with a count of
+  each light.
+- **Registration.** Green and blue are lined up with red by an affine fit. Phase correlation
+  runs on patches across the middle of the frame, and patches that disagree, such as a speck
+  on one layer, are dropped.
+- **The file.** The three layers are merged into an untagged 16-bit TIFF, each scaled so its
+  clear end sits near the top of the range. The desktop saves it beside the red exposure as
+  `<name>-rgb.tif`; the browser downloads it; iOS keeps it on the shelf.
+
+On a test roll of 35 mm colour negative the layers lined up to a median of 0.3 to 0.5 pixel. A merged scan has the same
+balance under each light, so its film base shows no orange mask and film suggestions read it as
+black-and-white; choose the film yourself.
+
+```sh
+swift run -c release fotufilm --merge-trichromatic exposures/*.ARW
+```
+
 ## Editor
 
 Choose **Import Scanned Negative…** and open unconverted negatives. Each opens as

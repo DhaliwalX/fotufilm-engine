@@ -244,7 +244,8 @@ static void developRaw(const std::string &path, uint32_t options, uint32_t longE
     params.gamm[1] = 1;
     params.no_auto_bright = 1;
     params.adjust_maximum_thr = 0;
-    params.use_camera_wb = 1;
+    // An exposure under one coloured light keeps that light's colour: no shot balance undoes it.
+    params.use_camera_wb = options & FFC_DECODE_EXPOSURE ? 0 : 1;
     params.use_auto_wb = 0;
     params.use_camera_matrix = 1;
     // Keep the sensor range while balancing white; restore its scale in float below. Clipping
@@ -254,7 +255,8 @@ static void developRaw(const std::string &path, uint32_t options, uint32_t longE
     params.user_flip = -1;
     const uint32_t nativeLong = uint32_t(std::max(nativeWidth, nativeHeight));
     // Half size where the Mac's scale factor (`RawDecode.scaleFactor`) is at most one half.
-    params.half_size = longEdge > 0 && 4ull * longEdge <= nativeLong ? 1 : 0;
+    params.half_size = (options & FFC_DECODE_EXPOSURE) || (longEdge > 0 && 4ull * longEdge <= nativeLong)
+        ? 1 : 0;
 
     // Keep RAW, working camera RGB, demosaic scratch, processed RGB16 and output live together
     // in this admission estimate. Half-size demosaicing still unpacks the complete sensor.
@@ -412,7 +414,8 @@ extern "C" int32_t ffc_decode_raw(const char *path, uint32_t options, uint32_t l
     auto fail = [&](const char *message) { if (error && errorSize) std::snprintf(error, errorSize, "%s", message); };
     try {
         if (!path || !out || !sourceWidth || !sourceHeight || !limits || !limits->max_file_bytes
-            || !limits->max_sensor_pixels || !limits->max_working_bytes || (options & ~FFC_DECODE_SCAN))
+            || !limits->max_sensor_pixels || !limits->max_working_bytes
+            || (options & ~(FFC_DECODE_SCAN | FFC_DECODE_EXPOSURE)))
             throw ffc::Failure("Invalid RAW decode request.");
         ffc::developRaw(path, options, longEdge, limits, *out, *sourceWidth, *sourceHeight);
         return FFC_RAW_OK;
