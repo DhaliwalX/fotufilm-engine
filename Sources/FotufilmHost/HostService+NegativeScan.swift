@@ -228,12 +228,21 @@ extension HostService {
             return HostNegativeScan.preview(try self.makeScene(image, geometry: framing, sizes: sizes),
                                             width: sizes.output.0, height: sizes.output.1)
         }
+        let roll = negative?.roll
         if let stock {
             prepared.edit.negativeReading = try scan.reading(key, stock: stock, border: border,
-                                                             preview: preview)
+                                                             roll: roll, preview: preview)
         } else {
-            prepared.image = try scan.positive(key, border: border, light: light, preview: preview)
+            prepared.image = try scan.positive(key, border: border, light: light, roll: roll,
+                                               preview: preview)
         }
+        // What this frame measures for its roll, kept from the reading above.
+        let measured = try scan.measure(key, border: border, preview: preview)
+        prepared.negativeMeasure = [
+            "border": (0..<3).map { Double(measured.border[$0]) },
+            "denseEnd": measured.dense.map { dense in (0..<3).map { Double(dense[$0]) } as Any }
+                ?? NSNull(),
+        ]
     }
 
     /// Clear film sampled where the page points on the framed scan: the median over a patch a

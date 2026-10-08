@@ -54,6 +54,18 @@ export default function useSavedEdits({ backend, active, edit, stocks, setError 
     clearTimeout(timer.current);
     timer.current = setTimeout(flush, 400);
   }, [key, edit, flush]);
+  // Keeps the edit of a photograph other than the one being edited, as a roll's change reaches
+  // every frame of it (useRollActions). The photograph shown later with it keeps it as it is.
+  const keepEdit = useCallback(
+    (editKey, other) => {
+      const text = editText(other);
+      const baseline = baselines.current.get(editKey);
+      if (baseline) baseline.last = text;
+      return Promise.resolve().then(() => store.save(editKey, text));
+    },
+    [store],
+  );
+
   useEffect(() => {
     window.addEventListener("pagehide", flush);
     return () => {
@@ -62,5 +74,5 @@ export default function useSavedEdits({ backend, active, edit, stocks, setError 
     };
   }, [flush]);
 
-  return { savedEditFor };
+  return { savedEditFor, keepEdit };
 }

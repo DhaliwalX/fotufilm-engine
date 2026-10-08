@@ -163,8 +163,23 @@ bare light source divides out uneven scanning light.
 
 A library folder can be kept as a folder of scanned negatives. Its photos open as negatives, and
 its thumbnails show each scan read without a film, its clear base estimated from the thumbnail.
-A frame opened for the first time starts from the film, film settings, clear film and light
-frame of the folder's frame edited last, as frames of one roll share them.
+Each directory of the folder is a roll; a subfolder is a roll of its own. Opening one photo from
+the library brings every picture of its roll into the strip below the photograph, in the
+library's order; choosing several opens just those. A frame opened for the first time starts
+from the film, film settings, clear film, light frame and roll balance of its roll's frame
+edited last, as frames of one roll share them.
+
+The **Roll** panel works on the whole roll. **Measure Roll** develops every frame of the roll in
+the strip and reads each one's densest end, its highlights. The roll's colour is the median
+over its frames of each end's red and blue density per unit of its green; a frame filled by one
+colour, such as a sunset, moves a median little. Every frame is then balanced on that colour
+instead of its own, but each keeps its own green density, so it is still timed on its own
+highlights and a darker frame does not print darker. The roll's colour is kept with each frame's
+edit and travels with Copy Settings; the shown frame's change can be undone. **Balance This Frame
+Alone** returns one frame to its own colour, and **Balance Every Frame Alone** returns the whole
+roll. Measure again after cropping frames or adding them to the roll. Fewer than two frames with
+readable highlights cannot be measured. A roll shot under several lights is better balanced
+frame by frame.
 
 With **Normal**, the scan is read without a film and edited as a plain positive photograph.
 Each channel's density above the clear base is balanced on the frame's densest end and taken

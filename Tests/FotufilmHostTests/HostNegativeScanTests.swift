@@ -206,6 +206,48 @@ final class HostNegativeScanTests: XCTestCase {
         XCTAssertGreaterThan(green(try develop(service, exposed), 60, 50), green(plain, 60, 50))
     }
 
+    /// A frame measures its own densest end for its roll, and develops on the roll's colour: a
+    /// roll of the frame's own colour is no change, another colour is, read as a film or not.
+    func testAFrameMeasuresForItsRollAndDevelopsOnTheRollsColour() throws {
+        let (service, engine) = try service()
+        defer { fotufilm_engine_destroy(engine) }
+        let handle = open(service, width: 300, height: 200)
+        let reading: [String: Any] = ["border": border.indices.map { Double(border[$0]) }]
+        let prepared = try service.prepare(JSONSerialization.data(
+            withJSONObject: request(handle, maxEdge: 150, negative: reading)))
+        let measure = try XCTUnwrap(prepared.negativeMeasure)
+        let dense = try XCTUnwrap(measure["denseEnd"] as? [Double])
+        XCTAssertEqual(dense.count, 3)
+        XCTAssertGreaterThan(dense[1], 0.05)
+        XCTAssertEqual((measure["border"] as? [Double])?.map(Float.init), [border.x, border.y, border.z])
+
+        func green(_ print: (rgba: [Float], width: Int, height: Int)) -> Float {
+            print.rgba[(50 * print.width + 60) * 4 + 1]
+        }
+        func red(_ print: (rgba: [Float], width: Int, height: Int)) -> Float {
+            print.rgba[(50 * print.width + 60) * 4]
+        }
+        func rolled(_ colour: [Double]) -> [String: Any] {
+            reading.merging(["roll": ["colour": colour, "frames": 12]]) { $1 }
+        }
+        let own = [dense[0] / dense[1], dense[2] / dense[1]]
+        let warmer = [own[0] * 0.8, own[1]]
+        for stock in ["gold200", nil] as [String?] {
+            let alone = try develop(service, request(handle, stock: stock, maxEdge: 150, negative: reading))
+            let same = try develop(service, request(handle, stock: stock, maxEdge: 150, negative: rolled(own)))
+            let other = try develop(service, request(handle, stock: stock, maxEdge: 150,
+                                                     negative: rolled(warmer)))
+            XCTAssertEqual(red(same), red(alone), accuracy: 1e-4, stock ?? "Normal")
+            XCTAssertNotEqual(red(other), red(alone), accuracy: 1e-3, stock ?? "Normal")
+            // The roll's colour leaves green, which times the frame, where it was.
+            XCTAssertEqual(green(other), green(alone), accuracy: 2e-2, stock ?? "Normal")
+        }
+        // The measurement stays the frame's own whatever roll it is balanced on.
+        let onRoll = try service.prepare(JSONSerialization.data(
+            withJSONObject: request(handle, maxEdge: 150, negative: rolled(warmer))))
+        XCTAssertEqual(onRoll.negativeMeasure?["denseEnd"] as? [Double], dense)
+    }
+
     /// The print stage on the CPU and on the GPU make the same print of a scan.
     func testCPUAndGPUPrintsAgree() throws {
         let (service, engine) = try service()

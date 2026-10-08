@@ -333,6 +333,9 @@ public final class HostService {
         var geometry: SceneGeometry
         var maxEdge: Int?
         var sizes: (frame: (Int, Int), output: (Int, Int))
+        /// A scanned negative's measurement for its roll (`readNegative`): its clear film and its
+        /// own densest end, nil for a photograph.
+        var negativeMeasure: [String: Any]?
 
         /// The edit with what the photograph and its framing decide, as the Mac app's develop
         /// reads them off the scene (`FilmRender.develop`): a gauge nobody picked follows the
@@ -538,6 +541,7 @@ public final class HostService {
                 "elapsed": Double(DispatchTime.now().uptimeNanoseconds - started) / 1e6,
             ]
             if let plan { presented["framePlan"] = plan.json }
+            if let measure = prepared.negativeMeasure { presented["negativeMeasure"] = measure }
             if let subjects = subjectCount(body, cropMode: request.cropMode == true) {
                 presented["subjects"] = subjects
             }
@@ -563,6 +567,7 @@ public final class HostService {
         if let subjects = subjectCount(body, cropMode: request.cropMode == true) {
             answerBody["subjects"] = subjects
         }
+        if let measure = prepared.negativeMeasure { answerBody["negativeMeasure"] = measure }
         // The undeveloped picture changes only with the photograph, geometry and region: the
         // page names the one it holds and it crosses again only when it differs.
         let originalFrame = originals.last!

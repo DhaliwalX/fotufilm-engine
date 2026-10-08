@@ -11,6 +11,7 @@ import {
   plainReading,
   positiveSource,
 } from "../../src/negative-reading.js";
+import { rollBalance, rolledDenseEnd } from "../../src/negative-document.js";
 
 // A scan of `width`×`height` linear RGBA, each pixel from `at(x, y)`.
 function scan(width, height, at) {
@@ -105,4 +106,40 @@ test("without a film a negative reads as a plain positive, its densest end diffu
 test("the plain reading balances on the densest end", () => {
   assert.deepEqual(plainReading(border, null), { border, gains: [1, 1, 1], reference: 1 });
   assert.deepEqual(plainReading(border, [0.1, 1, 3]).gains, [2, 1, 0.5]);
+});
+
+test("a roll's colour is the median of its frames' highlight colours", () => {
+  // Three frames under one light, one filled by a sunset, and two too thin to read.
+  const ends = [
+    [0.9, 1.0, 1.2],
+    [1.8, 2.0, 2.4],
+    [1.35, 1.5, 1.8],
+    [1.5, 1.0, 0.6],
+    [0.01, 0.02, 0.03],
+    null,
+  ];
+  const roll = rollBalance(ends);
+  assert.equal(roll.frames, 4);
+  // Medians of red/green {0.9, 0.9, 0.9, 1.5} and blue/green {1.2, 1.2, 1.2, 0.6}.
+  assert.ok(Math.abs(roll.colour[0] - 0.9) < 1e-6, String(roll.colour[0]));
+  assert.ok(Math.abs(roll.colour[1] - 1.2) < 1e-6, String(roll.colour[1]));
+  // An even count takes the middle two.
+  assert.deepEqual(rollBalance([[1, 1, 1], [2, 1, 3]]).colour, [1.5, 2]);
+  assert.equal(rollBalance([[1, 1, 1]]), null);
+  assert.equal(rollBalance([]), null);
+});
+
+test("a frame on its roll keeps its own green and takes the roll's colour", () => {
+  const roll = { colour: [0.9, 1.2], frames: 4 };
+  const rolled = rolledDenseEnd([1.5, 1.0, 0.6], roll);
+  assert.deepEqual(rolled.map((v) => Number(v.toFixed(6))), [0.9, 1, 1.2]);
+  // Without a roll, or a frame too thin to read, the frame reads as it is.
+  assert.deepEqual(rolledDenseEnd([1.5, 1.0, 0.6], null), [1.5, 1.0, 0.6]);
+  assert.deepEqual(rolledDenseEnd([1, 0.01, 1], roll), [1, 0.01, 1]);
+  assert.equal(rolledDenseEnd(null, roll), null);
+  // The plain reading balances a rolled frame on the roll: green held, red and blue scaled.
+  const plain = plainReading([0.8, 0.5, 0.25], rolledDenseEnd([1.5, 1.0, 0.6], roll));
+  assert.ok(Math.abs(plain.gains[0] - 1 / 0.9) < 1e-6);
+  assert.ok(Math.abs(plain.gains[2] - 1 / 1.2) < 1e-6);
+  assert.equal(plain.reference, 1);
 });
