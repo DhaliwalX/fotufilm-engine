@@ -65,28 +65,41 @@ final class HostNegativeScan {
         return border
     }
 
-    /// The reading of a framing on `stock`. The framing's densest end is kept by `key` (the
-    /// framing, border and light), so each film reads it without drawing the scan again;
-    /// `preview` is the framed scan, made only when none is kept.
+    /// The reading of a framing on `stock`, balanced on `roll`'s colour when it has one. The
+    /// framing's densest end is kept by `key` (the framing, border and light), so each film reads
+    /// it without drawing the scan again; `preview` is the framed scan, made only when none is kept.
     func reading(_ key: String, stock: FilmStock, border: [Float],
+                 roll: ApproximateNegativeScan.RollBalance?,
                  preview: () throws -> (rgba: [Float], width: Int, height: Int)) throws
         -> NegativeScanPrint.Reading {
-        let (border, dense) = try denseEnd(key, border: border, preview: preview)
+        let (border, measured) = try denseEnd(key, border: border, preview: preview)
+        let dense = ApproximateNegativeScan.denseEnd(measured, roll: roll)
         return try NegativeScanPrint.Reading(
             stock: stock, border: border,
             balance: dense.map { ApproximateNegativeScan.balance(stock: stock, denseEnd: $0) } ?? .neutral)
     }
 
+    /// What a framing measures for its roll: the clear film it is read against and its own
+    /// densest end, before any roll's colour. Arguments as `reading`.
+    func measure(_ key: String, border: [Float],
+                 preview: () throws -> (rgba: [Float], width: Int, height: Int)) throws
+        -> (border: SIMD3<Float>, dense: SIMD3<Float>?) {
+        try denseEnd(key, border: border, preview: preview)
+    }
+
     /// The scan read without a film (`PlainNegativeScan`), evened under the light frame `light`:
     /// a scene-linear positive of the whole scan, which the editor frames and develops as it does
-    /// any photograph. Arguments as `reading`.
+    /// any photograph, balanced on `roll`'s colour when it has one. Arguments as `reading`.
     func positive(_ key: String, border: [Float], light id: String?,
+                  roll: ApproximateNegativeScan.RollBalance?,
                   preview: () throws -> (rgba: [Float], width: Int, height: Int)) throws -> HostImage {
-        if let kept = lock.withLock({ plain }), kept.key == key { return kept.image }
-        let (border, dense) = try denseEnd(key, border: border, preview: preview)
+        let plainKey = "\(key)|\(roll.map { "\($0.colour)" } ?? "")"
+        if let kept = lock.withLock({ plain }), kept.key == plainKey { return kept.image }
+        let (border, measured) = try denseEnd(key, border: border, preview: preview)
+        let dense = ApproximateNegativeScan.denseEnd(measured, roll: roll)
         let positive = try prepared(light: id.flatMap(lightFrame),
                                     plain: PlainNegativeScan(border: border, denseEnd: dense))
-        lock.withLock { plain = (key, positive) }
+        lock.withLock { plain = (plainKey, positive) }
         return positive
     }
 

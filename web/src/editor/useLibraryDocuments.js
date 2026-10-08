@@ -28,17 +28,21 @@ export default function useLibraryDocuments({
           .filter((file) => file.editKey)
           .map((file) => [file.editKey, file]),
       );
-      const fresh = items
-        .filter((item) => !open.has(item.key))
-        .map((item) => ({
-          file: item.file,
-          editKey: item.key,
-          negative: !!item.negative,
-          roll: item.roll ?? null,
-        }));
-      if (origin && items[0]) setHandoff({ ...origin, key: items[0].key });
-      if (fresh.length) await acceptFiles(fresh);
-      else if (open.has(items[0]?.key)) selectFile(open.get(items[0].key));
+      // The photo chosen, shown first; a roll opened with it fills the strip around it.
+      const shown = items.find((item) => item.shown) ?? items[0];
+      const fresh = items.filter((item) => !open.has(item.key));
+      if (origin && shown) setHandoff({ ...origin, key: shown.key });
+      if (fresh.length)
+        await acceptFiles(
+          items.map((item) => ({
+            file: item.file,
+            editKey: item.key,
+            negative: !!item.negative,
+            roll: item.roll ?? null,
+            shown: item === shown,
+          })),
+        );
+      else if (open.has(shown?.key)) selectFile(open.get(shown.key));
       if (problems.length)
         setError((current) => [current, ...problems].filter(Boolean).join(" "));
     },

@@ -22,6 +22,8 @@ import {
   filteredPhotos,
   folderTree,
   nextSelection,
+  openedPhotos,
+  photoDirectory,
   rollEdit,
   sortedPhotos,
   steppedKey,
@@ -180,24 +182,33 @@ export default function PhotoLibrary({
     if (id) setScope({ folderId: id, path: "" });
   };
 
+  // One photo opens its whole roll into the strip (openedPhotos), shown first; a picture of the
+  // roll no longer in its folder is left out, and named only when it was the one chosen.
   const openPhotos = async (list) => {
     if (!list.length) return;
+    const opened = openedPhotos(list, library.folders, library.records, filters.sort);
+    const files = await Promise.allSettled(opened.photos.map(currentFile));
     const items = [],
       missing = [];
-    for (const photo of list) {
-      try {
-        items.push({
-          key: photo.key,
-          name: photo.name,
-          file: await currentFile(photo),
-          ...(photo.negative && negatives
-            ? { negative: true, roll: rollEdit(library.records, photo.folderId) }
-            : {}),
-        });
-      } catch {
-        missing.push(photo.name);
+    opened.photos.forEach((photo, index) => {
+      const shown = photo.key === opened.shown;
+      if (files[index].status !== "fulfilled") {
+        if (shown || list.includes(photo)) missing.push(photo.name);
+        return;
       }
-    }
+      items.push({
+        key: photo.key,
+        name: photo.name,
+        file: files[index].value,
+        ...(shown ? { shown: true } : {}),
+        ...(photo.negative && negatives
+          ? {
+              negative: true,
+              roll: rollEdit(library.records, photo.folderId, photoDirectory(photo)),
+            }
+          : {}),
+      });
+    });
     const tile = document.getElementById(tileId(photos.indexOf(list[0])));
     const image = tile?.querySelector("img");
     onOpenPhotos({

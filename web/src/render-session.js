@@ -34,6 +34,7 @@ import {
   plainReading,
   positiveSource,
 } from './negative-reading.js'
+import { rolledDenseEnd } from './negative-document.js'
 import {
   assetUrl,
   sceneScreenMeter,
@@ -552,13 +553,20 @@ export class RenderSession {
         )
         if (!prepared || stale()) return null
         const { source: scan } = prepared
-        const framed = edit.negative
+        // Not `framed`, which says whether the picture takes a print frame.
+        const reading = edit.negative
           ? await this.negativeFraming(image, edit, report, stale)
           : null
-        if (edit.negative && (!framed || stale())) return null
+        if (edit.negative && (!reading || stale())) return null
+        // The frame read on its roll's colour, when it is balanced on its roll.
+        const dense = reading && rolledDenseEnd(reading.dense, edit.negative.roll)
+        // What this frame measures for its roll (useRollActions), before any roll's colour.
+        const negativeMeasure = reading
+          ? { border: reading.border, denseEnd: reading.dense }
+          : undefined
         // A negative without a film is a positive photograph (plainReading); one read as a film
         // prints from its scan, which the kernels read as the film.
-        const plain = edit.negative && !negative ? plainReading(framed.border, framed.dense) : null
+        const plain = edit.negative && !negative ? plainReading(reading.border, dense) : null
         const preparation = plain ? await loadScanPreparation() : null
         if (stale()) return null
         const scene = (pixels) => (plain ? positiveSource(pixels, plain, preparation) : pixels)
@@ -622,8 +630,8 @@ export class RenderSession {
                   ...(negative
                     ? {
                         negative: {
-                          border: framed.border,
-                          denseEnd: framed.dense,
+                          border: reading.border,
+                          denseEnd: dense,
                           light: negativeLight(edit.params),
                         },
                       }
@@ -768,6 +776,7 @@ export class RenderSession {
             backend,
             elapsed,
             framePlan,
+            negativeMeasure,
             renderMilliseconds: performance.now() - started,
           }
         }
@@ -852,6 +861,7 @@ export class RenderSession {
           sceneSource: source,
           // The scan itself, where its clear film is picked.
           scanSource: scan,
+          negativeMeasure,
           canvas,
           blob,
           original,

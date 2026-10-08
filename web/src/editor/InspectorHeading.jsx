@@ -1,7 +1,6 @@
 import PanelDismissButton from "./PanelDismissButton.jsx";
 import { ActionButton } from "@react-spectrum/s2/ActionButton";
 import { Tooltip, TooltipTrigger } from "@react-spectrum/s2/Tooltip";
-import { inspectorPanels } from "../editor-catalogue.js";
 import { Icon } from "../icons.jsx";
 import { useEditor } from "./EditorContext.jsx";
 const help = {
@@ -9,12 +8,13 @@ const help = {
   light: "Adjust the light and filters, then refine the colour grade.",
   develop: "Develop the film, then shape its grain and colour separation.",
   print: "Choose a print or scan, set its viewing light, and export.",
+  roll: "Balance every frame of a roll of negatives on the roll's colour.",
   selective: "Adjust a selected colour, area, or subject.",
   crop: "Frame and straighten the finished photograph.",
   pipeline: "Inspect each stage of the film development pipeline.",
 };
 export default function InspectorHeading() {
-  const { panel } = useEditor();
+  const { panel, inspectorPanels } = useEditor();
   return (
     <div className="darkroom-heading">
       <h2>

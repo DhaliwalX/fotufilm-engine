@@ -13,6 +13,7 @@ import InspectorHeading from "./InspectorHeading.jsx";
 import InspectorPanel from "../InspectorPanel.jsx";
 import FilmInspector from "./FilmInspector.jsx";
 import NegativeInspector from "./NegativeInspector.jsx";
+import RollInspector from "./RollInspector.jsx";
 import PrintInspector from "./PrintInspector.jsx";
 import LightInspector from "./LightInspector.jsx";
 import LensFilters from "../LensFilters.jsx";
@@ -85,6 +86,7 @@ export default function EditorInspector() {
         {panel === "film" && (edit.negative ? <NegativeInspector /> : <FilmInspector />)}
         {panel === "develop" && <DevelopInspector />}
         {panel === "print" && <PrintInspector />}
+        {panel === "roll" && <RollInspector />}
         {panel === "light" && <LightInspector />}
         {panel === "light" && !negative && selectedStock?.available.includes("shutter") && (
           <Disclosure

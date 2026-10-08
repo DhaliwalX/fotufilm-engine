@@ -266,7 +266,7 @@
     color: var(--muted);
   }
   .inspector-collapsed {
-    grid-template-columns: 236px minmax(0, 1fr) 46px;
+    grid-template-columns: var(--film-width, 236px) minmax(0, 1fr) 46px;
   }
   .film-collapsed.inspector-collapsed {
     grid-template-columns: 60px minmax(0, 1fr) 46px;

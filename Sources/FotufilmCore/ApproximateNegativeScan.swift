@@ -157,6 +157,40 @@ public struct ApproximateNegativeScan: Encodable, Equatable, Sendable {
         return SIMD3(dense[0], dense[1], dense[2])
     }
 
+    /// The colour a roll's frames share: over the frames whose densest ends can be read, the
+    /// median of each end's red and blue density per unit of its green. The editor measures it
+    /// (web/src/negative-reading.js `rollBalance`) and keeps it with each frame's edit.
+    public struct RollBalance: Codable, Equatable, Sendable {
+        /// The densest end's red and blue over its green.
+        public var colour: [Float]
+        /// How many frames it was measured on.
+        public var frames: Int
+
+        public init(colour: [Float], frames: Int) {
+            self.colour = colour
+            self.frames = frames
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            colour = try container.decode([Float].self, forKey: .colour)
+            frames = try container.decode(Int.self, forKey: .frames)
+            guard colour.count == 2, colour.allSatisfy({ $0.isFinite && $0 > 0 }), frames >= 2 else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .colour, in: container, debugDescription: "Invalid roll balance.")
+            }
+        }
+    }
+
+    /// A frame's densest end read on its roll's colour: its own green, which times its print,
+    /// with red and blue in the roll's proportion to it. `dense` as it is without a roll, or one
+    /// too thin to read. Mirrors web/src/negative-reading.js `rolledDenseEnd`.
+    public static func denseEnd(_ dense: SIMD3<Float>?, roll: RollBalance?) -> SIMD3<Float>? {
+        guard let dense, let roll, (0..<3).allSatisfy({ dense[$0].isFinite }), dense.y > 0.05
+        else { return dense }
+        return SIMD3(roll.colour[0] * dense.y, dense.y, roll.colour[1] * dense.y)
+    }
+
     /// The balance of a frame whose densest end reads `dense` over the border, against `stock`.
     public static func balance(stock: FilmStock, denseEnd dense: SIMD3<Float>) -> Balance {
         guard (0..<3).allSatisfy({ dense[$0].isFinite }), dense[1] > 0.05 else { return .neutral }

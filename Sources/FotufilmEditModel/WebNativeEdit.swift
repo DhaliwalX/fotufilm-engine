@@ -43,6 +43,9 @@ public struct WebNativeEdit: Decodable {
         public var border: [Float]?
         /// A photograph of the bare light source the scan was made on (`NegativeLightFrame`).
         public var lightFrame: String?
+        /// The colour of the roll the frame is balanced on, nil for its own
+        /// (`ApproximateNegativeScan.RollBalance`).
+        public var roll: ApproximateNegativeScan.RollBalance?
     }
 
     public var edit: Edit

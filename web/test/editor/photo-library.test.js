@@ -4,6 +4,8 @@ import {
   ALL_FOLDERS,
   folderTree,
   nextSelection,
+  openedPhotos,
+  photoDirectory,
   rollEdit,
   steppedKey,
   visiblePhotos,
@@ -467,5 +469,42 @@ test("a folder of negatives opens its photos as negatives, a roll from its newes
   ]);
   assert.equal(JSON.parse(rollEdit(roll, "n")).edit.stock, "portra400");
   assert.equal(rollEdit(roll, "x"), null);
+});
+
+test("a roll is one directory: its frames inherit only from frames beside them", () => {
+  const kept = (stock) =>
+    JSON.stringify({ version: 1, edit: { stock, negative: { border: null, lightFrame: null } } });
+  const records = new Map([
+    ["n/a/01.tif", { edit: kept("gold200"), edited: 5 }],
+    ["n/b/01.tif", { edit: kept("portra400"), edited: 9 }],
+    ["n/a/deeper/01.tif", { edit: kept("ektar100"), edited: 12 }],
+    ["n/02.tif", { edit: kept("hp5plus400"), edited: 3 }],
+  ]);
+  assert.equal(JSON.parse(rollEdit(records, "n", "a")).edit.stock, "gold200");
+  assert.equal(JSON.parse(rollEdit(records, "n", "")).edit.stock, "hp5plus400");
+  assert.equal(rollEdit(records, "n", "c"), null);
+  // Without a directory, the whole folder, as before.
+  assert.equal(JSON.parse(rollEdit(records, "n")).edit.stock, "ektar100");
+});
+
+test("opening one photo brings its roll into the strip, in the library's order", () => {
+  const entry = (path, modified = 0) => photoEntry({ id: "n" }, path, 1, modified);
+  const photos = ["10.tif", "2.tif", "1.tif", "sub/1.tif"].map((path, i) => entry(path, i));
+  const folders = [{ id: "n", photos }];
+  assert.equal(photoDirectory(photos[3]), "sub");
+  assert.equal(photoDirectory(photos[0]), "");
+  const opened = openedPhotos([photos[1]], folders, new Map());
+  assert.deepEqual(opened.photos.map(({ path }) => path), ["1.tif", "2.tif", "10.tif"]);
+  assert.equal(opened.shown, photos[1].key);
+  assert.deepEqual(
+    openedPhotos([photos[1]], folders, new Map(), "newest").photos.map(({ path }) => path),
+    ["1.tif", "2.tif", "10.tif"],
+  );
+  // A subfolder's photo opens its own roll.
+  assert.deepEqual(openedPhotos([photos[3]], folders, new Map()).photos, [photos[3]]);
+  // Several chosen photos open as chosen.
+  const chosen = openedPhotos([photos[0], photos[3]], folders, new Map());
+  assert.deepEqual(chosen.photos, [photos[0], photos[3]]);
+  assert.equal(chosen.shown, photos[0].key);
 });
 

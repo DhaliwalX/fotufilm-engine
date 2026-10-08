@@ -153,19 +153,16 @@ export default function useDocumentActions({
 
   // `incoming` holds Files, library items {file, editKey}, or files a native host chose
   // {path, name}, which it opens in place. Each opens with the edit kept for it; one already open
-  // is shown instead of opened twice. Only the first new photograph is decoded: the others wait
-  // in the strip, as thumbnails, until they are chosen.
+  // is shown instead of opened twice. Only one new photograph is decoded, the one marked `shown`
+  // (a library photo opened with its roll) or else the first: the others wait in the strip, as
+  // thumbnails, until they are chosen. The strip takes them in the order they came.
   async function acceptFiles(incoming) {
     if (exporting) return;
     const generation = ++loadGeneration.current;
     importController.current?.abort();
     const controller = new AbortController();
     importController.current = controller;
-    const loaded = [],
-      waiting = [],
-      errors = [];
-    let shown = null;
-    for (const entry of Array.from(incoming || [])) {
+    const entries = Array.from(incoming || [], (entry, order) => {
       const {
         file,
         path,
@@ -173,8 +170,18 @@ export default function useDocumentActions({
         editKey = null,
         negative = false,
         roll = null,
+        shown = false,
       } = entry instanceof Blob ? { file: entry } : entry;
-      const item = { file, path, name, editKey, negative, roll };
+      return { item: { file, path, name, editKey, negative, roll }, order, shown };
+    });
+    const first = Math.max(0, entries.findIndex((entry) => entry.shown));
+    const loaded = [],
+      waiting = [],
+      errors = [];
+    let shown = null;
+    for (const { item, order } of [...entries.slice(first, first + 1),
+      ...entries.slice(0, first), ...entries.slice(first + 1)]) {
+      const { name, editKey } = item;
       if (controller.signal.aborted) break;
       const already = [...files, ...loaded, ...waiting].find((doc) =>
         opensFrom(doc, item),
@@ -183,7 +190,7 @@ export default function useDocumentActions({
         shown ??= already;
         continue;
       }
-      if (loaded.length) {
+      if (loaded.length || shown) {
         waiting.push({
           id: crypto.randomUUID(),
           name,
@@ -191,6 +198,7 @@ export default function useDocumentActions({
           source: item,
           waiting: true,
           url: null,
+          order,
         });
         continue;
       }
@@ -215,6 +223,7 @@ export default function useDocumentActions({
           editKey: saved.editKey,
           savedEdit: saved.savedEdit,
           source: item,
+          order,
           ...decoded,
         });
       } catch (e) {
@@ -230,13 +239,16 @@ export default function useDocumentActions({
     }
     setImportStatus(null);
     importController.current = null;
+    const added = [...loaded, ...waiting]
+      .sort((a, b) => a.order - b.order)
+      .map(({ order: _order, ...doc }) => doc);
     if (loaded.length) {
       loaded.forEach((file) => {
         urls.current.add(file.url);
         imageResources.current.add(file.image);
       });
       if (activeId) histories.current.set(activeId, history);
-      setFiles((current) => [...current, ...loaded, ...waiting]);
+      setFiles((current) => [...current, ...added]);
       setActiveId(loaded[0].id);
       setVideoTime(loaded[0].image.video?.start || 0);
       dispatch({
@@ -246,8 +258,15 @@ export default function useDocumentActions({
       replaceResult(null);
       setStage(null);
       setDifference(false);
-      drawThumbnails(waiting);
-    } else if (shown && files.includes(shown)) selectFile(shown);
+      drawThumbnails(added.filter((doc) => doc.waiting));
+    } else if (shown && files.includes(shown)) {
+      // The photo chosen is open already: the rest of its roll joins the strip around it.
+      if (added.length) {
+        setFiles((current) => [...current, ...added]);
+        drawThumbnails(added);
+      }
+      selectFile(shown);
+    }
     setError(errors.length ? errors.join(" ") : null);
   }
   // The waiting photographs' pictures, one at a time once the first photograph's preview is

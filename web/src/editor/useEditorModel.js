@@ -6,6 +6,7 @@ import useRendererLifecycle from "./useRendererLifecycle.js";
 import usePreviewRenderer from "./usePreviewRenderer.js";
 import usePipelineStages from "./usePipelineStages.js";
 import useDocumentActions from "./useDocumentActions.js";
+import useRollActions from "./useRollActions.js";
 import useFilmActions from "./useFilmActions.js";
 import useSettingsActions from "./useSettingsActions.js";
 import useFilmPacks from "./useFilmPacks.js";
@@ -58,6 +59,10 @@ export default function useEditorModel() {
   editor = {
     ...editor,
     ...useDocumentActions(editor),
+  };
+  editor = {
+    ...editor,
+    ...useRollActions(editor),
   };
   editor = {
     ...editor,
