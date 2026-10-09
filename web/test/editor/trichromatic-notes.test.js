@@ -21,7 +21,7 @@ test("frames not merged, blanks and white exposures are each named", () => {
 test("repeated exposures and loosely lined-up scans are each named", () => {
   assert.equal(
     trichromaticNotes({ repeats: ["b5.arw"], loose: ["r7-rgb.tif"] }),
-    "Left out, repeated by the next exposure: b5.arw. " +
+    "Left out, repeated by a later exposure: b5.arw. " +
       "Lined up loosely, so colours may fringe: r7-rgb.tif.",
   );
 });

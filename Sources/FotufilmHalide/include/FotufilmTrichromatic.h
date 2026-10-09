@@ -31,8 +31,8 @@ int32_t fotufilm_trichromatic_measure(const float *rgba, int32_t width, int32_t 
 
 // Groups exposures, in the order they were made, into frames: `lights` as measured, `frames`
 // receiving (red, green, blue) index triples, room for count / 3 of them. Blank and other
-// exposures are left out. Exposures alternate (red, green, blue, red, ...) or come in passes (every
-// frame under red, then every frame under green, ...), in any order of the lights. Returns the
+// exposures are left out. Exposures come frame by frame (each frame's three lights in any order) or
+// in passes (every frame under red, then every frame under green, ...), in any order of the lights. Returns the
 // frame count, or -(1 + i) where i is the first exposure that fits no frame.
 int32_t fotufilm_trichromatic_group(const int32_t *lights, int32_t count, int32_t *frames);
 

@@ -1,7 +1,7 @@
 import Foundation
 
 /// Exposures scanned under red, green and blue light, merged frame by frame into trichromatic
-/// scans (`TrichromaticScan`). Exposures may alternate light by light or come in passes, a roll at
+/// scans (`TrichromaticScan`). Exposures may come frame by frame or in passes, a roll at
 /// a time; they are taken in the order their names give, the order the camera made them.
 public enum TrichromaticRoll {
     /// An exposure decoded as linear RGBA, through the camera's daylight balance where it is a
@@ -26,8 +26,8 @@ public enum TrichromaticRoll {
         /// Exposures of no picture, and exposures under white or mixed light, left out.
         public var blanks: [URL] = []
         public var others: [URL] = []
-        /// Exposures repeated by the next exposure under the same light, left out for the
-        /// repeat, as a frame retaken.
+        /// Exposures repeated by a later exposure under the same light, left out for the repeat,
+        /// as a frame retaken.
         public var repeats: [URL] = []
     }
 
@@ -113,11 +113,13 @@ public enum TrichromaticRoll {
         var outcome = Outcome()
         outcome.blanks = zip(files, lights).filter { $1 == .blank }.map(\.0)
         outcome.others = zip(files, lights).filter { $1 == .other }.map(\.0)
-        // A frame exposed twice under one light: the later exposure is kept.
-        let pictures = layers.keys.sorted()
+        // A frame exposed twice under one light, the second time straight away or after its other
+        // lights: the later exposure is kept.
         var grouped = lights
-        for (earlier, later) in zip(pictures, pictures.dropFirst())
-        where lights[earlier] == lights[later] {
+        var last: [TrichromaticScan.Light: Int] = [:]
+        for later in layers.keys.sorted() {
+            defer { last[lights[later]] = later }
+            guard let earlier = last[lights[later]] else { continue }
             guard shouldContinue() else { throw Cancelled() }
             let a = layers[earlier]!, b = layers[later]!
             guard a.width == b.width, a.height == b.height,

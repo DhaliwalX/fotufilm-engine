@@ -602,6 +602,25 @@ inline bool layer_weights(const float colour[3], float weights[3]) {
 // ---- Grouping ----
 
 inline int32_t group(const int32_t *lights, int32_t count, int32_t *frames) {
+    // Frame by frame first: consecutive threes, each under all three lights in any order.
+    std::vector<int32_t> pictures;
+    for (int32_t i = 0; i < count; ++i)
+        if (lights[i] >= FOTUFILM_TRICHROMATIC_RED && lights[i] <= FOTUFILM_TRICHROMATIC_BLUE)
+            pictures.push_back(i);
+    size_t taken = 0;
+    for (; taken + 2 < pictures.size(); taken += 3) {
+        const int32_t a = lights[pictures[taken]], b = lights[pictures[taken + 1]],
+                      c = lights[pictures[taken + 2]];
+        if (a == b || a == c || b == c) break;
+    }
+    if (taken == pictures.size()) {
+        for (size_t f = 0; f < taken; f += 3)
+            for (size_t j = f; j < f + 3; ++j) frames[f + lights[pictures[j]]] = pictures[j];
+        return int32_t(taken / 3);
+    }
+    const int32_t interleaved = pictures[taken];
+
+    // Then in passes: runs of one light, every frame under it.
     struct Run { int32_t light; std::vector<int32_t> members; };
     std::vector<Run> runs;
     for (int32_t i = 0; i < count; ++i) {
@@ -617,7 +636,8 @@ inline int32_t group(const int32_t *lights, int32_t count, int32_t *frames) {
             && runs[k + 1].light != runs[k + 2].light
             && runs[k].members.size() == runs[k + 1].members.size()
             && runs[k].members.size() == runs[k + 2].members.size();
-        if (!fits) return -(1 + runs[k].members.front());
+        // Where the order breaks: whichever way of reading it got further.
+        if (!fits) return -(1 + std::max(interleaved, runs[k].members.front()));
         for (size_t j = 0; j < runs[k].members.size(); ++j, ++made)
             for (size_t r = k; r < k + 3; ++r)
                 frames[3 * made + runs[r].light] = runs[r].members[j];

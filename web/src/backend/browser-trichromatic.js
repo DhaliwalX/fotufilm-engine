@@ -127,14 +127,18 @@ export async function mergeTrichromatic(files, { signal, onProgress = () => {} }
       }
     };
     await Promise.all(Array.from({ length: Math.min(readers, ordered.length) }, reader));
-    // A frame exposed twice under one light: the later exposure is kept.
+    // A frame exposed twice under one light, the second time straight away or after its other
+    // lights: the later exposure is kept.
     const grouped = [...lights];
     const repeats = [];
+    const last = new Map();
     const pictures = layers.flatMap((layer, index) => (layer ? [index] : []));
-    for (const [n, earlier] of pictures.slice(0, -1).entries()) {
-      const later = pictures[n + 1];
+    for (const [n, later] of pictures.entries()) {
+      const earlier = last.get(lights[later]);
+      last.set(lights[later], later);
+      if (earlier == null) continue;
       const [a, b] = [layers[earlier], layers[later]];
-      if (lights[earlier] !== lights[later] || a.width !== b.width || a.height !== b.height) continue;
+      if (a.width !== b.width || a.height !== b.height) continue;
       cancelled();
       const repeated = await (n % 2 ? second : first).call("repeats", {
         earlier: a.blob,

@@ -162,10 +162,11 @@ negative.
 - **White light.** White light through a colour negative's orange mask is mostly red too, but
   its colour changes across the picture with the dyes, where a red light's holds: such
   exposures are left out.
-- **Repeats.** An exposure that the next one under the same light repeats, the same film in the
+- **Repeats.** An exposure that a later one under the same light repeats, the same film in the
   same place, is left out for the later one, as a frame retaken.
 - **Grouping.** The remaining exposures are grouped into frames in the order of their names.
-  They may alternate light by light, or come in whole passes of a roll, one light at a time.
+  They may come frame by frame, each frame's three lights in any order, or in whole passes of a
+  roll, one light at a time.
   Passes of unequal length stop the merge with a count of each light.
 - **Registration.** Green and blue are lined up with red by an affine fit. Phase correlation
   runs on patches across the middle of the frame, and patches that disagree, such as a speck

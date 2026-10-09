@@ -146,6 +146,10 @@ final class TrichromaticScanTests: XCTestCase {
         // Frame by frame, each light's leader first.
         XCTAssertEqual(try TrichromaticScan.frames([blank, r, blank, g, blank, b, g, r, b]),
                        [[1, 3, 5], [7, 6, 8]])
+        // Frame by frame, the lights in a different order each frame: two blues meet between
+        // frames.
+        XCTAssertEqual(try TrichromaticScan.frames([r, g, b, b, r, g, g, b, r]),
+                       [[0, 1, 2], [4, 5, 3], [8, 6, 7]])
         // A roll a pass at a time, blue first.
         XCTAssertEqual(try TrichromaticScan.frames([b, b, r, r, g, g]), [[2, 4, 0], [3, 5, 1]])
         // A pass one exposure longer than the others.

@@ -13,7 +13,7 @@ export function trichromaticNotes({ failures = [], blanks = [], others = [], rep
     ...failures.map(({ sources, reason }) => `${list(sources)}: ${reason}`),
     blanks.length ? `Left out as blank: ${list(blanks)}.` : "",
     others.length ? `Left out, not under one light: ${list(others)}.` : "",
-    repeats.length ? `Left out, repeated by the next exposure: ${list(repeats)}.` : "",
+    repeats.length ? `Left out, repeated by a later exposure: ${list(repeats)}.` : "",
     loose.length ? `Lined up loosely, so colours may fringe: ${list(loose)}.` : "",
   ]
     .filter(Boolean)

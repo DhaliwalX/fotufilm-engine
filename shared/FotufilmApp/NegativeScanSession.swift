@@ -472,7 +472,7 @@ enum NegativeScanOpening {
                 + (outcome.blanks.isEmpty ? [] : ["Left out as blank: \(names(outcome.blanks))."])
                 + (outcome.others.isEmpty ? [] : ["Left out, not under one light: \(names(outcome.others))."])
                 + (outcome.repeats.isEmpty ? []
-                   : ["Left out, repeated by the next exposure: \(names(outcome.repeats))."])
+                   : ["Left out, repeated by a later exposure: \(names(outcome.repeats))."])
                 + (outcome.frames.contains(where: \.loose)
                    ? ["Lined up loosely, so colours may fringe: \(names(outcome.frames.filter(\.loose).map(\.sources[0])))."]
                    : [])
