@@ -694,7 +694,7 @@ extension FilmGrain {
         public let id: Int32
         /// True only after a provider asset passed identity, bounds and finite-data validation.
         public var usedAsset: Bool { grain.assetTiles != nil }
-        private let tiles: Tiles
+        let tiles: Tiles
         let registrationStatus: Int32
 
         fileprivate init(grain: FilmGrain, tiles: Tiles, id: Int32) {

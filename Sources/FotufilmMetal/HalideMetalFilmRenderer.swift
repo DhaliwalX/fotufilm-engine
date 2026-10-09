@@ -541,6 +541,8 @@ public final class HalideMetalFilmRenderer {
         /// grade. `stock` is still named because the configuration is built from one, and still
         /// unread — see `FilmEngineFeature.noFilm`.
         noFilm: Bool = false,
+        /// Another span's metering of this frame, adopted in place of this develop's own.
+        metering: FilmMetering? = nil,
         /// Whether `writeRows` may run on an engine-selected thread while the next kernel executes.
         /// Writes remain ordered and serialized. Disabled by default because host callbacks may
         /// require their calling thread; the app's still exporter opts in.
@@ -554,8 +556,8 @@ public final class HalideMetalFilmRenderer {
             width: width, height: height, stock: stock, options: options,
             outputTransform: &outputTransform, frameIndex: frameIndex,
             memoryBudget: memoryBudget, apronScale: apronScale, realtime: realtime,
-            exactMath: exactMath, noFilm: noFilm, overlapsWriteback: overlapsWriteback,
-            fullWidthTiles: true, progress: progress, shouldContinue: shouldContinue,
+            exactMath: exactMath, noFilm: noFilm, metering: metering,
+            overlapsWriteback: overlapsWriteback, fullWidthTiles: true, progress: progress, shouldContinue: shouldContinue,
             readTile: { rows, columns, into in
                 precondition(columns == 0..<width)
                 readRows(rows, into)
@@ -586,6 +588,7 @@ public final class HalideMetalFilmRenderer {
         realtime: Bool = false,
         exactMath: Bool = false,
         noFilm: Bool = false,
+        metering: FilmMetering? = nil,
         overlapsWriteback: Bool = false,
         /// Keeps every tile as wide as the frame, for callers that hand rows over.
         fullWidthTiles: Bool = false,
@@ -627,7 +630,7 @@ public final class HalideMetalFilmRenderer {
                 staging, width: width, height: height, stock: stock, options: options,
                 outputTransform: &outputTransform, frameIndex: frameIndex,
                 realtime: realtime, exactMath: exactMath, measuresGlareOnDevice: false,
-                noFilm: noFilm,
+                noFilm: noFilm, metering: metering,
                 progress: progress, shouldContinue: shouldContinue)
             else { return false }
             writeTile(0..<height, 0..<width, UnsafeBufferPointer(
@@ -642,6 +645,7 @@ public final class HalideMetalFilmRenderer {
             validating: stock, options: options, width: width,
             height: height, frameIndex: frameIndex, noFilm: noFilm)
         else { return false }
+        if let metering { invocation.adopt(metering) }
         let timings = getenv("FOTUFILM_STILL_TIMINGS") != nil
         if timings {
             print(String(format: "  %-10@ %8.1f ms", "invoke" as NSString,
@@ -1227,6 +1231,8 @@ public final class HalideMetalFilmRenderer {
         exactMath: Bool = false,
         measuresGlareOnDevice: Bool = false,
         noFilm: Bool = false,
+        /// Another span's metering of this frame, adopted in place of this develop's own.
+        metering: FilmMetering? = nil,
         progress: ((FilmRenderPhase) -> Void)? = nil,
         shouldContinue: (() -> Bool)? = nil
     ) -> Bool {
@@ -1250,6 +1256,7 @@ public final class HalideMetalFilmRenderer {
             validating: stock, options: options, width: width,
             height: height, frameIndex: frameIndex, noFilm: noFilm)
         else { return false }
+        if let metering { invocation.adopt(metering) }
         invocation.featureMask |= FilmEngineFeature.floatIO
         if realtime { invocation.featureMask |= FilmEngineFeature.realtime }
         if exactMath { invocation.featureMask |= FilmEngineFeature.exactMath }
@@ -1257,7 +1264,8 @@ public final class HalideMetalFilmRenderer {
         // first stage rather than have the host run that stage a second time over every pixel.
         // Only when there is glare to measure: the stage is opt-in, and a frame without it
         // has no mean to average.
-        if measuresGlareOnDevice, invocation.featureMask & FilmEngineFeature.flare != 0 {
+        if measuresGlareOnDevice, !invocation.meteringAdopted,
+           invocation.featureMask & FilmEngineFeature.flare != 0 {
             invocation.featureMask |= FilmEngineFeature.flareMeasure
         }
         // Asked for on the same terms as the measurement above, but answered back rather than
@@ -1533,7 +1541,7 @@ public final class HalideMetalFilmRenderer {
     /// returns its base, a staged render returns a window onto the frame it already holds
     /// and pays nothing. Shared so the two paths cannot drift into measuring different numbers.
     /// Returns false only when the caller cancelled.
-    private func measureWholeFrame(
+    func measureWholeFrame(
         _ invocation: inout FilmEngineInvocation,
         width: Int, height: Int, bandRows: Int,
         toneBase: Bool = true,
@@ -1551,6 +1559,8 @@ public final class HalideMetalFilmRenderer {
             return run(0, band(rows)) == 0
         }
 
+        // An adopted metering is the whole frame's already, the glare mean with it.
+        guard !invocation.meteringAdopted else { return true }
         if toneBase, invocation.sceneMeteringActive {
             var walk = ToneBaseWalk(invocation, bandRows: bandRows)
             var row = 0
