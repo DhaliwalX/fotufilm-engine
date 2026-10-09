@@ -71,7 +71,7 @@ public enum TrichromaticRoll {
         var next = 0, read = 0
         var failure: Error?
         let lock = NSLock()
-        DispatchQueue.concurrentPerform(iterations: max(1, min(readers, files.count))) { _ in
+        ParallelWork.forEach(iterations: max(1, min(readers, files.count))) { _ in
             while true {
                 lock.lock()
                 let index = next
