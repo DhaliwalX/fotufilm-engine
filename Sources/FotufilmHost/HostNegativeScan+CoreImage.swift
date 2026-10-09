@@ -14,7 +14,7 @@ struct CoreImageScanDecoder: HostScanDecoder {
         let data = try Data(contentsOf: url)
         let hint = UTType(filenameExtension: url.pathExtension)?.identifier
         let image = try NegativeScanImport.decode(data: data, identifierHint: hint,
-                                                  linearSamples: !Self.statesEncoding(data))
+                                                  linearSamples: !NegativeScanImport.statesEncoding(data))
         let width = Int(image.extent.width), height = Int(image.extent.height)
         guard width > 0, height > 0, width <= 40000, height <= 40000,
               width * height <= 150_000_000 else { throw NegativeScanImport.Failure.unreadable }
@@ -28,16 +28,9 @@ struct CoreImageScanDecoder: HostScanDecoder {
         return HostImage(rgba: rgba, width: width, height: height, contentHeadroom: 1)
     }
 
-    /// Whether a file says how its samples encode light: an embedded profile, or a PNG's colour
-    /// chunks, as `Sources/CFotufilmCodecs` reads them. ImageIO gives every other file sRGB.
-    static func statesEncoding(_ data: Data) -> Bool {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
-        else { return true }
-        let png = properties[kCGImagePropertyPNGDictionary] as? [CFString: Any] ?? [:]
-        return properties[kCGImagePropertyProfileName] != nil
-            || [kCGImagePropertyPNGsRGBIntent, kCGImagePropertyPNGGamma,
-                kCGImagePropertyPNGChromaticities].contains { png[$0] != nil }
+    func decodeExposure(_ url: URL) throws -> (rgba: [Float], width: Int, height: Int) {
+        try NegativeScanImport.exposure(data: Data(contentsOf: url),
+                                        identifierHint: UTType(filenameExtension: url.pathExtension)?.identifier)
     }
 
     func measureLight(_ url: URL) throws -> NegativeLightFrame {

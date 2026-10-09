@@ -137,6 +137,52 @@ extension HostService {
         }
     }
 
+    /// Merge Trichromatic Scans (`mergeTrichromatic` {paths}): exposures of negatives under red,
+    /// green and blue light, chosen in the host's open panel, merged frame by frame into scans
+    /// beside their red exposures (`TrichromaticRoll`), which the editor then opens as negatives.
+    /// Progress is `{progress, status}`.
+    func mergeTrichromatic(_ parameters: [String: Any],
+                           progress: @escaping ([String: Any]) -> Void) throws -> [String: Any] {
+        guard let scans = HostPlatform.current.scans else {
+            throw HostEngine.Failure(description: "This host cannot read scanned negatives.")
+        }
+        let files = (parameters["paths"] as? [String] ?? []).map { URL(fileURLWithPath: $0) }
+        guard !files.isEmpty else { throw HostEngine.Failure(description: "No exposures were chosen.") }
+        let shouldContinue = engine.continuation()
+        let outcome: TrichromaticRoll.Outcome
+        do {
+            outcome = try HostActivity.during("Merging trichromatic scans") {
+                try TrichromaticRoll.merge(
+                    files, decode: scans.decodeExposure, readers: TrichromaticRoll.readers,
+                    store: { scan, red in
+                        let url = TrichromaticRoll.scanURL(red: red)
+                        try scan.write(to: url, options: .atomic)
+                        return url
+                    },
+                    progress: { progress(["progress": $0, "status": $1]) },
+                    shouldContinue: shouldContinue)
+            }
+        } catch is TrichromaticRoll.Cancelled {
+            throw HostEngine.Failure(description: "The merge was cancelled.", cancelled: true)
+        } catch let failure as HostEngine.Failure {
+            throw failure
+        } catch {
+            throw HostEngine.Failure(description: (error as? LocalizedError)?.errorDescription
+                                     ?? String(describing: error))
+        }
+        let names = { (files: [URL]) in files.map(\.lastPathComponent) }
+        return [
+            "scans": outcome.frames.map {
+                ["path": $0.scan.path, "name": $0.scan.lastPathComponent, "sources": names($0.sources)]
+            },
+            "failures": outcome.failures.map { ["sources": names($0.sources), "reason": $0.reason] },
+            "blanks": names(outcome.blanks),
+            "others": names(outcome.others),
+            "repeats": names(outcome.repeats),
+            "loose": names(outcome.frames.filter(\.loose).map(\.scan)),
+        ]
+    }
+
     /// Runs `body` on the file the call names: a path the host chose, read in place, or the bytes
     /// the page sent, written where the decoders can read them with their extension.
     private func withFile<T>(_ parameters: [String: Any], payload: UnsafeRawBufferPointer?,

@@ -3,6 +3,7 @@ module FotufilmHalide {
     header "FotufilmHalideDevelop.h"
     header "FotufilmTransport.h"
     header "FotufilmNegativeScan.h"
+    header "FotufilmTrichromatic.h"
     header "FotufilmFilmTileBuild.h"
     export *
 }

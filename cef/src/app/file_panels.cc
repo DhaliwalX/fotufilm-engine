@@ -25,7 +25,7 @@ std::vector<CefString> Filters(const std::string& kind) {
     filters.push_back(".exr");
     for (const char* extension : kRawExtensions) filters.push_back(extension);
   }
-  if (kind != "image") filters.push_back("video/*");
+  if (kind != "image" && kind != "exposures") filters.push_back("video/*");
   return filters;
 }
 
@@ -99,7 +99,9 @@ std::set<std::string>& BatchFolders() {
 void ChooseFilesToOpen(CefRefPtr<CefBrowser> browser, const std::string& kind,
                        std::function<void(std::vector<std::string>)> done) {
   if (!browser) return done({});
-  const char* title = kind == "filmPack" ? "Add Film Pack" : "Open";
+  const char* title = kind == "filmPack"    ? "Add Film Pack"
+                      : kind == "exposures" ? "Choose the Red, Green and Blue Exposures"
+                                            : "Open";
   browser->GetHost()->RunFileDialog(FILE_DIALOG_OPEN_MULTIPLE, title, "", Filters(kind),
                                     new Chosen(std::move(done)));
 }

@@ -138,6 +138,13 @@ struct PortableScanDecoder: HostScanDecoder {
                          contentHeadroom: 1)
     }
 
+    func decodeExposure(_ url: URL) throws -> (rgba: [Float], width: Int, height: Int) {
+        let exposure = try PortableCodecs.decode(
+            url, options: UInt32(FFC_DECODE_SCAN) | UInt32(FFC_DECODE_EXPOSURE)
+                | UInt32(FFC_DECODE_LINEAR_SAMPLES))
+        return (exposure.rgba, exposure.width, exposure.height)
+    }
+
     func measureLight(_ url: URL) throws -> NegativeLightFrame {
         let photo = try PortableCodecs.decode(url, options: UInt32(FFC_DECODE_SCAN))
         var srgb = photo.rgba

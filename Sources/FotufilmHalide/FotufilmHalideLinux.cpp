@@ -9,6 +9,9 @@
 #include "FotufilmAotFrame.h"
 #include "fotufilm_aot_negative_cpu.h"
 #include "fotufilm_aot_scan_prepare_cpu.h"
+#include "fotufilm_aot_trichromatic_layer_cpu.h"
+#include "fotufilm_aot_trichromatic_merge_cpu.h"
+#include "FotufilmTrichromaticMeasure.h"
 #include "fotufilm_aot_transport_cpu.h"
 #include "fotufilm_aot_transport_scene_cpu.h"
 #include "fotufilm_aot_transport_domain_cpu.h"
@@ -358,6 +361,32 @@ extern "C" int32_t fotufilm_scan_prepare(const float *in, float *out, int32_t w,
                                                  lit ? lw : 1, lit ? lh : 1, 3);
     Buffer<float> params(const_cast<float *>(p), 9);
     return fotufilm_aot_scan_prepare_cpu(input, cells, params, output);
+}
+
+// A trichromatic scan's layer and merge (Pipeline/Trichromatic.h); the measuring is shared C++.
+extern "C" int32_t fotufilm_trichromatic_layer(const float *rgba, int32_t w, int32_t h,
+                                               const float colour[3], float *layer) {
+    float weights[3];
+    if (!rgba || !layer || !fotufilm::trichromatic::valid_size(w, h)
+        || !fotufilm::trichromatic::layer_weights(colour, weights)) return -1;
+    auto input = Buffer<float>::make_interleaved(const_cast<float *>(rgba), w, h, 4);
+    Buffer<float> output(layer, w, h), params(weights, 3);
+    return fotufilm_aot_trichromatic_layer_cpu(input, params, output);
+}
+
+extern "C" int32_t fotufilm_trichromatic_merge(const float *red, const float *green,
+                                               const float *blue, int32_t w, int32_t h,
+                                               const float green_affine[6],
+                                               const float blue_affine[6], uint8_t *file,
+                                               int64_t size) {
+    float p[15];
+    if (!fotufilm::trichromatic::merge_header(red, green, blue, w, h, green_affine, blue_affine,
+                                               file, size, p)) return -1;
+    Buffer<float> r(const_cast<float *>(red), w, h), g(const_cast<float *>(green), w, h),
+        b(const_cast<float *>(blue), w, h), params(p, 15);
+    auto output = Buffer<uint16_t>::make_interleaved(
+        reinterpret_cast<uint16_t *>(file + fotufilm::trichromatic::pixel_offset(h)), w, h, 3);
+    return fotufilm_aot_trichromatic_merge_cpu(r, g, b, params, output);
 }
 
 // Layered Transport's spreading on the CPU; the desktop has no Metal (1).

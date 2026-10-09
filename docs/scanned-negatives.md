@@ -143,6 +143,47 @@ swift run -c release fotufilm --suggest-film scan.dng [--light-frame light.dng]
 swift run -c release fotufilm --list-film-bases
 ```
 
+## Trichromatic scans
+
+A trichromatic scan photographs each frame three times, under red, green and blue light, so
+each exposure records one dye layer without the camera's broad channels mixing them. **Import
+Trichromatic Scan…** merges the exposures into one scan per frame, then opens each as a scanned
+negative.
+
+- **Light.** Each exposure's light is measured from its colour. Under one narrow light every
+  pixel is that light's colour scaled by the film's transmittance, whatever the camera's
+  balance or matrix did, so that scale is the exposure's layer (`TrichromaticScan`).
+- **Decoding.** Camera RAW files are decoded through a fixed daylight balance rather than
+  the shot's, and at half size, since each colour has only a quarter of the photosites. Each
+  exposure is decoded once, several side by side, and only its layer is kept until the
+  exposures are grouped.
+- **Blank exposures.** Exposures of no picture are left out: a light frame, or the film's
+  leader.
+- **White light.** White light through a colour negative's orange mask is mostly red too, but
+  its colour changes across the picture with the dyes, where a red light's holds: such
+  exposures are left out.
+- **Repeats.** An exposure that a later one under the same light repeats, the same film in the
+  same place, is left out for the later one, as a frame retaken.
+- **Grouping.** The remaining exposures are grouped into frames in the order of their names.
+  They may come frame by frame, each frame's three lights in any order, or in whole passes of a
+  roll, one light at a time.
+  Passes of unequal length stop the merge with a count of each light.
+- **Registration.** Green and blue are lined up with red by an affine fit. Phase correlation
+  runs on patches across the middle of the frame, and patches that disagree, such as a speck
+  on one layer, are dropped. Exposures of different frames share too little detail to line up
+  and are not merged. Layers that line up only loosely, as film that bowed between exposures
+  does, are merged and named, since their colours may fringe.
+- **The file.** The three layers are merged into an untagged 16-bit TIFF, each scaled so its
+  clear end sits near the top of the range. The desktop saves it beside the red exposure as
+  `<name>-rgb.tif`; the browser downloads it; iOS keeps it on the shelf.
+
+A merged scan has the same balance under each light, so its film base shows no orange mask and
+film suggestions read it as black-and-white; choose the film yourself.
+
+```sh
+swift run -c release fotufilm --merge-trichromatic exposures/*.ARW
+```
+
 ## Editor
 
 Choose **Import Scanned Negative…** and open unconverted negatives. Each opens as

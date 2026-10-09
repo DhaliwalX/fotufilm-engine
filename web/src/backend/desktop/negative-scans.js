@@ -4,7 +4,7 @@ import { fileBase64 } from "./transport.js";
 // opens as a document through `importMedia`/`importPath` with `negative`, and every develop of it
 // prints the framed scan as the edit's film. These are the calls a negative's Film panel makes.
 // `binary` hosts send file bytes beside the message; WebKit's sends base64.
-export function createNegativeScans(call, { binary }) {
+export function createNegativeScans(call, { binary, trichromatic = false }) {
   async function withFile(file, params, options) {
     if (file.path) return call(options.method, { ...params, path: file.path }, options);
     if (binary)
@@ -25,5 +25,14 @@ export function createNegativeScans(call, { binary }) {
     lightFrames: () => call("negativeLightFrames"),
     addLightFrame: (file) => withFile(file, {}, { method: "negativeAddLightFrame" }),
     removeLightFrame: (id) => call("negativeRemoveLightFrame", { id }),
+    // Trichromatic scans: the host's open panel asks for the exposures, and their frames are
+    // merged into scans beside them: `{scans: [{path, name, sources}], failures, blanks, others}`.
+    ...(trichromatic
+      ? {
+          choosesExposures: true,
+          mergeTrichromatic: (_files, { signal, onProgress } = {}) =>
+            call("mergeTrichromatic", {}, { signal, onProgress }),
+        }
+      : {}),
   });
 }

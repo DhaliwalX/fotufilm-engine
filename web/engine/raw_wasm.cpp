@@ -55,8 +55,12 @@ void raw_close() {
     sceneScale = 1;
     negativeCapture = false;
 }
-static int open_capture(void *bytes, unsigned length, bool negative) {
+// A negative: no rendering of its own. An exposure of a trichromatic scan, also: the camera's
+// daylight balance rather than the shot's, so its light keeps its colour, and each colour from its
+// own photosites (half size).
+static int open_capture(void *bytes, unsigned length, bool negative, bool exposure = false) {
     raw_close();
+    negative = negative || exposure;
     negativeCapture = negative;
     decoder = std::make_unique<LibRaw>();
     decoder->set_progress_handler(progress, nullptr);
@@ -67,8 +71,9 @@ static int open_capture(void *bytes, unsigned length, bool negative) {
     p.gamm[0] = p.gamm[1] = 1;
     p.no_auto_bright = 1;
     p.adjust_maximum_thr = 0; // Keep the camera's white level, not the frame's peak.
-    p.use_camera_wb = 1;
+    p.use_camera_wb = exposure ? 0 : 1;
     p.use_camera_matrix = 1;
+    p.half_size = exposure ? 1 : 0;
     // Repair chroma where sensor channels clip at different white-balance gains.
     // Unclip (1) leaves those unequal channels magenta after color conversion.
     p.highlight = negative ? 1 : 2; // Negative scans must not reconstruct film densities.
@@ -92,6 +97,7 @@ static int open_capture(void *bytes, unsigned length, bool negative) {
 }
 int raw_open(void *bytes, unsigned length) { return open_capture(bytes, length, false); }
 int raw_open_negative(void *bytes, unsigned length) { return open_capture(bytes, length, true); }
+int raw_open_exposure(void *bytes, unsigned length) { return open_capture(bytes, length, true, true); }
 int raw_unpack() {
     return status = decoder ? decoder->unpack() : LIBRAW_OUT_OF_ORDER_CALL;
 }

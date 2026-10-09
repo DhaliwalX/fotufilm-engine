@@ -23,6 +23,9 @@ export async function importNegativeMedia(file, options) {
 export const negativeScans = Object.freeze({
   // Clear film where `point` falls on a shown render: linear Rec. 2020 scan RGB.
   sampleFilmBase: async (result, point) => filmBase(result.scanSource, point),
+  // Exposures under red, green and blue light merged into scans, each offered as a download.
+  mergeTrichromatic: async (files, options) =>
+    (await import("./browser-trichromatic.js")).mergeTrichromatic(files, options),
 });
 
 // The suggestions read one 512-pixel copy of the whole scan by area (areaPreview), packed as

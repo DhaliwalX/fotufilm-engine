@@ -17,7 +17,10 @@ class RawImage {
   }
 }
 
-export function decodeRaw(file, { signal, onProgress = () => {}, negative = false } = {}) {
+export function decodeRaw(
+  file,
+  { signal, onProgress = () => {}, negative = false, exposure = false } = {},
+) {
   return new Promise((resolve, reject) => {
     if (file.size > 512 * 1024 * 1024) {
       reject(new Error('RAW files above 512 MB are not supported.'))
@@ -102,7 +105,10 @@ export function decodeRaw(file, { signal, onProgress = () => {}, negative = fals
       .arrayBuffer()
       .then((bytes) => {
         if (!settled && !signal?.aborted)
-          worker.postMessage({ bytes, negative, decoderURL: assetUrl('raw/decoder.mjs') }, [bytes])
+          worker.postMessage(
+            { bytes, negative, exposure, decoderURL: assetUrl('raw/decoder.mjs') },
+            [bytes],
+          )
       })
       .catch((error) => finish(error))
   })

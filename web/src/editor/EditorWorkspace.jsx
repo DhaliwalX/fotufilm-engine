@@ -32,6 +32,7 @@ export default function Workspace() {
     compactLayout,
     input,
     acceptFiles,
+    mergeExposures,
     editInput,
     restoreEdit,
     dialog,
@@ -95,11 +96,15 @@ export default function Workspace() {
         multiple
         hidden
         onChange={(e) => {
-          // Files chosen as negatives open as scans.
-          const negative = e.target.dataset.negative === "true";
-          acceptFiles(
-            negative ? [...e.target.files].map((file) => ({ file, negative })) : e.target.files,
-          );
+          // Files chosen as negatives open as scans; exposures under coloured light merge first.
+          const negative = e.target.dataset.negative;
+          if (negative === "trichromatic") mergeExposures([...e.target.files]);
+          else
+            acceptFiles(
+              negative === "true"
+                ? [...e.target.files].map((file) => ({ file, negative: true }))
+                : e.target.files,
+            );
           e.target.value = "";
         }}
       />

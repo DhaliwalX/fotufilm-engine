@@ -160,6 +160,8 @@ public final class HostService {
             return try answer(exportOptions(parameters))
         case "exportBatch":
             return try answer(exportBatch(parameters, progress: { _ in }))
+        case "mergeTrichromatic":
+            return try answer(mergeTrichromatic(parameters, progress: { _ in }))
         case "fileIdentities":
             return try answer(fileIdentities(parameters))
         case "suggestFilm":
