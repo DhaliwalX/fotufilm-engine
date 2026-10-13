@@ -68,6 +68,11 @@ int main() {
     CHECK(json.find("notes") == std::string::npos);
     CHECK(json.find("hidden") == std::string::npos);
     CHECK(json.find("c.jpg") == std::string::npos);
+    // An opened photo's folder lists only the files beside it, not those of folders below.
+    CHECK(LibraryFolders::List(photos.string(), {"jpg", "arw"}, cancelled, json, error, false));
+    CHECK(json.find("\"a.JPG\",3,") != std::string::npos);
+    CHECK(json.find("b.arw") == std::string::npos);
+    CHECK(json.find("hidden") == std::string::npos);
     cancelled = true;
     CHECK(!LibraryFolders::List(photos.string(), {"jpg"}, cancelled, json, error));
     cancelled = false;
@@ -87,6 +92,14 @@ int main() {
     CHECK(folders.Resolve((photos / "first.jpg").string()).empty());
   }
   CHECK(!LibraryFolders(store).Granted(photos.string()));
+  // Only files the host opened let the page list their folder, however the path is spelled.
+  CHECK(!LibraryFolders::Opened((root / "Other" / "d.jpg").string()));
+  LibraryFolders::NoteOpened((root / "Other" / "d.jpg").string());
+  CHECK(LibraryFolders::Opened((root / "Other" / ".." / "Other" / "d.jpg").string()));
+  CHECK(!LibraryFolders::Opened((root / "Other").string()));
+  CHECK(!LibraryFolders::Opened("Other/d.jpg"));
+  LibraryFolders::NoteOpened("relative.jpg");
+  CHECK(!LibraryFolders::Opened("relative.jpg"));
   fs::remove_all(root);
   if (failures) {
     std::fprintf(stderr, "%d library folder checks failed\n", failures);

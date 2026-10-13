@@ -49,10 +49,10 @@ class FolderChosen : public CefRunFileDialogCallback {
 
 // On a file thread: a large folder takes seconds to walk, which neither painting nor renders
 // should wait for.
-void List(std::string folder, std::set<std::string> extensions,
+void List(std::string folder, std::set<std::string> extensions, bool recursive,
           std::shared_ptr<std::atomic<bool>> cancelled, std::shared_ptr<Reply> reply) {
   std::string json, error;
-  if (!LibraryFolders::List(folder, extensions, *cancelled, json, error))
+  if (!LibraryFolders::List(folder, extensions, *cancelled, json, error, recursive))
     return reply->Reject(error, *cancelled ? "AbortError" : "NotReadableError");
   CefRefPtr<CefValue> result = CefValue::Create();
   result->SetDictionary(CefDictionaryValue::Create());
@@ -60,6 +60,14 @@ void List(std::string folder, std::set<std::string> extensions,
 }
 
 // The absolute paths a call names, each inside a chosen folder; empty when any is not.
+std::set<std::string> Extensions(CefRefPtr<CefDictionaryValue> fields) {
+  std::set<std::string> extensions;
+  if (CefRefPtr<CefListValue> list = fields->GetList("extensions"))
+    for (size_t index = 0; index < list->GetSize(); ++index)
+      extensions.insert(list->GetString(index).ToString());
+  return extensions;
+}
+
 std::vector<std::string> ChosenPaths(const LibraryFolders& folders, const Call& call) {
   std::vector<std::string> paths;
   CefRefPtr<CefListValue> list = Fields(call)->GetList("paths");
@@ -143,12 +151,23 @@ void RegisterLibraryMethods(Dispatcher& dispatcher, const std::string& store,
         const std::string folder = fields->GetString("path").ToString();
         if (!folders->Granted(folder))
           return reply->Reject("Add this folder again to read it.", "NotAllowedError");
-        std::set<std::string> extensions;
-        if (CefRefPtr<CefListValue> list = fields->GetList("extensions"))
-          for (size_t index = 0; index < list->GetSize(); ++index)
-            extensions.insert(list->GetString(index).ToString());
-        CefPostTask(TID_FILE_USER_BLOCKING,
-                    base::BindOnce(&List, folder, std::move(extensions), call.cancelled, reply));
+        CefPostTask(TID_FILE_USER_BLOCKING, base::BindOnce(&List, folder, Extensions(fields),
+                                                           true, call.cancelled, reply));
+      });
+
+  // The files beside one the host opened (`path`), not those of folders below, listed as
+  // "listLibraryFolder" lists, relative to its folder: opening one photograph fills the strip.
+  dispatcher.Register(
+      "listOpenedFolder", Thread::kUi, [](const Call& call, std::shared_ptr<Reply> reply) {
+        CefRefPtr<CefDictionaryValue> fields = Fields(call);
+        const std::string file = fields->GetString("path").ToString();
+        if (!LibraryFolders::Opened(file))
+          return reply->Reject("Only the folder of a file Fotufilm opened can be read.",
+                               "NotAllowedError");
+        const std::string folder =
+            std::filesystem::path(file).lexically_normal().parent_path().string();
+        CefPostTask(TID_FILE_USER_BLOCKING, base::BindOnce(&List, folder, Extensions(fields),
+                                                           false, call.cancelled, reply));
       });
 
   dispatcher.Register("forgetLibraryFolder", Thread::kUi,

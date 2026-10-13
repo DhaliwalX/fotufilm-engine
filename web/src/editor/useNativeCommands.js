@@ -13,6 +13,7 @@ import {
   undoTitle,
 } from "../edit-history.js";
 import { isFilmPack } from "./useFilmPacks.js";
+import { withOpenedFolder } from "./opened-folder.js";
 import { zoomReach } from "../photo-view.js";
 import { pasteTitle } from "../edit-settings.js";
 
@@ -21,7 +22,8 @@ import { pasteTitle } from "../edit-settings.js";
 // which commands apply now ("menuState") so the menus grey out and tick as its toolbars do, what
 // Undo and Redo would undo ("titles") and the Edit History ("history", one title per step; the
 // command "history:<step>" goes to a step). Film packs among the opened paths (File › Import Film
-// Pack…, a Finder double-click) are installed.
+// Pack…, a Finder double-click) are installed; one photograph opened alone brings the pictures
+// beside it into the strip (opened-folder.js).
 
 // The inspector tabs in the order ⌘1…⌘6 choose them.
 export const MENU_PANELS = [
@@ -341,7 +343,7 @@ export default function useNativeCommands(editor) {
       queueMicrotask(() => setTextInput(editsText(document.activeElement)));
     const command = (event) =>
       runCommand(latest.current, event.detail?.command);
-    const open = (event) => {
+    const open = async (event) => {
       const paths = event.detail?.paths;
       if (!paths?.length) return;
       const items = paths.map((path) => ({
@@ -350,7 +352,9 @@ export default function useNativeCommands(editor) {
       }));
       if (items.some(({ name }) => !isFilmPack(name)))
         latest.current.setLibraryOpen(false);
-      latest.current.acceptFiles(items);
+      // One photograph opens with the pictures beside it in the strip.
+      const opened = await withOpenedFolder(latest.current.backend, items);
+      latest.current.acceptFiles(opened);
     };
     document.addEventListener("focusin", focus);
     document.addEventListener("focusout", focus);

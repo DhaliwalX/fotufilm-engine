@@ -35,8 +35,16 @@ class LibraryFolders {
   // JSON array of [relative path, size, modified milliseconds]. Hidden files and folders are left
   // out, as the browser's walk leaves them. False with `error` set when the folder cannot be read
   // or `cancelled` turns true.
+  // With `recursive` false, only the files directly in `folder`.
   static bool List(const std::string& folder, const std::set<std::string>& extensions,
-                   const std::atomic<bool>& cancelled, std::string& json, std::string& error);
+                   const std::atomic<bool>& cancelled, std::string& json, std::string& error,
+                   bool recursive = true);
+
+  // The files the host opened at the person's request (an open panel, Finder, Open Recent).
+  // The folder one sits in may be listed, without being chosen, so that opening one photograph
+  // brings the pictures beside it into the editor's strip ("listOpenedFolder").
+  static void NoteOpened(const std::string& file);
+  static bool Opened(const std::string& file);
 
  private:
   void Save() const;

@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "app/client.h"
+#include "app/library_folders.h"
 #include "app/view_delegate.h"
 #include "bridge/dispatcher.h"
 #include "include/cef_app.h"
@@ -823,6 +824,8 @@ class MacView : public fotufilm::ViewDelegate {
   for (NSURL* url in urls) {
     if (!url.isFileURL) continue;
     [FotufilmRecentFiles note:url];
+    // Its folder may fill the editor's strip ("listOpenedFolder").
+    fotufilm::LibraryFolders::NoteOpened(url.path.UTF8String);
     [_pendingPaths addObject:url.path];
   }
   [self deliverOpens];

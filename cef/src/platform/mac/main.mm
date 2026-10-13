@@ -68,6 +68,8 @@ CefRefPtr<CefDictionaryValue> HostCapabilities() {
   CefRefPtr<CefDictionaryValue> host = CefDictionaryValue::Create();
   host->SetString("platform", "macos");
   host->SetBool("libraryFolders", true);
+  // Opening one photograph lists the folder it is in, to fill the strip (`listOpenedFolder`).
+  host->SetBool("openedFolders", true);
   CefRefPtr<CefDictionaryValue> files = CefDictionaryValue::Create();
   files->SetString("reveal", "Show in Finder");
   files->SetString("trash", "Move to Trash");
