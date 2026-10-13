@@ -56,10 +56,10 @@ test("only one photograph, opened where the host lists folders, brings its folde
 test("the strip names where the photo shown came from", () => {
   const opened = (path) => ({ name: path.split("/").pop(), source: { path } });
   assert.equal(
-    stripPath(opened("/Users/pat/Pictures/Roll 7/frame 2.jpg")),
+    stripPath(opened("/Users/license-test/Pictures/Roll 7/frame 2.jpg")),
     "~/Pictures/Roll 7/frame 2.jpg",
   );
-  assert.equal(stripPath(opened("/home/pat/Roll/a.jpg")), "~/Roll/a.jpg");
+  assert.equal(stripPath(opened("/home/license-test/Roll/a.jpg")), "~/Roll/a.jpg");
   assert.equal(
     stripPath(opened("/Volumes/Data/Roll/a.jpg")),
     "/Volumes/Data/Roll/a.jpg",
