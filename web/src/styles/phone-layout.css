@@ -126,7 +126,9 @@
     }
     .filmstrip {
       min-height: 68px;
-      padding: 8px 12px;
+      padding: 4px 12px 8px;
+    }
+    .filmstrip-items {
       overscroll-behavior-x: contain;
     }
   }

@@ -41,3 +41,13 @@ export async function withOpenedFolder(backend, items) {
     return items;
   }
 }
+
+/**
+ * Where the photo shown came from, for the strip's caption: its path, with a home folder written
+ * as "~", or its name where the page never learns a path (a file a browser opened).
+ */
+export function stripPath(doc) {
+  const path = doc?.source?.path ?? doc?.source?.file?.hostPath ?? null;
+  if (!path) return doc?.name ?? "";
+  return path.replace(/^\/(?:Users|home)\/[^/]+(?=\/)/, "~");
+}

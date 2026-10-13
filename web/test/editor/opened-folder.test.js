@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   folderItems,
+  stripPath,
   withOpenedFolder,
 } from "../../src/editor/opened-folder.js";
 
@@ -50,4 +51,24 @@ test("only one photograph, opened where the host lists folders, brings its folde
     listOpenedFolder: async () => Promise.reject(new Error("no")),
   };
   assert.equal(await withOpenedFolder(refusing, one), one);
+});
+
+test("the strip names where the photo shown came from", () => {
+  const opened = (path) => ({ name: path.split("/").pop(), source: { path } });
+  assert.equal(
+    stripPath(opened("/Users/pat/Pictures/Roll 7/frame 2.jpg")),
+    "~/Pictures/Roll 7/frame 2.jpg",
+  );
+  assert.equal(stripPath(opened("/home/pat/Roll/a.jpg")), "~/Roll/a.jpg");
+  assert.equal(
+    stripPath(opened("/Volumes/Data/Roll/a.jpg")),
+    "/Volumes/Data/Roll/a.jpg",
+  );
+  const library = {
+    name: "b.jpg",
+    source: { file: { hostPath: "/Volumes/Card/b.jpg" } },
+  };
+  assert.equal(stripPath(library), "/Volumes/Card/b.jpg");
+  // A browser never learns a file's path: its name stands in.
+  assert.equal(stripPath({ name: "c.jpg", source: { file: {} } }), "c.jpg");
 });
