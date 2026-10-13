@@ -70,6 +70,7 @@ export function createNativeBackend(host) {
     "loadEdit",
     "saveEdit",
     "openExport",
+    "saveFile",
   ])
     if (typeof host[name] === "function") backend[name] = host[name].bind(host);
   // Optional: scanned negatives opened as documents and read as a film (backend/README.md).
