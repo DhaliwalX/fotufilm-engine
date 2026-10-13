@@ -6,6 +6,7 @@ import useRendererLifecycle from "./useRendererLifecycle.js";
 import usePreviewRenderer from "./usePreviewRenderer.js";
 import usePipelineStages from "./usePipelineStages.js";
 import useDocumentActions from "./useDocumentActions.js";
+import useStripSelection from "./useStripSelection.js";
 import useRollActions from "./useRollActions.js";
 import useFilmActions from "./useFilmActions.js";
 import useSettingsActions from "./useSettingsActions.js";
@@ -59,6 +60,10 @@ export default function useEditorModel() {
   editor = {
     ...editor,
     ...useDocumentActions(editor),
+  };
+  editor = {
+    ...editor,
+    ...useStripSelection(editor),
   };
   editor = {
     ...editor,

@@ -25,10 +25,19 @@ export default function useEditorShortcuts({
   setShowNegative,
   editSettings,
   pasteSettings,
+  files,
+  selectAllPhotos,
+  clearPhotoSelection,
 }) {
   // Pastes onto the edit standing when the key is pressed, not the one the listener was added on.
   const paste = useRef(pasteSettings);
   paste.current = pasteSettings;
+  const strip = useRef(null);
+  strip.current = {
+    selectAll: selectAllPhotos,
+    clear: clearPhotoSelection,
+    several: files.length > 1,
+  };
   useEffect(() => {
     function keydown(event) {
       const command = event.metaKey || event.ctrlKey;
@@ -63,6 +72,16 @@ export default function useEditorShortcuts({
       } else if (command && event.altKey && event.code === "KeyV" && active) {
         event.preventDefault();
         if (editSettings.copied) paste.current();
+      } else if (
+        command &&
+        !event.altKey &&
+        !event.shiftKey &&
+        event.key.toLowerCase() === "a" &&
+        strip.current.several
+      ) {
+        // Every open photo, for Paste Settings and presets.
+        event.preventDefault();
+        strip.current.selectAll();
       } else if (command && event.key.toLowerCase() === "s" && active) {
         event.preventDefault();
         setDialog("export");
@@ -74,6 +93,7 @@ export default function useEditorShortcuts({
         event.preventDefault();
         setCompare(true);
       } else if (event.key === "Escape") {
+        strip.current.clear();
         setCompare(false);
         photoView.fit();
         if (cropMode) setPanel("film");

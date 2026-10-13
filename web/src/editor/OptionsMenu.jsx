@@ -13,6 +13,7 @@ import { LEGAL_MENU } from "../generated/controls.js";
 import { useEditor } from "./EditorContext.jsx";
 import { editHistory, filmNamer } from "../edit-history.js";
 import { shortcutLabel } from "../shortcut-label.js";
+import { pasteTitle } from "../edit-settings.js";
 
 export default function OptionsMenu() {
   const {
@@ -32,6 +33,8 @@ export default function OptionsMenu() {
     editSettings,
     pasteSettings,
     applyPreset,
+    selectedFiles,
+    lookInput,
     importNegatives,
     importTrichromatic,
   } = useEditor();
@@ -39,6 +42,8 @@ export default function OptionsMenu() {
   const imageOnlyDisabled = !active || !!active.image.video || exporting;
   // The Edit History, as the Mac app's Edit menu lists it: every step, the one shown ticked.
   const steps = editHistory(history, filmNamer(stocks));
+  // Paste Settings and presets go onto every photo chosen in the strip.
+  const chosen = selectedFiles.length;
   return (
     <MenuTrigger align="end">
       <ActionButton aria-label="More options" size="S" isQuiet>
@@ -126,12 +131,12 @@ export default function OptionsMenu() {
           </MenuItem>
           <MenuItem
             id="pasteSettings"
-            textValue="Paste Settings"
+            textValue={pasteTitle(chosen)}
             isDisabled={noPhoto || !editSettings.copied}
             onAction={pasteSettings}
           >
             <Icon slot="icon" name="pasteSettings" />
-            <Text>Paste Settings</Text>
+            <Text>{pasteTitle(chosen)}</Text>
             <Text slot="description">{shortcutLabel("⌥⌘V")}</Text>
           </MenuItem>
           <SubmenuTrigger>
@@ -167,6 +172,13 @@ export default function OptionsMenu() {
                   onAction={() => setDialog("presets")}
                 >
                   <Text>Manage Presets…</Text>
+                </MenuItem>
+                <MenuItem
+                  id="importLooks"
+                  isDisabled={exporting}
+                  onAction={() => lookInput.current?.click()}
+                >
+                  <Text>Import Looks…</Text>
                 </MenuItem>
               </MenuSection>
             </Menu>

@@ -25,6 +25,7 @@ import { libraryThumbnailRenderer } from "./libraryThumbnails.js";
 import LibraryHandoff from "./LibraryHandoff.jsx";
 import PanelResizer from "./PanelResizer.jsx";
 import usePanelWidths from "./usePanelWidths.js";
+import { LOOK_EXTENSION } from "../look-files.js";
 export default function Workspace() {
   const {
     filmOpen,
@@ -34,6 +35,8 @@ export default function Workspace() {
     acceptFiles,
     mergeExposures,
     editInput,
+    lookInput,
+    importLooks,
     restoreEdit,
     dialog,
     setDialog,
@@ -115,6 +118,16 @@ export default function Workspace() {
         hidden
         onChange={(e) => {
           restoreEdit(e.target.files?.[0]);
+          e.target.value = "";
+        }}
+      />
+      <input
+        ref={lookInput}
+        type="file"
+        accept={LOOK_EXTENSION}
+        hidden
+        onChange={(e) => {
+          importLooks(Array.from(e.target.files));
           e.target.value = "";
         }}
       />

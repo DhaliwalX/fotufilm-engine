@@ -52,6 +52,7 @@ class EngineBridge {
 
   void Export(const Call& call, std::shared_ptr<Reply> reply);
   void MergeExposures(const Call& call, std::shared_ptr<Reply> reply);
+  void SaveFile(const Call& call, std::shared_ptr<Reply> reply);
 
   Dispatcher& dispatcher_;
   DestinationPicker picker_;

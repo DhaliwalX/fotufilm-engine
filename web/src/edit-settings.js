@@ -40,6 +40,10 @@ const sectionOfField = Object.fromEntries(
 export const sectionOf = (key) =>
   PHOTO_KEYS.includes(key) ? null : (sectionOfField[FIELD[key] ?? key] ?? null);
 
+/** Paste Settings, named for the photos chosen in the strip when there are several. */
+export const pasteTitle = (count) =>
+  count > 1 ? `Paste Settings to ${count} Photos` : "Paste Settings";
+
 /** The sections of `edit` to paste elsewhere. */
 export const copySettings = (edit, sections) => ({
   sections: [...sections],
@@ -144,6 +148,35 @@ export function savePreset(name, settings) {
     ),
   });
   return preset;
+}
+
+/**
+ * Adds presets read from a look file. One the same as a preset already here is left as it is;
+ * one whose name is taken by a different preset is added as “Name 2”, never replacing it.
+ * Answers how many were added.
+ */
+export function importPresets(incoming) {
+  const { presets: list, ...rest } = read();
+  const next = [...list];
+  let added = 0;
+  for (const { name, settings } of incoming) {
+    // Already here: under its name, or under the name an earlier import gave it.
+    const text = JSON.stringify(settings);
+    const named = (p) =>
+      p.name === name ||
+      (p.name.startsWith(`${name} `) && /^\d+$/.test(p.name.slice(name.length + 1)));
+    if (next.some((p) => named(p) && JSON.stringify(p.settings) === text)) continue;
+    let unique = name;
+    for (let n = 2; next.some((p) => p.name === unique); n++) unique = `${name} ${n}`;
+    next.push({ id: crypto.randomUUID(), name: unique, settings });
+    added++;
+  }
+  if (added)
+    write({
+      ...rest,
+      presets: next.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })),
+    });
+  return added;
 }
 
 export function deletePreset(id) {

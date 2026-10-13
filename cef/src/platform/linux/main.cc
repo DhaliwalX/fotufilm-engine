@@ -74,6 +74,8 @@ CefRefPtr<CefDictionaryValue> HostCapabilities() {
   CefRefPtr<CefDictionaryValue> open = CefDictionaryValue::Create();
   open->SetString("reveal", "Show in Folder");
   host->SetDictionary("openExport", open);
+  // Look files and other small files the editor writes, saved where the person chooses.
+  host->SetBool("saveFile", true);
 #endif
   return host;
 }

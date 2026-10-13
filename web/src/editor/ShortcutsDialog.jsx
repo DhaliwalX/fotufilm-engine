@@ -1,6 +1,10 @@
 import { Dialog, Heading, Content } from "@react-spectrum/s2/Dialog";
 import { editorControl } from "../editor-catalogue.js";
-import { exportShortcut, shortcutLabel } from "../shortcut-label.js";
+import {
+  exportShortcut,
+  isApplePlatform,
+  shortcutLabel,
+} from "../shortcut-label.js";
 import { useEditor } from "./EditorContext.jsx";
 export default function ShortcutsDialog() {
   const { backend } = useEditor();
@@ -19,6 +23,11 @@ export default function ShortcutsDialog() {
             ["Show negative", shortcutLabel("⌥⌘N")],
             ["Copy settings", shortcutLabel("⌥⌘C")],
             ["Paste settings", shortcutLabel("⌥⌘V")],
+            [
+              "Choose more photos in the strip",
+              `Shift-click / ${isApplePlatform() ? "⌘" : "Ctrl"}-click`,
+            ],
+            ["Choose every open photo", shortcutLabel("⌘A")],
             ["Video play / pause", "Space / K in viewer"],
             ["Video seek", "← / → or J / L in viewer"],
             ["Mute video preview", "M in viewer"],
