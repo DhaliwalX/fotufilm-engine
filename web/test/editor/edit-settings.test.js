@@ -6,7 +6,10 @@ import {
   PHOTO_KEYS,
   SETTINGS_SECTIONS,
   copySettings,
+  importPresets,
   pasteSettings,
+  pasteTitle,
+  savePreset,
   sectionOf,
 } from "../../src/edit-settings.js";
 
@@ -84,4 +87,39 @@ test("geometry travels when chosen", () => {
   const pasted = pasteSettings(base, copySettings(source, ["frameGeometry"]));
   assert.equal(pasted.rotation, 1);
   assert.equal(pasted.stock, "gold200");
+});
+
+test("Paste Settings is named for several chosen photos", () => {
+  assert.equal(pasteTitle(1), "Paste Settings");
+  assert.equal(pasteTitle(3), "Paste Settings to 3 Photos");
+});
+
+test("imported presets never replace one already here", (t) => {
+  const kept = new Map();
+  globalThis.localStorage = {
+    getItem: (key) => kept.get(key) ?? null,
+    setItem: (key, value) => kept.set(key, value),
+  };
+  t.after(() => delete globalThis.localStorage);
+  const warm = copySettings(source, DEFAULT_SECTIONS);
+  const cool = copySettings({ ...source, stock: "gold200" }, DEFAULT_SECTIONS);
+  savePreset("Warm", warm);
+  assert.equal(importPresets([{ name: "Warm", settings: warm }]), 0);
+  assert.equal(
+    importPresets([
+      { name: "Warm", settings: cool },
+      { name: "Cool", settings: cool },
+    ]),
+    2,
+  );
+  assert.equal(importPresets([{ name: "Warm", settings: cool }]), 0);
+  const { presets } = JSON.parse(kept.get("fotufilm.editPresets"));
+  assert.deepEqual(
+    presets.map((p) => [p.name, p.settings.edit.stock]),
+    [
+      ["Cool", "gold200"],
+      ["Warm", "portra400"],
+      ["Warm 2", "gold200"],
+    ],
+  );
 });

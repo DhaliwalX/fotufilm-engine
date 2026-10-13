@@ -1,5 +1,7 @@
 #include "engine/engine_bridge.h"
 
+#include <fstream>
+
 #include "include/cef_parser.h"
 
 namespace fotufilm {
@@ -48,6 +50,11 @@ EngineBridge::EngineBridge(Dispatcher& dispatcher) : dispatcher_(dispatcher) {
                         [this](const Call& call, std::shared_ptr<Reply> reply) {
                           Export(call, std::move(reply));
                         });
+  // A small file the editor writes itself, such as a look file of presets: the host asks where.
+  dispatcher.Register("saveFile", Dispatcher::Thread::kUi,
+                      [this](const Call& call, std::shared_ptr<Reply> reply) {
+                        SaveFile(call, std::move(reply));
+                      });
   // The exposures to merge are the host's to ask for; reading and merging them the engine's.
   dispatcher.Register("mergeTrichromatic", Dispatcher::Thread::kUi,
                       [this](const Call& call, std::shared_ptr<Reply> reply) {
@@ -188,6 +195,30 @@ void EngineBridge::MergeExposures(const Call& call, std::shared_ptr<Reply> reply
     pending->params = CefValue::Create();
     pending->params->SetDictionary(fields);
     dispatcher_.PostCall(pending, [this, pending, reply] { Handle(*pending, reply); });
+  });
+}
+
+// "saveFile" {filename, text}: the text written where the person chooses, answered with `{path}`.
+// The panel is offered no type, so it keeps the file's own extension.
+void EngineBridge::SaveFile(const Call& call, std::shared_ptr<Reply> reply) {
+  if (!picker_) return reply->Reject("This host cannot choose where to save.");
+  CefRefPtr<CefDictionaryValue> fields =
+      call.params && call.params->GetType() == VTYPE_DICTIONARY ? call.params->GetDictionary()
+                                                                : nullptr;
+  if (!fields) return reply->Reject("Nothing to save.");
+  const std::string filename = fields->GetString("filename").ToString();
+  const std::string text = fields->GetString("text").ToString();
+  picker_(filename, "", [reply, text](const std::string& path) {
+    if (path.empty()) return reply->Reject("Saving was cancelled.", "AbortError");
+    std::ofstream file(path, std::ios::binary | std::ios::trunc);
+    file.write(text.data(), static_cast<std::streamsize>(text.size()));
+    file.close();
+    if (!file) return reply->Reject("The file could not be written there.");
+    CefRefPtr<CefDictionaryValue> answer = CefDictionaryValue::Create();
+    answer->SetString("path", path);
+    CefRefPtr<CefValue> value = CefValue::Create();
+    value->SetDictionary(answer);
+    reply->Resolve(value);
   });
 }
 

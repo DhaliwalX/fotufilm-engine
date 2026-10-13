@@ -208,6 +208,10 @@ export function createDesktopBackend(channel) {
       : undefined,
     // What the host calls showing a file in its file manager.
     revealExportLabel: can.openExport?.reveal,
+    // A small file the editor writes (a look file), saved where the host's panel asks.
+    saveFile: can.saveFile
+      ? ({ filename, text }) => call("saveFile", { filename, text })
+      : undefined,
     // Export Original: a camera RAW opened from a file, copied as it is.
     exportOriginal: (image) =>
       call("exportOriginal", { handle: image.handle, filename: image.original.name, type: "" }),

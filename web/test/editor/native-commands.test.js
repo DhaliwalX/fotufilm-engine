@@ -232,6 +232,7 @@ test("Undo and Redo are named and the Edit History lists every step", () => {
     undo: "Undo Crop & Rotate",
     redo: "Redo Portra 400",
     play: "Play",
+    pasteSettings: "Paste Settings",
   });
   // View › Play says what it will do next.
   assert.equal(menuState({ ...e, playing: true }).titles.play, "Pause");
@@ -301,6 +302,24 @@ test("Copy Settings, Paste Settings and the presets run on the open photo", () =
   assert.equal(none.copySettings, false);
   assert.equal(none.pasteSettings, false);
   assert.equal(none["preset:p1"], false);
+});
+
+test("Paste Settings names the photos chosen, and looks import from the Presets menu", () => {
+  const lookInput = { current: { click: () => e.calls.push(["looks"]) } };
+  const e = editor({
+    lookInput,
+    selectedFiles: [{ id: "a" }, { id: "b" }, { id: "c" }],
+    editSettings: { copied: {}, presets: [], sections: [] },
+  });
+  const state = menuState(e);
+  assert.equal(state.titles.pasteSettings, "Paste Settings to 3 Photos");
+  assert.equal(state.enabled.importLooks, true);
+  assert.ok(runCommand(e, "importLooks"));
+  assert.deepEqual(e.calls, [["looks"]]);
+  assert.equal(
+    menuState({ ...e, dialog: "export" }).enabled.importLooks,
+    false,
+  );
 });
 
 test("the zoom items follow the canvas's view, which the editor never holds", () => {

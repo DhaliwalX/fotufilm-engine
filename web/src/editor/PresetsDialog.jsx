@@ -6,12 +6,15 @@ import { Tooltip, TooltipTrigger } from "@react-spectrum/s2/Tooltip";
 import { Icon } from "../icons.jsx";
 import { useEditor } from "./EditorContext.jsx";
 
-// Manage Presets…: the saved presets, each applied or deleted here.
+// Manage Presets…: the saved presets, each applied, exported as a look file or deleted here,
+// and look files imported.
 export default function PresetsDialog() {
   const {
     editSettings,
     applyPreset,
     deletePreset,
+    exportPresets,
+    lookInput,
     setDialog,
     active,
     exporting,
@@ -68,6 +71,17 @@ export default function PresetsDialog() {
                   <ActionButton
                     size="S"
                     isQuiet
+                    aria-label={`Export ${preset.name}`}
+                    onPress={() => exportPresets([preset.id])}
+                  >
+                    <Icon name="export" />
+                  </ActionButton>
+                  <Tooltip>{"Export as a Look File…"}</Tooltip>
+                </TooltipTrigger>
+                <TooltipTrigger>
+                  <ActionButton
+                    size="S"
+                    isQuiet
                     aria-label={`Delete ${preset.name}`}
                     onPress={() => setDoomed(preset)}
                   >
@@ -81,6 +95,23 @@ export default function PresetsDialog() {
         ) : (
           <p className="medium-detail">{"No presets yet."}</p>
         )}
+        <div className="dialog-actions">
+          <Button
+            size="S"
+            variant="secondary"
+            onPress={() => lookInput.current?.click()}
+          >
+            {"Import Looks…"}
+          </Button>
+          <Button
+            size="S"
+            variant="secondary"
+            isDisabled={!editSettings.presets.length}
+            onPress={() => exportPresets(editSettings.presets.map((p) => p.id))}
+          >
+            {"Export All…"}
+          </Button>
+        </div>
       </Content>
     </Dialog>
   );

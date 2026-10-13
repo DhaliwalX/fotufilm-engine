@@ -159,7 +159,10 @@ NSMenu* FotufilmMainMenu(NSArray<NSDictionary*>* plugins) {
   static FotufilmEditorListMenu* presets = [FotufilmEditorListMenu
        list:@"presets"
       empty:@"No Presets"
-      fixed:@[ @[ @"savePreset", @"Save Preset…" ], @[ @"managePresets", @"Manage Presets…" ] ]];
+      fixed:@[
+        @[ @"savePreset", @"Save Preset…" ], @[ @"managePresets", @"Manage Presets…" ],
+        @[ @"importLooks", @"Import Looks…" ]
+      ]];
   static FotufilmEditHistoryMenu* history = [FotufilmEditHistoryMenu new];
   NSMenu* bar = [NSMenu new];
 

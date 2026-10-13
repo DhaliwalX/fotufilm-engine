@@ -156,6 +156,11 @@ export default function useDocumentActions({
   // Each document's edit as it stands: the one being edited, one edited before as it was left,
   // and one not opened yet as it would open, with the edit kept for its file (Export All).
   async function documentEdits(docs) {
+    return (await documentStates(docs)).map(({ edit }) => edit);
+  }
+  // `documentEdits` with the key each edit is kept under, null where it cannot be kept, so that
+  // a change made without opening a photo (Paste Settings on several) is there when it opens.
+  async function documentStates(docs) {
     const unopened = docs.filter((doc) => doc.waiting && !doc.editKey && sourcePath(doc));
     const identities =
       unopened.length && backend.fileIdentities
@@ -164,15 +169,18 @@ export default function useDocumentActions({
     const identity = new Map(unopened.map((doc, i) => [doc.id, identities[i] ?? null]));
     return Promise.all(
       docs.map(async (doc) => {
-        if (doc.id === activeId) return edit;
+        if (doc.id === activeId) return { edit, editKey: doc.editKey ?? null };
         if (!doc.waiting)
-          return histories.current.get(doc.id)?.present ?? startingEdit(doc);
-        const { savedEdit } = await savedEditFor({
+          return {
+            edit: histories.current.get(doc.id)?.present ?? startingEdit(doc),
+            editKey: doc.editKey ?? null,
+          };
+        const { savedEdit, editKey } = await savedEditFor({
           editKey: doc.editKey,
           identity: identity.get(doc.id),
           file: identity.has(doc.id) ? undefined : doc.source.file,
         });
-        return startingEdit({ savedEdit, source: doc.source });
+        return { edit: startingEdit({ savedEdit, source: doc.source }), editKey };
       }),
     );
   }
@@ -481,6 +489,7 @@ export default function useDocumentActions({
     removeFile,
     removeFiles,
     documentEdits,
+    documentStates,
   };
 }
 

@@ -53,6 +53,7 @@ export default function useEditorState({}) {
     [retry, setRetry] = useState(0);
   const input = useRef(null),
     editInput = useRef(null),
+    lookInput = useRef(null),
     histories = useRef(new Map()),
     urls = useRef(new Set()),
     loadGeneration = useRef(0),
@@ -138,6 +139,7 @@ export default function useEditorState({}) {
     setRetry,
     input,
     editInput,
+    lookInput,
     histories,
     urls,
     loadGeneration,

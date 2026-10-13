@@ -14,6 +14,7 @@ import {
 } from "../edit-history.js";
 import { isFilmPack } from "./useFilmPacks.js";
 import { zoomReach } from "../photo-view.js";
+import { pasteTitle } from "../edit-settings.js";
 
 // The native menu bar (cef/src/platform/mac) runs the editor's own handlers: the host sends
 // "fotufilm-native-command" {command} and "fotufilm-native-open" {paths}, and the editor reports
@@ -86,6 +87,7 @@ const COMMANDS = {
   pasteSettings: (e) => e.pasteSettings(),
   savePreset: (e) => e.setDialog("savePreset"),
   managePresets: (e) => e.setDialog("presets"),
+  importLooks: (e) => e.lookInput.current?.click(),
   resetEdits: (e) => e.resetEdits(),
   newGrainPattern: (e) => e.newGrainPattern(),
   autoFilm: () => setAppSetting("autoFilm", !appSetting("autoFilm")),
@@ -178,6 +180,7 @@ export function menuState(e) {
     pasteSettings: photo && !!e.editSettings.copied,
     savePreset: photo,
     managePresets: free && e.editSettings.presets.length > 0,
+    importLooks: free,
     resetEdits: photo,
     newGrainPattern: photo && !!e.edit?.stock,
     settings: true,
@@ -253,6 +256,7 @@ export function menuState(e) {
       redo: redoTitle(e.history, filmName),
       // What it will do next, as the Mac app names it.
       play: e.playing ? "Pause" : "Play",
+      pasteSettings: pasteTitle(e.selectedFiles?.length ?? 1),
     },
     toolTips = {};
   pluginMenuState(e, enabled, titles, toolTips);

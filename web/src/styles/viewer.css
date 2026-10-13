@@ -160,6 +160,10 @@
   .filmstrip-item.selected {
     border-color: var(--accent);
   }
+  /* Chosen with the one shown, for Paste Settings and presets. */
+  .filmstrip-item.chosen:not(.selected) {
+    border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  }
   .filmstrip-preview {
     position: absolute;
     inset: 3px;
