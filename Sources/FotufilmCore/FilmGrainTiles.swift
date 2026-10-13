@@ -24,8 +24,16 @@ import FotufilmHalide
 /// `tileMarginMM` past its block, and across a band `tileSeamMM` either side of an edge the
 /// neighbouring blocks' grain cross-fades, renormalised so the fade keeps the grain's variance:
 /// a dye cloud is never cut along a straight line, which magnified past a few microns a pixel
-/// would show. The tiles themselves are the stock's, rendered once: another seed is another
-/// placement of the same coating, as another frame of the roll is.
+/// would show. But a tile is a quarter of a millimetre of film, and every block shares it: laid
+/// once, each patch of it would recur, whole and in the same turn, about every 0.7 mm, which the
+/// eye picks out as repeated clumps. So every pixel reads `tileLayers` independent layings of the
+/// tile, each through blocks of its own on a grid offset from the others', and sums their grain
+/// divided by `√tileLayers`. Independent fields of one covariance, summed and divided so, keep
+/// that covariance, so the grain's strength, spectrum and tone are the single laying's; a patch
+/// of one laying recurs only under different grain from the others, so no patch recurs whole.
+/// The cost is the grain's skew, which falls by `√tileLayers` as independent fields' does. The
+/// tiles themselves are the stock's, rendered once: another seed is another placement of the
+/// same coating, as another frame of the roll is.
 ///
 /// **The tone stays the curve's.** The mean density a footprint reads depends on its size and on
 /// where its edges fall against the texels — light averages, density does not — so for each
@@ -51,9 +59,14 @@ extension FilmGrain {
     /// Half-width of the band either side of a block edge across which neighbouring blocks'
     /// grain cross-fades, mm.
     public static let tileSeamMM: Float = 0.016
+    /// Independent layings of the tile each pixel reads, each through its own blocks, their
+    /// grain summed and divided by the square root of their number: the kernel's
+    /// `FOTUFILM_FILM_TILE_LAYERS`.
+    public static let tileLayers = Int(FOTUFILM_FILM_TILE_LAYERS)
     /// The coating the tiles render: one per stock, whatever the frame's seed.
     static let tileSeed: UInt64 = 0xA11C_4057_5EED_0001
-    /// Hash stream of the block placement, per record: the kernel's `kFilmTileStream`.
+    /// Hash stream of the block placement, per laying and record from here up: the kernel's
+    /// `kFilmTileStream`.
     static let tileStream: UInt32 = 200
 
     /// One record's tile at one gross density.
@@ -364,7 +377,8 @@ extension FilmGrain {
 
     /// Each level read through footprints of `pitch` texels laid as a frame lays them — each
     /// through the placement of the block its centre falls in — at `side²` footprints scattered
-    /// over many blocks.
+    /// over many blocks. Every laying is the one tile through blocks of its own, so the first
+    /// laying's tables are all of theirs.
     static func measurePitch(_ tiles: Tiles, pitch: Double, side: Int = 128) -> PitchTables {
         let pixels = (0..<(side * side)).map { i in
             (Double((i % side) * 7919 % 4096) * pitch, Double((i / side) * 104_729 % 4096) * pitch)
@@ -379,7 +393,7 @@ extension FilmGrain {
                     blockLight(levels[k], levels[next], p.0, p.0 + pitch, p.1, p.1 + pitch,
                                bx: Int(((p.0 + pitch / 2) / blockTexels).rounded(.down)),
                                by: Int(((p.1 + pitch / 2) / blockTexels).rounded(.down)),
-                               seed: 0x5A3F_1E1D, record: r)
+                               seed: 0x5A3F_1E1D, layer: 0, record: r)
                 }
                 fields[k] = lights.map { -log10(max(Double($0.0), 1e-9)) }
                 fields[next] = lights.map { -log10(max(Double($0.1), 1e-9)) }
@@ -517,36 +531,45 @@ extension FilmGrain {
             let amount = amounts[r]
             let block = Self.blockTexels, seam = Self.seamTexels
             ParallelWork.forEach(iterations: height) { y in
-                let cy = (Double(y) + 0.5) * pitch
-                let y0 = cy - 0.5 * footprint, y1 = y0 + footprint
-                let by0 = Int(((cy - seam) / block).rounded(.down))
-                let by1 = Int(((cy + seam) / block).rounded(.down))
                 for x in 0..<width {
                     let gross = source[y * width + x]
                     let t = min(max((gross - lo) / max(hi - lo, 1e-6), 0), 1) * steps
                     let k = min(Int(t), Self.tileLevels - 2)
                     let w = t - Float(k)
-                    let cx = (Double(x) + 0.5) * pitch
-                    let x0 = cx - 0.5 * footprint, x1 = x0 + footprint
-                    let bx0 = Int(((cx - seam) / block).rounded(.down))
-                    let bx1 = Int(((cx + seam) / block).rounded(.down))
-                    // The blocks whose fade reaches the pixel, each read through its own
-                    // placement and weighed by the fade; the weights' norm keeps the variance.
-                    var grain = 0.0, norm = 0.0
-                    for by in by0...by1 {
-                        let wy = Self.blockWeight(cy, by)
-                        for bx in bx0...bx1 {
-                            let weight = Self.blockWeight(cx, bx) * wy
-                            guard weight > 0 else { continue }
-                            let (a, b) = Self.blockLight(levels[k], levels[k + 1], x0, x1, y0, y1,
-                                                         bx: bx, by: by, seed: seed, record: r)
-                            let da = -log10(max(a, 1e-9)) - meanAt[k]
-                            let db = -log10(max(b, 1e-9)) - meanAt[k + 1]
-                            grain += weight * Double(Self.blend(da, db, w, rho[k]))
-                            norm += weight * weight
+                    // Each laying's blocks whose fade reaches the pixel, each read through its
+                    // own placement and weighed by the fade; the weights' norm keeps the
+                    // variance, and so does dividing the layings' sum by the root of their
+                    // number.
+                    var total = 0.0
+                    for layer in 0..<Self.tileLayers {
+                        let shift = Self.layingShift(layer)
+                        let cx = (Double(x) + 0.5) * pitch + shift
+                        let cy = (Double(y) + 0.5) * pitch + shift
+                        let x0 = cx - 0.5 * footprint, x1 = x0 + footprint
+                        let y0 = cy - 0.5 * footprint, y1 = y0 + footprint
+                        let bx0 = Int(((cx - seam) / block).rounded(.down))
+                        let bx1 = Int(((cx + seam) / block).rounded(.down))
+                        let by0 = Int(((cy - seam) / block).rounded(.down))
+                        let by1 = Int(((cy + seam) / block).rounded(.down))
+                        var grain = 0.0, norm = 0.0
+                        for by in by0...by1 {
+                            let wy = Self.blockWeight(cy, by)
+                            for bx in bx0...bx1 {
+                                let weight = Self.blockWeight(cx, bx) * wy
+                                guard weight > 0 else { continue }
+                                let (a, b) = Self.blockLight(levels[k], levels[k + 1],
+                                                             x0, x1, y0, y1, bx: bx, by: by,
+                                                             seed: seed, layer: layer, record: r)
+                                let da = -log10(max(a, 1e-9)) - meanAt[k]
+                                let db = -log10(max(b, 1e-9)) - meanAt[k + 1]
+                                grain += weight * Double(Self.blend(da, db, w, rho[k]))
+                                norm += weight * weight
+                            }
                         }
+                        total += grain / max(norm, 1e-12).squareRoot()
                     }
-                    box.pointer[y * width + x] = amount * Float(grain / max(norm, 1e-12).squareRoot())
+                    box.pointer[y * width + x] =
+                        amount * Float(total / Double(Self.tileLayers).squareRoot())
                 }
             }
             fluctuations[r] = Array(out)
@@ -574,10 +597,12 @@ extension FilmGrain {
 
     /// The block's placement of the tile: an offset anywhere in the period, a read past whose far
     /// edge wraps, and one of eight orientations, from the kernel's `pixel_hash` on the block's
-    /// column and row. Offsets over the whole period keep neighbouring blocks' grain unrelated;
-    /// confined to part of it, overlapping reads of the one mean-free tile anticorrelate them.
-    static func blockPlacement(seed: UInt32, record: Int, bx: Int, by: Int) -> (Double, Double, Int) {
-        let stream = (tileStream &+ UInt32(record)) &* 0x9E37_79B9
+    /// column and row in laying `layer`'s grid. Offsets over the whole period keep neighbouring
+    /// blocks' grain unrelated; confined to part of it, overlapping reads of the one mean-free
+    /// tile anticorrelate them.
+    static func blockPlacement(seed: UInt32, layer: Int, record: Int, bx: Int,
+                               by: Int) -> (Double, Double, Int) {
+        let stream = (tileStream &+ UInt32(3 * layer + record)) &* 0x9E37_79B9
         let h = pcgHash(UInt32(truncatingIfNeeded: bx)
                         ^ pcgHash(UInt32(truncatingIfNeeded: by) ^ pcgHash(seed ^ stream)))
         let period = UInt32(tileSide)
@@ -587,6 +612,12 @@ extension FilmGrain {
     static var blockTexels: Double { Double((tileBlockMM / tileTexelMM).rounded()) }
     static var marginTexels: Double { Double((tileMarginMM / tileTexelMM).rounded()) }
     static var seamTexels: Double { Double((tileSeamMM / tileTexelMM).rounded()) }
+
+    /// How far laying `layer`'s block grid sits from the frame's, texels, along both axes: the
+    /// layings' grids are spread evenly over a block, so their seams fall apart.
+    static func layingShift(_ layer: Int) -> Double {
+        blockTexels * Double(layer) / Double(tileLayers)
+    }
 
     /// Block `b`'s share of the point `c` texels along one axis: one inside the block, falling
     /// linearly to zero across the seam band at each of its edges, where the neighbour's share
@@ -625,18 +656,19 @@ extension FilmGrain {
         }
     }()
 
-    /// Mean light at two levels through the film rectangle `[x0, x1) × [y0, y1)` (texels) as
-    /// block `(bx, by)`'s placement of the tile holds it: all of it for any footprint within the
-    /// placement's margin, and the part the placement reaches past that.
+    /// Mean light at two levels through the film rectangle `[x0, x1) × [y0, y1)` (texels, in
+    /// laying `layer`'s grid) as block `(bx, by)`'s placement of the tile holds it: all of it
+    /// for any footprint within the placement's margin, and the part the placement reaches past
+    /// that.
     static func blockLight(_ a: TileLevel, _ b: TileLevel, _ x0: Double, _ x1: Double,
                            _ y0: Double, _ y1: Double, bx: Int, by: Int, seed: UInt32,
-                           record: Int) -> (Float, Float) {
+                           layer: Int, record: Int) -> (Float, Float) {
         let block = blockTexels, margin = marginTexels
         let left = Double(bx) * block, top = Double(by) * block
         let u0 = max(x0, left - margin) - left, u1 = min(x1, left + block + margin) - left
         let v0 = max(y0, top - margin) - top, v1 = min(y1, top + block + margin) - top
         let area = max((u1 - u0) * (v1 - v0), 1e-6)
-        let (ox, oy, turn) = blockPlacement(seed: seed, record: record, bx: bx, by: by)
+        let (ox, oy, turn) = blockPlacement(seed: seed, layer: layer, record: record, bx: bx, by: by)
         var (p0, p1, q0, q1) = (u0, u1, v0, v1)
         if turn & 1 != 0 { (p0, p1) = (block - u1, block - u0) }
         if turn & 2 != 0 { (q0, q1) = (block - v1, block - v0) }

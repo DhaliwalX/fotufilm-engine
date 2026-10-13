@@ -6,6 +6,7 @@
 #include "Random.h"
 
 #include <Halide.h>
+#include <string>
 
 namespace fotufilm {
 
@@ -17,10 +18,14 @@ namespace fotufilm {
 // summed-area table, (side + 1)² floats with a zero first row and column — in `tiles`, indexed
 // (entry, level, record). A pixel is a rectangle of film; the light through it is four lookups
 // into the table, exactly, at any pitch. The frame is cut into blocks of FOTUFILM_FILM_TILE_BLOCK
-// texels that each take the tile at their own hashed offset and orientation, so nothing repeats;
-// a placement reaches FOTUFILM_FILM_TILE_MARGIN texels past its block, and across
-// FOTUFILM_FILM_TILE_SEAM texels either side of an edge the neighbours' grain cross-fades, so no
-// cloud is cut along a straight line.
+// texels that each take the tile at their own hashed offset and orientation; a placement reaches
+// FOTUFILM_FILM_TILE_MARGIN texels past its block, and across FOTUFILM_FILM_TILE_SEAM texels
+// either side of an edge the neighbours' grain cross-fades, so no cloud is cut along a straight
+// line. One tile is a quarter of a millimetre of film, so laid once a frame would show each of
+// its patches many times. Every pixel therefore reads FOTUFILM_FILM_TILE_LAYERS independent
+// layings of the tile, each through its own blocks on a grid offset from the others', and sums
+// their grain divided by the root of their number, which keeps its covariance: a patch of one
+// laying recurs only under different grain from the others, so no patch recurs whole.
 // `FilmGrain` in FotufilmCore is the same arithmetic on the host, and the tests hold the two
 // together.
 
@@ -89,12 +94,13 @@ inline Halide::Expr film_tile_box(Halide::ImageParam &tiles, Halide::Expr x0, Ha
 
 /// The film grain of one pixel of one record: its density less the mean density its footprint
 /// reads, at the two levels either side of its developed gross density, blended so the blend
-/// keeps their variance, and scaled by the record's grain amount. `px`, `py` are the pixel's
-/// column and row in the whole frame. The footprint is the square of film the pixel reads,
-/// centred on it: its own pitch for a sharp scan, wider for a softer one. The configuration's
-/// FOTUFILM_CONFIG_FILM_TILE block carries the pitch, the footprint, the amounts, each record's
-/// density range and, per record and level, the mean light, the mean density through this
-/// footprint and the correlation with the next level's grain through it.
+/// keeps their variance, summed over the layings of the tile and scaled by the record's grain
+/// amount. `px`, `py` are the pixel's column and row in the whole frame. The footprint is the
+/// square of film the pixel reads, centred on it: its own pitch for a sharp scan, wider for a
+/// softer one. The configuration's FOTUFILM_CONFIG_FILM_TILE block carries the pitch, the
+/// footprint, the amounts, each record's density range and, per record and level, the mean
+/// light, the mean density through this footprint and the correlation with the next level's
+/// grain through it, which every laying shares.
 inline Halide::Expr film_tile_grain(Halide::ImageParam &configuration, Halide::ImageParam &tiles,
                                     Halide::Expr gross, Halide::Expr px, Halide::Expr py,
                                     Halide::Expr record, Halide::Expr seed, Halide::Expr on) {
@@ -112,22 +118,8 @@ inline Halide::Expr film_tile_grain(Halide::ImageParam &configuration, Halide::I
     Expr k = Halide::clamp(Halide::cast<int32_t>(Halide::floor(t)), 0, levels - 2);
     Expr w = t - Halide::cast<float>(k);
 
-    // The blocks whose fade reaches the pixel's centre, one or two each way: each reads the whole
-    // footprint through its own placement (the part within its margin, past that), and their
-    // grain is summed by the fade's weights and divided by the weights' norm, which keeps the
-    // variance where two independent placements meet.
     const float margin = float(FOTUFILM_FILM_TILE_MARGIN);
     const float seam = float(FOTUFILM_FILM_TILE_SEAM);
-    Expr cx = (Halide::cast<float>(px) + 0.5f) * pitch;
-    Expr cy = (Halide::cast<float>(py) + 0.5f) * pitch;
-    Expr x0 = cx - 0.5f * footprint, x1 = x0 + footprint;
-    Expr y0 = cy - 0.5f * footprint, y1 = y0 + footprint;
-    Expr bx0 = Halide::cast<int32_t>(Halide::floor((cx - seam) * (1.0f / block)));
-    Expr by0 = Halide::cast<int32_t>(Halide::floor((cy - seam) * (1.0f / block)));
-    Expr bx1 = Halide::min(Halide::cast<int32_t>(Halide::floor((cx + seam) * (1.0f / block))),
-                           bx0 + 1);
-    Expr by1 = Halide::min(Halide::cast<int32_t>(Halide::floor((cy + seam) * (1.0f / block))),
-                           by0 + 1);
     // Block `b`'s share at `c` along one axis: one inside, falling to zero across each edge's band.
     auto share = [&](Expr c, Expr b) {
         Expr start = Halide::cast<float>(b) * block;
@@ -138,44 +130,76 @@ inline Halide::Expr film_tile_grain(Halide::ImageParam &configuration, Halide::I
         Expr first = share(c, b0), second = Halide::select(b1 > b0, share(c, b1), 0.0f);
         return first * first + second * second;
     };
-    Expr norm = norm_axis(cx, bx0, bx1) * norm_axis(cy, by0, by1);
-    Halide::RDom pieces(0, 2, 0, 2, "film_tile_pieces");
-    pieces.where(bx0 + pieces.x <= bx1 && by0 + pieces.y <= by1);
-    Expr bx = bx0 + pieces.x, by = by0 + pieces.y;
-    Expr fbx = Halide::cast<float>(bx) * block, fby = Halide::cast<float>(by) * block;
-    Expr u0 = Halide::max(x0, fbx - margin) - fbx, u1 = Halide::min(x1, fbx + block + margin) - fbx;
-    Expr v0 = Halide::max(y0, fby - margin) - fby, v1 = Halide::min(y1, fby + block + margin) - fby;
-    Expr area = Halide::max((u1 - u0) * (v1 - v0), 1.0e-6f);
-    // Each block takes the tile at an offset anywhere in the period, and a read past its far edge
-    // wraps: offsets confined to part of the period would overlap neighbouring blocks' reads of
-    // the one mean-free tile and anticorrelate their grain.
-    Expr hash = pixel_hash(bx, by, seed, kFilmTileStream + record);
-    const uint32_t period = uint32_t(FOTUFILM_FILM_TILE_SIDE);
-    Expr ox = Halide::cast<float>(hash % Expr(period)) + margin;
-    Expr oy = Halide::cast<float>((hash >> 8) % Expr(period)) + margin;
-    Expr turn = Halide::cast<int32_t>((hash >> 16) & Expr(uint32_t(7)));
-    Expr flip_x = (turn & 1) != 0, flip_y = (turn & 2) != 0, swap = (turn & 4) != 0;
-    Expr p0 = Halide::select(flip_x, block - u1, u0);
-    Expr p1 = Halide::select(flip_x, block - u0, u1);
-    Expr q0 = Halide::select(flip_y, block - v1, v0);
-    Expr q1 = Halide::select(flip_y, block - v0, v1);
-    Expr a0 = Halide::select(swap, q0, p0) + ox, a1 = Halide::select(swap, q1, p1) + ox;
-    Expr b0 = Halide::select(swap, p0, q0) + oy, b1 = Halide::select(swap, p1, q1) + oy;
-    Expr light_a = configuration(table + k)
-        + film_tile_box(tiles, a0, a1, b0, b1, k, record, on) / area;
-    Expr light_b = configuration(table + k + 1)
-        + film_tile_box(tiles, a0, a1, b0, b1, k + 1, record, on) / area;
-    Expr density_a = -Halide::log(Halide::max(light_a, 1.0e-9f)) * float(1.0 / M_LN10)
-        - configuration(table + levels + k);
-    Expr density_b = -Halide::log(Halide::max(light_b, 1.0e-9f)) * float(1.0 / M_LN10)
-        - configuration(table + levels + k + 1);
-    Expr grain = Halide::sum(share(cx, bx) * share(cy, by)
-                                 * (density_a + (density_b - density_a) * w),
-                             "film_tile_grain_sum");
+
+    // One laying's grain. Its blocks lie on a grid moved `layer / FOTUFILM_FILM_TILE_LAYERS` of
+    // a block along both axes, so the layings' seams fall apart, and take their placements from
+    // a hash stream of their own. The blocks whose fade reaches the pixel's centre, one or two
+    // each way, each read the whole footprint through their own placement (the part within its
+    // margin, past that); their grain is summed by the fade's weights and divided by the
+    // weights' norm, which keeps the variance where two independent placements meet.
+    auto laying = [&](int layer) {
+        const float shift = block * float(layer) / float(FOTUFILM_FILM_TILE_LAYERS);
+        Expr cx = (Halide::cast<float>(px) + 0.5f) * pitch + shift;
+        Expr cy = (Halide::cast<float>(py) + 0.5f) * pitch + shift;
+        Expr x0 = cx - 0.5f * footprint, x1 = x0 + footprint;
+        Expr y0 = cy - 0.5f * footprint, y1 = y0 + footprint;
+        Expr bx0 = Halide::cast<int32_t>(Halide::floor((cx - seam) * (1.0f / block)));
+        Expr by0 = Halide::cast<int32_t>(Halide::floor((cy - seam) * (1.0f / block)));
+        Expr bx1 = Halide::min(Halide::cast<int32_t>(Halide::floor((cx + seam) * (1.0f / block))),
+                               bx0 + 1);
+        Expr by1 = Halide::min(Halide::cast<int32_t>(Halide::floor((cy + seam) * (1.0f / block))),
+                               by0 + 1);
+        Expr norm = norm_axis(cx, bx0, bx1) * norm_axis(cy, by0, by1);
+        const std::string suffix = std::to_string(layer);
+        Halide::RDom pieces(0, 2, 0, 2, "film_tile_pieces_" + suffix);
+        // Off, no block is read: a CPU schedule computes the stage whether or not the frame
+        // keeps it.
+        pieces.where(on && bx0 + pieces.x <= bx1 && by0 + pieces.y <= by1);
+        Expr bx = bx0 + pieces.x, by = by0 + pieces.y;
+        Expr fbx = Halide::cast<float>(bx) * block, fby = Halide::cast<float>(by) * block;
+        Expr u0 = Halide::max(x0, fbx - margin) - fbx;
+        Expr u1 = Halide::min(x1, fbx + block + margin) - fbx;
+        Expr v0 = Halide::max(y0, fby - margin) - fby;
+        Expr v1 = Halide::min(y1, fby + block + margin) - fby;
+        Expr area = Halide::max((u1 - u0) * (v1 - v0), 1.0e-6f);
+        // Each block takes the tile at an offset anywhere in the period, and a read past its far
+        // edge wraps: offsets confined to part of the period would overlap neighbouring blocks'
+        // reads of the one mean-free tile and anticorrelate their grain.
+        Expr hash = pixel_hash(bx, by, seed, kFilmTileStream + 3 * layer + record);
+        const uint32_t period = uint32_t(FOTUFILM_FILM_TILE_SIDE);
+        Expr ox = Halide::cast<float>(hash % Expr(period)) + margin;
+        Expr oy = Halide::cast<float>((hash >> 8) % Expr(period)) + margin;
+        Expr turn = Halide::cast<int32_t>((hash >> 16) & Expr(uint32_t(7)));
+        Expr flip_x = (turn & 1) != 0, flip_y = (turn & 2) != 0, swap = (turn & 4) != 0;
+        Expr p0 = Halide::select(flip_x, block - u1, u0);
+        Expr p1 = Halide::select(flip_x, block - u0, u1);
+        Expr q0 = Halide::select(flip_y, block - v1, v0);
+        Expr q1 = Halide::select(flip_y, block - v0, v1);
+        Expr a0 = Halide::select(swap, q0, p0) + ox, a1 = Halide::select(swap, q1, p1) + ox;
+        Expr b0 = Halide::select(swap, p0, q0) + oy, b1 = Halide::select(swap, p1, q1) + oy;
+        Expr light_a = configuration(table + k)
+            + film_tile_box(tiles, a0, a1, b0, b1, k, record, on) / area;
+        Expr light_b = configuration(table + k + 1)
+            + film_tile_box(tiles, a0, a1, b0, b1, k + 1, record, on) / area;
+        Expr density_a = -Halide::log(Halide::max(light_a, 1.0e-9f)) * float(1.0 / M_LN10)
+            - configuration(table + levels + k);
+        Expr density_b = -Halide::log(Halide::max(light_b, 1.0e-9f)) * float(1.0 / M_LN10)
+            - configuration(table + levels + k + 1);
+        Expr grain = Halide::sum(share(cx, bx) * share(cy, by)
+                                     * (density_a + (density_b - density_a) * w),
+                                 "film_tile_grain_sum_" + suffix);
+        return grain / Halide::sqrt(Halide::max(norm, 1.0e-12f));
+    };
+    // The layings are independent, so their sum over the root of their number keeps the
+    // variance.
+    Expr grain = laying(0);
+    for (int layer = 1; layer < FOTUFILM_FILM_TILE_LAYERS; ++layer) {
+        grain = grain + laying(layer);
+    }
     Expr rho = configuration(table + 2 * levels + k);
     Expr kept = (1.0f - w) * (1.0f - w) + w * w + 2.0f * w * (1.0f - w) * rho;
     return configuration(base + kFilmTileAmount + record) * grain
-        / Halide::sqrt(Halide::max(kept * norm, 1.0e-12f));
+        / Halide::sqrt(Halide::max(kept * float(FOTUFILM_FILM_TILE_LAYERS), 1.0e-12f));
 }
 
 }

@@ -41,6 +41,10 @@
     "FILM_TILE_SEAM": {
       "value": 16,
       "doc": "Half-width, in texels, of the band either side of a block edge over which the neighbouring blocks' grain cross-fades."
+    },
+    "FILM_TILE_LAYERS": {
+      "value": 2,
+      "doc": "Independent layings of the tile each pixel reads, each through its own blocks on an offset grid, their grain summed and divided by the square root of their number, so no patch of grain recurs whole."
     }
   },
   "fields": [

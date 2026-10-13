@@ -6,7 +6,8 @@
 
 namespace fotufilm {
 
-/// Hash stream of the film tiles' block placement: one per record, above every other stream.
+/// Hash stream of the film tiles' block placement: one per laying and record, from here up,
+/// above every other stream.
 constexpr int kFilmTileStream = 200;
 
 /// Offsets within the FOTUFILM_CONFIG_FILM_TILE block: the pixel pitch and the side of film a

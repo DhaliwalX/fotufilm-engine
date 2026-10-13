@@ -62,11 +62,20 @@ the CPU and Metal roads at the cost of the standard grain.
   moving the slider rebuilds nothing.
 - **Blocks.** The frame is cut into 128 µm blocks. Each takes the tile at its own hashed offset
   anywhere in the period, wrapping past its far edge, and one of the eight flips and turns of
-  the square, per record and per frame seed. Nothing repeats, and a new seed is another
-  placement of the same coating. Each placement reaches 64 µm past its block, and over 16 µm
-  either side of an edge the neighbouring blocks' grain cross-fades, renormalised so the fade
-  keeps the variance. A hard edge would cut every cloud along it, and magnified the frame
-  would show the blocks as a grid.
+  the square, per record and per frame seed. A new seed is another placement of the same
+  coating. Each placement reaches 64 µm past its block, and over 16 µm either side of an edge
+  the neighbouring blocks' grain cross-fades, renormalised so the fade keeps the variance. A
+  hard edge would cut every cloud along it, and magnified the frame would show the blocks as a
+  grid.
+- **Two layings.** The tile is only 256 µm of film and every block shares it, so laid once,
+  each patch of it would recur whole, in the same turn, about every 0.7 mm: across a frame the
+  eye picks out the same clumps again and again. So every pixel reads the tile twice, through
+  two independent sets of blocks, the second on a grid offset by half a block with placements
+  of its own, and sums the two grains divided by √2. Independent fields of one covariance,
+  summed and divided so, keep it, so the grain's strength, spectrum and tone are a single
+  laying's; a patch of one laying recurs only under different grain from the other, so no
+  patch recurs whole. The grain's skew falls by √2, as independent fields' does, and the
+  kernel samples the tiles twice as often.
 - **Tone.** For each pitch the host reads every level's mean density through footprints laid
   as the frame's pixels are, and a pixel's grain is its density less that mean. Between the
   two levels either side of its developed density, the pixel blends their grain, renormalised
@@ -105,14 +114,19 @@ Hosts offer these while the grain model is Film.
 |---|---|
 | σ48 at the sheet's read density, every record of Portra 400, Gold 200, UltraMax 400, Ektar 100, Superia X-TRA 400, Provia 100F and Tri-X | 0.86–1.21 of the sheet |
 | Tone | mean within 0.006 D of the curve on Portra 400 and Provia 100F, 0.001 D on Tri-X at 4 µm pixels |
-| Tiles against the full render at 1 µm | pixel σ 0.97–1.01 of it, same neighbour correlation, similar skew |
+| Tiles against the full render at 1 µm | pixel σ 0.97–1.01 of it, same neighbour correlation, similar skew laid once (two layings divide the skew by √2) |
 | Resolution | a 0.25 µm render averaged back to 1 µm correlates above 0.9 with the 1 µm render |
 | Halide against Swift | within 0.002 D per pixel, with every control above moved |
 | Tile builders (Metal, Halide) against the Swift reference | correlation above 0.9999, within 0.002 D per texel |
+| Repetition: each 48 µm patch's best match elsewhere in a 1.5 mm frame at 4 µm pixels | median 0.42–0.54 and none above 0.61, where one laying gave 0.64–0.77 and an exact copy |
 
-On an M4 Pro, a 1080p frame takes 19 ms on the Metal preview road (Standard: 16 ms), 31 ms
-on the Metal still road and 93 ms on the CPU. At 24 MP it matches the standard grain on
-Metal (0.20 s preview, 0.40 s still) and adds about 0.8 s on the CPU.
+On an M4 Pro, before the second laying, a 1080p frame took 19 ms on the Metal preview road
+(Standard: 16 ms), 31 ms on the Metal still road and 93 ms on the CPU, and at 24 MP it
+matched the standard grain on Metal (0.20 s preview, 0.40 s still) and added about 0.8 s on
+the CPU. The second laying doubles the tile reads. On the Halide Metal road, Portra 400's
+Film grain over Standard went from 9 to 22 ms at 1080p and from 19 to 62 ms at 4K; on the CPU
+a 24 MP frame takes about 2.5 s longer. On the CPU the film grain stage no longer reads the
+tiles when the frame lays Standard grain, which halves a 24 MP Standard render.
 
 ## What is not measured
 

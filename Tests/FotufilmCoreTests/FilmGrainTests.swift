@@ -129,16 +129,77 @@ final class FilmGrainTests: XCTestCase {
 
     /// Where few crystals developed the field is sparse clouds on clear film — a dark tail — and
     /// where most did it evens out. Jarvis's clouds spread each crystal's dye over microns, so
-    /// even the sparse field is soft: the tail is there, not spiky.
+    /// even the sparse field is soft: the tail is there, not spiky. A 40 µm frame holds a few
+    /// dozen clouds, whose skew swings by half from seed to seed, so six frames are pooled.
     func testSparseCloudsGiveAHeavyTail() {
         let stock = TestStocks.negative
         let grain = FilmGrain(stock: stock)
-        let thin = moments(grain.apply(to: flat(stock, net: 0.08, side: 160), pxPerMM: 4000,
-                                       seed: 2).planes[1])
-        let dense = moments(grain.apply(to: flat(stock, net: 1.2, side: 160), pxPerMM: 4000,
-                                        seed: 2).planes[1])
+        func pooled(_ net: Float) -> (mean: Float, sigma: Float, skew: Float) {
+            moments((1...6).flatMap { (seed: UInt32) in
+                grain.apply(to: flat(stock, net: net, side: 160), pxPerMM: 4000,
+                            seed: seed).planes[1]
+            })
+        }
+        let thin = pooled(0.08), dense = pooled(1.2)
         XCTAssertGreaterThan(thin.skew, 0.3, "thin skew \(thin.skew)")
         XCTAssertLessThan(dense.skew, thin.skew, "dense skew \(dense.skew)")
+    }
+
+    /// A tile is a quarter of a millimetre of film and every block shares it, so laid once, each
+    /// patch of it recurs whole, in the same turn, about every 0.7 mm. Each pixel reads
+    /// independent layings of it, so no 48 µm patch of a 1.5 mm frame may find a close match
+    /// elsewhere in it. Laid once, some patch finds an exact copy and the median best match is
+    /// 0.64–0.77; with two layings none passes 0.61 and the median is 0.42–0.54.
+    func testNoPatchOfGrainRecurs() {
+        for (name, stock) in [("negative", TestStocks.negative), ("monochrome", TestStocks.monochrome)] {
+            let grain = FilmGrain(stock: stock)
+            let side = 384, n = 12
+            let plane = grain.apply(to: flat(stock, net: 0.6, side: side), pxPerMM: 250,
+                                    seed: 3).planes[1].map(Double.init)
+            // Running sums of the plane and its square give every window's mean and spread.
+            let stride = side + 1
+            var sum = [Double](repeating: 0, count: stride * stride), square = sum
+            for y in 0..<side {
+                for x in 0..<side {
+                    let v = plane[y * side + x], i = (y + 1) * stride + x + 1
+                    sum[i] = v + sum[i - 1] + sum[i - stride] - sum[i - stride - 1]
+                    square[i] = v * v + square[i - 1] + square[i - stride] - square[i - stride - 1]
+                }
+            }
+            func window(_ table: [Double], _ x: Int, _ y: Int) -> Double {
+                table[(y + n) * stride + x + n] - table[y * stride + x + n]
+                    - table[(y + n) * stride + x] + table[y * stride + x]
+            }
+            let count = Double(n * n), last = side - n
+            var best: [Double] = []
+            for py in [40, 150, 260] {
+                for px in [30, 120, 210, 300] {
+                    let mean = window(sum, px, py) / count
+                    var patch = [Double](repeating: 0, count: n * n)
+                    for j in 0..<n {
+                        for i in 0..<n { patch[j * n + i] = plane[(py + j) * side + px + i] - mean }
+                    }
+                    let spread = (patch.reduce(0) { $0 + $1 * $1 }).squareRoot()
+                    var closest = -1.0
+                    for y in 0...last {
+                        for x in 0...last where abs(x - px) >= n || abs(y - py) >= n {
+                            let s = window(sum, x, y)
+                            let other = (window(square, x, y) - s * s / count).squareRoot()
+                            var dot = 0.0
+                            for j in 0..<n {
+                                let row = (y + j) * side + x
+                                for i in 0..<n { dot += patch[j * n + i] * plane[row + i] }
+                            }
+                            closest = max(closest, dot / max(spread * other, 1e-12))
+                        }
+                    }
+                    best.append(closest)
+                }
+            }
+            let sorted = best.sorted()
+            XCTAssertLessThan(sorted.last!, 0.8, "\(name): a patch recurs, matching \(sorted.last!)")
+            XCTAssertLessThan(sorted[sorted.count / 2], 0.62, "\(name): best matches \(sorted)")
+        }
     }
 
     /// A dye cloud is the one Jarvis measured: its terms carry one cloud's dye and reproduce the
