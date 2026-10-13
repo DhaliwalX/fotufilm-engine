@@ -23,6 +23,10 @@ enum {
     /// Half-width, in texels, of the band either side of a block edge over which the neighbouring
     /// blocks' grain cross-fades.
     FOTUFILM_FILM_TILE_SEAM = 16,
+    /// Independent layings of the tile each pixel reads, each through its own blocks on an offset
+    /// grid, their grain summed and divided by the square root of their number, so no patch of
+    /// grain recurs whole.
+    FOTUFILM_FILM_TILE_LAYERS = 2,
 };
 
 enum {
