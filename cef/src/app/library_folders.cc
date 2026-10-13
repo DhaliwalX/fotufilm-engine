@@ -139,7 +139,7 @@ std::string LibraryFolders::Rename(const std::string& path, const std::string& n
 
 bool LibraryFolders::List(const std::string& folder, const std::set<std::string>& extensions,
                           const std::atomic<bool>& cancelled, std::string& json,
-                          std::string& error) {
+                          std::string& error, bool recursive) {
   const fs::path root(Normal(folder));
   std::error_code status;
   fs::recursive_directory_iterator walk(
@@ -162,10 +162,12 @@ bool LibraryFolders::List(const std::string& folder, const std::set<std::string>
     }
     const fs::path& path = walk->path();
     const std::string name = Utf8(path.filename());
-    if (name.empty() || name.front() == '.') {
-      if (walk->is_directory(status)) walk.disable_recursion_pending();
+    const bool hidden = name.empty() || name.front() == '.';
+    if (walk->is_directory(status)) {
+      if (hidden || !recursive) walk.disable_recursion_pending();
       continue;
     }
+    if (hidden) continue;
     if (!walk->is_regular_file(status)) continue;
     std::string extension = Utf8(path.extension());
     if (extension.size() < 2) continue;
@@ -183,6 +185,33 @@ bool LibraryFolders::List(const std::string& folder, const std::set<std::string>
   }
   json += ']';
   return true;
+}
+
+namespace {
+
+std::mutex& OpenedMutex() {
+  static std::mutex mutex;
+  return mutex;
+}
+
+std::set<std::string>& OpenedFiles() {
+  static std::set<std::string> files;
+  return files;
+}
+
+}  // namespace
+
+void LibraryFolders::NoteOpened(const std::string& file) {
+  const std::string path = Normal(file);
+  if (path.empty()) return;
+  std::lock_guard<std::mutex> lock(OpenedMutex());
+  OpenedFiles().insert(path);
+}
+
+bool LibraryFolders::Opened(const std::string& file) {
+  const std::string path = Normal(file);
+  std::lock_guard<std::mutex> lock(OpenedMutex());
+  return !path.empty() && OpenedFiles().count(path) > 0;
 }
 
 void LibraryFolders::Save() const {

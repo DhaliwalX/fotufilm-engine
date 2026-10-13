@@ -1,7 +1,7 @@
 import { appSetting } from "../../app-settings.js";
 import { createLenses } from "./lenses.js";
 import { frameRequest } from "../../print-frame.js";
-import { isVideoFile } from "../../media-types.js";
+import { LIBRARY_EXTENSIONS, isVideoFile } from "../../media-types.js";
 import { importVideo, importedVideo } from "./video-import.js";
 import { BACKEND_VERSION } from "../contract.js";
 import { loadStockIndex } from "../../stock-index.js";
@@ -211,6 +211,16 @@ export function createDesktopBackend(channel) {
     // A small file the editor writes (a look file), saved where the host's panel asks.
     saveFile: can.saveFile
       ? ({ filename, text }) => call("saveFile", { filename, text })
+      : undefined,
+    // The photographs, RAW files and movies beside a file the host opened, not those of folders
+    // below: [[name, size, modified]], so that opening one fills the strip (opened-folder.js).
+    listOpenedFolder: can.openedFolders
+      ? async (path, { signal } = {}) => {
+          const result = await call("listOpenedFolder", { path, extensions: LIBRARY_EXTENSIONS }, {
+            signal,
+          });
+          return JSON.parse(new TextDecoder().decode(result.payload));
+        }
       : undefined,
     // Export Original: a camera RAW opened from a file, copied as it is.
     exportOriginal: (image) =>

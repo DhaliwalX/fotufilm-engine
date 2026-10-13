@@ -4,6 +4,7 @@
 #include <iterator>
 
 #include "app/file_panels.h"
+#include "app/library_folders.h"
 #include "include/cef_app.h"
 #include "include/cef_image.h"
 #include "include/wrapper/cef_helpers.h"
@@ -84,6 +85,8 @@ void WindowedHost::Show() {
 }
 
 void WindowedHost::Open(const std::vector<std::string>& paths) {
+  // Their folders may fill the editor's strip ("listOpenedFolder").
+  for (const std::string& path : paths) LibraryFolders::NoteOpened(path);
   pending_.insert(pending_.end(), paths.begin(), paths.end());
   Deliver();
 }
