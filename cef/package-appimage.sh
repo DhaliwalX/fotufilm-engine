@@ -52,6 +52,11 @@ bundle() {
   done
 }
 bundle "$LIB/libfotufilm.so" > "$OUT/bundled.txt"
+if ldd "$LIB/libfotufilm.so" | awk '$1 ~ /^libswiftCore\.so/ {found = 1} END {exit !found}'; then
+  echo "error: the engine links the system's Swift runtime; build it with a toolchain that has" >&2
+  echo "a static one (FOTUFILM_SWIFT_STDLIB, cef/README.md)" >&2
+  exit 1
+fi
 ldd "$LIB/libfotufilm.so" | grep -q '^\s*libjpeg\.so\.8 ' || {
   echo "error: the engine does not link libjpeg.so.8, the libjpeg the image carries" >&2
   exit 1

@@ -5,7 +5,8 @@
 #   cef/build.sh --run         build, then open the bridge diagnostics page
 #   cef/build.sh --no-plugins  leave the plug-ins out (the Plugins menu then says none are bundled)
 # On Linux it builds build/cef-host/Release/fotufilm and the engine's CUDA and Vulkan kernels
-# (HALIDE_ROOT, cef/build-engine-linux.sh); cef/package-appimage.sh then packs the AppImage.
+# (HALIDE_ROOT from tools/build-halide-linux.sh, cef/build-engine-linux.sh); cef/package-appimage.sh
+# then packs the AppImage.
 set -euo pipefail
 cd "$(cd "$(dirname "$0")" && pwd -P)/.."
 

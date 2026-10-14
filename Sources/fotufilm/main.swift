@@ -206,6 +206,7 @@ if flags["--merge-trichromatic"] != nil {
 }
 #endif
 
+#if canImport(CoreImage)
 if let scanPath = flags["--suggest-film"] {
     /// A 512-pixel preview of a scan in the film reading's linear Rec.2020, and its median.
     func scanPreview(_ path: String) -> ImageBuffer {
@@ -248,6 +249,7 @@ if let scanPath = flags["--suggest-film"] {
     }
     exit(0)
 }
+#endif
 
 if flags["--list-web-media"] != nil {
     let records: [[String: Any]] = FilmStock.presets.sorted(by: { $0.key < $1.key }).map { id, stock in

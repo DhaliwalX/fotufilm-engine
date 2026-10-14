@@ -15,7 +15,7 @@ predicates a legal UInt32 uniform ABI instead of emitting forbidden OpTypeBool s
 `tools/halide-vulkan-allocation-padding.patch` to preserve configured buffer padding;
 otherwise allocator splits can return regions smaller than the requested size and
 discard intermediate data. It includes allocator regression tests. The
-`tools/build-halide.sh --webgpu` toolchain recipe includes all three patches.
+`tools/build-halide.sh --webgpu` and `tools/build-halide-linux.sh` recipes include all three.
 
 ```sh
 export HALIDE_ROOT=/path/to/halide-sdk
@@ -101,11 +101,11 @@ swift run -c release fotufilm-parity --chart scene-chart.pfm --size 1536x864
 swift run -c release fotufilm-parity --develop scene-chart.pfm mac.pfm --device gpu --stock portra400 --no-grain
 ```
 
-On an x86-64 Linux machine with an NVIDIA GPU, build with a Halide SDK that has the CUDA and
-Vulkan backends and the three Vulkan patches above (`bool-uniforms` needs `patch --fuzz=3` on
-the pinned `third_party/Halide`). Without them Vulkan develops a flat, near-black frame. Also
-apply `tools/halide-vulkan-readback-staging.patch`: without it a GPU with a host-visible device
-heap reads every frame back uncached, seconds a frame. Then develop the same scenes with
+On an x86-64 Linux machine with an NVIDIA GPU, build with the Halide from
+`tools/build-halide-linux.sh`: the pinned `third_party/Halide` with the CUDA and Vulkan backends,
+the three Vulkan patches above and `tools/halide-vulkan-readback-staging.patch`. Without the
+first three Vulkan develops a flat, near-black frame; without the last a GPU with a host-visible
+device heap reads every frame back uncached, seconds a frame. Then develop the same scenes with
 `--device cpu`, `--device gpu` (CUDA), and `FOTUFILM_GPU_DEVICE=vulkan --device gpu`, and run
 `--compare mac.pfm linux.pfm`. Compare with `--no-grain`: Vulkan draws grain from the reference
 inverse-CDF tables, as the CPU and the browser do, so its grain has Metal's statistics but not
