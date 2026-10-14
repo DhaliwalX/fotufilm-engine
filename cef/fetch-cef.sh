@@ -27,7 +27,12 @@ mkdir -p "$dest"
 url="https://cef-builds.spotifycdn.com/${name//+/%2B}.tar.bz2"
 curl -sfL --retry 3 -o "$dest/$name.tar.bz2" "$url"
 expected="$(curl -sfL --retry 3 "$url.sha1")"
-actual="$(shasum -a 1 "$dest/$name.tar.bz2" | cut -d' ' -f1)"
+# coreutils' sha1sum where there is one (a minimal Linux has no Perl shasum), shasum on macOS.
+if command -v sha1sum >/dev/null; then
+  actual="$(sha1sum "$dest/$name.tar.bz2" | cut -d' ' -f1)"
+else
+  actual="$(shasum -a 1 "$dest/$name.tar.bz2" | cut -d' ' -f1)"
+fi
 if [[ "$expected" != "$actual" ]]; then
   echo "CEF checksum mismatch: expected $expected, got $actual" >&2
   rm -f "$dest/$name.tar.bz2"

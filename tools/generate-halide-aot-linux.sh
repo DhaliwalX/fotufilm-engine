@@ -10,6 +10,31 @@ OUTPUT="${1:-build/halide-linux-x86_64}"
 JOBS="${FOTUFILM_AOT_JOBS:-$(nproc)}"
 mkdir -p "$OUTPUT"
 GENERATOR="$OUTPUT/generate-halide-aot"
+STAMP="$OUTPUT/.generated-from"
+
+# The kernels are whatever the generator's sources (it and every header it includes), this script,
+# the Halide compiler and the generator's FOTUFILM_* overrides made them; when all of those match
+# the stamp the set is current.
+FINGERPRINT="$(python3 - "$HALIDE" <<'PY'
+import importlib.util, json, sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("aot_release", "tools/aot-release.py")
+release = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(release)
+halide = Path(sys.argv[1])
+files = sorted(release.generator_inputs() | {"tools/generate-halide-aot-linux.sh"})
+record = {name: release.digest(Path(name).read_bytes()) for name in files}
+for name in ("include/Halide.h", "lib/libHalide.so"):
+    record[name] = release.digest((halide / name).resolve().read_bytes())
+record["flags"] = release.flags()
+print(release.digest(json.dumps(record, sort_keys=True).encode()))
+PY
+)"
+if [[ -f "$STAMP" && "$(cat "$STAMP")" == "$FINGERPRINT" ]]; then
+  echo "Linux kernels in $OUTPUT are current."
+  exit 0
+fi
+rm -f "$STAMP"
 
 echo "Building the Halide generator…"
 "${CXX:-clang++}" -std=c++17 -O2 -I"$HALIDE/include" -ISources/FotufilmHalide/include \
@@ -25,4 +50,5 @@ done
 "$GENERATOR" "$OUTPUT" --linux-cuda --prefix=fotufilm_aot_ --extras
 cp "$HALIDE/include/HalideBuffer.h" "$HALIDE/include/HalideRuntime.h" \
    "$HALIDE/include/HalideRuntimeCuda.h" "$HALIDE/include/HalideRuntimeVulkan.h" "$OUTPUT/"
+echo "$FINGERPRINT" > "$STAMP"
 echo "Wrote Linux kernels to $OUTPUT"

@@ -271,7 +271,7 @@ if argument("--chart") != nil {
 
 if argument("--export-input") != nil {
     let paths = operands(after: "--export-input", count: 2)
-    #if canImport(FotufilmImaging)
+    #if canImport(FotufilmImaging) && canImport(CoreImage) && canImport(ImageIO)
     let image: SceneImage
     do { image = try SceneImage.decode(url: URL(fileURLWithPath: paths[0])) } catch { fail("\(error)") }
     var rgb = [Float](repeating: 0, count: image.width * image.height * 3)

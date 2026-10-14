@@ -36,12 +36,23 @@ engine beside it, and `cef/package-appimage.sh` packs that folder into
 `build/appimage/Fotufilm-<version>-x86_64.AppImage`. The engine library comes from
 `cef/build-engine-linux.sh`: the Swift engine with its runtime linked in, and the desktop graph
 compiled ahead of time for CUDA and for Vulkan (`tools/generate-halide-aot-linux.sh`, which needs
-a Halide build with both backends in `HALIDE_ROOT` and the patches in `tools/vulkan-parity/`).
+a Halide build with both backends and the Vulkan patches in `HALIDE_ROOT`).
+`tools/build-halide-linux.sh` builds that Halide from the pinned `third_party/Halide` into
+`build/halide-linux-install`, patching a copy so the submodule stays clean; it needs LLVM, Clang
+and LLD 21 or newer with their CMake files and the Vulkan headers (on Fedora: `llvm-devel
+clang-devel lld-devel vulkan-headers zlib-ng-compat-devel libxml2-devel libffi-devel`). The kernels are
+regenerated whenever the generator's sources or the Halide build change.
 When the app starts the engine develops on CUDA where an NVIDIA driver answers and on Vulkan on
 any other GPU; `FOTUFILM_GPU_DEVICE=cuda`, `vulkan` or `cpu` chooses instead. The window is CEF
 Views' (`app/windowed_host.h`), painted by Chromium, so the page draws the photograph itself.
 The Linux build runs without Chromium's sandbox, as an AppImage cannot carry its setuid helper;
 the editor only loads its own bundled pages.
+
+A Swift toolchain without a static runtime (no `lib/swift_static`, as with Fedora's `swift-lang`)
+links the system's Swift libraries instead. That engine runs on the machine that built it, but not
+elsewhere, so `cef/package-appimage.sh` refuses it: install the build in place, or pack the
+AppImage with a toolchain from swift.org. `FOTUFILM_SWIFT_STDLIB=static` or `dynamic` chooses
+explicitly.
 
 The engine opens, scans and exports stills through the system's codec libraries
 (`Sources/CFotufilmCodecs`: JPEG, PNG, TIFF, HEIF/AVIF, OpenEXR and camera RAW in; PNG, 16-bit

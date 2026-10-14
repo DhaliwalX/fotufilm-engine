@@ -3,7 +3,7 @@
 # library it links ahead-of-time Halide kernels, here the desktop graph for CUDA and for Vulkan
 # (FotufilmHalideLinux.cpp chooses between them when the app starts), so no develop waits on a
 # compiler and no Halide compiler ships. It exports nothing but the C interface, and carries the
-# Swift runtime inside it.
+# Swift runtime inside it where the toolchain has a static one (FOTUFILM_SWIFT_STDLIB below).
 #   HALIDE_ROOT=… cef/build-engine-linux.sh
 set -euo pipefail
 cd "$(cd "$(dirname "$0")" && pwd -P)/.."
@@ -15,8 +15,12 @@ KERNELS="${FOTUFILM_LINUX_KERNELS:-build/halide-linux-x86_64}"
 LIBRARY="$OUT/libfotufilm.so"
 mkdir -p "$OBJ"
 
-# Generating both sets takes a while on a large machine; they are regenerated when missing.
-[[ -f "$KERNELS/fotufilm_aot_runtime.a" ]] || tools/generate-halide-aot-linux.sh "$KERNELS"
+# Generating both sets takes a while on a large machine; the script regenerates them only when the
+# generator's sources or the Halide compiler changed since the last run. Kernels built elsewhere
+# (FOTUFILM_LINUX_KERNELS without HALIDE_ROOT) are used as they are.
+if [[ -n "${HALIDE_ROOT:-}" || ! -f "$KERNELS/fotufilm_aot_runtime.a" ]]; then
+  tools/generate-halide-aot-linux.sh "$KERNELS"
+fi
 
 "${CXX:-clang++}" -std=c++17 -O2 -g1 -fPIC \
   -fvisibility=hidden -fvisibility-inlines-hidden -ffunction-sections -fdata-sections -c \
@@ -94,13 +98,34 @@ swiftc ${SOURCE_BUILD_FLAGS[@]+"${SOURCE_BUILD_FLAGS[@]}"} \
   Sources/FotufilmHost/*.swift \
   -o "$OBJ/FotufilmHost.o"
 
-swiftc -emit-library -static-stdlib \
+# The Swift runtime and Foundation go inside the library, so it runs on any distribution. A
+# toolchain without a static runtime (lib/swift_static), such as Fedora's swift-lang, links the
+# system's instead: that library runs only where the same Swift is installed, and the AppImage
+# refuses it. FOTUFILM_SWIFT_STDLIB=static or dynamic chooses.
+SWIFT_STDLIB="${FOTUFILM_SWIFT_STDLIB:-}"
+if [[ -z "$SWIFT_STDLIB" ]]; then
+  SWIFT_RESOURCES="$(swiftc -print-target-info \
+    | python3 -c 'import json, sys; print(json.load(sys.stdin)["paths"]["runtimeResourcePath"])')"
+  SWIFT_STDLIB=dynamic
+  [[ -d "$SWIFT_RESOURCES/../swift_static" ]] && SWIFT_STDLIB=static
+fi
+case "$SWIFT_STDLIB" in
+  static)
+    STDLIB_FLAGS=(-static-stdlib
+      -lFoundationNetworking -l_CFURLSessionInterface -lCoreFoundation -l_FoundationCollections
+      -lswiftSynchronization -l_FoundationICU -l_FoundationCShims -lcurl) ;;
+  dynamic)
+    echo "warning: linking the system's Swift runtime; this libfotufilm.so is not portable" >&2
+    STDLIB_FLAGS=() ;;
+  *)
+    echo "error: FOTUFILM_SWIFT_STDLIB must be static or dynamic" >&2
+    exit 1 ;;
+esac
+swiftc -emit-library ${STDLIB_FLAGS[@]+"${STDLIB_FLAGS[@]}"} \
   "$OBJ/FotufilmHost.o" "$OBJ/FotufilmHalideLinux.o" "$OBJ"/codecs-*.o "$OBJ"/video-*.o \
   "$KERNELS"/*.a \
   -Xlinker --gc-sections -Xlinker --version-script="$OBJ/exports.map" \
   -Xlinker -soname -Xlinker libfotufilm.so \
-  -lFoundationNetworking -l_CFURLSessionInterface -lCoreFoundation -l_FoundationCollections \
-  -lswiftSynchronization -l_FoundationICU -l_FoundationCShims -lcurl \
   "${CODEC_LIBS[@]}" -lstdc++ -ldl -lpthread \
   -o "$LIBRARY"
 

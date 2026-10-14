@@ -1,13 +1,9 @@
 --- a/src/OffloadGPULoops.cpp
 +++ b/src/OffloadGPULoops.cpp
-@@ -16,6 +16,7 @@
- #include "InjectHostDevBufferCopies.h"
- #include "OffloadGPULoops.h"
+@@ -18,2 +18,3 @@
  #include "Simplify.h"
 +#include "Substitute.h"
  #include "Util.h"
-
- namespace Halide {
 @@ -147,6 +148,24 @@
 
          // Determine the arguments that must be passed into the halide function
