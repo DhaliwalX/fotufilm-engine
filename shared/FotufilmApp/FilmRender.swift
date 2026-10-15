@@ -160,6 +160,12 @@ enum FilmRender {
         /// because the correction happens on the way into the scene, so a cached scene made with a
         /// different one is the wrong picture rather than a stale-looking one.
         var lens: EditState.LensSettings
+        /// A scanned negative's reading — its clear film, light frame, roll and the cleaning kept
+        /// with it — and whether it prints plain, in Normal. A scan's scene is evened, cleaned and
+        /// measured by these, and in Normal printed by them, so a scene kept across a change to one
+        /// develops the reading it was made with. Nil and false for a photograph.
+        var negative: WebNativeEdit.Negative?
+        var printsPlain: Bool
 
         init(state: EditState, longEdge: Int?,
              viewport: PreviewViewport? = nil) {
@@ -175,6 +181,8 @@ enum FilmRender {
             self.viewport = viewport
             captureIlluminantKelvin = state.captureIlluminantKelvin
             lens = state.lensSettings
+            negative = state.negative
+            printsPlain = state.negative != nil && !state.hasFilm
         }
     }
 
