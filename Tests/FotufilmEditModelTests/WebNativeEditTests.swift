@@ -90,7 +90,7 @@ final class WebNativeEditTests: XCTestCase {
         let reading = WebNativeEdit.Negative(
             border: [0.8, 0.45, 0.25], lightFrame: "lamp",
             roll: ApproximateNegativeScan.RollBalance(colour: [0.98, 1.03], frames: 4),
-            crosstalk: 0.6, attachments: ["dust": Data([1, 2, 3])])
+            crosstalk: 0.6, scanLight: .rgb, attachments: ["dust": Data([1, 2, 3])])
         let decoded = try JSONDecoder().decode(
             WebNativeEdit.Negative.self, from: try JSONEncoder().encode(reading))
         XCTAssertEqual(decoded, reading)
@@ -104,7 +104,7 @@ final class WebNativeEditTests: XCTestCase {
         let decoded = try JSONDecoder().decode(
             WebNativeEdit.Negative.self, from: Data(#"{"lightFrame": "lamp"}"#.utf8))
         XCTAssertEqual(decoded, WebNativeEdit.Negative(lightFrame: "lamp"))
-        XCTAssertEqual(decoded.crosstalkStrength, 0)
+        XCTAssertEqual(decoded.correction, .none)
     }
 
     func testNegativeReadingRefusesACrosstalkCorrectionOutOfRange() {

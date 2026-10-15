@@ -63,18 +63,19 @@ final class NegativeScanPreparationTests: XCTestCase {
     }
 
     func testThePlainReadingIsPlainNegativeScan() throws {
-        try assertPlainReading(crosstalk: 0)
+        try assertPlainReading(.none)
     }
 
     func testThePlainReadingUndoesCrosstalkAsPlainNegativeScan() throws {
-        try assertPlainReading(crosstalk: 0.8)
+        try assertPlainReading(.init(strength: 0.8, light: .white))
+        try assertPlainReading(.init(strength: 1, light: .rgb))
     }
 
-    private func assertPlainReading(crosstalk: Float, file: StaticString = #filePath,
+    private func assertPlainReading(_ correction: NegativeScanCrosstalk.Correction, file: StaticString = #filePath,
                                     line: UInt = #line) throws {
         let rgba = scan()
         let plain = PlainNegativeScan(border: SIMD3(0.8, 0.45, 0.2), denseEnd: SIMD3(1.3, 1.2, 1.1),
-                                      crosstalk: crosstalk)
+                                      correction: correction)
         var expected = rgba
         for i in 0..<(width * height) {
             let light = plain.light(of: SIMD3(rgba[i * 4], rgba[i * 4 + 1], rgba[i * 4 + 2]))

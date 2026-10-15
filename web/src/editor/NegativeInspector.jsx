@@ -10,6 +10,13 @@ import { useEffect, useRef, useState } from "react";
 import { Adjustment } from "../Adjustment.jsx";
 import { NEGATIVE_ACCEPT } from "../media-types.js";
 import { readsNegative, suggestionName } from "../negative-document.js";
+
+// The lights a scan can be made under (NegativeScanCrosstalk.Light), which set how much
+// crosstalk there is to undo.
+const SCAN_LIGHTS = [
+  { id: "white", name: "White Light" },
+  { id: "rgb", name: "Red, Green and Blue LEDs" },
+];
 import { useEditor } from "./EditorContext.jsx";
 
 function Section({ title, children }) {
@@ -33,7 +40,7 @@ const CROSSTALK = {
   step: 0.01,
   def: 0,
   detail:
-    "A camera or scanner channel sees a little of every dye, not just its own, which mutes the colours of a scanned negative. Raise it to separate them again: most for a camera under white light, little for a scan made under narrowband red, green and blue light.",
+    "A camera or scanner channel sees a little of every dye, not just its own, which mutes the colours of a scanned negative. Raise it to separate them again. Greys stay grey: the frame's highlights read as before. Set the light the scan was made under first: separate red, green and blue LED exposures have little crosstalk to undo.",
 };
 
 // A scanned negative's Film panel: what the scan is read as. The film is chosen in the film
@@ -124,6 +131,18 @@ export default function NegativeInspector() {
         </ActionButton>
       </Section>
       <Section title="Colour Separation">
+        <Picker
+          label="Scanned Under"
+          size="S"
+          isDisabled={disabled}
+          value={negative.scanLight ?? "white"}
+          onChange={(scanLight) => read({ scanLight })}
+          UNSAFE_style={{ width: "100%" }}
+        >
+          {SCAN_LIGHTS.map(({ id, name }) => (
+            <PickerItem key={id} id={id}>{name}</PickerItem>
+          ))}
+        </Picker>
         <Adjustment
           slider={CROSSTALK}
           disabled={disabled}

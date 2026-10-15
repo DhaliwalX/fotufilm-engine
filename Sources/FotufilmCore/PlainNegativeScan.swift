@@ -18,17 +18,18 @@ public struct PlainNegativeScan: Equatable, Sendable {
     public let border: SIMD3<Float>
     /// Record density per unit of scanner-channel density above the border, green held.
     public let gains: SIMD3<Float>
-    /// What each channel reads from the three channels' densities over the border, rows summing
-    /// to one (`NegativeScanCrosstalk.plainWeights`).
+    /// What each channel reads from the three channels' densities over the border
+    /// (`NegativeScanCrosstalk.plainWeights`), keeping the frame's densest end.
     public let weights: [SIMD3<Float>]
     /// The densest end's balanced density, which prints as `highlight`.
     public let reference: Float
 
     /// Reads against `border` balanced on `denseEnd`, the frame's densest end over it, with
-    /// `crosstalk` correction (`NegativeScanCrosstalk.range`).
-    public init(border: SIMD3<Float>, denseEnd: SIMD3<Float>?, crosstalk: Float = 0) {
+    /// `correction` of the dyes' crosstalk.
+    public init(border: SIMD3<Float>, denseEnd: SIMD3<Float>?,
+                correction: NegativeScanCrosstalk.Correction = .none) {
         self.border = border
-        weights = NegativeScanCrosstalk.plainWeights(strength: crosstalk)
+        weights = NegativeScanCrosstalk.plainWeights(correction: correction, neutral: denseEnd)
         var gains = SIMD3<Float>.one
         var reference = Self.defaultReference
         if let raw = denseEnd, (0..<3).allSatisfy({ raw[$0].isFinite }),

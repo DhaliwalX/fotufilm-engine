@@ -262,9 +262,10 @@ final class HostNegativeScanTests: XCTestCase {
         let reading = try NegativeScanPrint.Reading(
             stock: stock, border: border,
             balance: ApproximateNegativeScan.balance(
-                stock: stock, border: border,
-                preview: HostNegativeScan.planes(scan, width: width, height: height)),
-            crosstalk: crosstalk)
+                stock: stock,
+                denseEnd: ApproximateNegativeScan.denseEnd(
+                    border: border, preview: HostNegativeScan.planes(scan, width: width, height: height)),
+                correction: .init(strength: crosstalk, light: .white)))
         var edit = FotufilmEngine.Options()
         edit.paper = .crystalArchive
         let options = reading.printing(edit, stock: stock)

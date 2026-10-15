@@ -96,27 +96,52 @@ export function denseEnd(border, pixels, width, height) {
   });
 }
 
-// The full crosstalk correction of a scan read without a film: what each channel reads from the
-// three channels' densities, rows summing to one. NegativeScanCrosstalk.plainWeights(strength: 1)
-// in Sources/FotufilmCore/NegativeScanCrosstalk.swift, which NegativeScanCrosstalkTests pins.
-export const PLAIN_CROSSTALK = [
-  [1.8741934, -0.8167563, -0.057437092],
-  [-0.07067131, 1.0591061, 0.011565179],
-  [0.0047098156, -0.04486931, 1.0401592],
-];
+// The full crosstalk correction of a scan read without a film, by the light it was scanned under:
+// what each channel reads from the three channels' densities, rows summing to one, before the
+// frame's densest end is kept. NegativeScanCrosstalk.plainWeights in
+// Sources/FotufilmCore/NegativeScanCrosstalk.swift, which NegativeScanCrosstalkTests pins.
+export const PLAIN_CROSSTALK = {
+  white: [
+    [1.8741934, -0.8167563, -0.057437092],
+    [-0.07067131, 1.0591061, 0.011565179],
+    [0.0047098156, -0.04486931, 1.0401592],
+  ],
+  rgb: [
+    [1.014058, -0.014435816, 0.00037779874],
+    [-1.604771e-5, 1.0268912, -0.02687511],
+    [7.733554e-9, -0.0008941038, 1.0008941],
+  ],
+};
 
-// The plain reading's weights `strength` of the way from each channel alone to PLAIN_CROSSTALK.
-export function plainCrosstalk(strength = 0) {
+const dot = (row, v) => row[0] * v[0] + row[1] * v[1] + row[2] * v[2];
+
+// The plain reading's weights: `strength` of the way from each channel alone to the full
+// correction for `light`, its rows scaled so the frame's densest end `neutral` reads as it did, or
+// to sum to one where there is none or a row would scale by more than two. Mirrors
+// NegativeScanCrosstalk.weights(dyes:correction:neutral:).
+export function plainCrosstalk(strength = 0, light = "white", neutral = null) {
   const s = Number.isFinite(strength) ? Math.min(Math.max(strength, 0), 1) : 0;
-  return PLAIN_CROSSTALK.map((row, r) => row.map((w, c) => (r === c ? 1 : 0) + s * (w - (r === c ? 1 : 0))));
+  const identity = [0, 1, 2].map((r) => [0, 1, 2].map((c) => (r === c ? 1 : 0)));
+  if (!(s > 0)) return identity;
+  const rows = PLAIN_CROSSTALK[light] ?? PLAIN_CROSSTALK.white;
+  const scales = (target) => {
+    const scale = rows.map((row, r) => target[r] / dot(row, target));
+    return scale.every((v) => Number.isFinite(v) && v >= 0.5 && v <= 2) ? scale : null;
+  };
+  const readable =
+    Array.isArray(neutral) && neutral.every((v) => Number.isFinite(v) && v > 0.05) ? neutral : null;
+  const scale = (readable && scales(readable)) ?? scales([1, 1, 1]) ?? [1, 1, 1];
+  return rows.map((row, r) =>
+    row.map((w, c) => identity[r][c] + s * (w * scale[r] - identity[r][c])),
+  );
 }
 
 // The scan read without a film, as Normal reads a negative (Sources/FotufilmCore/
 // PlainNegativeScan.swift): each channel's density above the clear base, weighted across the
 // channels against the dyes' crosstalk, balanced on the frame's densest end. The reading's light
 // comes from the engine's scan preparation.
-export function plainReading(border, raw, crosstalk = 0) {
-  const weights = plainCrosstalk(crosstalk);
+export function plainReading(border, raw, crosstalk = 0, scanLight = "white") {
+  const weights = plainCrosstalk(crosstalk, scanLight, raw);
   const gains = [1, 1, 1];
   let reference = 1;
   const dense =

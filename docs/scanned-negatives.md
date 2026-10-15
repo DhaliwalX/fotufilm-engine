@@ -100,20 +100,28 @@ A camera or scanner channel is broader than the dye it is read for, so a red cha
 some of the magenta and yellow dyes; read one channel per record, the records share each other's
 density and colours come out muted. The `crosstalk` strength (0 to 1, `NegativeScanCrosstalk`)
 reads each record from all three channels instead. The full correction inverts the 3×3 matrix of
-each Rec. 2020 channel's density of each of the film's dyes, from the colour-matching functions
-and the stock's dye spectra under a flat lamp, linearised about neutral, with every row scaled to
-sum to one so neutrals stay neutral; lower strengths blend toward one channel per record. The
-frame's balance reads its densest end the same way. A reading without a film uses a typical colour
-negative's dyes. The model is the colorimetric scan the decode delivers, not a measured scanner:
-narrowband RGB light leaves little crosstalk to undo, and the linear model under-corrects dense
-saturated patches of one dye. The print kernels take the weights in
-`FOTUFILM_CONFIG_SCAN_CROSSTALK` and clamp densities to `NegativeInterchange.range`.
+each channel's density of each of the film's dyes under the scan's light, linearised about
+neutral. `scanLight` names that light: `white` models a camera or scanner under white light, whose
+linear Rec. 2020 channels see the spectrum as the Rec. 2020 colour-matching functions do under a
+flat lamp; `rgb` models one exposure under each of a red, green and blue LED merged into a scan,
+Gaussian bands peaking at 625, 522 and 455 nm, which leaves little to undo. Each row is then scaled
+so the frame's densest end, which its balance takes as a neutral highlight, reads as it did, so the
+frame is timed and balanced as before (rows summing to one where the frame gives none); lower
+strengths blend toward one channel per record. A reading without a film uses a typical colour
+negative's dyes. The print kernels take the weights in `FOTUFILM_CONFIG_SCAN_CROSSTALK` and clamp
+densities to `NegativeInterchange.range`.
 
-The browser profile protocol's film request takes `negative: {border, denseEnd, light, crosstalk}`:
+The white-light model is not yet fitted to a measured camera. On camera scans under white light
+it amplifies red against green about 1.6 times at full strength, so warm areas the frame's balance
+leaves slightly warm turn red; values around 0.3 to 0.5 separate skies and foliage with little of
+that. The linear model also under-corrects dense, saturated patches of one dye.
+
+The browser profile protocol's film request takes
+`negative: {border, denseEnd, light, crosstalk, scanLight}`:
 the clear film as three linear scan values, the framed picture's densest end
 (`ApproximateNegativeScan.denseEnd`, or nothing for a frame too small to read), the edit's
 `ev`, `temperature` and `tint`, which the enlarger or the scan takes, and the crosstalk correction
-(0 when absent). It prepares the print
+and the light it is computed for (0 and `white` when absent). It prepares the print
 profile `NegativeScanPrint.Reading.printing` describes, which enters the WebGPU or SIMD renderer
 with the framed scan as its input, bypassing exposure and development. The renderer writes
 highlights, shadows, saturation and vibrance into the print's finish

@@ -120,23 +120,33 @@ test("the plain reading balances on the densest end", () => {
 });
 
 test("the plain reading undoes crosstalk as PlainNegativeScan does", () => {
-  // Rows blend from each channel alone to the full correction, and every row sums to one, so a
-  // neutral densest end balances as it did.
-  assert.deepEqual(plainCrosstalk(1), PLAIN_CROSSTALK);
-  const half = plainCrosstalk(0.5);
-  for (let r = 0; r < 3; r++) {
-    assert.ok(Math.abs(PLAIN_CROSSTALK[r].reduce((a, b) => a + b) - 1) < 1e-5);
-    for (let c = 0; c < 3; c++)
-      assert.ok(Math.abs(half[r][c] - ((r === c ? 1 : 0) + PLAIN_CROSSTALK[r][c]) / 2) < 1e-7);
+  const near = (a, b, tolerance = 1e-5) => assert.ok(Math.abs(a - b) < tolerance, `${a} ≠ ${b}`);
+  // Without a frame to keep, rows blend from each channel alone to the full correction and sum
+  // to one, so equal densities stay equal.
+  for (const light of ["white", "rgb"]) {
+    const full = plainCrosstalk(1, light),
+      half = plainCrosstalk(0.5, light);
+    for (let r = 0; r < 3; r++) {
+      near(full[r].reduce((a, b) => a + b), 1);
+      for (let c = 0; c < 3; c++) {
+        near(full[r][c], PLAIN_CROSSTALK[light][r][c]);
+        near(half[r][c], ((r === c ? 1 : 0) + full[r][c]) / 2, 1e-6);
+      }
+    }
   }
-  assert.deepEqual(plainCrosstalk(5), PLAIN_CROSSTALK);
-  const neutral = plainReading(border, [1.2, 1.2, 1.2], 1);
-  for (const gain of neutral.gains) assert.ok(Math.abs(gain - 1) < 1e-5);
-  assert.ok(Math.abs(neutral.reference - 1.2) < 1e-5);
-  // A colour reads further from neutral once separated.
-  const muted = plainReading(border, [1.0, 1.3, 1.1]),
-    separated = plainReading(border, [1.0, 1.3, 1.1], 1);
-  assert.ok(separated.gains[0] > muted.gains[0]);
+  assert.deepEqual(plainCrosstalk(5), plainCrosstalk(1));
+  // The frame's densest end reads as it did, so its balance is the frame's own.
+  const dense = [1.0, 1.3, 1.1];
+  const weights = plainCrosstalk(1, "white", dense);
+  for (let r = 0; r < 3; r++)
+    near(weights[r].reduce((sum, w, c) => sum + w * dense[c], 0), dense[r]);
+  const muted = plainReading(border, dense),
+    separated = plainReading(border, dense, 1);
+  for (let c = 0; c < 3; c++) near(separated.gains[c], muted.gains[c]);
+  near(separated.reference, muted.reference);
+  // Red, green and blue LEDs leave far less to undo than white light.
+  const off = (w) => w[0][1] ** 2 + w[0][2] ** 2 + w[1][0] ** 2 + w[1][2] ** 2 + w[2][0] ** 2 + w[2][1] ** 2;
+  assert.ok(off(plainCrosstalk(1, "rgb")) < 0.01 * off(plainCrosstalk(1, "white")));
 });
 
 test("a roll's colour is the median of its frames' highlight colours", () => {

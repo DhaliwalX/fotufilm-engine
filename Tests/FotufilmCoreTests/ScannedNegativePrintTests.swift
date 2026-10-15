@@ -90,8 +90,10 @@ final class ScannedNegativePrintTests: XCTestCase {
         let width = 96, height = 64
         let image = scan(width: width, height: height)
         let stock = TestStocks.negative
-        let calibration = try ApproximateNegativeScan(stock: stock, border: border,
-                                                      crosstalk: crosstalk)
+        let calibration = try ApproximateNegativeScan(
+            stock: stock, border: border,
+            weights: NegativeScanCrosstalk.weights(
+                for: stock, correction: .init(strength: crosstalk, light: .white), neutral: nil))
         let converted = try calibration.convert(image)
         var options = FotufilmEngine.Options()
         options.paper = .screen

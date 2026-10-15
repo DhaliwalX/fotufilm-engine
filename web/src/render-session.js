@@ -568,7 +568,7 @@ export class RenderSession {
         // prints from its scan, which the kernels read as the film.
         const plain =
           edit.negative && !negative
-            ? plainReading(reading.border, dense, edit.negative.crosstalk)
+            ? plainReading(reading.border, dense, edit.negative.crosstalk, edit.negative.scanLight)
             : null
         const preparation = plain ? await loadScanPreparation() : null
         if (stale()) return null
@@ -637,6 +637,7 @@ export class RenderSession {
                           denseEnd: dense,
                           light: negativeLight(edit.params),
                           crosstalk: edit.negative.crosstalk ?? 0,
+                          scanLight: edit.negative.scanLight ?? 'white',
                         },
                       }
                     : await sceneScreenMeter(

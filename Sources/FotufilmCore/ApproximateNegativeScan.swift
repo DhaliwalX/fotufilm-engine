@@ -3,7 +3,7 @@ import Foundation
 /// The native scan importer's approximate RGB-density mapping. A sampled border
 /// removes base/fog and the chosen film restores its model base. Optional per-record gains
 /// scale each channel's density, for scanners whose channels do not read the dyes' own
-/// densities, and `crosstalk` reads each record from all three channels, undoing some of the
+/// densities, and `weights` read each record from all three channels, undoing some of the
 /// dyes' crosstalk (`NegativeScanCrosstalk`). This does not fit a scanner profile or correct
 /// illumination or flare.
 public struct ApproximateNegativeScan: Encodable, Equatable, Sendable {
@@ -13,30 +13,32 @@ public struct ApproximateNegativeScan: Encodable, Equatable, Sendable {
     public let recordChannels: [Int]
     /// Record density per unit of scanner-channel density above the border.
     public let gains: [Float]
-    /// How far the reading undoes the dyes' crosstalk, `NegativeScanCrosstalk.range`.
-    public let crosstalk: Float
-    /// What each record reads from the scan channels' densities over the border, rows summing to
-    /// one (`NegativeScanCrosstalk.weights`): its own channel alone without crosstalk correction.
+    /// What each record reads from the scan channels' densities over the border
+    /// (`NegativeScanCrosstalk.weights`): its own channel alone without crosstalk correction.
     public let weights: [SIMD3<Float>]
     public let minimumSample: [Float]
     public let maximumSample: [Float]
 
     public static let gainRange: ClosedRange<Float> = 0.5...2
 
+    /// Reads `stock` against `border` with the frame's `gains` and crosstalk `weights`
+    /// (`Balance.weights`), each record from its own channel alone when nil.
     public init(stock: FilmStock, border: SIMD3<Float>, gains: SIMD3<Float> = .one,
-                crosstalk: Float = 0) throws {
+                weights: [SIMD3<Float>]? = nil) throws {
         guard !stock.isReversal else { throw ScannedNegativeError.positiveOutputRequired }
         _ = try ScannedNegativeConverter(dark: .zero, light: border, reference: .filmBase)
         guard (0..<3).allSatisfy({ gains[$0].isFinite && Self.gainRange.contains(gains[$0]) }),
-              NegativeScanCrosstalk.range.contains(crosstalk) else {
+              weights.map({ $0.count == 3 && $0.allSatisfy { row in
+                  (0..<3).allSatisfy { row[$0].isFinite } } }) ?? true else {
             throw ScannedNegativeError.invalidCalibration
         }
         self.border = [border.x, border.y, border.z]
         baseDensity = (0..<3).map { stock.curves[$0].dMin }
         recordChannels = stock.isMonochrome ? [1, 1, 1] : [0, 1, 2]
         self.gains = stock.isMonochrome ? [1, 1, 1] : [gains.x, gains.y, gains.z]
-        self.crosstalk = stock.isMonochrome ? 0 : crosstalk
-        weights = NegativeScanCrosstalk.weights(for: stock, strength: self.crosstalk)
+        self.weights = stock.isMonochrome || weights == nil
+            ? NegativeScanCrosstalk.weights(for: stock, correction: .none, neutral: nil)
+            : weights!
         var minimum = [Float](repeating: 0, count: 3)
         var maximum = [Float](repeating: .greatestFiniteMagnitude, count: 3)
         for record in 0..<3 {
@@ -131,6 +133,9 @@ public struct ApproximateNegativeScan: Encodable, Equatable, Sendable {
         /// The highlights' exposure in stops over the film's mid-grey, for
         /// `FotufilmEngine.Options.sceneHighlightStops`. Nil for a frame too flat to tell.
         public var highlightStops: Float?
+        /// What each record reads from the scan channels, undoing the dyes' crosstalk on the
+        /// frame's own grey (`NegativeScanCrosstalk.weights`); nil reads each from its own channel.
+        public var weights: [SIMD3<Float>]? = nil
 
         public static let neutral = Balance(gains: .one, highlightStops: nil)
     }
@@ -198,12 +203,30 @@ public struct ApproximateNegativeScan: Encodable, Equatable, Sendable {
     }
 
     /// The balance of a frame whose densest end reads `dense` over the border, against `stock`,
-    /// read with `crosstalk` correction as the frame is (`NegativeScanCrosstalk`).
-    public static func balance(stock: FilmStock, denseEnd dense: SIMD3<Float>,
-                               crosstalk: Float = 0) -> Balance {
-        guard (0..<3).allSatisfy({ dense[$0].isFinite }) else { return .neutral }
-        let dense = NegativeScanCrosstalk.apply(
-            NegativeScanCrosstalk.weights(for: stock, strength: crosstalk), dense)
+    /// and its `correction` of the dyes' crosstalk, which keeps the densest end as it reads
+    /// (`NegativeScanCrosstalk`). A frame too small or flat to read is unbalanced, its correction
+    /// keeping equal densities.
+    public static func balance(stock: FilmStock, denseEnd dense: SIMD3<Float>?,
+                               correction: NegativeScanCrosstalk.Correction) -> Balance {
+        let readable = dense.flatMap { d in (0..<3).allSatisfy({ d[$0].isFinite }) ? d : nil }
+        let weights = correction.strength > 0
+            ? NegativeScanCrosstalk.weights(for: stock, correction: correction, neutral: readable)
+            : nil
+        var balance = readable.map { balance(stock: stock, denseEnd: $0,
+                                             weights: weights) } ?? .neutral
+        balance.weights = weights
+        return balance
+    }
+
+    /// The balance of a frame whose densest end reads `dense` over the border, against `stock`.
+    public static func balance(stock: FilmStock, denseEnd dense: SIMD3<Float>) -> Balance {
+        balance(stock: stock, denseEnd: dense, weights: nil)
+    }
+
+    private static func balance(stock: FilmStock, denseEnd raw: SIMD3<Float>,
+                                weights: [SIMD3<Float>]?) -> Balance {
+        guard (0..<3).allSatisfy({ raw[$0].isFinite }) else { return .neutral }
+        let dense = weights.map { NegativeScanCrosstalk.apply($0, raw) } ?? raw
         guard dense[1] > 0.05 else { return .neutral }
         let exposure = stock.curves[1].logExposure(density: stock.curves[1].dMin + dense[1])
         var gains = SIMD3<Float>.one
