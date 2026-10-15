@@ -76,6 +76,18 @@ public struct FilmSpectralProfile: Sendable {
         self.minimumDensity = minimumDensity
     }
 
+    /// Every capture layer held at or above `share` of its own peak. Idempotent, so a stock
+    /// exported in its rendered form and read back keeps the same records.
+    public func floored(at share: Float) -> FilmSpectralProfile {
+        guard share > 0 else { return self }
+        var profile = self
+        profile.layerSensitivity = layerSensitivity.map { layer in
+            let floor = share * (layer.max() ?? 0)
+            return layer.map { max($0, floor) }
+        }
+        return profile
+    }
+
     /// Manufacturer-graph sensitivity samples on SpectralGrid's wavelength axis.
     public static func measured(
         layerSensitivity: [[Float]],

@@ -23,6 +23,13 @@ public struct FilmStockDefinition: Codable, Sendable {
 
     public var sensitivity: [[Float]]
     public var spectral: SpectralSpec
+    /// The least each capture layer responds anywhere on the grid, as a share of its own peak.
+    /// A manufacturer's sensitivity graph stops where its curves leave the plot, a decade or so
+    /// under the peak, and the tails continued past it fall away to nothing; a coated emulsion
+    /// keeps a small response everywhere (the silver halide's own blue sensitivity under the
+    /// filter layer, the sensitising dyes' far wings). Fitted where the manufacturer publishes
+    /// the colour reproduction the records must reach; absent is the published curve alone.
+    public var sensitivityFloor: Float?
     public var curves: [CurveSpec]
     /// Coated capture layers beyond the dye-forming ones: records that develop and release
     /// inhibitor but form no image dye (REALA's 4th Color Layer). Optional so that every
@@ -419,7 +426,7 @@ public extension FilmStockDefinition {
             name: name,
             sensitivity: sensitivity,
             referenceIlluminantKelvin: referenceIlluminantKelvin ?? 5500,
-            spectralProfile: spectral.profile,
+            spectralProfile: spectral.profile.floored(at: sensitivityFloor ?? 0),
             curves: curves.map(\.curve),
             donorLayers: donorLayers?.map(\.layer) ?? [],
             flare: flare ?? 0.008,

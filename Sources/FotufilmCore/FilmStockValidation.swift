@@ -211,6 +211,9 @@ public extension FilmStockDefinition {
         }
 
         try check("flare", flare ?? 0, 0...1)
+        // A tenth of the peak everywhere is already a layer seeing the whole spectrum three and a
+        // third stops under its own band; nothing measured asks for more.
+        try check("sensitivityFloor", sensitivityFloor ?? 0, 0...0.1)
         try check("emulsionDiffusionMM",
                   emulsionDiffusionMM ?? [Float](repeating: 0, count: layers),
                   count: layers, 0...2)
