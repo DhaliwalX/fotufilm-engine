@@ -3253,6 +3253,7 @@
       0.975
     ]
   ],
+  "sensitivityFloor": 0.01,
   "spectral": {
     "imageDyeDensity": [
       [
