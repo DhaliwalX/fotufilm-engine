@@ -53,7 +53,7 @@ extern "C" int32_t fotufilm_scan_prepare(const float *in, float *out, int32_t w,
     const float *light, int32_t lw, int32_t lh, const float *p) {
     if (!in || !out || !p || w < 1 || h < 1 || w > 40000 || h > 40000
         || int64_t(w)*h > 150000000) return -1;
-    for (int i = 0; i < 9; ++i) if (!std::isfinite(p[i])) return -1;
+    for (int i = 0; i < 18; ++i) if (!std::isfinite(p[i])) return -1;
     bool lit = p[0] > 0.5f;
     if (lit && (!light || lw < 1 || lh < 1 || lw > 4096 || lh > 4096)) return -1;
     static std::mutex &mutex = *new std::mutex;
@@ -71,7 +71,7 @@ extern "C" int32_t fotufilm_scan_prepare(const float *in, float *out, int32_t w,
         auto output = Halide::Buffer<float>::make_interleaved(out, w, h, 4);
         auto cells = lit ? Halide::Buffer<float>::make_interleaved(const_cast<float *>(light), lw, lh, 3)
                          : Halide::Buffer<float>::make_interleaved(const_cast<float *>(none), 1, 1, 3);
-        Halide::Buffer<float> params(const_cast<float *>(p), 9);
+        Halide::Buffer<float> params(const_cast<float *>(p), 18);
         pipeline->input.set(input); pipeline->light.set(cells); pipeline->parameters.set(params);
         struct Unbind {
             fotufilm::pipelines::ScanPreparePipeline &pipeline;

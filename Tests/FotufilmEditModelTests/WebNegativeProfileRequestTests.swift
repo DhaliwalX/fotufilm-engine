@@ -9,10 +9,12 @@ final class WebNegativeProfileRequestTests: XCTestCase {
 
     private func profile(stock id: String = "gold200", border: [Float] = [0.4, 0.6, 0.2],
                          denseEnd: [Float]? = [1.1, 1.0, 0.9], width: Int = 32, height: Int = 24,
-                         medium: String = "screen", light: [String: Double]? = nil) throws -> Data {
+                         medium: String = "screen", light: [String: Double]? = nil,
+                         crosstalk: Float? = nil) throws -> Data {
         var negative: [String: Any] = ["border": border]
         if let denseEnd { negative["denseEnd"] = denseEnd }
         if let light { negative["light"] = light }
+        if let crosstalk { negative["crosstalk"] = crosstalk }
         return try JSONSerialization.data(withJSONObject: [
             "stock": try definition(id), "width": width, "height": height, "medium": medium,
             "controls": [String: Any](), "negative": negative,
@@ -126,6 +128,21 @@ final class WebNegativeProfileRequestTests: XCTestCase {
         XCTAssertNil(options.sceneHighlightStops)
         XCTAssertEqual(options.scanReading,
                        try ApproximateNegativeScan(stock: stock, border: SIMD3(0.4, 0.6, 0.2)))
+    }
+
+    /// The browser's profile reads the scan with the edit's crosstalk correction, balanced on
+    /// its frame read the same way, as the desktop host reads it.
+    func testTheCrosstalkCorrectionReachesTheReading() throws {
+        let stock = try printed("gold200")
+        let (_, options) = try JSONDecoder().decode(WebProfileRequest.self,
+                                                    from: profile(crosstalk: 0.6)).configured()
+        let dense = SIMD3<Float>(1.1, 1.0, 0.9)
+        XCTAssertEqual(options.scanReading, try NegativeScanPrint.Reading(
+            stock: stock, border: SIMD3(0.4, 0.6, 0.2),
+            balance: ApproximateNegativeScan.balance(stock: stock, denseEnd: dense, crosstalk: 0.6),
+            crosstalk: 0.6).calibration)
+        XCTAssertEqual(options.scanReading?.crosstalk, 0.6)
+        XCTAssertThrowsError(try WebRenderRequest.prepare(profile(crosstalk: 1.2)))
     }
 
     func testRejectsMissingBorderAndReversal() throws {

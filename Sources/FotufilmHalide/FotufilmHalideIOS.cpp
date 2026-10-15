@@ -1183,7 +1183,7 @@ extern "C" int32_t fotufilm_scan_prepare(const float *in, float *out, int32_t w,
     const float *light, int32_t lw, int32_t lh, const float *p) {
     if (!in || !out || !p || w < 1 || h < 1 || w > 40000 || h > 40000
         || int64_t(w) * h > 150000000) return -1;
-    for (int i = 0; i < 9; ++i) if (!std::isfinite(p[i])) return -1;
+    for (int i = 0; i < 18; ++i) if (!std::isfinite(p[i])) return -1;
     const bool lit = p[0] > 0.5f;
     if (lit && (!light || lw < 1 || lh < 1 || lw > 4096 || lh > 4096)) return -1;
     static const float none[3] = {1, 1, 1};
@@ -1191,7 +1191,7 @@ extern "C" int32_t fotufilm_scan_prepare(const float *in, float *out, int32_t w,
     auto output = Buffer<float>::make_interleaved(out, w, h, 4);
     auto cells = Buffer<float>::make_interleaved(const_cast<float *>(lit ? light : none),
                                                  lit ? lw : 1, lit ? lh : 1, 3);
-    Buffer<float> params(const_cast<float *>(p), 9);
+    Buffer<float> params(const_cast<float *>(p), 18);
     return fotufilm_halide_ios_scan_prepare_cpu(input, cells, params, output);
 }
 

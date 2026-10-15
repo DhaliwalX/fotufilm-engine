@@ -110,23 +110,26 @@ installed films its clear base looks like, most likely first (films a scan canno
 one entry), and the kept light frames where the backend keeps them.
 
 The scan is the film after development, so its edit is any photograph's with `negative` set to
-`{border, lightFrame}`: the film is `edit.stock`, chosen in the film library from the films whose
+`{border, lightFrame, roll, crosstalk}`: the film is `edit.stock`, chosen in the film library from the films whose
 catalogue entry has `readsNegative`; the print is the edit's own. Every render, export and
 thumbnail of the document frames the scan with the edit's geometry, reads it as the film's
 densities against `border` (clear film as linear Rec. 2020 scan RGB; `null` estimates it from the
 thinnest film), evened under the light frame `lightFrame` names where the backend keeps light
-frames, and prints it through the
+frames, each film record read from all three scan channels by `crosstalk` (0 to 1, how far the
+dyes' crosstalk is undone, `NegativeScanCrosstalk`; 0 or absent reads each from its own channel),
+and prints it through the
 pipeline's print span alone (`PipelineStage.print`). An enlarged paper is timed to the negative's
 density. Development and grain do not apply; the light controls act on the print
 (`NegativeScanPrint.printing`): exposure and white balance through the enlarger or the scan where
 the receiver carries them, and as `PrintFinish` with highlights, shadows, saturation and vibrance
-otherwise. The browser's profile request carries `negative: {border, denseEnd, light}`, the clear
-film, the framing's densest end and the edit's `ev`, `temperature` and `tint`; the kernels read
+otherwise. The browser's profile request carries `negative: {border, denseEnd, light, crosstalk}`,
+the clear film, the framing's densest end, the edit's `ev`, `temperature` and `tint`, and its
+crosstalk correction; the kernels read
 the framed scan, and the renderer writes the rest of the light controls into
 `FOTUFILM_CONFIG_PRINT_FINISH` per render. With `edit.stock`
 `null` the scan is read without a film (`PlainNegativeScan`): each channel's density above
-`border`, balanced on the frame's densest end, is taken back to scene light and developed as any
-photograph with no film is.
+`border`, weighted across the channels by `crosstalk` and balanced on the frame's densest end, is
+taken back to scene light and developed as any photograph with no film is.
 
 | Member | Input and result |
 | --- | --- |

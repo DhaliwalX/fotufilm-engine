@@ -9,6 +9,8 @@ import {
   estimatedBorder,
   filmBase,
   plainReading,
+  plainCrosstalk,
+  PLAIN_CROSSTALK,
   positiveSource,
 } from "../../src/negative-reading.js";
 import { rollBalance, rolledDenseEnd } from "../../src/negative-document.js";
@@ -104,8 +106,37 @@ test("without a film a negative reads as a plain positive, its densest end diffu
 });
 
 test("the plain reading balances on the densest end", () => {
-  assert.deepEqual(plainReading(border, null), { border, gains: [1, 1, 1], reference: 1 });
+  assert.deepEqual(plainReading(border, null), {
+    border,
+    gains: [1, 1, 1],
+    reference: 1,
+    weights: [
+      [1, 0, 0],
+      [0, 1, 0],
+      [0, 0, 1],
+    ],
+  });
   assert.deepEqual(plainReading(border, [0.1, 1, 3]).gains, [2, 1, 0.5]);
+});
+
+test("the plain reading undoes crosstalk as PlainNegativeScan does", () => {
+  // Rows blend from each channel alone to the full correction, and every row sums to one, so a
+  // neutral densest end balances as it did.
+  assert.deepEqual(plainCrosstalk(1), PLAIN_CROSSTALK);
+  const half = plainCrosstalk(0.5);
+  for (let r = 0; r < 3; r++) {
+    assert.ok(Math.abs(PLAIN_CROSSTALK[r].reduce((a, b) => a + b) - 1) < 1e-5);
+    for (let c = 0; c < 3; c++)
+      assert.ok(Math.abs(half[r][c] - ((r === c ? 1 : 0) + PLAIN_CROSSTALK[r][c]) / 2) < 1e-7);
+  }
+  assert.deepEqual(plainCrosstalk(5), PLAIN_CROSSTALK);
+  const neutral = plainReading(border, [1.2, 1.2, 1.2], 1);
+  for (const gain of neutral.gains) assert.ok(Math.abs(gain - 1) < 1e-5);
+  assert.ok(Math.abs(neutral.reference - 1.2) < 1e-5);
+  // A colour reads further from neutral once separated.
+  const muted = plainReading(border, [1.0, 1.3, 1.1]),
+    separated = plainReading(border, [1.0, 1.3, 1.1], 1);
+  assert.ok(separated.gains[0] > muted.gains[0]);
 });
 
 test("a roll's colour is the median of its frames' highlight colours", () => {

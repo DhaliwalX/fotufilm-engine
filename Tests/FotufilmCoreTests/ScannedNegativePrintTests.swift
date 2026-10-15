@@ -76,12 +76,22 @@ final class ScannedNegativePrintTests: XCTestCase {
     /// Banded printing must match the one-shot print stage on the same densities, and paint the
     /// holder black.
     func testBandedScanPrintMatchesThePrintStage() throws {
+        try assertBandedScanPrintMatchesThePrintStage(crosstalk: 0)
+    }
+
+    /// The kernels undo the dyes' crosstalk as `ApproximateNegativeScan.density(of:)` does.
+    func testBandedScanPrintUndoesCrosstalkAsTheReadingDoes() throws {
+        try assertBandedScanPrintMatchesThePrintStage(crosstalk: 1)
+    }
+
+    private func assertBandedScanPrintMatchesThePrintStage(crosstalk: Float) throws {
         #if canImport(Metal)
         let gpu = try XCTUnwrap(HalideMetalFilmRenderer.shared)
         let width = 96, height = 64
         let image = scan(width: width, height: height)
         let stock = TestStocks.negative
-        let calibration = try ApproximateNegativeScan(stock: stock, border: border)
+        let calibration = try ApproximateNegativeScan(stock: stock, border: border,
+                                                      crosstalk: crosstalk)
         let converted = try calibration.convert(image)
         var options = FotufilmEngine.Options()
         options.paper = .screen

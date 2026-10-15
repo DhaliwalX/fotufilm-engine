@@ -47,26 +47,40 @@ public struct WebNativeEdit: Decodable {
         /// The colour of the roll the frame is balanced on, nil for its own
         /// (`ApproximateNegativeScan.RollBalance`).
         public var roll: ApproximateNegativeScan.RollBalance?
+        /// How far the reading undoes the crosstalk between the scan's channels and the film's
+        /// dyes (`NegativeScanCrosstalk.range`); nil reads each record from its own channel.
+        public var crosstalk: Float?
         /// What an app keeps with the reading that the engine carries, saves and undoes without
         /// reading, by the app's own key, as `NegativeScanRecipe.attachments` does.
         public var attachments: [String: Data] = [:]
 
         public init(border: [Float]? = nil, lightFrame: String? = nil,
-                    roll: ApproximateNegativeScan.RollBalance? = nil,
+                    roll: ApproximateNegativeScan.RollBalance? = nil, crosstalk: Float? = nil,
                     attachments: [String: Data] = [:]) {
             self.border = border
             self.lightFrame = lightFrame
             self.roll = roll
+            self.crosstalk = crosstalk
             self.attachments = attachments
         }
 
-        private enum CodingKeys: String, CodingKey { case border, lightFrame, roll, attachments }
+        /// The crosstalk correction the reading applies, 0 when none is set.
+        public var crosstalkStrength: Float { crosstalk ?? 0 }
+
+        private enum CodingKeys: String, CodingKey {
+            case border, lightFrame, roll, crosstalk, attachments
+        }
 
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             border = try c.decodeIfPresent([Float].self, forKey: .border)
             lightFrame = try c.decodeIfPresent(String.self, forKey: .lightFrame)
             roll = try c.decodeIfPresent(ApproximateNegativeScan.RollBalance.self, forKey: .roll)
+            crosstalk = try c.decodeIfPresent(Float.self, forKey: .crosstalk)
+            if let crosstalk, !NegativeScanCrosstalk.range.contains(crosstalk) {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .crosstalk, in: c, debugDescription: "Invalid crosstalk correction.")
+            }
             attachments = try c.decodeIfPresent([String: Data].self, forKey: .attachments) ?? [:]
         }
 
@@ -75,6 +89,7 @@ public struct WebNativeEdit: Decodable {
             try c.encodeIfPresent(border, forKey: .border)
             try c.encodeIfPresent(lightFrame, forKey: .lightFrame)
             try c.encodeIfPresent(roll, forKey: .roll)
+            try c.encodeIfPresent(crosstalk, forKey: .crosstalk)
             if !attachments.isEmpty { try c.encode(attachments, forKey: .attachments) }
         }
     }

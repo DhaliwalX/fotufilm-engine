@@ -258,11 +258,13 @@ final class HostNegativeScanTests: XCTestCase {
         let width = 120, height = 80
         let scan = strip(width: width, height: height)
         let stock = try NegativeScanPrint.film("gold200")
+        for crosstalk: Float in [0, 1] {
         let reading = try NegativeScanPrint.Reading(
             stock: stock, border: border,
             balance: ApproximateNegativeScan.balance(
                 stock: stock, border: border,
-                preview: HostNegativeScan.planes(scan, width: width, height: height)))
+                preview: HostNegativeScan.planes(scan, width: width, height: height)),
+            crosstalk: crosstalk)
         var edit = FotufilmEngine.Options()
         edit.paper = .crystalArchive
         let options = reading.printing(edit, stock: stock)
@@ -286,7 +288,33 @@ final class HostNegativeScanTests: XCTestCase {
         let gpu = try print(service.engine.developer), cpu = try print(HalideCPUDeveloper())
         var worst: Float = 0
         for i in gpu.indices where i % 4 != 3 { worst = max(worst, abs(gpu[i] - cpu[i])) }
-        XCTAssertLessThan(worst, 0.01)
+        XCTAssertLessThan(worst, 0.01, "crosstalk \(crosstalk)")
+        }
+    }
+
+    /// The Film panel's crosstalk correction separates the colours of a frame read as a film or
+    /// without one, and is kept with the reading.
+    func testCrosstalkCorrectionSeparatesTheColours() throws {
+        let (service, engine) = try service()
+        defer { fotufilm_engine_destroy(engine) }
+        let handle = open(service, width: 300, height: 200)
+        let reading: [String: Any] = ["border": border.indices.map { Double(border[$0]) }]
+        // A faintly coloured mid-tone of the frame: how far apart its channels print, relative to
+        // the brightest.
+        func spread(_ print: (rgba: [Float], width: Int, height: Int)) -> Float {
+            let i = (50 * print.width + 60) * 4
+            let rgb = print.rgba[i..<(i + 3)]
+            return (rgb.max()! - rgb.min()!) / rgb.max()!
+        }
+        for stock in ["gold200", nil] as [String?] {
+            let muted = try develop(service, request(handle, stock: stock, maxEdge: 150, negative: reading))
+            let separated = try develop(service, request(
+                handle, stock: stock, maxEdge: 150,
+                negative: reading.merging(["crosstalk": 1]) { $1 }))
+            XCTAssertGreaterThan(spread(separated), spread(muted) * 1.1, stock ?? "Normal")
+        }
+        XCTAssertThrowsError(try develop(service, request(
+            handle, maxEdge: 150, negative: reading.merging(["crosstalk": 2]) { $1 })))
     }
 
     /// Prints the strip through `developer` with `edit`'s light controls on the print.

@@ -89,17 +89,31 @@ scanner densities, which is useful with a film-border reference.
 ## Shared approximate import and browser print boundary
 
 `ApproximateNegativeScan` contains the editor's border normalization, film-base restoration,
-monochrome record mapping and usable-range mask. Set it as `FotufilmEngine.Options.scanReading`
+crosstalk correction, monochrome record mapping and usable-range mask. Set it as `FotufilmEngine.Options.scanReading`
 and hand the print span (`stage = .print`) linear scan RGB in place of densities: the kernels read
 each sample as `density(of:)` does and print the samples it cannot place black. `convert` reads a
 whole buffer in Swift, for reference. Neither alters the source scan nor fits a scanner profile.
 `NegativeScanPreparation` runs the kernels that divide a light frame out of a scan and read a
 scan without a film (`PlainNegativeScan`).
 
-The browser profile protocol's film request takes `negative: {border, denseEnd, light}`: the clear
-film as three linear scan values, the framed picture's densest end
-(`ApproximateNegativeScan.denseEnd`, or nothing for a frame too small to read), and the edit's
-`ev`, `temperature` and `tint`, which the enlarger or the scan takes. It prepares the print
+A camera or scanner channel is broader than the dye it is read for, so a red channel also sees
+some of the magenta and yellow dyes; read one channel per record, the records share each other's
+density and colours come out muted. The `crosstalk` strength (0 to 1, `NegativeScanCrosstalk`)
+reads each record from all three channels instead. The full correction inverts the 3×3 matrix of
+each Rec. 2020 channel's density of each of the film's dyes, from the colour-matching functions
+and the stock's dye spectra under a flat lamp, linearised about neutral, with every row scaled to
+sum to one so neutrals stay neutral; lower strengths blend toward one channel per record. The
+frame's balance reads its densest end the same way. A reading without a film uses a typical colour
+negative's dyes. The model is the colorimetric scan the decode delivers, not a measured scanner:
+narrowband RGB light leaves little crosstalk to undo, and the linear model under-corrects dense
+saturated patches of one dye. The print kernels take the weights in
+`FOTUFILM_CONFIG_SCAN_CROSSTALK` and clamp densities to `NegativeInterchange.range`.
+
+The browser profile protocol's film request takes `negative: {border, denseEnd, light, crosstalk}`:
+the clear film as three linear scan values, the framed picture's densest end
+(`ApproximateNegativeScan.denseEnd`, or nothing for a frame too small to read), the edit's
+`ev`, `temperature` and `tint`, which the enlarger or the scan takes, and the crosstalk correction
+(0 when absent). It prepares the print
 profile `NegativeScanPrint.Reading.printing` describes, which enters the WebGPU or SIMD renderer
 with the framed scan as its input, bypassing exposure and development. The renderer writes
 highlights, shadows, saturation and vibrance into the print's finish

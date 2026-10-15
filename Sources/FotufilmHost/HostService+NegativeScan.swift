@@ -275,12 +275,14 @@ extension HostService {
                                             width: sizes.output.0, height: sizes.output.1)
         }
         let roll = negative?.roll
+        let crosstalk = negative?.crosstalkStrength ?? 0
         if let stock {
             prepared.edit.negativeReading = try scan.reading(key, stock: stock, border: border,
-                                                             roll: roll, preview: preview)
+                                                             roll: roll, crosstalk: crosstalk,
+                                                             preview: preview)
         } else {
             prepared.image = try scan.positive(key, border: border, light: light, roll: roll,
-                                               preview: preview)
+                                               crosstalk: crosstalk, preview: preview)
         }
         // What this frame measures for its roll, kept from the reading above.
         let measured = try scan.measure(key, border: border, preview: preview)

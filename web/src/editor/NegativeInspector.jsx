@@ -7,6 +7,7 @@ import { ActionButton } from "@react-spectrum/s2/ActionButton";
 import { ToggleButton } from "@react-spectrum/s2/ToggleButton";
 import { Picker, PickerItem } from "@react-spectrum/s2/Picker";
 import { useEffect, useRef, useState } from "react";
+import { Adjustment } from "../Adjustment.jsx";
 import { NEGATIVE_ACCEPT } from "../media-types.js";
 import { readsNegative, suggestionName } from "../negative-document.js";
 import { useEditor } from "./EditorContext.jsx";
@@ -22,9 +23,23 @@ function Section({ title, children }) {
   );
 }
 
+// How far a negative's reading undoes the crosstalk between the scan's channels and the film's
+// dyes (NegativeScanCrosstalk): 0 reads each dye from its own channel alone.
+const CROSSTALK = {
+  key: "crosstalk",
+  label: "Crosstalk Correction",
+  min: 0,
+  max: 1,
+  step: 0.01,
+  def: 0,
+  detail:
+    "A camera or scanner channel sees a little of every dye, not just its own, which mutes the colours of a scanned negative. Raise it to separate them again: most for a camera under white light, little for a scan made under narrowband red, green and blue light.",
+};
+
 // A scanned negative's Film panel: what the scan is read as. The film is chosen in the film
-// library; here are the films its base looks like, the clear film it is measured against and the
-// light source it was scanned on. The print is the Print panel's.
+// library; here are the films its base looks like, the clear film it is measured against, how far
+// its dyes' crosstalk is undone, and the light source it was scanned on. The print is the Print
+// panel's.
 export default function NegativeInspector() {
   const {
     backend,
@@ -107,6 +122,17 @@ export default function NegativeInspector() {
         >
           Estimate
         </ActionButton>
+      </Section>
+      <Section title="Colour Separation">
+        <Adjustment
+          slider={CROSSTALK}
+          disabled={disabled}
+          value={negative.crosstalk ?? 0}
+          onChange={(crosstalk) =>
+            patch({ negative: { ...negative, crosstalk } }, "negative-crosstalk")
+          }
+          onEnd={endEdit}
+        />
       </Section>
       {scans.lightFrames && <Section title="Light Source">
         <Picker

@@ -1,7 +1,8 @@
 import Foundation
 
 /// A scan read without a film, as Normal reads a negative: each channel's density above the clear
-/// base, balanced on the frame's densest end, taken back to scene light along a straight-line
+/// base, weighted across the channels against the dyes' crosstalk (`NegativeScanCrosstalk`),
+/// balanced on the frame's densest end, taken back to scene light along a straight-line
 /// negative. The result is a scene-linear positive, developed like any photograph without film.
 /// The kernels read it (`NegativeScanPreparation`); this is their reference.
 public struct PlainNegativeScan: Equatable, Sendable {
@@ -17,14 +18,21 @@ public struct PlainNegativeScan: Equatable, Sendable {
     public let border: SIMD3<Float>
     /// Record density per unit of scanner-channel density above the border, green held.
     public let gains: SIMD3<Float>
+    /// What each channel reads from the three channels' densities over the border, rows summing
+    /// to one (`NegativeScanCrosstalk.plainWeights`).
+    public let weights: [SIMD3<Float>]
     /// The densest end's balanced density, which prints as `highlight`.
     public let reference: Float
 
-    public init(border: SIMD3<Float>, denseEnd: SIMD3<Float>?) {
+    /// Reads against `border` balanced on `denseEnd`, the frame's densest end over it, with
+    /// `crosstalk` correction (`NegativeScanCrosstalk.range`).
+    public init(border: SIMD3<Float>, denseEnd: SIMD3<Float>?, crosstalk: Float = 0) {
         self.border = border
+        weights = NegativeScanCrosstalk.plainWeights(strength: crosstalk)
         var gains = SIMD3<Float>.one
         var reference = Self.defaultReference
-        if let dense = denseEnd, (0..<3).allSatisfy({ dense[$0].isFinite }), dense.y > 0.05 {
+        if let raw = denseEnd, (0..<3).allSatisfy({ raw[$0].isFinite }),
+           case let dense = NegativeScanCrosstalk.apply(weights, raw), dense.y > 0.05 {
             reference = dense.y
             for channel in [0, 2] where dense[channel] > 0.05 {
                 gains[channel] = min(max(dense.y / dense[channel],
@@ -39,11 +47,17 @@ public struct PlainNegativeScan: Equatable, Sendable {
     /// One linear scan sample's scene light; black where the sample passes no light.
     @inlinable
     public func light(of sample: SIMD3<Float>) -> SIMD3<Float> {
-        var light = SIMD3<Float>.zero
+        var scanner = SIMD3<Float>.zero
         for channel in 0..<3 {
             let value = sample[channel]
             guard value.isFinite, value > 0 else { return .zero }
-            let density = -gains[channel] * log10(value / border[channel])
+            scanner[channel] = -log10(value / border[channel])
+        }
+        var light = SIMD3<Float>.zero
+        for channel in 0..<3 {
+            let weight = weights[channel]
+            let density = gains[channel]
+                * (weight.x * scanner.x + weight.y * scanner.y + weight.z * scanner.z)
             light[channel] = Self.highlight * pow(10, (density - reference) / Self.gamma)
         }
         return light

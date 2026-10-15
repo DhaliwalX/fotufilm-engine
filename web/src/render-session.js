@@ -566,7 +566,10 @@ export class RenderSession {
           : undefined
         // A negative without a film is a positive photograph (plainReading); one read as a film
         // prints from its scan, which the kernels read as the film.
-        const plain = edit.negative && !negative ? plainReading(reading.border, dense) : null
+        const plain =
+          edit.negative && !negative
+            ? plainReading(reading.border, dense, edit.negative.crosstalk)
+            : null
         const preparation = plain ? await loadScanPreparation() : null
         if (stale()) return null
         const scene = (pixels) => (plain ? positiveSource(pixels, plain, preparation) : pixels)
@@ -633,6 +636,7 @@ export class RenderSession {
                           border: reading.border,
                           denseEnd: dense,
                           light: negativeLight(edit.params),
+                          crosstalk: edit.negative.crosstalk ?? 0,
                         },
                       }
                     : await sceneScreenMeter(

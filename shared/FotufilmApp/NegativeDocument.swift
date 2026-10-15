@@ -140,15 +140,19 @@ final class NegativeDocument: @unchecked Sendable {
     /// The reading of a measured framing as `stock`, which prints it.
     static func reading(_ measure: Measure, state: EditState,
                         stock: FilmStock) throws -> NegativeScanPrint.Reading {
-        try NegativeScanPrint.Reading(
+        let crosstalk = state.negative?.crosstalkStrength ?? 0
+        return try NegativeScanPrint.Reading(
             stock: NegativeScanPrint.film(stock), border: measure.border,
-            balance: denseEnd(measure, state: state)
-                .map { ApproximateNegativeScan.balance(stock: stock, denseEnd: $0) } ?? .neutral)
+            balance: denseEnd(measure, state: state).map {
+                ApproximateNegativeScan.balance(stock: stock, denseEnd: $0, crosstalk: crosstalk)
+            } ?? .neutral,
+            crosstalk: crosstalk)
     }
 
     /// The scan read without a film, as Normal reads it.
     static func plain(_ measure: Measure, state: EditState) -> PlainNegativeScan {
-        PlainNegativeScan(border: measure.border, denseEnd: denseEnd(measure, state: state))
+        PlainNegativeScan(border: measure.border, denseEnd: denseEnd(measure, state: state),
+                          crosstalk: state.negative?.crosstalkStrength ?? 0)
     }
 
     // MARK: - Clear film
