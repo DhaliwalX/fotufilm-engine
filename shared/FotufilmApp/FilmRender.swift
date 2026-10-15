@@ -14,6 +14,9 @@ import FotufilmMetal
 #if canImport(FotufilmImaging)
 import FotufilmImaging
 #endif
+#if canImport(FotufilmEditModel)
+import FotufilmEditModel
+#endif
 
 /// App-supplied development for an existing scene. Implementations may receive concurrent
 /// requests, and must throw for unsupported work: an installed backend is never a fallback hint.
@@ -218,6 +221,10 @@ enum FilmRender {
         /// Set on a piece of film larger than the aperture (`developFilm(beyond:...)`): where the
         /// photograph stands in it, and the levels it prints on.
         var unexposedEdge: UnexposedEdge.Develop? = nil
+        /// Set on a scanned negative's scene: what its whole framing measures, which a film reads
+        /// the scan by (`NegativeDocument.reading`). The pixels are then the framed scan, linear
+        /// Rec. 2020, except in Normal, where they are already its plain positive.
+        var scanMeasure: NegativeDocument.Measure? = nil
 
         /// Blocks until `rows` have been laid down. Free — not even a lock — on a settled scene.
         func waitForRows(through row: Int) {
@@ -245,6 +252,9 @@ enum FilmRender {
         fileprivate enum Storage {
             case builtIn(FilmFrameContext)
             case backend(any FilmRenderBackend, any FilmRenderDetailContext)
+            /// A scanned negative's print, which measures nothing over the whole frame beyond the
+            /// reading its scene already carries (`Scene.scanMeasure`).
+            case scanPrint
         }
         fileprivate let storage: Storage
 
@@ -295,6 +305,7 @@ enum FilmRender {
         of scene: Scene, state: EditState,
         negative: NegativeViewing? = nil
     ) -> DetailMeasurements? {
+        if printsScan(scene, state: state) { return DetailMeasurements(storage: .scanPrint) }
         if let backend = backendRegistry.current() {
             do {
                 return DetailMeasurements(storage: .backend(backend,
@@ -342,7 +353,7 @@ enum FilmRender {
         report: Reporter? = nil, shouldContinue: (() -> Bool)? = nil
     ) -> RegionOutput? {
         guard let viewport = scene.viewport, shouldContinue?() != false else { return nil }
-        if let backend = backendRegistry.current() {
+        if !printsScan(scene, state: state), let backend = backendRegistry.current() {
             do {
                 let output = try backend.developRegion(DevelopmentRequest(scene: scene, state: state,
                     detailMeasurements: measurements, collectHistogram: false, hdr: hdr,
@@ -409,12 +420,34 @@ enum FilmRender {
         let lens = state.lensPlan(for: source.lensShot, dng: source.originalDNGData)
         // Read once: the probe opens the file, and the answer is wanted three times below.
         let declaredHeadroom = source.isRaw ? nil : source.declaredHeadroom
-        guard var decoded = time(.decode, source.detail, {
-            source.decoded(longEdge: decodeLongEdge, neutralKelvin: fixedCaptureIlluminant,
-                           upright: upright,
-                           decodeMode: .expandedHDR,
-                           correctingLens: lens.supersedesDecoder ? false : nil)
+        // A scanned negative's scan stands in for the decode: cleaned and evened as its edit asks,
+        // then framed like any photograph.
+        let document = source.scanDocument
+        guard var decoded = time(.decode, source.detail, { () -> CIImage? in
+            if let document {
+                guard let scan = document.source(state) else { return nil }
+                return decodeLongEdge.map { downsample(scan, longEdge: $0) } ?? scan
+            }
+            return source.decoded(longEdge: decodeLongEdge, neutralKelvin: fixedCaptureIlluminant,
+                                  upright: upright,
+                                  decodeMode: .expandedHDR,
+                                  correctingLens: lens.supersedesDecoder ? false : nil)
         }) else { return nil }
+        // What the scan's framing reads as, measured on the whole framing so a viewport, a strip
+        // tile and the export all print alike; and in Normal, the plain positive laid down.
+        let scanMeasure: NegativeDocument.Measure?
+        if let document {
+            do {
+                scanMeasure = try document.measure(state) { geometry($0, state: state) }
+            } catch {
+                print("FilmRender scan reading failed: \(error.localizedDescription)")
+                return nil
+            }
+        } else {
+            scanMeasure = nil
+        }
+        let plainScan = state.hasFilm ? nil
+            : scanMeasure.map { NegativeDocument.plain($0, state: state) }
 
         // Adaptive-HDR stills are processed alternate renditions, not calibrated camera
         // radiometry. Keep the expanded, linear pixels and their above-white ratios, but remove
@@ -436,7 +469,7 @@ enum FilmRender {
         }
 
         var contentHeadroom: Float = 1
-        if !source.isRaw {
+        if !source.isRaw, document == nil {
             if #available(iOS 18.0, macOS 15.0, *) {
                 contentHeadroom = max(1, decoded.contentHeadroom)
             }
@@ -553,6 +586,18 @@ enum FilmRender {
         /// written to the buffer through its file — see `MappedBuffer.write` for why not
         /// through the mapping — in that order, exactly as the whole-frame version did it.
         func rasterizeBand(_ band: UnsafeMutableRawPointer, byteOffset: Int, byteCount: Int) {
+            if let plainScan {
+                let samples = UnsafeMutableBufferPointer(
+                    start: band.assumingMemoryBound(to: Float.self),
+                    count: byteCount / MemoryLayout<Float>.size)
+                do {
+                    try NegativeScanPreparation.prepare(samples, width: width,
+                                                        height: byteCount / rowBytes,
+                                                        light: nil, plain: plainScan)
+                } catch {
+                    print("FilmRender plain negative failed: \(error.localizedDescription)")
+                }
+            }
             if let profileDelta {
                 let base = band.assumingMemoryBound(to: Float.self)
                 CameraProfileCorrection.apply(
@@ -634,7 +679,8 @@ enum FilmRender {
                              framed = atOrigin(framed.cropped(to: region))
                          }
                          return resample(framed, pixelSize: CGSize(width: width, height: height))
-                     })
+                     },
+                     scanMeasure: scanMeasure)
     }
 
     /// Measure the original renditions so preview size and crop cannot change exposure placement.
@@ -709,7 +755,8 @@ enum FilmRender {
                      frameCoverage: scene.frameCoverage,
                      viewport: scene.viewport,
                      sensorFrame: scene.sensorFrame,
-                     takingAperture: scene.takingAperture)
+                     takingAperture: scene.takingAperture,
+                     scanMeasure: scene.scanMeasure)
     }
 
     /// Develops `source` under `state`, resampled so its long edge is
@@ -740,7 +787,9 @@ enum FilmRender {
         // develop keeps for the next frame is worth more to the encode that follows it.
         defer { HalideMetalFilmRenderer.releaseIdleBuffers() }
         #endif
-        // The Emulsion Border develops a larger piece of film, the photograph included.
+        // The Emulsion Border develops a larger piece of film, the photograph included. A scanned
+        // negative has its own film's edge in the scan, and no larger piece to develop.
+        let frame = frame?.frame == .emulsion && source.scanDocument != nil ? nil : frame
         let print = frame?.frame == .emulsion ? nil : develop(
             scene, state: state, hdr: hdr, dynamicRange: dynamicRange,
             exact: exact, negative: negative, report: report
@@ -780,7 +829,9 @@ enum FilmRender {
                 hdr: hdr, dynamicRange: dynamicRange, exact: exact, stock: stockOverride,
                 negative: negative, report: report, shouldContinue: shouldContinue)
         }
-        if let backend = backendRegistry.current() {
+        // The installed backend's graph has no scan reading; only the engine's own kernels print a
+        // scanned negative.
+        if !printsScan(scene, state: state), let backend = backendRegistry.current() {
             guard shouldContinue?() != false else { return nil }
             let request = DevelopmentRequest(scene: scene, state: state,
                 detailMeasurements: detailMeasurements, collectHistogram: collectHistogram,
@@ -867,6 +918,19 @@ enum FilmRender {
         if let negative {
             options.negativeViewing = negative
         }
+        // A scanned negative read as its film: the scan's densities printed by the edit's own
+        // print, its light controls moved onto the print (`NegativeScanPrint.printing`).
+        var scanReading: NegativeScanPrint.Reading?
+        if printsScan(scene, state: state), let stock, let measure = scene.scanMeasure {
+            do {
+                let reading = try NegativeDocument.reading(measure, state: state, stock: stock)
+                options = reading.printing(options, stock: stock)
+                scanReading = reading
+            } catch {
+                print("FilmRender scan print failed: \(error.localizedDescription)")
+                return nil
+            }
+        }
         let active = stock.map {
             activeStages(stock: $0, options: options, width: width, height: height)
         } ?? "no film"
@@ -926,7 +990,7 @@ enum FilmRender {
         // encode exists for this frame. `carriesOutputTransform` answers the last one before the
         // first strip, which is the only time it can be asked: a streaming render has already
         // written rows by the time it could return a refusal.
-        let wantsKernelDelivery = hdrPrinted == nil
+        let wantsKernelDelivery = hdrPrinted == nil && scanReading == nil
             && !(scene.viewport != nil && detailMeasurements != nil)
         // The film develop's transform, and the film-free one's. They differ only in the
         // shoulder, which is the difference between the two converters above.
@@ -1081,6 +1145,18 @@ enum FilmRender {
                                     inputConversion: inputConversion,
                                     shouldContinue: shouldContinue,
                                     progress: advance, writeRows: writeRows)
+            }
+            if let scanReading {
+                advance(band: 0, of: 1)
+                return film.engine.printScan(
+                    width: width, height: height, stock: film.stock, options: options,
+                    calibration: scanReading.calibration, shouldContinue: shouldContinue,
+                    readScan: { rows, into in
+                        sceneReady?.wait(through: rows.upperBound)
+                        expand(scenePixels, rows: rows, width: width, into: into,
+                               inputConversion: inputConversion)
+                    },
+                    writeRows: writeRows)
             }
             if let viewport = scene.viewport, let detailMeasurements {
                 sceneReady?.wait(through: height)
@@ -1648,7 +1724,13 @@ enum FilmRender {
         return names.joined(separator: " · ")
     }
 
-    private static func geometry(_ image: CIImage, state: EditState) -> CIImage {
+    /// Whether `scene` is a scanned negative that `state` reads as a film and prints.
+    static func printsScan(_ scene: Scene, state: EditState) -> Bool {
+        scene.scanMeasure != nil && state.hasFilm
+    }
+
+    /// The edit's framing of a picture: turned, flipped, straightened, tilted and cropped.
+    static func geometry(_ image: CIImage, state: EditState) -> CIImage {
         var working = image
         switch (state.rotation % 4 + 4) % 4 {
         case 1: working = working.oriented(.right)
@@ -1766,6 +1848,8 @@ struct PhotoSource: @unchecked Sendable {
         case raw
         case raster
         case bitmap
+        /// A scanned negative opened as a document (`NegativeDocument`).
+        case scan
     }
 
     enum DecodeMode: Sendable {
@@ -1776,6 +1860,7 @@ struct PhotoSource: @unchecked Sendable {
     enum Payload {
         case file(Data)
         case bitmap(CGImage)
+        case scan(NegativeDocument)
     }
 
     /// Facts discovered once when the source enters the app. Rendering reads this value instead of
@@ -1816,8 +1901,16 @@ struct PhotoSource: @unchecked Sendable {
     let rawHint: String?
 
     var data: Data? {
-        guard case .file(let data) = payload else { return nil }
-        return data
+        switch payload {
+        case .file(let data): return data
+        case .scan(let document): return document.original
+        case .bitmap: return nil
+        }
+    }
+    /// The scanned negative this source is, when it is one.
+    var scanDocument: NegativeDocument? {
+        guard case .scan(let document) = payload else { return nil }
+        return document
     }
     var isRaw: Bool { descriptor.kind == .raw }
     var camera: CameraIdentity? { descriptor.camera }
@@ -1889,6 +1982,20 @@ struct PhotoSource: @unchecked Sendable {
             rawHint: nil)
     }
 
+    /// A scanned negative, which the scene reads through its edit's reading.
+    static func scan(_ document: NegativeDocument) -> PhotoSource {
+        PhotoSource(
+            payload: .scan(document),
+            descriptor: Descriptor(
+                kind: .scan,
+                contentType: document.typeHint.flatMap(UTType.init)
+                    ?? resolvedContentType(data: document.original, hint: nil),
+                originalName: nil, pixelSize: document.size, orientation: .up,
+                asShotKelvin: nil, camera: nil, captureMetadata: nil, lensShot: nil,
+                sensorFrame: nil, declaredHeadroom: nil, sourceColorProfile: nil),
+            rawHint: document.typeHint)
+    }
+
     static func bitmap(_ image: CGImage) -> PhotoSource {
         PhotoSource(
             payload: .bitmap(image),
@@ -1907,6 +2014,7 @@ struct PhotoSource: @unchecked Sendable {
         case .raw: return "camera raw"
         case .raster: return "image file"
         case .bitmap: return "bitmap"
+        case .scan: return "scanned negative"
         }
     }
 
@@ -1971,7 +2079,10 @@ struct PhotoSource: @unchecked Sendable {
                  decodeMode: DecodeMode = .expandedHDR,
                  correctingLens: Bool? = nil) -> CIImage? {
         var decoded: CIImage?
-        if isRaw, let data {
+        if case .scan(let document) = payload {
+            // The scan as scanned: what a picture of the negative itself shows.
+            decoded = document.image
+        } else if isRaw, let data {
             decoded = RawDecode.image(data: data, identifierHint: rawHint,
                                       recipe: RawDecode.Recipe(
                                         neutralKelvin: neutralKelvin,

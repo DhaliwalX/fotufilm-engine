@@ -85,4 +85,24 @@ final class WebNativeEditTests: XCTestCase {
     func testOutOfRangeSliderIsRefused() throws {
         XCTAssertThrowsError(try request(params: ["ev": 40]).document.options(for: try stock()))
     }
+
+    func testNegativeReadingRoundTripsWithItsAttachments() throws {
+        let reading = WebNativeEdit.Negative(
+            border: [0.8, 0.45, 0.25], lightFrame: "lamp",
+            roll: ApproximateNegativeScan.RollBalance(colour: [0.98, 1.03], frames: 4),
+            attachments: ["dust": Data([1, 2, 3])])
+        let decoded = try JSONDecoder().decode(
+            WebNativeEdit.Negative.self, from: try JSONEncoder().encode(reading))
+        XCTAssertEqual(decoded, reading)
+    }
+
+    func testNegativeReadingLeavesOutNoAttachments() throws {
+        // The web editor writes a reading without attachments, and reads one back the same way.
+        let bare = try JSONEncoder().encode(WebNativeEdit.Negative(lightFrame: "lamp"))
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: bare) as? [String: Any])
+        XCTAssertNil(object["attachments"])
+        let decoded = try JSONDecoder().decode(
+            WebNativeEdit.Negative.self, from: Data(#"{"lightFrame": "lamp"}"#.utf8))
+        XCTAssertEqual(decoded, WebNativeEdit.Negative(lightFrame: "lamp"))
+    }
 }

@@ -54,6 +54,8 @@ extension EditState {
         "rotation": .frameGeometry, "crop": .frameGeometry, "cornerCrop": .frameGeometry,
         "selective": .frameLocal,
         "seed": nil, "captureIlluminantKelvin": nil, "filmLightKelvin": nil,
+        // A scan's reading is measured on that scan and stays with it.
+        "negative": nil,
     ]
 
     /// These sections of this edit, to paste elsewhere.
@@ -82,6 +84,11 @@ extension EditState {
             EditState.self, from: JSONSerialization.data(withJSONObject: merged))
         // Only a made selection is stored; one still being made stays with its photograph.
         if !settings.sections.contains(.frameLocal) { pasted.selective = selective }
+        // A scanned negative is read as a film with a negative: a slide's settings keep its own.
+        if negative != nil, let stock = pasted.stock, pasted.hasFilm,
+           !NegativeScanPrint.reads(stock) {
+            pasted.stockID = stockID
+        }
         return pasted
     }
 }

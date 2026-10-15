@@ -76,6 +76,16 @@ final class EditLibrary {
         var linksOriginal = false
         /// A scanned negative's conversion, for an entry whose original is the scan.
         var scan: NegativeScanRecipe?
+        /// A scanned negative opened as a document: its edit carries the reading
+        /// (`EditState.negative`).
+        var isNegative = false
+        /// The roll this frame is filed in (`Roll.id`).
+        var rollID: String?
+        /// The name the original came with, such as its file's.
+        var name: String?
+
+        /// Whether the original is a scanned negative, as either editor keeps one.
+        var isScan: Bool { isNegative || scan != nil }
 
         var directory: URL { EditLibrary.root.appendingPathComponent(id) }
         var thumbnailURL: URL {
@@ -105,7 +115,24 @@ final class EditLibrary {
         var linksOriginal: Bool?
         /// The original is a scanned negative, converted by this recipe rather than `edit`.
         var scan: NegativeScanRecipe?
+        /// The roll this frame is filed in.
+        var roll: String?
+        /// The name the original came with.
+        var name: String?
     }
+
+    /// A roll of negatives: a folder on the shelf, named and dated by the photographer, holding the
+    /// frames scanned from it. Its frames share a colour balance (`EditState.negative.roll`).
+    struct Roll: Codable, Identifiable, Equatable, Sendable {
+        let id: String
+        var name: String
+        /// The day the roll is filed under, as the photographer gives it.
+        var date: Date
+        let created: Date
+    }
+
+    /// Every roll, newest date first.
+    private(set) var rolls: [Roll] = []
 
     /// Where an entry's original lives.
     enum Original {
@@ -118,6 +145,7 @@ final class EditLibrary {
     private nonisolated static let recordName = "edit.json"
     private nonisolated static let thumbName = "thumb.jpg"
     private nonisolated static let developedName = "developed.json"
+    private nonisolated static let rollsName = "rolls.json"
 
     /// The shelf: this device's, or the one in iCloud when that has been asked for and is actually
     /// available.
@@ -163,15 +191,16 @@ final class EditLibrary {
     /// Reads the shelf off disk.
     func refresh() async {
         let inCloud = Self.root != Self.localRoot
-        let (found, developed) = await Task.detached(priority: .utility) {
-            () -> ([Entry], Set<String>) in
+        let (found, developed, rolls) = await Task.detached(priority: .utility) {
+            () -> ([Entry], Set<String>, [Roll]) in
             let fm = FileManager.default
             let developed = (try? Data(contentsOf:
                     Self.root.appendingPathComponent(Self.developedName)))
                 .flatMap { try? JSONDecoder().decode(Set<String>.self, from: $0) }
                 ?? []
+            let rolls = Self.readRolls()
             guard let ids = try? fm.contentsOfDirectory(atPath: Self.root.path)
-            else { return ([], developed) }
+            else { return ([], developed, rolls) }
             let entries = ids.compactMap { id -> Entry? in
                 let dir = Self.root.appendingPathComponent(id)
                 if inCloud, !CloudShelf.isDownloaded(
@@ -191,12 +220,17 @@ final class EditLibrary {
                              stockID: record.edit.stockID,
                              isVideo: record.isVideo ?? false,
                              linksOriginal: record.linksOriginal ?? false,
-                             scan: record.scan)
+                             scan: record.scan,
+                             isNegative: record.edit.negative != nil,
+                             rollID: record.roll,
+                             name: record.name)
             }
             .sorted { $0.modified > $1.modified }
-            return (entries, developed)
+            return (entries, developed, rolls)
         }.value
         developedAssets.formUnion(developed)
+        let knownRolls = Set(self.rolls.map(\.id))
+        self.rolls = Self.ordered(self.rolls + rolls.filter { !knownRolls.contains($0.id) })
         let known = Set(entries.map(\.id))
         entries += found.filter { !known.contains($0.id) }
         if inCloud {
@@ -213,12 +247,12 @@ final class EditLibrary {
     /// Puts a new photograph on the shelf: the original bytes and the state that develops them.
     func create(original: Data, rawTypeHint: String?,
                 assetIdentifier: String? = nil,
-                edit: EditState) async -> String? {
+                edit: EditState, roll: String? = nil, name: String? = nil) async -> String? {
         let id = UUID().uuidString
         let dir = Self.root.appendingPathComponent(id)
         let record = Record(created: .now, modified: .now,
                             rawTypeHint: rawTypeHint,
-                            assetIdentifier: assetIdentifier, edit: edit)
+                            assetIdentifier: assetIdentifier, edit: edit, roll: roll, name: name)
         let written = await Task.detached(priority: .utility) { () -> Bool in
             do {
                 try FileManager.default.createDirectory(
@@ -239,7 +273,9 @@ final class EditLibrary {
                              rawTypeHint: record.rawTypeHint,
                              assetIdentifier: record.assetIdentifier,
                              thumbStamp: record.modified,
-                             stockID: edit.stockID), at: 0)
+                             stockID: edit.stockID,
+                             isNegative: edit.negative != nil,
+                             rollID: roll, name: name), at: 0)
         return id
     }
 
@@ -286,12 +322,17 @@ final class EditLibrary {
         var entry = entries[index]
         entry.modified = .now
         entry.stockID = edit.stockID
+        // A scan the photo editor has read is its edit's now; the scan editor's recipe goes.
+        if edit.negative != nil {
+            entry.isNegative = true
+            entry.scan = nil
+        }
         let record = Record(created: entry.created, modified: entry.modified,
                             rawTypeHint: entry.rawTypeHint,
                             assetIdentifier: entry.assetIdentifier, edit: edit,
                             isVideo: entry.isVideo ? true : nil,
                             linksOriginal: entry.linksOriginal ? true : nil,
-                            scan: entry.scan)
+                            scan: entry.scan, roll: entry.rollID, name: entry.name)
         return await write(record, for: entry, stockName: FilmChoice.name(for: edit.stockID))
     }
 
@@ -320,7 +361,8 @@ final class EditLibrary {
         edit.stockID = entry.stockID
         let record = Record(created: entry.created, modified: entry.modified,
                             rawTypeHint: entry.rawTypeHint,
-                            assetIdentifier: entry.assetIdentifier, edit: edit, scan: recipe)
+                            assetIdentifier: entry.assetIdentifier, edit: edit, scan: recipe,
+                            roll: entry.rollID, name: entry.name)
         return await write(record, for: entry, stockName: "Negative scan")
     }
 
@@ -338,6 +380,23 @@ final class EditLibrary {
                   let data = try? Data(contentsOf: dir.appendingPathComponent(Self.originalName))
             else { return nil }
             return (data, record.rawTypeHint, recipe)
+        }.value
+    }
+
+    /// A scanned negative's bytes and the edit that reads it, for opening it in the photo editor:
+    /// the edit as kept, or one made from the scan editor's recipe for a scan converted there.
+    func loadNegative(id: String) async -> (original: Data, rawTypeHint: String?,
+                                            edit: EditState)? {
+        let dir = Self.root.appendingPathComponent(id)
+        return await Task.detached(priority: .userInitiated) {
+            guard let record = Self.readRecord(in: dir),
+                  let data = try? Data(contentsOf: dir.appendingPathComponent(Self.originalName))
+            else { return nil }
+            if record.edit.negative != nil {
+                return (data, record.rawTypeHint, record.edit.openableByPurchase())
+            }
+            guard let recipe = record.scan else { return nil }
+            return (data, record.rawTypeHint, EditState(scanRecipe: recipe))
         }.value
     }
 
@@ -374,6 +433,88 @@ final class EditLibrary {
                              thumbnailURL: entry.thumbnailURL)
         publishRecents()
         return true
+    }
+
+    // MARK: - Rolls
+
+    /// Starts a roll, empty, for frames to be filed in.
+    func createRoll(name: String, date: Date) -> Roll {
+        let roll = Roll(id: UUID().uuidString, name: name, date: date, created: .now)
+        rolls = Self.ordered(rolls + [roll])
+        writeRolls()
+        return roll
+    }
+
+    /// Renames or redates a roll.
+    func update(_ roll: Roll) {
+        guard let index = rolls.firstIndex(where: { $0.id == roll.id }) else { return }
+        rolls[index] = roll
+        rolls = Self.ordered(rolls)
+        writeRolls()
+    }
+
+    /// Takes a roll off the shelf: its frames with it, or left on the shelf outside any roll.
+    func deleteRoll(id: String, keepingFrames: Bool) async {
+        let frames = entries.filter { $0.rollID == id }.map(\.id)
+        rolls.removeAll { $0.id == id }
+        writeRolls()
+        for frame in frames {
+            if keepingFrames {
+                _ = await file(frame, inRoll: nil)
+            } else {
+                delete(id: frame)
+            }
+        }
+    }
+
+    /// The frames filed in a roll, in the order they were added.
+    func frames(inRoll id: String) -> [Entry] {
+        entries.filter { $0.rollID == id }.sorted { $0.created < $1.created }
+    }
+
+    /// Files a frame in a roll, or in none. Refused while a save is on its way, which would carry
+    /// the old roll.
+    func file(_ id: String, inRoll roll: String?) async -> Bool {
+        guard pendingRecordWrites[id, default: 0] == 0,
+              let index = entries.firstIndex(where: { $0.id == id }) else { return false }
+        let previous = entries[index].rollID
+        entries[index].rollID = roll
+        nextRecordRevision &+= 1
+        let url = entries[index].directory.appendingPathComponent(Self.recordName)
+        let result = await Self.recordWriter.rewrite(url, revision: nextRecordRevision) { old in
+            guard var record = Self.decode(old) else { return nil }
+            record.roll = roll
+            return try? Self.encode(record)
+        }
+        guard result == .failed else { return true }
+        if let current = entries.firstIndex(where: { $0.id == id }) {
+            entries[current].rollID = previous
+        }
+        return false
+    }
+
+    private static func ordered(_ rolls: [Roll]) -> [Roll] {
+        rolls.sorted { ($0.date, $0.created) > ($1.date, $1.created) }
+    }
+
+    private func writeRolls() {
+        let snapshot = rolls
+        Task.detached(priority: .utility) {
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            guard let data = try? encoder.encode(snapshot) else { return }
+            try? FileManager.default.createDirectory(at: Self.root,
+                                                     withIntermediateDirectories: true)
+            try? data.write(to: Self.root.appendingPathComponent(Self.rollsName),
+                            options: .atomic)
+        }
+    }
+
+    private nonisolated static func readRolls() -> [Roll] {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return (try? Data(contentsOf: root.appendingPathComponent(rollsName)))
+            .flatMap { try? decoder.decode([Roll].self, from: $0) } ?? []
     }
 
     /// Keeps the latest print beside the entry, small, for the grid.

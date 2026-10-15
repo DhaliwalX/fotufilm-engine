@@ -383,18 +383,27 @@ enum NegativeScanOpening {
 
     static func menu(from presenter: @escaping () -> UIViewController?,
                      editor: @escaping (NegativeScanSource) -> UIViewController) -> UIMenu {
+        menu(from: presenter) { source in
+            guard let presenter = presenter() else { return }
+            open(editor(source), from: presenter)
+        }
+    }
+
+    /// The same menu, handing what is picked to `open` to show as it shows scans.
+    static func menu(from presenter: @escaping () -> UIViewController?,
+                     opening open: @escaping (NegativeScanSource) -> Void) -> UIMenu {
         UIMenu(title: "Convert Negative", children: [
             UIAction(title: "From Photos", image: Glyph.image(Glyph.photos)) { _ in
                 guard let presenter = presenter() else { return }
-                pickFromPhotos(from: presenter) { open(editor($0), from: presenter) }
+                pickFromPhotos(from: presenter, then: open)
             },
             UIAction(title: "From Files", image: Glyph.image(Glyph.folder)) { _ in
                 guard let presenter = presenter() else { return }
-                pickFromFiles(from: presenter) { open(editor($0), from: presenter) }
+                pickFromFiles(from: presenter, then: open)
             },
             UIAction(title: "Trichromatic Scan", image: Glyph.image(Glyph.lamp)) { _ in
                 guard let presenter = presenter() else { return }
-                mergeExposures(from: presenter) { open(editor($0), from: presenter) }
+                mergeExposures(from: presenter, then: open)
             },
         ])
     }
