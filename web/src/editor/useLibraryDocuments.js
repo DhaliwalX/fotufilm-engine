@@ -36,6 +36,8 @@ export default function useLibraryDocuments({
         await acceptFiles(
           items.map((item) => ({
             file: item.file,
+            path: item.path,
+            name: item.name,
             editKey: item.key,
             negative: !!item.negative,
             roll: item.roll ?? null,
@@ -54,23 +56,24 @@ export default function useLibraryDocuments({
       setFiles((current) =>
         current.map((doc) => {
           if (doc.editKey !== from) return doc;
-          const { file } = doc.source;
+          const { file, path } = doc.source;
           const renamed = file
-            ? Object.assign(
-                new File([file], name, {
-                  type: file.type,
-                  lastModified: file.lastModified,
-                }),
-                file.hostPath
-                  ? { hostPath: file.hostPath.replace(/[^/]*$/, name) }
-                  : {},
-              )
+            ? new File([file], name, {
+                type: file.type,
+                lastModified: file.lastModified,
+              })
             : file;
           return {
             ...doc,
             name,
             editKey: to,
-            source: { ...doc.source, file: renamed, name, editKey: to },
+            source: {
+              ...doc.source,
+              file: renamed,
+              path: path?.replace(/[^/]*$/, name),
+              name,
+              editKey: to,
+            },
           };
         }),
       ),

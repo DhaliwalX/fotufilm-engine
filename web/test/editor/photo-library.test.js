@@ -19,6 +19,7 @@ import {
   currentFile,
   indexRows,
   indexedPhotos,
+  openSource,
   photoEntry,
   scanDirectory,
   uploadedFolders,
@@ -327,6 +328,8 @@ test("folder scans walk subfolders and skip hidden and unsupported files", async
   ]);
   const raw = photos.find((item) => item.kind === "raw");
   assert.equal((await currentFile(raw)).size, 5);
+  // A browser folder opens its photo as a file.
+  assert.equal((await openSource(raw)).file.size, 5);
 
   // The saved list restores the same photos, reopened through the folder.
   const restored = indexedPhotos(
@@ -508,3 +511,12 @@ test("opening one photo brings its roll into the strip, in the library's order",
   assert.equal(chosen.shown, photos[0].key);
 });
 
+
+test("a photo of a folder the host opens in place opens by its path, unread", async () => {
+  const root = {
+    pathOf: (path) => `/Volumes/Card/${path}`,
+    file: () => assert.fail("the photo was read"),
+  };
+  const raw = photoEntry({ id: "f", handle: root }, "day/b.ARW", 5, 0);
+  assert.deepEqual(await openSource(raw), { path: "/Volumes/Card/day/b.ARW" });
+});

@@ -9,10 +9,12 @@ class HostFolder {
   #call;
   #thumbnails;
   #fileActions;
-  constructor(call, hostPath, name, { thumbnails, fileActions }) {
+  #inPlace;
+  constructor(call, hostPath, name, { thumbnails, fileActions, inPlace }) {
     this.#call = call;
     this.#thumbnails = thumbnails;
     this.#fileActions = fileActions;
+    this.#inPlace = inPlace;
     this.hostPath = hostPath;
     this.name = name;
   }
@@ -30,6 +32,11 @@ class HostFolder {
       { signal },
     );
     return JSON.parse(new TextDecoder().decode(result.payload));
+  }
+  // Where the host opens the photo in place, so opening it, or its roll, reads no bytes into the
+  // page. Null when the host cannot open files by their path.
+  pathOf(path) {
+    return this.#inPlace ? `${this.hostPath}/${path}` : null;
   }
   async file(path, modified) {
     const name = path.slice(path.lastIndexOf("/") + 1);
@@ -95,6 +102,7 @@ export function installLibraryFolders(channel) {
   const host = {
     thumbnails: channel.capabilities.thumbnails === true,
     fileActions: channel.capabilities.libraryFiles ?? null,
+    inPlace: channel.capabilities.importPath === true,
   };
   installFolderAccess({
     persistent: () => true,

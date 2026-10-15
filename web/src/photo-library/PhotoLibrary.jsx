@@ -16,7 +16,7 @@ import LibraryFolders from "./LibraryFolders.jsx";
 import PhotoGrid, { tileId } from "./PhotoGrid.jsx";
 import PhotoMenu, { menuTargets } from "./PhotoMenu.jsx";
 import RenameDialog from "./RenameDialog.jsx";
-import { currentFile } from "./library-scan.js";
+import { openSource } from "./library-scan.js";
 import {
   ALL_FOLDERS,
   filteredPhotos,
@@ -187,19 +187,19 @@ export default function PhotoLibrary({
   const openPhotos = async (list) => {
     if (!list.length) return;
     const opened = openedPhotos(list, library.folders, library.records, filters.sort);
-    const files = await Promise.allSettled(opened.photos.map(currentFile));
+    const sources = await Promise.allSettled(opened.photos.map(openSource));
     const items = [],
       missing = [];
     opened.photos.forEach((photo, index) => {
       const shown = photo.key === opened.shown;
-      if (files[index].status !== "fulfilled") {
+      if (sources[index].status !== "fulfilled") {
         if (shown || list.includes(photo)) missing.push(photo.name);
         return;
       }
       items.push({
         key: photo.key,
         name: photo.name,
-        file: files[index].value,
+        ...sources[index].value,
         ...(shown ? { shown: true } : {}),
         ...(photo.negative && negatives
           ? {
