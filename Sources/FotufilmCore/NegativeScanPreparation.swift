@@ -10,6 +10,17 @@ public enum NegativeScanPreparation {
                                light: (width: Int, height: Int, gains: [Float])?,
                                plain: PlainNegativeScan?) throws {
         guard width > 0, height > 0, rgba.count == width * height * 4 else { throw Failure.unprepared }
+        try rgba.withUnsafeMutableBufferPointer {
+            try prepare($0, width: width, height: height, light: light, plain: plain)
+        }
+    }
+
+    /// `prepare` on rows held elsewhere, in place: a band of a scene as it is laid down, read by
+    /// `plain`, or a whole scan evened under `light`.
+    public static func prepare(_ rgba: UnsafeMutableBufferPointer<Float>, width: Int, height: Int,
+                               light: (width: Int, height: Int, gains: [Float])?,
+                               plain: PlainNegativeScan?) throws {
+        guard width > 0, height > 0, rgba.count >= width * height * 4 else { throw Failure.unprepared }
         let light = light.flatMap {
             $0.width > 0 && $0.height > 0 && $0.gains.count == $0.width * $0.height * 3 ? $0 : nil
         }
@@ -23,12 +34,10 @@ public enum NegativeScanPreparation {
             parameters[8] = plain.reference
         }
         let gains = light?.gains ?? [1, 1, 1]
-        let status = rgba.withUnsafeMutableBufferPointer { rgba in
-            gains.withUnsafeBufferPointer { gains in
-                fotufilm_scan_prepare(rgba.baseAddress, rgba.baseAddress, Int32(width), Int32(height),
-                                      gains.baseAddress, Int32(light?.width ?? 1),
-                                      Int32(light?.height ?? 1), parameters)
-            }
+        let status = gains.withUnsafeBufferPointer { gains in
+            fotufilm_scan_prepare(rgba.baseAddress, rgba.baseAddress, Int32(width), Int32(height),
+                                  gains.baseAddress, Int32(light?.width ?? 1),
+                                  Int32(light?.height ?? 1), parameters)
         }
         guard status == 0 else { throw Failure.unprepared }
     }

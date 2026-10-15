@@ -147,6 +147,13 @@ struct FilmChoice: Identifiable, Hashable {
     /// no-film photograph rather than refusing it.
     static var editorWall: [FilmChoice] { [noFilm] + stocks }
 
+    /// What a scanned negative can be read as: Normal, and every film with a negative to read.
+    static var negativeWall: [FilmChoice] {
+        [noFilm] + stocks.filter { film in
+            StockPreset.preset(id: film.id).map { NegativeScanPrint.reads($0.stock) } ?? false
+        }
+    }
+
     private static let noFilm = FilmChoice(id: StockPreset.noFilmID,
                                            name: StockPreset.noFilmName,
                                            subtitle: StockPreset.noFilmSubtitle)
@@ -239,6 +246,9 @@ struct FilmMediumChoice: Identifiable, Hashable, StripChoice {
 /// The complete, value-typed description of an edit.
 struct EditState: Equatable {
     var selective: SelectiveState?
+    /// Set on a scanned negative opened as a document: how the scan is read. The film is the
+    /// edit's own (`stockID`); Normal reads the scan as a plain positive. Nil for a photograph.
+    var negative: WebNativeEdit.Negative?
     /// Returns an openable copy, substituting the default stock when current purchase access does
     /// not allow the stored stock. The persisted record remains unchanged.
     func openableByPurchase() -> EditState {
@@ -554,6 +564,11 @@ struct EditState: Equatable {
     /// character, its paper's correction, the develop sheet. Everything scene-referred still
     /// applies either way.
     var hasFilm: Bool { !StockPreset.isNoFilm(stockID) }
+
+    /// Whether this edit is a scanned negative read as its film and printed from the scan's
+    /// densities, as the desktop's `printsNegative` asks: the camera stages before the negative
+    /// existed (exposure, grain, halation, lens) have nothing to act on.
+    var printsNegative: Bool { negative != nil && hasFilm }
 
     /// The medium this edit really develops on. Silence follows the stock's physical reference
     /// path; an explicit selection is honoured wherever that stock can reach it, including

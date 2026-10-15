@@ -30,7 +30,7 @@ extension EditState: Codable {
         "stockID", "chosenFormatID", "captureIlluminantKelvin",
         "filmLightKelvin", "sourceLightIndex", "halationReturnRatio", "grainMottleShare", "grainModel", "couplerGapReach", "paper", "paperFollowsStock",
         "seed", "shutterSeconds", "printLightKelvin", "printFrame", "negativeViewing", "digitalReference", "enlarger", "printerProfile", "rotation", "crop", "cornerCrop", "framingZoom",
-        "grade", "lensProfileID", "lensAdjustment", "lensFilterIDs", "lensFilterMetering", "selective",
+        "grade", "lensProfileID", "lensAdjustment", "lensFilterIDs", "lensFilterMetering", "selective", "negative",
     ]
 
     init(from decoder: Decoder) throws {
@@ -112,6 +112,7 @@ extension EditState: Codable {
         framingZoom = max(1, try c.decodeIfPresent(Double.self, forKey: EditKey("framingZoom")) ?? 1)
         grade = try c.decodeIfPresent(ColorGrade.self, forKey: EditKey("grade")) ?? grade
         selective = try c.decodeIfPresent(SelectiveState.self, forKey: EditKey("selective"))?.saved
+        negative = try c.decodeIfPresent(WebNativeEdit.Negative.self, forKey: EditKey("negative"))
         lensProfileID = try c.decodeIfPresent(String.self, forKey: EditKey("lensProfileID"))
         lensAdjustment = try c.decodeIfPresent(LensAdjustment.self, forKey: EditKey("lensAdjustment"))
             ?? lensAdjustment
@@ -123,6 +124,7 @@ extension EditState: Codable {
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: EditKey.self)
         try c.encodeIfPresent(selective?.saved, forKey: EditKey("selective"))
+        try c.encodeIfPresent(negative, forKey: EditKey("negative"))
         for (control, key) in Self.cataloguedKeys {
             let coding = EditKey(key)
             switch control.field.access {

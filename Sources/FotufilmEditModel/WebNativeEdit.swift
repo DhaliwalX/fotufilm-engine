@@ -36,8 +36,9 @@ public struct WebNativeEdit: Decodable {
     }
 
     /// A scanned negative's reading the editor keeps: the clear film it is measured against and
-    /// the light source it was scanned on. The film is the edit's own.
-    public struct Negative: Decodable, Equatable {
+    /// the light source it was scanned on. The film is the edit's own. The phone keeps the same
+    /// reading on its own edits (`EditState.negative`).
+    public struct Negative: Codable, Equatable, Sendable {
         /// Clear film sampled from the scan, as linear Rec. 2020 scan RGB; nil estimates it from
         /// the thinnest film of the scan.
         public var border: [Float]?
@@ -46,6 +47,36 @@ public struct WebNativeEdit: Decodable {
         /// The colour of the roll the frame is balanced on, nil for its own
         /// (`ApproximateNegativeScan.RollBalance`).
         public var roll: ApproximateNegativeScan.RollBalance?
+        /// What an app keeps with the reading that the engine carries, saves and undoes without
+        /// reading, by the app's own key, as `NegativeScanRecipe.attachments` does.
+        public var attachments: [String: Data] = [:]
+
+        public init(border: [Float]? = nil, lightFrame: String? = nil,
+                    roll: ApproximateNegativeScan.RollBalance? = nil,
+                    attachments: [String: Data] = [:]) {
+            self.border = border
+            self.lightFrame = lightFrame
+            self.roll = roll
+            self.attachments = attachments
+        }
+
+        private enum CodingKeys: String, CodingKey { case border, lightFrame, roll, attachments }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            border = try c.decodeIfPresent([Float].self, forKey: .border)
+            lightFrame = try c.decodeIfPresent(String.self, forKey: .lightFrame)
+            roll = try c.decodeIfPresent(ApproximateNegativeScan.RollBalance.self, forKey: .roll)
+            attachments = try c.decodeIfPresent([String: Data].self, forKey: .attachments) ?? [:]
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encodeIfPresent(border, forKey: .border)
+            try c.encodeIfPresent(lightFrame, forKey: .lightFrame)
+            try c.encodeIfPresent(roll, forKey: .roll)
+            if !attachments.isEmpty { try c.encode(attachments, forKey: .attachments) }
+        }
     }
 
     public var edit: Edit
