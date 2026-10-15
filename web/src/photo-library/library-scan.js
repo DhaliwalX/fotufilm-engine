@@ -114,6 +114,13 @@ export function uploadedFolders(files, negative = false) {
   return [...folders.values()];
 }
 
+// What the editor opens a photo from: its path where the folder's host opens files in place,
+// else the file as it is now.
+export async function openSource(photo) {
+  const path = photo.root?.pathOf?.(photo.path);
+  return path ? { path } : { file: await currentFile(photo) };
+}
+
 // Read the file again so one edited or replaced since the scan opens as it
 // is now.
 export async function currentFile(photo) {
