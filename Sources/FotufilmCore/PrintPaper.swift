@@ -1,6 +1,11 @@
 import Foundation
 
 /// The medium that turns developed film into a finished image, including the film itself.
+///
+/// This is the output a user chooses, and its raw value and case order are what hosts persist.
+/// Physical print materials are described by `PrintStock`; each of their cases names one in
+/// `route`, and the rest of the engine reads the stock rather than switching on the case. The
+/// other cases are outputs with no print material: two scans and two ways of viewing.
 public enum PrintPaper: String, CaseIterable, Sendable {
     /// KODAK EKTACOLOR EDGE Paper (E-7020), measured.
     case ektacolorEdge = "ektacolor-edge"
@@ -38,49 +43,70 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     /// The engine's unstated, physically matched path remains `default(for:)`.
     public static let editorDefault: PrintPaper = .screen
 
+    /// How an output forms its image: on a print stock, or by one of the paths with no print
+    /// material.
+    enum Route {
+        /// Exposed onto a physical print material.
+        case print(PrintStock)
+        case labScan
+        case telecine
+        case screen
+        case negative
+    }
+
+    /// The one place a case is tied to what it is made of. A new print stock is a new case here.
+    var route: Route {
+        switch self {
+        case .ektacolorEdge: return .print(.ektacolorEdge)
+        case .enduraPremier: return .print(.enduraPremier)
+        case .crystalArchive: return .print(.crystalArchive)
+        case .vision2383: return .print(.vision2383)
+        case .vision2393: return .print(.vision2393)
+        case .eternaCP: return .print(.eternaCP)
+        case .ilfochromeCPS1K: return .print(.ilfochromeCPS1K)
+        case .ilfochromeCLM1K: return .print(.ilfochromeCLM1K)
+        case .labScan: return .labScan
+        case .telecine: return .telecine
+        case .screen: return .screen
+        case .negative: return .negative
+        }
+    }
+
+    /// The physical material this output prints onto, or nil for scans and viewing modes.
+    public var printStock: PrintStock? {
+        if case .print(let stock) = route { return stock }
+        return nil
+    }
+
+    /// The material family, or nil where nothing is printed.
+    public var printProcess: PrintStock.Process? { printStock?.process }
+
+    /// Every output that prints onto a material of `process`, in case order.
+    public static func media(printedBy process: PrintStock.Process) -> [PrintPaper] {
+        allCases.filter { $0.printProcess == process }
+    }
+
     public var id: String { rawValue }
 
     public var name: String {
-        switch self {
-        case .ektacolorEdge: return "Kodak Ektacolor Edge Paper"
-        case .enduraPremier: return "Kodak Professional Endura Premier Paper"
-        case .crystalArchive: return "Fujicolor Crystal Archive Paper Type CA"
-        case .vision2383: return "Kodak Vision Color Print Film 2383"
-        case .vision2393: return "Kodak Vision Premier Color Print Film 2393"
-        case .eternaCP: return "Fujifilm ETERNA-CP Color Positive Film 3513DI"
+        switch route {
+        case .print(let stock): return stock.name
         case .labScan: return "Lab Scan"
         case .telecine: return "Telecine"
         case .screen: return "Digital Reference"
         case .negative: return "Negative"
-        case .ilfochromeCPS1K: return "Ilfochrome Classic CPS.1K (Cibachrome)"
-        case .ilfochromeCLM1K: return "Ilfochrome Classic CLM.1K (Cibachrome)"
         }
     }
 
     public var detail: String {
-        switch self {
-        case .ektacolorEdge:
-            return "Kodak photo paper with a slightly warm color balance."
-        case .enduraPremier:
-            return "Kodak photo paper with saturated colors and deep blacks."
-        case .crystalArchive:
-            return "Fujifilm photo paper with a cooler color balance than Ektacolor Edge."
-        case .vision2383:
-            return "Kodak cinema print film with stronger contrast than photo paper."
-        case .vision2393:
-            return "Kodak cinema print film with deeper blacks and stronger color than 2383, but less shadow detail."
-        case .eternaCP:
-            return "Fujifilm cinema print film with a cooler color balance and softer contrast than Kodak print films."
+        switch route {
+        case .print(let stock): return stock.detail
         case .labScan:
             return "A minilab scan: each frame set up and finished with a deeper black, cool shadows, teal foliage and cyan-leaning blues. Choose TIFF for a 16-bit master."
         case .telecine:
             return "A Rec.709 video transfer with timed color, raised blacks and a finished contrast curve."
         case .screen:
             return "A fixed digital receiver preserves negative-film color and tone. Reversal films are viewed directly and support HDR output."
-        case .ilfochromeCPS1K:
-            return "Normal-contrast positive paper for slide film. Approximate color response; more paper exposure lightens the print."
-        case .ilfochromeCLM1K:
-            return "Medium-contrast positive paper for slide film, softer than CPS.1K. Approximate color response."
         case .negative:
             return "View the developed negative before printing or conversion to a positive."
         }
@@ -109,7 +135,7 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     public var isNegative: Bool { self == .negative }
 
     /// Positive-to-positive paper loses density as exposure increases.
-    public var isPositivePaper: Bool { self == .ilfochromeCPS1K || self == .ilfochromeCLM1K }
+    public var isPositivePaper: Bool { printProcess?.isPositiveWorking == true }
 
     /// Direction of the paper's exposure axis, carried by the shared print configuration.
     var exposureDirection: Float { isPositivePaper ? -1 : 1 }
@@ -131,7 +157,7 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     /// Transparent positives print onto positive paper. Integral instant sheets are already prints.
     public static func choices(for stock: FilmStock) -> [PrintPaper] {
         if stock.isReflectionPrint { return [.screen] }
-        if stock.isReversal { return [.screen, .ilfochromeCPS1K, .ilfochromeCLM1K] }
+        if stock.isReversal { return [.screen] + media(printedBy: .positivePaper) }
         return allCases.filter { !$0.isPositivePaper }
     }
 
@@ -153,21 +179,21 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     }
 
     /// Preview media for the selected gauge, with an explicitly named native medium first.
-    /// Reversal film offers positive paper and direct viewing. Negative film offers the three photo or
-    /// projection variants; motion-picture gauges also offer Telecine.
+    /// Reversal film offers positive paper and direct viewing. Negative film offers photo paper
+    /// on still gauges, and release print film and Telecine on motion-picture gauges.
     public static func stripChoices(for stock: FilmStock,
                                     gauge: FilmFormat) -> [PrintPaper] {
         if stock.isReflectionPrint { return [.screen] }
-        if stock.isReversal { return [.ilfochromeCPS1K, .ilfochromeCLM1K, .screen] }
-        var media: [PrintPaper] = gauge.isMotionPicture
-            ? [.vision2383, .vision2393, .eternaCP, .telecine]
-            : [.ektacolorEdge, .enduraPremier, .crystalArchive]
+        if stock.isReversal { return media(printedBy: .positivePaper) + [.screen] }
+        var offered: [PrintPaper] = gauge.isMotionPicture
+            ? media(printedBy: .releasePrintFilm) + [.telecine]
+            : media(printedBy: .photoPaper)
         if let native = stock.nativePrintMedium,
-           let index = media.firstIndex(of: native) {
-            media.remove(at: index)
-            media.insert(native, at: 0)
+           let index = offered.firstIndex(of: native) {
+            offered.remove(at: index)
+            offered.insert(native, at: 0)
         }
-        return media + [.screen]
+        return offered + [.screen]
     }
 
     /// Whether this finished positive is projected rather than held: a transparency on a screen
@@ -177,9 +203,7 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     /// viewer has and defaults to a D50 judging booth; a release print defaults to calibrated
     /// 5400 K filtered-xenon model. This is a representative projector spectrum, not the
     /// unspecified xenon lamp used for the manufacturer's dye measurements.
-    public var isProjected: Bool {
-        self == .vision2383 || self == .vision2393 || self == .eternaCP
-    }
+    public var isProjected: Bool { printProcess?.isProjected == true }
 
     /// Whether this finished positive is a scanner's file rather than a physical
     /// sheet: the read is a flat lamp through trichromatic sensor bands, the
@@ -191,14 +215,7 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     /// and projected positives can be inspected under another lamp. A scan is already a digital
     /// signal, and the screen is the fixed D65 display the renderer targets, so neither takes a
     /// second viewing-light transform.
-    public var acceptsViewingIlluminant: Bool {
-        switch self {
-        case .ektacolorEdge, .enduraPremier, .crystalArchive, .ilfochromeCPS1K, .ilfochromeCLM1K, .vision2383, .vision2393, .eternaCP:
-            return true
-        case .labScan, .telecine, .screen, .negative:
-            return false
-        }
-    }
+    public var acceptsViewingIlluminant: Bool { printStock != nil }
 
     /// Whether this output path's colour is profiled once, on a reference negative,
     /// rather than re-timed for the stock in the carrier.
@@ -226,9 +243,8 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     /// The lab-scan value is 7 µm versus a documented 5.3–6.6 µm sample pitch. Screen output has
     /// no physical imaging stage and uses zero.
     public var enlargerBlurMM: Float {
-        switch self {
-        case .ektacolorEdge, .enduraPremier, .crystalArchive, .ilfochromeCPS1K, .ilfochromeCLM1K: return 0.004
-        case .vision2383, .vision2393, .eternaCP: return 0.003
+        switch route {
+        case .print(let stock): return stock.process.enlargerBlurMM
         case .labScan: return 0.007
         // The Spirit's documented geometry: a 1920-photosite detail array
         // across the full Super 35 camera aperture it projects — 24.92 mm —
@@ -243,7 +259,7 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     /// 0. The lab-scan value of 0.65 matches measured grain amplitude and correlation after scanner
     /// aperture blur and unsharp masking.
     public var scanSharpening: Float {
-        switch self {
+        switch route {
         case .labScan: return 0.65
         // A video chain runs aperture correction — the operator-adjustable
         // detail peaking every telecine documented, applied film-relative
@@ -252,8 +268,7 @@ public enum PrintPaper: String, CaseIterable, Sendable {
         // the electronically crisped grain is part of what a transfer looks
         // like, and short of undoing the aperture entirely.
         case .telecine: return 0.8
-        case .ektacolorEdge, .enduraPremier, .crystalArchive, .vision2383, .vision2393, .eternaCP,
-             .screen, .negative, .ilfochromeCPS1K, .ilfochromeCLM1K:
+        case .print, .screen, .negative:
             return 0
         }
     }
@@ -272,7 +287,7 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     /// reflection/digital outputs and the single-record monochrome convention. Colour cine
     /// prints are placed at their published gross Status A LAD aims by `printExposureMidpoints`;
     /// those aims are not three equal densities above base or a forced 10% RGB value.
-    public var midDensity: Float { isProjected ? 1.0 : 0.744 }
+    public var midDensity: Float { printProcess?.midDensity ?? PrintStock.Process.photoPaper.midDensity }
 
     /// Nominal density above base that reads at `midDensity`. The print is read as its 0/45
     /// measurement with no viewing glare, so the two are the same.

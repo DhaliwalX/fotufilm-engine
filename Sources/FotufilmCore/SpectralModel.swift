@@ -2382,7 +2382,7 @@ public enum SpectralRuntime {
     /// added to developed densities. Cine media use their published LAD targets instead.
     private static let reflectionPrintDensityTrims: [PrintPaper: SIMD3<Float>] = {
         Dictionary(uniqueKeysWithValues:
-            [PrintPaper.ektacolorEdge, .enduraPremier, .crystalArchive, .ilfochromeCPS1K, .ilfochromeCLM1K].map { paper in
+            PrintPaper.allCases.filter { $0.printProcess?.isReflection == true }.map { paper in
                 let anchor = paper.anchorDensity
                 let light = referenceViewingLight(for: paper)
                 return (paper, solveReflectionPrintSetup(
@@ -3125,15 +3125,11 @@ public enum SpectralGrid {
         return result
     }
 
-    /// The receiver supplied by PrintPaperSpectra, digitised from KODAK EKTACOLOR EDGE
-    /// publication E-7020.
-    static let paperDyeAmounts: [[Float]] =
-        zip(PrintPaperSpectra.dyeDensity, PrintPaperSpectra.neutralAmounts)
-            .map { record, amount in record.map { $0 * amount } }
-    static let paperDyes: [[Float]] = partition(paperDyeAmounts)
-    /// Extend and normalize the configured receiver sensitivity.
-    static let paperSensitivity: [[Float]] =
-        normalizeSensitivities(PrintPaperSpectra.layerSensitivity.map(continuedTails))
+    /// The RA-4 receiver: Kodak Ektacolor Edge's spectra, which also stand in for the outputs
+    /// that need a neutral visual judge but have no dyes of their own.
+    static var paperDyeAmounts: [[Float]] { PrintStock.ektacolorEdge.spectra.analyticalDyes }
+    static var paperDyes: [[Float]] { PrintStock.ektacolorEdge.spectra.dyes }
+    static var paperSensitivity: [[Float]] { PrintStock.ektacolorEdge.spectra.sensitivity }
 
     /// Planck's law on the grid, normalized to its own peak.
     static func blackbody(kelvinK: Float) -> [Float] {

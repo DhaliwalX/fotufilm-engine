@@ -432,8 +432,7 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
 
 extension PrintPaper {
     /// An unexposed border is clear paper for negative paper and maximum density for positive
-    /// paper, under the viewing lamp. Crystal Archive shares the engine's explicitly documented
-    /// RA-4 curve proxy.
+    /// paper, under the viewing lamp. Only a reflection print has a border.
     func frameBaseRGB(viewingKelvin: Float?) -> SIMD3<Float>? {
         frameRGB(viewingKelvin: viewingKelvin, dense: false)
     }
@@ -447,20 +446,11 @@ extension PrintPaper {
     /// Density above the paper base, which is what the receiver reads and what the photograph's
     /// own tones are made of: clear paper is the print's white in the frame and in the picture.
     private func frameRGB(viewingKelvin: Float?, dense: Bool) -> SIMD3<Float>? {
-        let density: SIMD3<Float>
-        func pick(_ curve: CharacteristicCurve) -> Float { dense ? curve.dMax - curve.dMin : 0 }
-        func maximum(_ curve: CharacteristicCurve) -> Float { curve.dMax - curve.dMin }
-        switch self {
-        case .ektacolorEdge:
-            density = SIMD3(pick(Self.ra4PrintCurveRed), pick(Self.ra4PrintCurve), pick(Self.ra4PrintCurveBlue))
-        case .enduraPremier:
-            density = SIMD3(pick(EnduraPremierPaperSpectra.redCurve),
-                            pick(EnduraPremierPaperSpectra.greenCurve), pick(EnduraPremierPaperSpectra.blueCurve))
-        case .crystalArchive: density = SIMD3(repeating: pick(Self.ra4PrintCurve))
-        case .ilfochromeCPS1K: density = SIMD3(repeating: maximum(Self.ilfochromeNormalCurve))
-        case .ilfochromeCLM1K: density = SIMD3(repeating: maximum(Self.ilfochromeMediumCurve))
-        default: return nil
-        }
+        guard let stock = printStock, stock.process.isReflection else { return nil }
+        // Positive paper is at its maximum density where it was never exposed.
+        let full = dense || stock.process.isPositiveWorking
+        let records = stock.curves.map { full ? $0.dMax - $0.dMin : 0 }
+        let density = SIMD3(records[0], records[1], records[2])
         let receiver = SpectralRuntime.PrintReceiver(dyes: analyticalDyes,
             viewingLight: viewingKelvin.map(SpectralRuntime.printLightSPD) ?? Illuminant.d50,
             unmix: PrintDyeUnmix(dyes: analyticalDyes))
