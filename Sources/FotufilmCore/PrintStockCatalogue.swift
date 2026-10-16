@@ -96,6 +96,58 @@ extension PrintStock {
         releaseSetup: ReleaseSetup(ladStatusA: SIMD3(1.10, 1.05, 1.05),
                                    sensitivityAboveMinimum: true))
 
+    /// EASTMAN EXR Color Print Film 5386 (H-1-5386, February 1999), measured. Setup aims from
+    /// the sheet's LAD section; sensitivity measured at a density of 1.0, as Kodak labels it.
+    ///
+    /// The release print 2383 replaced. Its dyes are drawn at the amounts that form the
+    /// sheet's visual neutral, which solves back to 1.00, 1.01 and 0.99 of them.
+    static let exr5386 = PrintStock(
+        name: "Kodak EXR Color Print Film 5386",
+        detail: "Kodak's 1990s cinema print film, before Vision, with lighter blacks than 2383.",
+        process: .releasePrintFilm,
+        curves: [EXR5386PrintSpectra.redCurve, EXR5386PrintSpectra.greenCurve,
+                 EXR5386PrintSpectra.blueCurve],
+        spectra: Spectra(dyeDensity: EXR5386PrintSpectra.dyeDensity,
+                         layerSensitivity: EXR5386PrintSpectra.layerSensitivity,
+                         process: .releasePrintFilm),
+        releaseSetup: ReleaseSetup(ladStatusA: SIMD3(1.10, 1.06, 1.03),
+                                   sensitivityAboveMinimum: false))
+
+    /// AGFA PRINT CP30 Colour Print Film (Technical Data, 17 October 2011), measured. Setup
+    /// aims from the sheet's "Laboratory aimdensity values".
+    ///
+    /// The sheet states no density criterion for its spectral sensitivity, so it is read at a
+    /// gross density of 1.0 like Kodak's. Its dyes are drawn at the amounts that form a 3.0 D
+    /// neutral; the engine unmixes through the same dyes, so their scale cancels.
+    static let agfaCP30 = PrintStock(
+        name: "Agfa CP30 Colour Print Film",
+        detail: "Agfa cinema print film with deep, neutral blacks.",
+        process: .releasePrintFilm,
+        curves: [AgfaCP30PrintSpectra.redCurve, AgfaCP30PrintSpectra.greenCurve,
+                 AgfaCP30PrintSpectra.blueCurve],
+        spectra: Spectra(dyeDensity: AgfaCP30PrintSpectra.dyeDensity,
+                         layerSensitivity: AgfaCP30PrintSpectra.layerSensitivity,
+                         process: .releasePrintFilm),
+        releaseSetup: ReleaseSetup(ladStatusA: SIMD3(1.15, 1.05, 1.05),
+                                   sensitivityAboveMinimum: false))
+
+    /// FUJICOLOR POSITIVE FILM ETERNA-CP 3521XD (KB-0707E, November 2007), characteristic
+    /// curves and Aim Print Density measured.
+    ///
+    /// Fujifilm publishes no spectra for 3521XD. It borrows 3513DI's dye and sensitivity
+    /// spectra, the same maker's ETERNA-CP in the same process and printer setup, and with them
+    /// 3513DI's statement that sensitivity is measured at 1.0 above minimum density. Its own
+    /// sheet supplies the deeper tone scale it is sold on.
+    static let eternaCP3521XD = PrintStock(
+        name: "Fujifilm ETERNA-CP Color Positive Film 3521XD",
+        detail: "Fujifilm cinema print film with deeper blacks and more shadow contrast than ETERNA-CP 3513DI.",
+        process: .releasePrintFilm,
+        curves: [EternaCP3521XDPrintSpectra.redCurve, EternaCP3521XDPrintSpectra.greenCurve,
+                 EternaCP3521XDPrintSpectra.blueCurve],
+        spectra: PrintStock.eternaCP.spectra,
+        releaseSetup: ReleaseSetup(ladStatusA: SIMD3(1.10, 1.05, 1.05),
+                                   sensitivityAboveMinimum: true))
+
     /// Ilfochrome Classic CPS.1K (Cibachrome), normal contrast. See `IlfochromeCurves`.
     static let ilfochromeCPS1K = PrintStock(
         name: "Ilfochrome Classic CPS.1K (Cibachrome)",

@@ -4806,7 +4806,7 @@
       "availability" : "printStage",
       "commandLineFlag" : "--paper",
       "commandLineGeneric" : false,
-      "commandLineHelp" : "Output medium: ektacolor-edge (default), endura-premier, crystal-archive, vision-2383, vision-2393, eterna-cp, lab-scan, telecine, screen, negative or ilfochrome-cps-1k/ilfochrome-clm-1k (cibachrome alias). Photo and projection variants are digitised from the manufacturers' published datasheets; Ilfochrome uses published tone specifications with approximate color. Reversal stocks support screen and Ilfochrome; instant sheets use screen.",
+      "commandLineHelp" : "Output medium: ektacolor-edge (default), endura-premier, crystal-archive, vision-2383, vision-2393, eterna-cp, eterna-cp-3521xd, exr-5386, agfa-cp30, lab-scan, telecine, screen, negative or ilfochrome-cps-1k/ilfochrome-clm-1k (cibachrome alias). Photo and projection variants are digitised from the manufacturers' published datasheets; Ilfochrome uses published tone specifications with approximate color. Reversal stocks support screen and Ilfochrome; instant sheets use screen.",
       "commandLinePlaceholder" : "<name>",
       "detail" : "Choose how the film is printed, scanned, or viewed.",
       "documentation" : "Selects the print paper, projection print, scan, display reference or the negative itself.",
