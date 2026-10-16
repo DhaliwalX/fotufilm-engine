@@ -5,7 +5,7 @@ import FotufilmMetal
 
 final class ReleasedProfileRenderingTests: XCTestCase {
     func testEveryReleasedProfileMatchesCPUOnMetal() throws {
-        XCTAssertEqual(FilmStock.presetIDs.count, 46)
+        XCTAssertEqual(FilmStock.presetIDs.count, 47)
         try checkCPUAndMetal(FilmStock.presetIDs)
     }
 

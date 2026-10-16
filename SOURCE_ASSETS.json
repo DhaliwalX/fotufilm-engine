@@ -431,6 +431,10 @@
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-176E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
     "sha256": "c05d1782437d66c793b516621d5b222c08936443d4e3c20b9d0bf30f10a2b803"
   },
+  "Sources/FotufilmCore/Stocks/reala100.json": {
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-967E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "60a83f2839292ca6da0f29b63a0dc7d3a6b12ea50e8497d7295e7e0641ed3122"
+  },
   "Sources/FotufilmCore/Stocks/reala500d.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm KB-111E3 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
     "sha256": "22d3620be361eff3e1c8350bbc57a1a884f94b13f0be0b2ca15400bee8aa5b18"
