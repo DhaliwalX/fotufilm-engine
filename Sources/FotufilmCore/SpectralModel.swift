@@ -383,6 +383,7 @@ public enum SpectralRuntime {
                               printViewingKelvin: Float? = nil,
                               callier: Float = 1,
                               printer: PrinterProfile? = nil,
+                              printerLights: PrinterLights? = nil,
                               digitalReference: DigitalReferenceStyle = .default,
                               screenGrade: Float = 2,
                               screenExposureEV: Float = 0,
@@ -393,6 +394,7 @@ public enum SpectralRuntime {
         let labScanLook = effectiveLabScanLook(labScanLook, paper: paper)
         let receiverBands = effectiveReceiverBands(receiverBands, stock: stock, paper: paper)
         let printer = PrinterProfile.resolved(printer, stock: stock, paper: paper)
+        let printerLights = PrinterLights.resolved(printerLights, stock: stock, paper: paper)
         let bleachBypass = retainedSilverFraction(bleachBypass, stock: stock)
         let screenGrade = effectiveScreenGrade(screenGrade, stock: stock, paper: paper,
                                                digitalReference: digitalReference)
@@ -403,7 +405,8 @@ public enum SpectralRuntime {
         let callier = callierCoefficient(callier, stock: stock, paper: paper)
         let key = cacheIdentifier(for: stock, paper: paper, bleachBypass: bleachBypass,
                                   printViewingKelvin: printViewingKelvin, callier: callier,
-                                  printer: printer, digitalReference: digitalReference,
+                                  printer: printer, printerLights: printerLights,
+                                  digitalReference: digitalReference,
                                   screenGrade: screenGrade, screenExposureEV: screenExposureEV,
                                   labScanLook: labScanLook, receiverBands: receiverBands)
         lock.lock()
@@ -423,7 +426,8 @@ public enum SpectralRuntime {
 
         let built = buildTables(for: stock, paper: paper, bleachBypass: bleachBypass,
                                 printViewingKelvin: printViewingKelvin, callier: callier,
-                                printer: printer, digitalReference: digitalReference,
+                                printer: printer, printerLights: printerLights,
+                                digitalReference: digitalReference,
                                 screenGrade: screenGrade, screenExposureEV: screenExposureEV,
                                 labScanLook: labScanLook, receiverBands: receiverBands)
 
@@ -495,6 +499,7 @@ public enum SpectralRuntime {
                                        printViewingKelvin: Float? = nil,
                                        callier: Float = 1,
                                        printer: PrinterProfile? = nil,
+                                       printerLights: PrinterLights? = nil,
                                        digitalReference: DigitalReferenceStyle = .default,
                                        screenGrade: Float = 2,
                                        screenExposureEV: Float = 0,
@@ -579,6 +584,10 @@ public enum SpectralRuntime {
         if let printer = PrinterProfile.resolved(printer, stock: stock, paper: paper) {
             h = (h ^ printer.spectralSignature) &* 0x100000001b3
         }
+        // Hashed only away from the aim setup, which every untimed release print already is.
+        if let lights = PrinterLights.resolved(printerLights, stock: stock, paper: paper) {
+            h = (h ^ lights.spectralSignature) &* 0x100000001b3
+        }
         return h
     }
 
@@ -588,6 +597,7 @@ public enum SpectralRuntime {
                                     printViewingKelvin: Float? = nil,
                                     callier: Float = 1,
                                     printer: PrinterProfile? = nil,
+                                    printerLights: PrinterLights? = nil,
                                     digitalReference: DigitalReferenceStyle = .default,
                                     screenGrade: Float = 2,
                                     screenExposureEV: Float = 0,
@@ -678,7 +688,7 @@ public enum SpectralRuntime {
                     dyes: stock.spectralProfile.imageDyeDensity,
                     neutralDensity: silverCallier * retainedSilverDensity(
                         midDensity, dMin: dMin, fraction: bleachBypass), densityScale: callier,
-                    receiverBands: bands)
+                    receiverBands: bands, lights: printerLights)
                 let lamp = printer?.filteredSpectrum ?? illumination.lamp
                 // Keep the simulated printer's reference setup fixed when its lamp or filters move.
                 // Other media retain their existing printing illumination and calibration.

@@ -308,6 +308,11 @@ above clear film. Reflection papers retain a visually balanced 0.744 D (18%) set
 under D50. Viewing another lamp never changes the developed dyes. Optional digital
 channel-contrast correction is off by default.
 
+Red, Green and Blue Light re-time a release print from that aim in printer points:
+25-25-25 is the aim, and each point scales its own beam by 0.025 log exposure, so more
+red light adds cyan and all three together make the print denser. The 1-50 range is the
+conventional printer scale.
+
 The printer passbands and filtered 5400 K xenon reference are explicit approximations,
 not measured printer filters or the manufacturers' original calibration lamps. Output
 is relative to clear medium; no unmeasured print-base spectrum is invented. Reflection

@@ -436,6 +436,18 @@
       ],
       "rendering": "multicolor"
     },
+    "fotu.slider.printerBlue.high": {
+      "colours": [
+        "systemBlue"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.printerBlue.low": {
+      "colours": [
+        "systemBlue"
+      ],
+      "rendering": "multicolor"
+    },
     "fotu.slider.printerExposure.high": {
       "colours": [],
       "rendering": "hierarchical"
@@ -443,6 +455,18 @@
     "fotu.slider.printerExposure.low": {
       "colours": [],
       "rendering": "hierarchical"
+    },
+    "fotu.slider.printerGreen.high": {
+      "colours": [
+        "systemGreen"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.printerGreen.low": {
+      "colours": [
+        "systemGreen"
+      ],
+      "rendering": "multicolor"
     },
     "fotu.slider.printerLamp.high": {
       "colours": [],
@@ -471,6 +495,18 @@
     "fotu.slider.printerPreflash.low": {
       "colours": [],
       "rendering": "hierarchical"
+    },
+    "fotu.slider.printerRed.high": {
+      "colours": [
+        "systemRed"
+      ],
+      "rendering": "multicolor"
+    },
+    "fotu.slider.printerRed.low": {
+      "colours": [
+        "systemRed"
+      ],
+      "rendering": "multicolor"
     },
     "fotu.slider.printerYellow.high": {
       "colours": [
@@ -1029,9 +1065,17 @@
       "high": "fotu.slider.printCorrection.high",
       "low": "fotu.slider.printCorrection.low"
     },
+    "printerBlue": {
+      "high": "fotu.slider.printerBlue.high",
+      "low": "fotu.slider.printerBlue.low"
+    },
     "printerExposure": {
       "high": "fotu.slider.printerExposure.high",
       "low": "fotu.slider.printerExposure.low"
+    },
+    "printerGreen": {
+      "high": "fotu.slider.printerGreen.high",
+      "low": "fotu.slider.printerGreen.low"
     },
     "printerLamp": {
       "high": "fotu.slider.printerLamp.high",
@@ -1044,6 +1088,10 @@
     "printerPreflash": {
       "high": "fotu.slider.printerPreflash.high",
       "low": "fotu.slider.printerPreflash.low"
+    },
+    "printerRed": {
+      "high": "fotu.slider.printerRed.high",
+      "low": "fotu.slider.printerRed.low"
     },
     "printerYellow": {
       "high": "fotu.slider.printerYellow.high",

@@ -182,7 +182,7 @@ public enum EditorControlCatalogue {
 
     public static let retiredFxplugIDs: [Int] = [33]
     public static let fxplugTextureStageIDs: ClosedRange<Int> = 40...71
-    public static let bridgeSlotCount = 69
+    public static let bridgeSlotCount = 72
 
     static let hostOnly: [EditorSurface: String] = [
         .app: "a plugin host's own setting, with no meaning on a photograph",
@@ -1641,6 +1641,81 @@ public enum EditorControlCatalogue {
                                              + "0-1 (default: 0; not a printer-light control)"),
             documentation: "Optional digital channel-contrast correction. Off by default to preserve measured slopes; this is not a physical printer-light control."),
         EditorControl(
+            .printerRed, title: "Red Light",
+            detail: "Printer points; more red light adds cyan to the print.",
+            section: .printPaper,
+            kind: .slider(EditorControlScale(printerLightRange, neutral: printerLightCentre,
+                                             unit: .printerPoints)),
+            availability: .printStage, binding: .printerLight(0),
+            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .web, .cli],
+            host: HostParameter(
+                slot: 69, slotSymbol: "PRINTER_RED", ofxName: "printerRed",
+                fxplugID: 105, group: .output, label: "Red Light",
+                hint: "Cinema print film only: the release printer's red light in printer points, "
+                    + "25 at the stock's aim. Each point is 0.025 log exposure; more red light "
+                    + "adds cyan.",
+                kind: .double(min: printerLightRange.lowerBound, max: printerLightRange.upperBound,
+                              value: printerLightCentre, delta: 1),
+                clamp: printerLightRange, order: 34),
+            web: .profile,
+            commandLine: CommandLineFlag("--printer-red", placeholder: "<points>",
+                help: "Release printer red light, 1-50 printer points (default: 25, the stock's "
+                    + "aim); one point is 0.025 log exposure, more adds cyan. Cinema print film only",
+                range: printerLightRange),
+            documentation: "Cinema print film only, from a negative. The release printer's red light "
+                + "in printer points: 25 prints the stock's aim, each point is 0.025 log exposure and "
+                + "more red light adds cyan to the print."),
+        EditorControl(
+            .printerGreen, title: "Green Light",
+            detail: "Printer points; more green light adds magenta to the print.",
+            section: .printPaper,
+            kind: .slider(EditorControlScale(printerLightRange, neutral: printerLightCentre,
+                                             unit: .printerPoints)),
+            availability: .printStage, binding: .printerLight(1),
+            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .web, .cli],
+            host: HostParameter(
+                slot: 70, slotSymbol: "PRINTER_GREEN", ofxName: "printerGreen",
+                fxplugID: 106, group: .output, label: "Green Light",
+                hint: "Cinema print film only: the release printer's green light in printer points, "
+                    + "25 at the stock's aim. Each point is 0.025 log exposure; more green light "
+                    + "adds magenta.",
+                kind: .double(min: printerLightRange.lowerBound, max: printerLightRange.upperBound,
+                              value: printerLightCentre, delta: 1),
+                clamp: printerLightRange, order: 35),
+            web: .profile,
+            commandLine: CommandLineFlag("--printer-green", placeholder: "<points>",
+                help: "Release printer green light, 1-50 printer points (default: 25, the stock's "
+                    + "aim); one point is 0.025 log exposure, more adds magenta. Cinema print film only",
+                range: printerLightRange),
+            documentation: "Cinema print film only, from a negative. The release printer's green light "
+                + "in printer points: 25 prints the stock's aim, each point is 0.025 log exposure and "
+                + "more green light adds magenta to the print."),
+        EditorControl(
+            .printerBlue, title: "Blue Light",
+            detail: "Printer points; more blue light adds yellow to the print.",
+            section: .printPaper,
+            kind: .slider(EditorControlScale(printerLightRange, neutral: printerLightCentre,
+                                             unit: .printerPoints)),
+            availability: .printStage, binding: .printerLight(2),
+            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .web, .cli],
+            host: HostParameter(
+                slot: 71, slotSymbol: "PRINTER_BLUE", ofxName: "printerBlue",
+                fxplugID: 107, group: .output, label: "Blue Light",
+                hint: "Cinema print film only: the release printer's blue light in printer points, "
+                    + "25 at the stock's aim. Each point is 0.025 log exposure; more blue light "
+                    + "adds yellow.",
+                kind: .double(min: printerLightRange.lowerBound, max: printerLightRange.upperBound,
+                              value: printerLightCentre, delta: 1),
+                clamp: printerLightRange, order: 36),
+            web: .profile,
+            commandLine: CommandLineFlag("--printer-blue", placeholder: "<points>",
+                help: "Release printer blue light, 1-50 printer points (default: 25, the stock's "
+                    + "aim); one point is 0.025 log exposure, more adds yellow. Cinema print film only",
+                range: printerLightRange),
+            documentation: "Cinema print film only, from a negative. The release printer's blue light "
+                + "in printer points: 25 prints the stock's aim, each point is 0.025 log exposure and "
+                + "more blue light adds yellow to the print."),
+        EditorControl(
             .negativeViewing, title: "Negative Viewing",
             detail: "Choose how negative output is displayed.",
             section: .printPaper, kind: .menu(.dynamic(.negativeViewings)),
@@ -2005,6 +2080,9 @@ public enum EditorControlCatalogue {
 
     private static let screenCurveOmission =
         "The Android photo editor does not yet carry the screen conversion's grade and exposure."
+    private static let printerLightRange =
+        Double(PrinterLights.range.lowerBound)...Double(PrinterLights.range.upperBound)
+    private static let printerLightCentre = Double(PrinterLights.centre)
     private static let printerOmissions: [EditorSurface: String] = [
         .android: "The simulated printer is currently exposed in the Apple apps and CLI.",
         .resolve: "The plugin bridge does not yet expose simulated printer profiles.",

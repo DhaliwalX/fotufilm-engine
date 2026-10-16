@@ -177,6 +177,10 @@ public struct FotufilmEngine {
         /// Optional simulated optical printer. Nil preserves the existing printing model.
         /// Applies only to enlarged reflection prints; exposure is separate from film exposure.
         public var printer: PrinterProfile? = nil
+        /// The release printer's red, green and blue lights, in printer points. The aim setup,
+        /// 25-25-25, prints the stock's LAD aim; see `PrinterLights`. Read only where a negative
+        /// is printed onto cinema print film.
+        public var printerLights: PrinterLights = .balanced
         /// Uniform additive paper preflash relative to paper mid-exposure, 0...0.10 (0 = off).
         /// Softens print highlight contrast and brings delicate highlights onto the paper curve
         /// without fogging maximum black (D-max). Applies only to optical prints.

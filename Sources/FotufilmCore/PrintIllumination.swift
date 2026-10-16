@@ -4,10 +4,13 @@ extension SpectralRuntime {
     /// The timed spectrum and energy-axis reference used by both the renderer and analytic
     /// mirrors. For release film only one common exposure scale is removed. If a non-negative
     /// head cannot reach an aim, its residual must survive, not be divided away per record.
+    /// `lights` re-times a release print from its aim setup: the beams move and the reference
+    /// stays where the aim setup put it, so the print shifts by the points the lights moved.
     static func printingIllumination(stock: FilmStock, paper: PrintPaper,
                                      density: [Float], dyes: [[Float]],
                                      neutralDensity: Float = 0, densityScale: Float = 1,
-                                     receiverBands: ReceiverBands = .paper)
+                                     receiverBands: ReceiverBands = .paper,
+                                     lights: PrinterLights? = nil)
         -> (lamp: [Float], referenceEnergy: SIMD3<Float>) {
         let offset = filmDensityOffset(for: stock, scale: densityScale)
         guard paper.isProjected else {
@@ -24,15 +27,23 @@ extension SpectralRuntime {
             sensitivity: paper.sensitivity, target: aim, neutralDensity: neutralDensity,
             densityOffset: offset)
         let peak = max(raw.max() ?? 0, 1e-12)
-        return (raw.map { $0 / peak }, aim / peak)
+        guard let lights = PrinterLights.resolved(lights, stock: stock, paper: paper) else {
+            return (raw.map { $0 / peak }, aim / peak)
+        }
+        let timed = releasePrinterLamp(density: density, dyes: dyes,
+            sensitivity: paper.sensitivity, target: aim, neutralDensity: neutralDensity,
+            densityOffset: offset, beamGain: lights.beamGain)
+        return (timed.map { $0 / peak }, aim / peak)
     }
 
     /// Non-negative beam exposures for a stated sensitivity-weighted energy target. The
     /// sheets' reciprocal-exposure scale is kept across layers; curve inverses translate
     /// from the sensitivity measurement density to the processed-print setup density.
+    /// `beamGain` scales each solved beam afterwards, as a printer's lights do.
     static func releasePrinterLamp(density: [Float], dyes: [[Float]],
                                    sensitivity: [[Float]], target: SIMD3<Float>,
-                                   neutralDensity: Float = 0, densityOffset: [Float]? = nil) -> [Float] {
+                                   neutralDensity: Float = 0, densityOffset: [Float]? = nil,
+                                   beamGain: SIMD3<Float> = .one) -> [Float] {
         let beams = SpectralGrid.releasePrinterBeams
         let response = beams.map {
             paperExposure(density: density, dyes: dyes, lamp: $0,
@@ -62,7 +73,7 @@ extension SpectralRuntime {
             }
         }
         let weights = SIMD3(lights.x / norms[0], lights.y / norms[1],
-                            lights.z / norms[2])
+                            lights.z / norms[2]) * beamGain
         return (0..<SpectralGrid.count).map { i in
             beams[0][i] * weights.x + beams[1][i] * weights.y + beams[2][i] * weights.z
         }

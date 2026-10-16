@@ -228,7 +228,7 @@
       "text" : "Not yet examined"
     }
   ],
-  "bridgeSlotCount" : 69,
+  "bridgeSlotCount" : 72,
   "bridgeSlots" : [
     "EXPOSURE_EV",
     "TEMPERATURE",
@@ -298,7 +298,10 @@
     "SCREEN_MAGENTA",
     "SCREEN_YELLOW",
     "LAB_SCAN_DODGING",
-    "LAB_SCAN_LOOK"
+    "LAB_SCAN_LOOK",
+    "PRINTER_RED",
+    "PRINTER_GREEN",
+    "PRINTER_BLUE"
   ],
   "controls" : [
     {
@@ -4995,6 +4998,222 @@
         "cli"
       ],
       "title" : "Channel Contrast Match",
+      "webTransform" : "profile"
+    },
+    {
+      "availability" : "printStage",
+      "binding" : "printerLight(0)",
+      "commandLineFlag" : "--printer-red",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Release printer red light, 1-50 printer points (default: 25, the stock's aim); one point is 0.025 log exposure, more adds cyan. Cinema print film only",
+      "commandLineMax" : 50,
+      "commandLineMin" : 1,
+      "commandLinePlaceholder" : "<points>",
+      "detail" : "Printer points; more red light adds cyan to the print.",
+      "documentation" : "Cinema print film only, from a negative. The release printer's red light in printer points: 25 prints the stock's aim, each point is 0.025 log exposure and more red light adds cyan to the print.",
+      "drives" : [
+
+      ],
+      "field" : "printerRed",
+      "group" : "print",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "clampMax" : 50,
+        "clampMin" : 1,
+        "composed" : false,
+        "delta" : 1,
+        "fxplugID" : 105,
+        "group" : "output",
+        "hint" : "Cinema print film only: the release printer's red light in printer points, 25 at the stock's aim. Each point is 0.025 log exposure; more red light adds cyan.",
+        "kind" : "double",
+        "label" : "Red Light",
+        "max" : 50,
+        "min" : 1,
+        "ofxName" : "printerRed",
+        "order" : 34,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 69,
+        "slotSymbol" : "PRINTER_RED",
+        "value" : 25,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+
+      },
+      "persistedKey" : "printerRed",
+      "scale" : {
+        "admittedMax" : 50,
+        "admittedMin" : 1,
+        "max" : 50,
+        "min" : 1,
+        "neutral" : 25,
+        "stops" : [
+
+        ],
+        "unit" : "printerPoints"
+      },
+      "scope" : "edit",
+      "section" : "printPaper",
+      "storedEncoding" : "same",
+      "storedNeutral" : 25,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "finalcut",
+        "web",
+        "cli"
+      ],
+      "title" : "Red Light",
+      "webTransform" : "profile"
+    },
+    {
+      "availability" : "printStage",
+      "binding" : "printerLight(1)",
+      "commandLineFlag" : "--printer-green",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Release printer green light, 1-50 printer points (default: 25, the stock's aim); one point is 0.025 log exposure, more adds magenta. Cinema print film only",
+      "commandLineMax" : 50,
+      "commandLineMin" : 1,
+      "commandLinePlaceholder" : "<points>",
+      "detail" : "Printer points; more green light adds magenta to the print.",
+      "documentation" : "Cinema print film only, from a negative. The release printer's green light in printer points: 25 prints the stock's aim, each point is 0.025 log exposure and more green light adds magenta to the print.",
+      "drives" : [
+
+      ],
+      "field" : "printerGreen",
+      "group" : "print",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "clampMax" : 50,
+        "clampMin" : 1,
+        "composed" : false,
+        "delta" : 1,
+        "fxplugID" : 106,
+        "group" : "output",
+        "hint" : "Cinema print film only: the release printer's green light in printer points, 25 at the stock's aim. Each point is 0.025 log exposure; more green light adds magenta.",
+        "kind" : "double",
+        "label" : "Green Light",
+        "max" : 50,
+        "min" : 1,
+        "ofxName" : "printerGreen",
+        "order" : 35,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 70,
+        "slotSymbol" : "PRINTER_GREEN",
+        "value" : 25,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+
+      },
+      "persistedKey" : "printerGreen",
+      "scale" : {
+        "admittedMax" : 50,
+        "admittedMin" : 1,
+        "max" : 50,
+        "min" : 1,
+        "neutral" : 25,
+        "stops" : [
+
+        ],
+        "unit" : "printerPoints"
+      },
+      "scope" : "edit",
+      "section" : "printPaper",
+      "storedEncoding" : "same",
+      "storedNeutral" : 25,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "finalcut",
+        "web",
+        "cli"
+      ],
+      "title" : "Green Light",
+      "webTransform" : "profile"
+    },
+    {
+      "availability" : "printStage",
+      "binding" : "printerLight(2)",
+      "commandLineFlag" : "--printer-blue",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Release printer blue light, 1-50 printer points (default: 25, the stock's aim); one point is 0.025 log exposure, more adds yellow. Cinema print film only",
+      "commandLineMax" : 50,
+      "commandLineMin" : 1,
+      "commandLinePlaceholder" : "<points>",
+      "detail" : "Printer points; more blue light adds yellow to the print.",
+      "documentation" : "Cinema print film only, from a negative. The release printer's blue light in printer points: 25 prints the stock's aim, each point is 0.025 log exposure and more blue light adds yellow to the print.",
+      "drives" : [
+
+      ],
+      "field" : "printerBlue",
+      "group" : "print",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "clampMax" : 50,
+        "clampMin" : 1,
+        "composed" : false,
+        "delta" : 1,
+        "fxplugID" : 107,
+        "group" : "output",
+        "hint" : "Cinema print film only: the release printer's blue light in printer points, 25 at the stock's aim. Each point is 0.025 log exposure; more blue light adds yellow.",
+        "kind" : "double",
+        "label" : "Blue Light",
+        "max" : 50,
+        "min" : 1,
+        "ofxName" : "printerBlue",
+        "order" : 36,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 71,
+        "slotSymbol" : "PRINTER_BLUE",
+        "value" : 25,
+        "zeroLeavesEngineDefault" : false
+      },
+      "kind" : "slider",
+      "omitted" : {
+
+      },
+      "persistedKey" : "printerBlue",
+      "scale" : {
+        "admittedMax" : 50,
+        "admittedMin" : 1,
+        "max" : 50,
+        "min" : 1,
+        "neutral" : 25,
+        "stops" : [
+
+        ],
+        "unit" : "printerPoints"
+      },
+      "scope" : "edit",
+      "section" : "printPaper",
+      "storedEncoding" : "same",
+      "storedNeutral" : 25,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "resolve",
+        "finalcut",
+        "web",
+        "cli"
+      ],
+      "title" : "Blue Light",
       "webTransform" : "profile"
     },
     {

@@ -41,6 +41,18 @@ final class CommandLineControlsTests: XCTestCase {
         }
     }
 
+    func testPrinterLightFlagsReachTheirOwnBeamAndRejectOffScaleValues() throws {
+        XCTAssertEqual(FotufilmEngine.Options().printerLights, .balanced)
+        for (channel, field) in [EditorControlField.printerRed, .printerGreen, .printerBlue].enumerated() {
+            var expected = PrinterLights.balanced
+            expected[channel] = 31
+            XCTAssertEqual(try applying(field, "31").printerLights, expected)
+            for invalid in ["0", "51", "nan", "inf"] {
+                XCTAssertThrowsError(try applying(field, invalid), invalid)
+            }
+        }
+    }
+
     func testFringeFlagsKeepTheirExistingLimits() throws {
         for value in ["-0.1", "1.1", "nan", "inf", "1e300"] {
             XCTAssertThrowsError(try applying(.chromaticFringeAmount, value), value)

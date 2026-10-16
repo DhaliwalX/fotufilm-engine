@@ -409,6 +409,10 @@ struct EditState: Equatable {
     var printerEnabled = false
     var printerProfile = PrinterProfile.simulatedTungsten
     var printerPreflash = 0.0
+    /// The release printer's lights, in printer points; read only on cinema print film.
+    var printerRed = Double(PrinterLights.centre)
+    var printerGreen = Double(PrinterLights.centre)
+    var printerBlue = Double(PrinterLights.centre)
 
     var rotation = 0  // clockwise quarter turns, 0...3
     var flipH = false
