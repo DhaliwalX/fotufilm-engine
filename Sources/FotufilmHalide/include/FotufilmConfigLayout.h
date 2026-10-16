@@ -276,12 +276,20 @@ enum {
     FOTUFILM_CONFIG_PRINT_FINISH = 18236,
     /// How a print span with density input reads a scanned negative handed to it as linear scan RGB
     /// (ApproximateNegativeScan). Mode first: 0 the input is density; 1 it is a scan, each record's
-    /// density its base less its gain times the log10 of its scan channel over the clear film, a
-    /// sample outside the usable range reading as the base and printing black. Then the clear film
-    /// (3), the record base densities (3), each record's scan channel (3), the record gains (3),
-    /// and the usable range's lower and upper samples (3 each). Appended without renumbering
-    /// earlier fields.
+    /// density its base plus its gain times its density of the scan channels over the clear film
+    /// weighted by FOTUFILM_CONFIG_SCAN_CROSSTALK, a sample outside the usable range reading as the
+    /// base and printing black. Then the clear film (3), the record base densities (3), the scan
+    /// channel each record mostly reads, which sets the usable range (3), the record gains (3), and
+    /// the usable range's lower and upper samples (3 each). Appended without renumbering earlier
+    /// fields.
     FOTUFILM_CONFIG_SCAN_READING = 18243,
+    /// What each record of a scanned negative read as a film (FOTUFILM_CONFIG_SCAN_READING mode 1)
+    /// reads from the scan's channels, undoing the dyes' crosstalk (NegativeScanCrosstalk): three
+    /// rows of red, green and blue weights on the channels' densities over the clear film, record
+    /// by record, each row summing to one. The record's density is then its base plus its gain
+    /// times the weighted density, held inside the negative interchange range. Its own channel
+    /// alone, weight one, reads as before. Appended without renumbering earlier fields.
+    FOTUFILM_CONFIG_SCAN_CROSSTALK = 18262,
 };
 
 enum {
@@ -387,8 +395,9 @@ enum {
     FOTUFILM_CONFIG_CARRIER_COUNT = 8,
     FOTUFILM_CONFIG_PRINT_FINISH_COUNT = 7,
     FOTUFILM_CONFIG_SCAN_READING_COUNT = 19,
+    FOTUFILM_CONFIG_SCAN_CROSSTALK_COUNT = 9,
 };
 
-enum { FOTUFILM_FRAME_CONFIGURATION_COUNT = 18262 };
+enum { FOTUFILM_FRAME_CONFIGURATION_COUNT = 18271 };
 
 #endif

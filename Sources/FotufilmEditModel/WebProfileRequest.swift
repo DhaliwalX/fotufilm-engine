@@ -31,6 +31,11 @@ public struct WebProfileRequest: Decodable {
         /// The edit's `ev`, `temperature` and `tint`, in the web's units: the light controls an
         /// enlarger or a scan carries into the print. The rest finish the print at render time.
         public let light: [String: Double]?
+        /// How far the reading undoes the dyes' crosstalk (`NegativeScanCrosstalk.range`); nil
+        /// reads each record from its own channel.
+        public let crosstalk: Float?
+        /// The light the scan was made under (`NegativeScanCrosstalk.Light`); nil is white light.
+        public let scanLight: NegativeScanCrosstalk.Light?
 
         /// The keys `light` may hold.
         static let lightKeys: Set<String> = ["ev", "temperature", "tint"]
@@ -111,11 +116,15 @@ public struct WebProfileRequest: Decodable {
             guard border.count == 3, border.allSatisfy({ $0.isFinite && $0 > 0 }) else {
                 throw Failure(description: "Pick clear, unexposed film.")
             }
-            let balance = try negative.denseEnd.map { dense -> ApproximateNegativeScan.Balance in
+            let correction = NegativeScanCrosstalk.Correction(
+                strength: negative.crosstalk ?? 0, light: negative.scanLight ?? .white)
+            guard correction.isValid else { throw Failure(description: "Invalid crosstalk correction.") }
+            let dense = try negative.denseEnd.map { dense -> SIMD3<Float> in
                 guard dense.count == 3 else { throw Failure(description: "Invalid scene measurement.") }
-                return ApproximateNegativeScan.balance(stock: stock,
-                                                       denseEnd: SIMD3(dense[0], dense[1], dense[2]))
-            } ?? .neutral
+                return SIMD3(dense[0], dense[1], dense[2])
+            }
+            let balance = ApproximateNegativeScan.balance(stock: stock, denseEnd: dense,
+                                                          correction: correction)
             // Exposure and development, which transport belongs to, already happened to the film.
             stock.layeredTransport = nil
             options = try NegativeScanPrint.Reading(

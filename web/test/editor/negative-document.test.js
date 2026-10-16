@@ -60,7 +60,13 @@ test("a negative's reading is kept with its edit and checked when it is read bac
   const border = [0.4, 0.2, 0.1];
   const kept = parseEdit(editText(negativeEdit("gold200", { border, lightFrame: "light" })),
     stocks.map(({ id }) => id));
-  assert.deepEqual(kept.negative, { border, lightFrame: "light", roll: null });
+  assert.deepEqual(kept.negative, {
+    border,
+    lightFrame: "light",
+    roll: null,
+    crosstalk: 0,
+    scanLight: "white",
+  });
   assert.equal(parseEdit(editText(defaultEdit("gold200")), ["gold200"]).negative, null);
   assert.throws(() => parseNegative({ border: [0.4, 0, 0.1] }), /negative reading/);
   assert.throws(() => parseNegative({ lightFrame: 3 }), /negative reading/);
@@ -83,6 +89,23 @@ test("a negative's roll balance is kept with its edit and checked when it is rea
     assert.throws(() => parseNegative({ roll: bad }), /negative reading/, JSON.stringify(bad));
   // An edit kept before rolls existed reads as balanced on its own frame.
   assert.equal(parseNegative({ border: null, lightFrame: null }).roll, null);
+});
+
+test("a negative's crosstalk correction is kept with its edit and checked when read back", () => {
+  const kept = parseEdit(
+    editText(negativeEdit("gold200", { ...newNegative("rgb"), crosstalk: 0.4 })),
+    stocks.map(({ id }) => id),
+  );
+  assert.equal(kept.negative.crosstalk, 0.4);
+  assert.equal(kept.negative.scanLight, "rgb");
+  for (const bad of [-0.1, 1.2, NaN, "0.5"])
+    assert.throws(() => parseNegative({ crosstalk: bad }), /negative reading/, String(bad));
+  assert.throws(() => parseNegative({ scanLight: "uv" }), /negative reading/);
+  // An edit kept before the correction existed reads each dye from its own channel, under white
+  // light.
+  const old = parseNegative({ border: null, lightFrame: null });
+  assert.equal(old.crosstalk, 0);
+  assert.equal(old.scanLight, "white");
 });
 
 test("a roll is the strip's negatives from the shown frame's directory", () => {
@@ -109,9 +132,15 @@ test("a roll is the strip's negatives from the shown frame's directory", () => {
 });
 
 test("pasting onto a negative keeps it a negative, read as a film it can be", () => {
-  const base = { border: [0.5, 0.3, 0.2], lightFrame: null, roll: null };
+  const base = {
+    border: [0.5, 0.3, 0.2],
+    lightFrame: null,
+    roll: null,
+    crosstalk: 0.5,
+    scanLight: "rgb",
+  };
   const roll = negativeEdit("portra400", base);
-  // Another frame of the roll takes its film, base and light with the film.
+  // Another frame of the roll takes its film, base, light and crosstalk correction with the film.
   const frame = pastedEdit(negativeEdit("gold200"), copySettings(roll, DEFAULT_SECTIONS), stocks);
   assert.equal(frame.stock, "portra400");
   assert.deepEqual(frame.negative, base);

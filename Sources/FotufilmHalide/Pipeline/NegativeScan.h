@@ -49,11 +49,14 @@ struct NegativeScanPipeline {
     }
 };
 // A scanned negative's scan made ready for the editor, interleaved linear Rec. 2020 RGBA in and
-// out, alpha passed through. Parameters: lit, plain, clear film[3], gains[3], reference.
+// out, alpha passed through. Parameters: lit, plain, clear film[3], gains[3], reference, then
+// the crosstalk weights (3×3, each channel's row over the three channels' densities).
 // Lit divides out the light source's unevenness, `light` (interleaved RGB cells, bilinear
 // between cell centres, the edges holding their outermost cell, as NegativeLightFrame.gain), in
 // linear sRGB. Plain then reads the scan as a plain positive's scene light (PlainNegativeScan),
 // a pixel passing no light in any channel black.
+// How many parameters ScanPreparePipeline reads.
+constexpr int kScanPrepareParameterCount = 18;
 struct ScanPreparePipeline {
     Halide::ImageParam input{Halide::Float(32), 3, "scan_prepare_input"};
     Halide::ImageParam light{Halide::Float(32), 3, "scan_prepare_light"};
@@ -92,14 +95,16 @@ struct ScanPreparePipeline {
         Expr lr = lit(x, y, 0), lg = lit(x, y, 1), lb = lit(x, y, 2);
         Expr passes = is_finite(lr) && is_finite(lg) && is_finite(lb)
             && lr > 0.0f && lg > 0.0f && lb > 0.0f;
+        Expr density = parameters(9 + 3 * c) * scan_density_over_clear(lr, parameters(2), approximate)
+            + parameters(10 + 3 * c) * scan_density_over_clear(lg, parameters(3), approximate)
+            + parameters(11 + 3 * c) * scan_density_over_clear(lb, parameters(4), approximate);
         Expr plain = select(passes,
-            plain_negative_light(lit(x, y, c), parameters(2 + c), parameters(5 + c),
-                                 parameters(8), approximate), 0.0f);
+            plain_negative_light(density, parameters(5 + c), parameters(8), approximate), 0.0f);
         Func prepared("scan_prepared_rgb");
         prepared(x, y, c) = select(parameters(1) > 0.5f, plain, lit(x, y, c));
         output(x, y, c) = select(c == 3, input(x, y, 3), prepared(x, y, min(c, 2)));
 
-        parameters.dim(0).set_bounds(0, 9);
+        parameters.dim(0).set_bounds(0, kScanPrepareParameterCount);
         input.dim(0).set_stride(4);
         input.dim(2).set_stride(1).set_bounds(0, 4);
         light.dim(0).set_stride(3);

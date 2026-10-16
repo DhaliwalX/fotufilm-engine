@@ -6,9 +6,19 @@
 // plain positive (PlainNegativeScan), edited like any photograph without film.
 
 // How the scan is read: the clear film it is measured against (linear Rec. 2020 scan RGB, null
-// to estimate it from the thinnest film), the light source it was scanned on, and the colour of
-// its roll it is balanced on (rollBalance, null for its own).
-export const newNegative = () => ({ border: null, lightFrame: null, roll: null });
+// to estimate it from the thinnest film), the light source it was scanned on, the colour of its
+// roll it is balanced on (rollBalance, null for its own), how far the reading undoes the
+// crosstalk between the scan's channels and the film's dyes (0 to 1, NegativeScanCrosstalk), and
+// the light the scan was made under: "white", or "rgb" for exposures under red, green and blue
+// LEDs merged into one scan.
+export const SCAN_LIGHTS = ["white", "rgb"];
+export const newNegative = (scanLight = "white") => ({
+  border: null,
+  lightFrame: null,
+  roll: null,
+  crosstalk: 0,
+  scanLight,
+});
 
 // The inspector panels a negative read as a film offers: the reading, the light controls (which
 // act on the print, NegativeScanPrint.printing), the print, its roll and its framing.
@@ -110,7 +120,13 @@ export function negativeStartingStock(image, stocks, current) {
 // A saved edit's reading, or an error for one that cannot be read.
 export function parseNegative(value) {
   if (value == null) return null;
-  const { border = null, lightFrame = null, roll = null } = value;
+  const {
+    border = null,
+    lightFrame = null,
+    roll = null,
+    crosstalk = 0,
+    scanLight = "white",
+  } = value;
   if (
     (border !== null &&
       !(
@@ -119,6 +135,8 @@ export function parseNegative(value) {
         border.every((v) => Number.isFinite(v) && v > 0)
       )) ||
     (lightFrame !== null && typeof lightFrame !== "string") ||
+    !(Number.isFinite(crosstalk) && crosstalk >= 0 && crosstalk <= 1) ||
+    !SCAN_LIGHTS.includes(scanLight) ||
     (roll !== null &&
       !(
         Array.isArray(roll?.colour) &&
@@ -133,5 +151,7 @@ export function parseNegative(value) {
     border,
     lightFrame,
     roll: roll && { colour: [...roll.colour], frames: roll.frames },
+    crosstalk,
+    scanLight,
   };
 }

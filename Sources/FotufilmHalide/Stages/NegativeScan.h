@@ -41,6 +41,13 @@ inline Halide::Expr negative_scan_channel(Halide::Expr sample, Halide::Expr low,
     return srgb_decode(y);
 }
 
+// One channel's density of `sample` over the clear film `clear`.
+inline Halide::Expr scan_density_over_clear(Halide::Expr sample, Halide::Expr clear,
+                                            bool approximate) {
+    using namespace Halide;
+    return -fs_log10(max(sample, 1e-30f) / clear, approximate);
+}
+
 // FOTUFILM_CONFIG_SCAN_READING: how a scanned negative's linear scan RGB is read.
 enum ScanReadingMode { kScanUnread = 0, kScanFilm = 1 };
 
@@ -65,35 +72,39 @@ inline Halide::Expr scan_film_readable(Halide::ImageParam &configuration,
     return inside(0, r) && inside(1, g) && inside(2, b);
 }
 
-// One record's density from the scan: its base density less its gain times the log10 of its scan
-// channel over the clear film; the base where the sample cannot be read, which then prints black.
+// One record's density from the scan: its base density plus its gain times its weighted density
+// of the scan channels over the clear film (FOTUFILM_CONFIG_SCAN_CROSSTALK), held inside the
+// negative interchange range; the base where the sample cannot be read, which then prints black.
 // Mirrors ApproximateNegativeScan.density(of:).
 inline Halide::Expr scan_film_density(Halide::ImageParam &configuration, Halide::Expr record,
                                       Halide::Expr r, Halide::Expr g, Halide::Expr b,
                                       bool approximate) {
     using namespace Halide;
-    Expr channel = cast<int32_t>(scan_reading_slot(configuration, 7, record) + 0.5f);
-    Expr sample = select(channel == 0, r, channel == 1, g, b);
-    Expr clear = scan_reading_slot(configuration, 1, clamp(channel, 0, 2));
+    auto scanner = [&](int channel, Expr sample) {
+        return scan_density_over_clear(sample, scan_reading_slot(configuration, 1, channel),
+                                       approximate);
+    };
+    auto weight = [&](int channel) {
+        return configuration(FOTUFILM_CONFIG_SCAN_CROSSTALK + record * 3 + channel);
+    };
+    Expr read = weight(0) * scanner(0, r) + weight(1) * scanner(1, g) + weight(2) * scanner(2, b);
     Expr base = scan_reading_slot(configuration, 4, record);
-    Expr density = base - scan_reading_slot(configuration, 10, record)
-        * fs_log10(max(sample, 1e-30f) / clear, approximate);
+    // NegativeInterchange.range.
+    Expr density = clamp(base + scan_reading_slot(configuration, 10, record) * read, -0.5f, 8.0f);
     return select(scan_film_readable(configuration, r, g, b), density, base);
 }
 
-// One channel's scene light from a plain reading of `sample` against the clear film `clear`: its
-// density over the clear film times `gain`, back to light along a straight-line negative with the
-// densest end, density `reference`, at diffuse white. Mirrors PlainNegativeScan.light(of:); the
-// caller blacks out a pixel where any channel passes no light.
-inline Halide::Expr plain_negative_light(Halide::Expr sample, Halide::Expr clear,
-                                         Halide::Expr gain, Halide::Expr reference,
-                                         bool approximate) {
+// One channel's scene light from a plain reading of its `density` over the clear film, weighted
+// across the channels against their crosstalk: that density times `gain`, back to light along a
+// straight-line negative with the densest end, density `reference`, at diffuse white. Mirrors
+// PlainNegativeScan.light(of:); the caller blacks out a pixel where any channel passes no light.
+inline Halide::Expr plain_negative_light(Halide::Expr density, Halide::Expr gain,
+                                         Halide::Expr reference, bool approximate) {
     using namespace Halide;
     // PlainNegativeScan.gamma and .highlight.
     constexpr float kGamma = 0.6f;
     constexpr float kHighlight = 0.18f * 5.656854f;
-    Expr density = -gain * fs_log10(max(sample, 1e-30f) / clear, approximate);
-    return kHighlight * fs_pow10((density - reference) * (1.0f / kGamma), approximate);
+    return kHighlight * fs_pow10((gain * density - reference) * (1.0f / kGamma), approximate);
 }
 }
 #endif

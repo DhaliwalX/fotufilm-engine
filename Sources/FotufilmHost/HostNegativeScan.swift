@@ -65,18 +65,21 @@ final class HostNegativeScan {
         return border
     }
 
-    /// The reading of a framing on `stock`, balanced on `roll`'s colour when it has one. The
-    /// framing's densest end is kept by `key` (the framing, border and light), so each film reads
-    /// it without drawing the scan again; `preview` is the framed scan, made only when none is kept.
+    /// The reading of a framing on `stock`, balanced on `roll`'s colour when it has one, with
+    /// `correction` of the dyes' crosstalk. The framing's densest end is kept by `key` (the framing, border and
+    /// light), so each film and correction reads it without drawing the scan again; `preview` is
+    /// the framed scan, made only when none is kept.
     func reading(_ key: String, stock: FilmStock, border: [Float],
                  roll: ApproximateNegativeScan.RollBalance?,
+                 correction: NegativeScanCrosstalk.Correction = .none,
                  preview: () throws -> (rgba: [Float], width: Int, height: Int)) throws
         -> NegativeScanPrint.Reading {
         let (border, measured) = try denseEnd(key, border: border, preview: preview)
         let dense = ApproximateNegativeScan.denseEnd(measured, roll: roll)
         return try NegativeScanPrint.Reading(
             stock: stock, border: border,
-            balance: dense.map { ApproximateNegativeScan.balance(stock: stock, denseEnd: $0) } ?? .neutral)
+            balance: ApproximateNegativeScan.balance(stock: stock, denseEnd: dense,
+                                                     correction: correction))
     }
 
     /// What a framing measures for its roll: the clear film it is read against and its own
@@ -89,16 +92,19 @@ final class HostNegativeScan {
 
     /// The scan read without a film (`PlainNegativeScan`), evened under the light frame `light`:
     /// a scene-linear positive of the whole scan, which the editor frames and develops as it does
-    /// any photograph, balanced on `roll`'s colour when it has one. Arguments as `reading`.
+    /// any photograph, balanced on `roll`'s colour when it has one, with `correction` of the
+    /// dyes' crosstalk. Arguments as `reading`.
     func positive(_ key: String, border: [Float], light id: String?,
                   roll: ApproximateNegativeScan.RollBalance?,
+                  correction: NegativeScanCrosstalk.Correction = .none,
                   preview: () throws -> (rgba: [Float], width: Int, height: Int)) throws -> HostImage {
-        let plainKey = "\(key)|\(roll.map { "\($0.colour)" } ?? "")"
+        let plainKey = "\(key)|\(roll.map { "\($0.colour)" } ?? "")|\(correction)"
         if let kept = lock.withLock({ plain }), kept.key == plainKey { return kept.image }
         let (border, measured) = try denseEnd(key, border: border, preview: preview)
         let dense = ApproximateNegativeScan.denseEnd(measured, roll: roll)
         let positive = try prepared(light: id.flatMap(lightFrame),
-                                    plain: PlainNegativeScan(border: border, denseEnd: dense))
+                                    plain: PlainNegativeScan(border: border, denseEnd: dense,
+                                                             correction: correction))
         lock.withLock { plain = (plainKey, positive) }
         return positive
     }

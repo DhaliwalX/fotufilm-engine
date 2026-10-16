@@ -118,7 +118,10 @@ export default function useDocumentActions({
     setImportStatus(null);
     const left = trichromaticNotes(merged);
     if (merged.scans.length)
-      await acceptFiles(merged.scans.map(({ file, path, name }) => ({ file, path, name, negative: true })));
+      // Merged from red, green and blue LED exposures: read with that light's narrow channels.
+      await acceptFiles(merged.scans.map(({ file, path, name }) => ({
+        file, path, name, negative: true, scanLight: "rgb",
+      })));
     if (left) setError(left);
   }
 
@@ -133,7 +136,7 @@ export default function useDocumentActions({
       if (file.savedEdit?.negative) return file.savedEdit;
       const start = {
         ...defaultEdit(negativeStartingStock(file.image, stocks ?? [], edit.stock)),
-        negative: newNegative(),
+        negative: newNegative(file.source?.scanLight),
       };
       const roll = rollEdit(file.source?.roll);
       return roll ? pastedEdit(start, copySettings(roll, ["filmStock"]), stocks) : start;
@@ -240,9 +243,10 @@ export default function useDocumentActions({
         editKey = null,
         negative = false,
         roll = null,
+        scanLight = undefined,
         shown = false,
       } = entry instanceof Blob ? { file: entry } : entry;
-      return { item: { file, path, name, editKey, negative, roll }, order, shown };
+      return { item: { file, path, name, editKey, negative, roll, scanLight }, order, shown };
     });
     const first = Math.max(0, entries.findIndex((entry) => entry.shown));
     const loaded = [],

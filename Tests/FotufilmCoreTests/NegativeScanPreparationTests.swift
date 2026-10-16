@@ -63,19 +63,31 @@ final class NegativeScanPreparationTests: XCTestCase {
     }
 
     func testThePlainReadingIsPlainNegativeScan() throws {
+        try assertPlainReading(.none)
+    }
+
+    func testThePlainReadingUndoesCrosstalkAsPlainNegativeScan() throws {
+        try assertPlainReading(.init(strength: 0.8, light: .white))
+        try assertPlainReading(.init(strength: 1, light: .rgb))
+    }
+
+    private func assertPlainReading(_ correction: NegativeScanCrosstalk.Correction, file: StaticString = #filePath,
+                                    line: UInt = #line) throws {
         let rgba = scan()
-        let plain = PlainNegativeScan(border: SIMD3(0.8, 0.45, 0.2), denseEnd: SIMD3(1.3, 1.2, 1.1))
+        let plain = PlainNegativeScan(border: SIMD3(0.8, 0.45, 0.2), denseEnd: SIMD3(1.3, 1.2, 1.1),
+                                      correction: correction)
         var expected = rgba
         for i in 0..<(width * height) {
             let light = plain.light(of: SIMD3(rgba[i * 4], rgba[i * 4 + 1], rgba[i * 4 + 2]))
             for c in 0..<3 { expected[i * 4 + c] = light[c] }
         }
         let prepared = try prepare(rgba, light: nil, plain: plain)
-        assertClose(prepared, expected, 1e-4)
+        assertClose(prepared, expected, 1e-4, file: file, line: line)
         // Film passing no light in one channel, or none to read, is black; alpha is kept.
-        XCTAssertEqual(Array(prepared[0..<3]), [0, 0, 0])
-        XCTAssertEqual(Array(prepared[((width + 1) * 4)..<((width + 1) * 4 + 3)]), [0, 0, 0])
-        XCTAssertEqual(prepared[(width + 2) * 4 + 3], 0.25)
+        XCTAssertEqual(Array(prepared[0..<3]), [0, 0, 0], file: file, line: line)
+        XCTAssertEqual(Array(prepared[((width + 1) * 4)..<((width + 1) * 4 + 3)]), [0, 0, 0],
+                       file: file, line: line)
+        XCTAssertEqual(prepared[(width + 2) * 4 + 3], 0.25, file: file, line: line)
     }
 
     func testEvenedThenRead() throws {

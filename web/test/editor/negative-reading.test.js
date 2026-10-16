@@ -9,6 +9,8 @@ import {
   estimatedBorder,
   filmBase,
   plainReading,
+  plainCrosstalk,
+  PLAIN_CROSSTALK,
   positiveSource,
 } from "../../src/negative-reading.js";
 import { rollBalance, rolledDenseEnd } from "../../src/negative-document.js";
@@ -104,8 +106,47 @@ test("without a film a negative reads as a plain positive, its densest end diffu
 });
 
 test("the plain reading balances on the densest end", () => {
-  assert.deepEqual(plainReading(border, null), { border, gains: [1, 1, 1], reference: 1 });
+  assert.deepEqual(plainReading(border, null), {
+    border,
+    gains: [1, 1, 1],
+    reference: 1,
+    weights: [
+      [1, 0, 0],
+      [0, 1, 0],
+      [0, 0, 1],
+    ],
+  });
   assert.deepEqual(plainReading(border, [0.1, 1, 3]).gains, [2, 1, 0.5]);
+});
+
+test("the plain reading undoes crosstalk as PlainNegativeScan does", () => {
+  const near = (a, b, tolerance = 1e-5) => assert.ok(Math.abs(a - b) < tolerance, `${a} ≠ ${b}`);
+  // Without a frame to keep, rows blend from each channel alone to the full correction and sum
+  // to one, so equal densities stay equal.
+  for (const light of ["white", "rgb"]) {
+    const full = plainCrosstalk(1, light),
+      half = plainCrosstalk(0.5, light);
+    for (let r = 0; r < 3; r++) {
+      near(full[r].reduce((a, b) => a + b), 1);
+      for (let c = 0; c < 3; c++) {
+        near(full[r][c], PLAIN_CROSSTALK[light][r][c]);
+        near(half[r][c], ((r === c ? 1 : 0) + full[r][c]) / 2, 1e-6);
+      }
+    }
+  }
+  assert.deepEqual(plainCrosstalk(5), plainCrosstalk(1));
+  // The frame's densest end reads as it did, so its balance is the frame's own.
+  const dense = [1.0, 1.3, 1.1];
+  const weights = plainCrosstalk(1, "white", dense);
+  for (let r = 0; r < 3; r++)
+    near(weights[r].reduce((sum, w, c) => sum + w * dense[c], 0), dense[r]);
+  const muted = plainReading(border, dense),
+    separated = plainReading(border, dense, 1);
+  for (let c = 0; c < 3; c++) near(separated.gains[c], muted.gains[c]);
+  near(separated.reference, muted.reference);
+  // Red, green and blue LEDs leave far less to undo than white light.
+  const off = (w) => w[0][1] ** 2 + w[0][2] ** 2 + w[1][0] ** 2 + w[1][2] ** 2 + w[2][0] ** 2 + w[2][1] ** 2;
+  assert.ok(off(plainCrosstalk(1, "rgb")) < 0.01 * off(plainCrosstalk(1, "white")));
 });
 
 test("a roll's colour is the median of its frames' highlight colours", () => {

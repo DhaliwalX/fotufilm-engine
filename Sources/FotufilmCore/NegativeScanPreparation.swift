@@ -25,11 +25,13 @@ public enum NegativeScanPreparation {
             $0.width > 0 && $0.height > 0 && $0.gains.count == $0.width * $0.height * 3 ? $0 : nil
         }
         guard light != nil || plain != nil else { return }
-        var parameters: [Float] = [light == nil ? 0 : 1, plain == nil ? 0 : 1, 1, 1, 1, 1, 1, 1, 0]
+        var parameters: [Float] = [light == nil ? 0 : 1, plain == nil ? 0 : 1, 1, 1, 1, 1, 1, 1, 0,
+                                   1, 0, 0, 0, 1, 0, 0, 0, 1]
         if let plain {
             for c in 0..<3 {
                 parameters[2 + c] = plain.border[c]
                 parameters[5 + c] = plain.gains[c]
+                for k in 0..<3 { parameters[9 + 3 * c + k] = plain.weights[c][k] }
             }
             parameters[8] = plain.reference
         }

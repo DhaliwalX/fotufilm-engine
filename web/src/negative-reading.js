@@ -96,19 +96,65 @@ export function denseEnd(border, pixels, width, height) {
   });
 }
 
+// The full crosstalk correction of a scan read without a film, by the light it was scanned under:
+// what each channel reads from the three channels' densities, rows summing to one, before the
+// frame's densest end is kept. NegativeScanCrosstalk.plainWeights in
+// Sources/FotufilmCore/NegativeScanCrosstalk.swift, which NegativeScanCrosstalkTests pins.
+export const PLAIN_CROSSTALK = {
+  white: [
+    [1.8741934, -0.8167563, -0.057437092],
+    [-0.07067131, 1.0591061, 0.011565179],
+    [0.0047098156, -0.04486931, 1.0401592],
+  ],
+  rgb: [
+    [1.014058, -0.014435816, 0.00037779874],
+    [-1.604771e-5, 1.0268912, -0.02687511],
+    [7.733554e-9, -0.0008941038, 1.0008941],
+  ],
+};
+
+const dot = (row, v) => row[0] * v[0] + row[1] * v[1] + row[2] * v[2];
+
+// The plain reading's weights: `strength` of the way from each channel alone to the full
+// correction for `light`, its rows scaled so the frame's densest end `neutral` reads as it did, or
+// to sum to one where there is none or a row would scale by more than two. Mirrors
+// NegativeScanCrosstalk.weights(dyes:correction:neutral:).
+export function plainCrosstalk(strength = 0, light = "white", neutral = null) {
+  const s = Number.isFinite(strength) ? Math.min(Math.max(strength, 0), 1) : 0;
+  const identity = [0, 1, 2].map((r) => [0, 1, 2].map((c) => (r === c ? 1 : 0)));
+  if (!(s > 0)) return identity;
+  const rows = PLAIN_CROSSTALK[light] ?? PLAIN_CROSSTALK.white;
+  const scales = (target) => {
+    const scale = rows.map((row, r) => target[r] / dot(row, target));
+    return scale.every((v) => Number.isFinite(v) && v >= 0.5 && v <= 2) ? scale : null;
+  };
+  const readable =
+    Array.isArray(neutral) && neutral.every((v) => Number.isFinite(v) && v > 0.05) ? neutral : null;
+  const scale = (readable && scales(readable)) ?? scales([1, 1, 1]) ?? [1, 1, 1];
+  return rows.map((row, r) =>
+    row.map((w, c) => identity[r][c] + s * (w * scale[r] - identity[r][c])),
+  );
+}
+
 // The scan read without a film, as Normal reads a negative (Sources/FotufilmCore/
-// PlainNegativeScan.swift): each channel's density above the clear base balanced on the frame's
-// densest end. The reading's light comes from the engine's scan preparation.
-export function plainReading(border, dense) {
+// PlainNegativeScan.swift): each channel's density above the clear base, weighted across the
+// channels against the dyes' crosstalk, balanced on the frame's densest end. The reading's light
+// comes from the engine's scan preparation.
+export function plainReading(border, raw, crosstalk = 0, scanLight = "white") {
+  const weights = plainCrosstalk(crosstalk, scanLight, raw);
   const gains = [1, 1, 1];
   let reference = 1;
-  if (dense && dense.every(Number.isFinite) && dense[1] > 0.05) {
+  const dense =
+    raw && raw.every(Number.isFinite)
+      ? weights.map((row) => row[0] * raw[0] + row[1] * raw[1] + row[2] * raw[2])
+      : null;
+  if (dense && dense[1] > 0.05) {
     reference = dense[1];
     for (const channel of [0, 2])
       if (dense[channel] > 0.05)
         gains[channel] = Math.min(Math.max(dense[1] / dense[channel], 0.5), 2);
   }
-  return { border, gains, reference };
+  return { border, gains, reference, weights };
 }
 
 // The median clear film over a patch of framed scan around `point`, normalised to the frame,
@@ -155,10 +201,10 @@ export function loadScanPreparation(url = assetUrl("negative/prepare.mjs")) {
 
 // Reads linear scan RGBA `pixels` of `width`×`height`, in place, as the plain reading's scene
 // light with `module` (loadScanPreparation); black where a sample passes no light.
-export function readPlain(module, pixels, width, height, { border, gains, reference }) {
+export function readPlain(module, pixels, width, height, { border, gains, reference, weights }) {
   const bytes = pixels.length * 4;
   const data = module._malloc(bytes),
-    reading = module._malloc(7 * 4);
+    reading = module._malloc(16 * 4);
   if (!data || !reading) {
     module._free(data);
     module._free(reading);
@@ -166,7 +212,7 @@ export function readPlain(module, pixels, width, height, { border, gains, refere
   }
   try {
     module.HEAPF32.set(pixels, data / 4);
-    module.HEAPF32.set([...border, ...gains, reference], reading / 4);
+    module.HEAPF32.set([...border, ...gains, reference, ...weights.flat()], reading / 4);
     const code = module._scan_prepare_plain(data, data, width, height, reading);
     if (code) throw new Error(`The negative could not be read (${code}).`);
     pixels.set(module.HEAPF32.subarray(data / 4, data / 4 + pixels.length));

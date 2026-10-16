@@ -142,13 +142,15 @@ final class NegativeDocument: @unchecked Sendable {
                         stock: FilmStock) throws -> NegativeScanPrint.Reading {
         try NegativeScanPrint.Reading(
             stock: NegativeScanPrint.film(stock), border: measure.border,
-            balance: denseEnd(measure, state: state)
-                .map { ApproximateNegativeScan.balance(stock: stock, denseEnd: $0) } ?? .neutral)
+            balance: ApproximateNegativeScan.balance(
+                stock: stock, denseEnd: denseEnd(measure, state: state),
+                correction: state.negative?.correction ?? .none))
     }
 
     /// The scan read without a film, as Normal reads it.
     static func plain(_ measure: Measure, state: EditState) -> PlainNegativeScan {
-        PlainNegativeScan(border: measure.border, denseEnd: denseEnd(measure, state: state))
+        PlainNegativeScan(border: measure.border, denseEnd: denseEnd(measure, state: state),
+                          correction: state.negative?.correction ?? .none)
     }
 
     // MARK: - Clear film
