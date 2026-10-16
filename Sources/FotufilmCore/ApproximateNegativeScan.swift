@@ -212,10 +212,10 @@ public struct ApproximateNegativeScan: Encodable, Equatable, Sendable {
         let weights = correction.strength > 0
             ? NegativeScanCrosstalk.weights(for: stock, correction: correction, neutral: readable)
             : nil
-        var balance = readable.map { balance(stock: stock, denseEnd: $0,
-                                             weights: weights) } ?? .neutral
-        balance.weights = weights
-        return balance
+        var measured = readable.map { Self.balance(stock: stock, denseEnd: $0, weights: weights) }
+            ?? Balance.neutral
+        measured.weights = weights
+        return measured
     }
 
     /// The balance of a frame whose densest end reads `dense` over the border, against `stock`.
