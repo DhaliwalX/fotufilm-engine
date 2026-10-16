@@ -37,6 +37,11 @@ export function videoExportTypes(backend) {
   );
 }
 
+/** A colour film's whole-photo grain on an M4 Pro, about 0.8 s a megapixel, to the next five. */
+function grainSeconds({ width, height }) {
+  return Math.max(5, Math.ceil((width * height * 0.8e-6) / 5) * 5);
+}
+
 export default function ExportDialog() {
   const {
     backend,
@@ -103,6 +108,15 @@ export default function ExportDialog() {
     ? (sizes.find(({ id }) => !unavailable.includes(id))?.id ?? chosenSize)
     : chosenSize;
   const sizeWarning = video ? null : resolutionLimitWarning(sizes, sizeID, unavailable);
+  // An Accurate still's Film grain is laid over the whole photo where the backend lays it.
+  const photoQuality = useAppSetting("photoQuality");
+  const slowGrain =
+    !video &&
+    !batch &&
+    backend.filmGrainFrames === true &&
+    photoQuality === "accurate" &&
+    edit.profile?.grainModel === "film" &&
+    (edit.grain ?? 1) > 0;
   useEffect(() => {
     if (sizeID !== chosenSize) setExportSize(sizeID);
   }, [sizeID, chosenSize, setExportSize]);
@@ -231,6 +245,11 @@ export default function ExportDialog() {
             </Picker>
           </div>
           {sizeWarning && <p className="export-detail">{sizeWarning}</p>}
+          {slowGrain && (
+            <p className="export-detail">
+              {`Film grain is laid crystal by crystal over the whole photo: up to ${grainSeconds(delivered)} seconds.`}
+            </p>
+          )}
           {!active?.image.video &&
             LOSSY.includes(exportType) && (
               <Adjustment

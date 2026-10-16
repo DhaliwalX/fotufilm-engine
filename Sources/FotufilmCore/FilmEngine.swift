@@ -463,6 +463,17 @@ public struct FilmEngineInvocation {
     public var configuration: [Float]
     /// Keeps the frame's canonical Film bank registered across cache eviction and tile calls.
     public let filmTileBinding: FilmGrain.TileBinding?
+    /// How the frame lays its Film grain: the film's pixels per millimetre, the amount and the
+    /// look the FILM_TILE block carries.
+    private let filmGrainLayout: (pxPerMM: Float, amount: Float, look: FilmGrain.Look)?
+    /// What a host needs to lay this develop's Film grain itself over the whole frame, as
+    /// `FilmGrain.TileBinding.addFrameGrain` lays it, rather than from the tiles; nil where the
+    /// develop lays none.
+    public var filmGrainFrame: FilmGrainFrame? {
+        guard let filmTileBinding, let filmGrainLayout else { return nil }
+        return FilmGrainFrame(binding: filmTileBinding, pxPerMM: filmGrainLayout.pxPerMM,
+                              amount: filmGrainLayout.amount, look: filmGrainLayout.look, seed: seed)
+    }
     /// The Film grain population this develop draws, bound or not; nil under another model.
     public let filmGrainPopulation: FilmGrain.Population?
     public var spectral: SpectralPipelineTables
@@ -481,6 +492,8 @@ public struct FilmEngineInvocation {
     var meterScanExposure: Float = 0
     var meterKeys: SIMD3<Float> = .zero
     var meterLevels = MeteredLevels()
+    /// Whether this develop carries another span's metering of its frame and meters nothing itself.
+    public internal(set) var meteringAdopted = false
     /// Pixels of context a tile must carry on each cut edge for its interior to develop exactly as
     /// it would inside the whole frame.
     public let spatialSupport: Int
@@ -1465,11 +1478,13 @@ public struct FilmEngineInvocation {
             }
             try checkCancellation()
             self.filmTileBinding = film
+            self.filmGrainLayout = (pxPerMM, grainScale, options.filmGrain)
             configuration += film.configurationBlock(pxPerMM: pxPerMM, amount: grainScale,
                                                       look: options.filmGrain)
             try checkCancellation()
         } else {
             self.filmTileBinding = nil
+            self.filmGrainLayout = nil
             configuration += [Float](repeating: 0, count: Int(FOTUFILM_CONFIG_FILM_TILE_COUNT))
         }
         configuration += options.gateConfiguration(width: width, height: height)
@@ -2056,4 +2071,14 @@ public struct FilmEngineInvocation {
             }
         }
     }
+}
+
+/// A develop's Film grain as a host lays it over the whole frame: the bound film, the frame's
+/// pixels per millimetre of film, the grain amount and look, and the frame's seed.
+public struct FilmGrainFrame {
+    public let binding: FilmGrain.TileBinding
+    public let pxPerMM: Float
+    public let amount: Float
+    public let look: FilmGrain.Look
+    public let seed: UInt32
 }

@@ -95,6 +95,26 @@ struct MetalDeveloper: HostDeveloper {
             }
             return (ok, (transform != nil) == encoded)
         }
+        // An Accurate still lays its Film grain crystal by crystal over the whole frame, so a
+        // magnified export shows none of the tiles' repeats; the host encodes it. A frame the
+        // road cannot lay develops from the tiles below.
+        if pace.exactMath, pace.frameIndex == 0, !noFilm,
+           HalideMetalFilmRenderer.laysFrameGrain(stock: stock, options: options) {
+            var none: FilmOutputTransform?
+            let laid = scene.withUnsafeBufferPointer { source in
+                metal.developWithFrameGrain(
+                    width: width, height: height, stock: stock, options: options,
+                    outputTransform: &none, exactMath: true, shouldContinue: shouldContinue,
+                    readRows: { rows, into in
+                        into.baseAddress!.update(
+                            from: source.baseAddress! + rows.lowerBound * width * 4,
+                            count: rows.count * width * 4)
+                    },
+                    writeRows: { rows, from in deliver(from, rows, false) })
+            }
+            if laid == true { return }
+            if !shouldContinue() { throw HostEngine.Failure(description: "Cancelled.", cancelled: true) }
+        }
         var result = run(requested, realtime: pace.realtime)
         // A film whose realtime schedule this build does not carry develops on the reference one.
         if !result.ok, pace.realtime, shouldContinue() { result = run(requested, realtime: false) }

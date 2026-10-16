@@ -386,7 +386,26 @@ extension FilmEngineInvocation {
     public var labScanMeters: Bool { meterMedium == .labScan && meterStock != nil }
 
     /// Metered levels and local tone share one whole-frame measurement on CPU and Metal.
-    public var sceneMeteringActive: Bool { localToneActive || meterStock != nil }
+    /// An invocation that adopted another's metering meters nothing.
+    public var sceneMeteringActive: Bool {
+        !meteringAdopted && (localToneActive || meterStock != nil)
+    }
+
+    /// The metering `self` carries over `unmetered`, the same invocation before it metered: the
+    /// configuration slots the measurements wrote — levels, tone grid and glare mean.
+    public func metering(since unmetered: FilmEngineInvocation) -> FilmMetering {
+        precondition(configuration.count == unmetered.configuration.count)
+        return FilmMetering(slots: configuration.indices.compactMap {
+            configuration[$0] == unmetered.configuration[$0] ? nil : ($0, configuration[$0])
+        })
+    }
+
+    /// Takes another span's metering of the same frame, a negative's or a print's taking the whole
+    /// develop's, and meters nothing of its own: the spans between them develop as the whole does.
+    public mutating func adopt(_ metering: FilmMetering) {
+        for (slot, value) in metering.slots { configuration[slot] = value }
+        meteringAdopted = true
+    }
 
     public mutating func copyMeteredLevels(from measured: FilmEngineInvocation) {
         guard meterStock != nil else { return }
@@ -568,4 +587,9 @@ extension FilmEngineInvocation {
         measurement.add(encodedDisplayP3RGBA: bytes, rows: 0..<height)
         setToneBase(measurement)
     }
+}
+
+/// A frame's metering as its configuration carries it, for another span of the same develop.
+public struct FilmMetering {
+    let slots: [(Int, Float)]
 }

@@ -80,6 +80,9 @@ struct HostPlatform {
             "printFrames": frames != nil,
             "imageExportTypes": encoder?.types.sorted() ?? [],
             "hdrExport": encoder?.writesHDR ?? false,
+            // An Accurate still's Film grain is laid crystal by crystal over the whole frame, not
+            // from the tiles, which takes seconds a photo.
+            "filmGrainFrames": FilmGrain.laysFrameGrain,
             // Export All: the open photographs into one folder, pipelined (`exportBatch`).
             "batchExport": decoder != nil && encoder != nil,
             "filmSuggestion": true,
