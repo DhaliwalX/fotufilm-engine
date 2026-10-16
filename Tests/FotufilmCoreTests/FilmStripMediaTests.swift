@@ -10,8 +10,8 @@ final class FilmStripMediaTests: XCTestCase {
             }
             for gauge in [FilmFormat.super35, .sixteenMM, .super8] {
                 XCTAssertEqual(PrintPaper.stripChoices(for: stock, gauge: gauge),
-                               [.vision2383, .vision2393, .eternaCP,
-                                .telecine, .screen])
+                               [.vision2383, .vision2393, .eternaCP, .exr5386, .agfaCP30,
+                                .eternaCP3521XD, .telecine, .screen])
             }
         }
     }
@@ -29,7 +29,8 @@ final class FilmStripMediaTests: XCTestCase {
         var stock = TestStocks.negative
         stock.nativePrintMedium = .eternaCP
         XCTAssertEqual(PrintPaper.stripChoices(for: stock, gauge: .super35),
-                       [.eternaCP, .vision2383, .vision2393, .telecine, .screen])
+                       [.eternaCP, .vision2383, .vision2393, .exr5386, .agfaCP30,
+                        .eternaCP3521XD, .telecine, .screen])
         XCTAssertEqual(PrintPaper.stripChoices(for: stock, gauge: .still35),
                        [.ektacolorEdge, .enduraPremier, .crystalArchive, .screen])
         stock.nativePrintMedium = .enduraPremier

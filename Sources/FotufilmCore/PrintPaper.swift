@@ -35,6 +35,12 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     /// Tone-scale approximations from Ilford TDS 307US; receiver spectra remain a proxy.
     case ilfochromeCPS1K = "ilfochrome-cps-1k"
     case ilfochromeCLM1K = "ilfochrome-clm-1k"
+    /// EASTMAN EXR Color Print Film 5386 (H-1-5386), measured.
+    case exr5386 = "exr-5386"
+    /// AGFA PRINT CP30 Colour Print Film, measured.
+    case agfaCP30 = "agfa-cp30"
+    /// FUJIFILM ETERNA-CP 3521XD: measured curves, with 3513DI's spectra.
+    case eternaCP3521XD = "eterna-cp-3521xd"
 
     /// Default for engine and headless callers.
     public static let `default`: PrintPaper = .ektacolorEdge
@@ -65,6 +71,9 @@ public enum PrintPaper: String, CaseIterable, Sendable {
         case .eternaCP: return .print(.eternaCP)
         case .ilfochromeCPS1K: return .print(.ilfochromeCPS1K)
         case .ilfochromeCLM1K: return .print(.ilfochromeCLM1K)
+        case .exr5386: return .print(.exr5386)
+        case .agfaCP30: return .print(.agfaCP30)
+        case .eternaCP3521XD: return .print(.eternaCP3521XD)
         case .labScan: return .labScan
         case .telecine: return .telecine
         case .screen: return .screen

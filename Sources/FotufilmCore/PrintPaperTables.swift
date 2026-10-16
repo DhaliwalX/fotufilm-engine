@@ -35,8 +35,9 @@ extension PrintPaper {
         }
     }
 
-    /// Gross Status A setup aims, not densities above clear film. Kodak H-1-2383t and
-    /// H-1-2393t, LAD sections; Fujifilm ETERNA-CP 3513DI brochure, "Aim Print Density".
+    /// Gross Status A setup aims, not densities above clear film. Kodak H-1-2383t, H-1-2393t
+    /// and H-1-5386, LAD sections; Fujifilm ETERNA-CP 3513DI brochure and KB-0707E, "Aim Print
+    /// Density"; Agfa CP30 Technical Data, "Laboratory aimdensity values".
     /// These instrument readings must not be replaced by three equal density values or
     /// by an RGB-neutralizing correction after development.
     var ladStatusA: SIMD3<Float>? { printStock?.releaseSetup?.ladStatusA }

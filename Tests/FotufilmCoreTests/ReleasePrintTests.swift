@@ -2,7 +2,8 @@ import XCTest
 @testable import FotufilmCore
 
 final class ReleasePrintTests: XCTestCase {
-    private let prints: [PrintPaper] = [.vision2383, .vision2393, .eternaCP]
+    private let prints: [PrintPaper] = [.vision2383, .vision2393, .eternaCP, .exr5386, .agfaCP30,
+                                        .eternaCP3521XD]
 
     func testMediumOwnsGreyForStillAndMotionPictureNegatives() throws {
         for id in ["gold200", "vision250d", "vision500t", "eterna500", "trix400"] {
@@ -123,12 +124,17 @@ final class ReleasePrintTests: XCTestCase {
         XCTAssertEqual(PrintPaper.vision2383.ladStatusA, SIMD3(1.09, 1.06, 1.03))
         XCTAssertEqual(PrintPaper.vision2393.ladStatusA, SIMD3(1.09, 1.06, 1.03))
         XCTAssertEqual(PrintPaper.eternaCP.ladStatusA, SIMD3(1.10, 1.05, 1.05))
+        XCTAssertEqual(PrintPaper.exr5386.ladStatusA, SIMD3(1.10, 1.06, 1.03))
+        XCTAssertEqual(PrintPaper.agfaCP30.ladStatusA, SIMD3(1.15, 1.05, 1.05))
+        XCTAssertEqual(PrintPaper.eternaCP3521XD.ladStatusA, SIMD3(1.10, 1.05, 1.05))
+        // Fujifilm states its sensitivity at 1.0 above minimum density; 3521XD borrows 3513DI's.
+        let aboveMinimum: Set<PrintPaper> = [.eternaCP, .eternaCP3521XD]
         for paper in prints {
             let curves = paper.printCurves(for: stock)
             let reference = paper.sensitivityReferenceExposures(for: stock)
             for channel in 0..<3 {
                 XCTAssertEqual(curves[channel].density(logExposure: reference[channel]),
-                    paper == .eternaCP ? 1 + curves[channel].dMin : 1, accuracy: 1e-5)
+                    aboveMinimum.contains(paper) ? 1 + curves[channel].dMin : 1, accuracy: 1e-5)
             }
         }
         XCTAssertEqual(PrintPaper.vision2383.sensitivity,
@@ -137,6 +143,13 @@ final class ReleasePrintTests: XCTestCase {
                        Vision2393PrintSpectra.layerSensitivity.map(SpectralGrid.continuedTails))
         XCTAssertEqual(PrintPaper.eternaCP.sensitivity,
                        EternaCPPrintSpectra.layerSensitivity.map(SpectralGrid.continuedTails))
+        XCTAssertEqual(PrintPaper.exr5386.sensitivity,
+                       EXR5386PrintSpectra.layerSensitivity.map(SpectralGrid.continuedTails))
+        XCTAssertEqual(PrintPaper.agfaCP30.sensitivity,
+                       AgfaCP30PrintSpectra.layerSensitivity.map(SpectralGrid.continuedTails))
+        // 3521XD has no published spectra and borrows 3513DI's whole.
+        XCTAssertEqual(PrintPaper.eternaCP3521XD.sensitivity, PrintPaper.eternaCP.sensitivity)
+        XCTAssertEqual(PrintPaper.eternaCP3521XD.dyes, PrintPaper.eternaCP.dyes)
     }
 
     func testPrinterMixMatchesAnIndependentLinearSolve() throws {
