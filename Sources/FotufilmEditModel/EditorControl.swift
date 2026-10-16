@@ -31,6 +31,7 @@ public enum EditorControlField: String, CaseIterable, Sendable, Codable {
     case paper, digitalReference, screenGrade, screenExposure, printFrame, printLight, enlarger, printCorrection,
          negativeViewing, gradeSpace
     case printerEnabled, printerLamp, printerExposure, printerMagenta, printerYellow, printerPreflash
+    case printerRed, printerGreen, printerBlue
     case gradeShadowsWarmth, gradeShadowsTint, gradeShadowsLevel
     case gradeMidtonesWarmth, gradeMidtonesTint, gradeMidtonesLevel
     case gradeHighlightsWarmth, gradeHighlightsTint, gradeHighlightsLevel
@@ -127,6 +128,8 @@ public enum EditorControlUnit: String, Sendable, Equatable, Codable {
     case micrometers
     case millimetres
     case nanometres
+    /// A release printer's light setting: 0.025 log exposure a point.
+    case printerPoints
     case none
 
     public static let offStops = -6.0
@@ -151,6 +154,7 @@ public enum EditorControlUnit: String, Sendable, Equatable, Codable {
         case .micrometers: return String(format: "%.0f µm", shown(value, places: 0))
         case .millimetres: return String(format: "%.0f mm", shown(value, places: 0))
         case .nanometres: return String(format: "%.0f nm", shown(value, places: 0))
+        case .printerPoints: return String(format: "%.0f", shown(value, places: 0))
         case .none: return ""
         }
     }

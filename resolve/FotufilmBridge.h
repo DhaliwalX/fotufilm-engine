@@ -94,6 +94,7 @@ enum {
     FOTUFILM_CONTROL_SCREEN_CONVERSION = 512,
     FOTUFILM_CONTROL_SCREEN_GRADE = 1024,
     FOTUFILM_CONTROL_LAB_SCAN = 2048,
+    FOTUFILM_CONTROL_PRINTER_LIGHTS = 4096,
 };
 int32_t fotufilm_bridge_control_capabilities(int32_t stock, int32_t paper);
 

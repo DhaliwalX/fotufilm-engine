@@ -2836,12 +2836,14 @@ int testPlugin() {
                 const char *companion;
                 double companionValue;
             };
-            int screenPaper = -1;
+            int screenPaper = -1, releasePrint = -1;
             for (int i = 0; i < fotufilm_bridge_paper_count(); ++i) {
                 char id[80]; fotufilm_bridge_paper_id(i, id, sizeof(id));
                 if (std::strcmp(id, "screen") == 0) screenPaper = i;
+                if (std::strcmp(id, "vision-2383") == 0) releasePrint = i;
             }
             check(screenPaper >= 0, "finds Digital Reference for the conversion sweep");
+            check(releasePrint >= 0, "finds a cinema print film for the printer-light sweep");
             const Lever levers[] = {
                 {"exposure", 1.0, nullptr, 0},
                 {"temperature", 3200, nullptr, 0},
@@ -2859,6 +2861,10 @@ int testPlugin() {
                 {"screenCyan", 0.25, "paper", static_cast<double>(screenPaper)},
                 {"screenMagenta", 0.25, "paper", static_cast<double>(screenPaper)},
                 {"screenYellow", 0.25, "paper", static_cast<double>(screenPaper)},
+                // The release printer's lights act only where a negative prints on cinema film.
+                {"printerRed", 31, "paper", static_cast<double>(releasePrint)},
+                {"printerGreen", 31, "paper", static_cast<double>(releasePrint)},
+                {"printerBlue", 31, "paper", static_cast<double>(releasePrint)},
                 {"couplers", 0, nullptr, 0},
                 {"flare", 2.0, nullptr, 0},
                 {"estimatedHalation", 1, nullptr, 0},

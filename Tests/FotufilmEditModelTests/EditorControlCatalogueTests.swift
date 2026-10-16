@@ -354,6 +354,20 @@ final class EditorControlCatalogueTests: XCTestCase {
         }
     }
 
+    func testPrinterLightsAreOfferedOnlyWhereANegativeIsPrintedOnCinemaPrintFilm() throws {
+        let negative = try preset("example-negative-400")
+        for field: EditorControlField in [.printerRed, .printerGreen, .printerBlue] {
+            for paper in PrintPaper.media(printedBy: .releasePrintFilm) {
+                XCTAssertTrue(offers(paper, field, negative), "\(paper)")
+                XCTAssertFalse(offers(paper, field, try preset("example-reversal-64")), "\(paper)")
+            }
+            for paper in [PrintPaper.ektacolorEdge, .screen, .labScan, .negative] {
+                XCTAssertFalse(offers(paper, field, negative), "\(paper)")
+            }
+            XCTAssertFalse(offers(.vision2383, field, nil))
+        }
+    }
+
     func testReceiverBandsAreOfferedOnlyForColourFilmOnDigitalReference() throws {
         for field: EditorControlField in [.screenRedBand, .screenGreenBand, .screenBlueBand] {
             for style in DigitalReferenceStyle.allCases {
@@ -409,7 +423,8 @@ final class EditorControlCatalogueTests: XCTestCase {
         let offered = EditorControlCatalogue.controls(in: .printPaper,
                                                       for: reversal)
         XCTAssertEqual(offered.map(\.field),
-                       [.printFrame, .paper, .printLight, .printCorrection, .negativeViewing,
+                       [.printFrame, .paper, .printLight, .printCorrection,
+                        .printerRed, .printerGreen, .printerBlue, .negativeViewing,
                         .digitalReference,
                         .screenGrade, .screenExposure, .screenRedBand, .screenGreenBand,
                         .screenBlueBand, .labScanDodging, .labScanLook])
@@ -419,7 +434,8 @@ final class EditorControlCatalogueTests: XCTestCase {
         XCTAssertEqual(
             EditorControlCatalogue.controls(in: .printPaper, for: negative)
                 .map(\.field),
-                       [.printFrame, .paper, .printLight, .printCorrection, .negativeViewing,
+                       [.printFrame, .paper, .printLight, .printCorrection,
+                        .printerRed, .printerGreen, .printerBlue, .negativeViewing,
                         .digitalReference,
                         .screenGrade, .screenExposure, .screenRedBand, .screenGreenBand,
                         .screenBlueBand, .screenCyan, .screenMagenta, .screenYellow,

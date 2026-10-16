@@ -104,7 +104,8 @@ export default function ProfileControls({
         min: c.scale.min * factor,
         max: c.scale.max * factor,
         def: c.scale.neutral * factor,
-        step: factor === 100 ? 1 : c.scale.stops.length ? 1 : 0.01,
+        // Printer lights are whole points, the steps a timer writes on the tape.
+        step: factor === 100 || c.scale.unit === "printerPoints" ? 1 : c.scale.stops.length ? 1 : 0.01,
         unit: factor === 100 ? "%" : catalogueSlider(c.field, "").unit,
       };
       const stops = c.scale.stops;

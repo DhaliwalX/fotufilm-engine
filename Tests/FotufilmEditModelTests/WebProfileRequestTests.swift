@@ -40,6 +40,13 @@ final class WebProfileRequestTests: XCTestCase {
         XCTAssertThrowsError(try request(["screenCyan": 1.1], medium: "screen").configured())
     }
 
+    func testPrinterLightsReachTheReleasePrinter() throws {
+        let values: [String: Any] = ["printerRed": 28, "printerGreen": 25, "printerBlue": 22]
+        XCTAssertEqual(try request(values, stock: "vision250d", medium: "vision-2383").configured().1
+                           .printerLights, PrinterLights(red: 28, green: 25, blue: 22))
+        XCTAssertThrowsError(try request(["printerRed": 51], medium: "vision-2383").configured())
+    }
+
     func testPrinterControlsComposeAndDisablingRestoresDefaultPath() throws {
         var values: [String: Any] = ["printerEnabled": true, "printerLamp": 3400,
             "printerExposure": 1.25, "printerMagenta": 0.6, "printerYellow": 0.7,

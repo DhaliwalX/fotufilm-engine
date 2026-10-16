@@ -41,6 +41,9 @@ extension EditorControlCatalogue {
             // through any bands.
             guard let stock else { return false }
             return paper == .screen && !stock.isMonochrome && !stock.isReflectionPrint
+        case .printerRed, .printerGreen, .printerBlue:
+            // A release printer exposes a negative onto cinema print film; a slide is viewed.
+            return stock.map { PrinterLights.applies(stock: $0, paper: paper) } ?? false
         case .labScanDodging, .labScanLook:
             guard let stock else { return false }
             return paper == .labScan && !stock.isReversal && !stock.isReflectionPrint

@@ -143,7 +143,10 @@ starts closed. Start with these settings:
   <tr><td>Yellow / Blue</td><td>Output</td><td>Digital Reference and Lab Scan colour negatives: positive adds yellow, negative adds blue.</td></tr>
   <tr><td>Dodging</td><td>Output</td><td>Lab Scan negatives: the scanner's regional dodging, 0 off, 1 its own, 2 double.</td></tr>
   <tr><td>Scanner Look</td><td>Output</td><td>Lab Scan negatives: 0 is the neutral scan, 1 the minilab scanner's finish.</td></tr>
+  <tr><td>Red Light</td><td>Output</td><td>Cinema print film only: the release printer's red light in printer points, 25 at the stock's aim.</td></tr>
+  <tr><td>Green Light</td><td>Output</td><td>Cinema print film only: the release printer's green light in printer points, 25 at the stock's aim.</td></tr>
   <tr><td>Printer Preflash</td><td>Output</td><td>Pre-exposure of the print paper in relative log exposure units, softening highlights without lifting maximum density.</td></tr>
+  <tr><td>Blue Light</td><td>Output</td><td>Cinema print film only: the release printer's blue light in printer points, 25 at the stock's aim.</td></tr>
   <tr><td>Negative Viewing</td><td>Output</td><td>How the developed negative is read when Output Medium is Negative.</td></tr>
   <tr><td>Stage</td><td>Pipeline</td><td>Which span of the pipeline this node performs.</td></tr>
   <tr><td>Texture Stages</td><td>Pipeline</td><td>Whether Texture Only carries this stage.</td></tr>

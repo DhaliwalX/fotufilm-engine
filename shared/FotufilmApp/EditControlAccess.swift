@@ -147,6 +147,9 @@ extension EditorControlField {
                             write: { $0.printerProfile.yellow = Float($1) })
         case .printCorrection: return .number(\.printCorrection)
         case .printerPreflash: return .number(\.printerPreflash)
+        case .printerRed: return .number(\.printerRed)
+        case .printerGreen: return .number(\.printerGreen)
+        case .printerBlue: return .number(\.printerBlue)
         case .negativeViewing:
             return .bespoke { $0.negativeViewing != .lightBox }
         case .gradeSpace: return .flag(\.encodedGrade)
