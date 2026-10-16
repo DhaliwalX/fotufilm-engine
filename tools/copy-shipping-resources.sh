@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copies runtime resources, including all 46 film profiles and their license
+# Copies runtime resources, including all 47 film profiles and their license
 # notices.
 set -euo pipefail
 cd "$(dirname "$0")/.."

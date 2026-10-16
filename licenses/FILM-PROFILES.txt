@@ -1,7 +1,7 @@
 Fotufilm film profiles
 Copyright 2026 MUAStudio Inc.
 
-The following 46 runtime film profiles, distributed in
+The following 47 runtime film profiles, distributed in
 Sources/FotufilmCore/Stocks/, are licensed under Creative Commons
 Attribution-ShareAlike 4.0 International (CC BY-SA 4.0).
 
@@ -41,6 +41,7 @@ Attribution-ShareAlike 4.0 International (CC BY-SA 4.0).
   pro160ns.json
   pro400h.json
   provia100f.json
+  reala100.json
   reala500d.json
   superia200.json
   superia400.json
