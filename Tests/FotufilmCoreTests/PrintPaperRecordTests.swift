@@ -21,8 +21,8 @@ final class PrintPaperRecordTests: XCTestCase {
     func testEachRecordRidesItsOwnCurveAndMidpoint() {
         let inv = invocation(paper: .ektacolorEdge)
         let configuration = inv.configuration
-        let expected = [PrintPaper.ra4PrintCurveRed, PrintPaper.ra4PrintCurve,
-                        PrintPaper.ra4PrintCurveBlue]
+        let expected = [EktacolorEdgeCurves.red, EktacolorEdgeCurves.green,
+                        EktacolorEdgeCurves.blue]
         let offsets = [FilmEngineInvocation.paperRedOffset, 33,
                        FilmEngineInvocation.paperBlueOffset]
         let midpointSlots = [FilmEngineInvocation.paperMidpointRedOffset, 62,
@@ -66,12 +66,12 @@ final class PrintPaperRecordTests: XCTestCase {
 
     func testShippedRecordsReproduceTheSheet() {
         let sheet: [(CharacteristicCurve, [(Float, Float)])] = [
-            (PrintPaper.ra4PrintCurveRed,
+            (EktacolorEdgeCurves.red,
              [(-1.8, 0.183), (-1.2, 1.649), (-0.6, 2.213), (-0.04, 2.277)]),
             // Green's sheet reads 2.372 at -0.04; one shoulder levels 0.08 D short of it.
-            (PrintPaper.ra4PrintCurve,
+            (EktacolorEdgeCurves.green,
              [(-1.8, 0.193), (-1.2, 1.539), (-0.6, 2.241)]),
-            (PrintPaper.ra4PrintCurveBlue,
+            (EktacolorEdgeCurves.blue,
              [(-1.8, 0.168), (-1.2, 1.562), (-0.6, 2.135), (-0.04, 2.154)]),
         ]
         for (record, (curve, points)) in sheet.enumerated() {

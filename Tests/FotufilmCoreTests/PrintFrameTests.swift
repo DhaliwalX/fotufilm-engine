@@ -161,7 +161,8 @@ final class PrintFrameTests: XCTestCase {
     }
 
     func testPaperRequiresARealReflectionPaperAndFollowsItsBaseAndLamp() {
-        for paper in [PrintPaper.screen, .negative, .labScan, .telecine, .vision2383, .vision2393, .eternaCP] {
+        for paper in [PrintPaper.screen, .negative, .labScan, .telecine, .vision2383, .vision2393, .eternaCP,
+                      .exr5386, .agfaCP30, .eternaCP3521XD] {
             XCTAssertEqual(configuration(.paper, paper: paper).frame, .none)
         }
         let edge = configuration(.paper)

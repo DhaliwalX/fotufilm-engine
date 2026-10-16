@@ -164,6 +164,9 @@ export default function PrintInspector() {
                 fields={[
                   "printLight",
                   "printCorrection",
+                  "printerRed",
+                  "printerGreen",
+                  "printerBlue",
                   "negativeViewing",
                   "screenGrade",
                   "screenExposure",

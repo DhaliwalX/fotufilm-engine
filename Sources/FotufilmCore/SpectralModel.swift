@@ -383,6 +383,7 @@ public enum SpectralRuntime {
                               printViewingKelvin: Float? = nil,
                               callier: Float = 1,
                               printer: PrinterProfile? = nil,
+                              printerLights: PrinterLights? = nil,
                               digitalReference: DigitalReferenceStyle = .default,
                               screenGrade: Float = 2,
                               screenExposureEV: Float = 0,
@@ -393,6 +394,7 @@ public enum SpectralRuntime {
         let labScanLook = effectiveLabScanLook(labScanLook, paper: paper)
         let receiverBands = effectiveReceiverBands(receiverBands, stock: stock, paper: paper)
         let printer = PrinterProfile.resolved(printer, stock: stock, paper: paper)
+        let printerLights = PrinterLights.resolved(printerLights, stock: stock, paper: paper)
         let bleachBypass = retainedSilverFraction(bleachBypass, stock: stock)
         let screenGrade = effectiveScreenGrade(screenGrade, stock: stock, paper: paper,
                                                digitalReference: digitalReference)
@@ -403,7 +405,8 @@ public enum SpectralRuntime {
         let callier = callierCoefficient(callier, stock: stock, paper: paper)
         let key = cacheIdentifier(for: stock, paper: paper, bleachBypass: bleachBypass,
                                   printViewingKelvin: printViewingKelvin, callier: callier,
-                                  printer: printer, digitalReference: digitalReference,
+                                  printer: printer, printerLights: printerLights,
+                                  digitalReference: digitalReference,
                                   screenGrade: screenGrade, screenExposureEV: screenExposureEV,
                                   labScanLook: labScanLook, receiverBands: receiverBands)
         lock.lock()
@@ -423,7 +426,8 @@ public enum SpectralRuntime {
 
         let built = buildTables(for: stock, paper: paper, bleachBypass: bleachBypass,
                                 printViewingKelvin: printViewingKelvin, callier: callier,
-                                printer: printer, digitalReference: digitalReference,
+                                printer: printer, printerLights: printerLights,
+                                digitalReference: digitalReference,
                                 screenGrade: screenGrade, screenExposureEV: screenExposureEV,
                                 labScanLook: labScanLook, receiverBands: receiverBands)
 
@@ -495,6 +499,7 @@ public enum SpectralRuntime {
                                        printViewingKelvin: Float? = nil,
                                        callier: Float = 1,
                                        printer: PrinterProfile? = nil,
+                                       printerLights: PrinterLights? = nil,
                                        digitalReference: DigitalReferenceStyle = .default,
                                        screenGrade: Float = 2,
                                        screenExposureEV: Float = 0,
@@ -579,6 +584,10 @@ public enum SpectralRuntime {
         if let printer = PrinterProfile.resolved(printer, stock: stock, paper: paper) {
             h = (h ^ printer.spectralSignature) &* 0x100000001b3
         }
+        // Hashed only away from the aim setup, which every untimed release print already is.
+        if let lights = PrinterLights.resolved(printerLights, stock: stock, paper: paper) {
+            h = (h ^ lights.spectralSignature) &* 0x100000001b3
+        }
         return h
     }
 
@@ -588,6 +597,7 @@ public enum SpectralRuntime {
                                     printViewingKelvin: Float? = nil,
                                     callier: Float = 1,
                                     printer: PrinterProfile? = nil,
+                                    printerLights: PrinterLights? = nil,
                                     digitalReference: DigitalReferenceStyle = .default,
                                     screenGrade: Float = 2,
                                     screenExposureEV: Float = 0,
@@ -678,7 +688,7 @@ public enum SpectralRuntime {
                     dyes: stock.spectralProfile.imageDyeDensity,
                     neutralDensity: silverCallier * retainedSilverDensity(
                         midDensity, dMin: dMin, fraction: bleachBypass), densityScale: callier,
-                    receiverBands: bands)
+                    receiverBands: bands, lights: printerLights)
                 let lamp = printer?.filteredSpectrum ?? illumination.lamp
                 // Keep the simulated printer's reference setup fixed when its lamp or filters move.
                 // Other media retain their existing printing illumination and calibration.
@@ -2382,7 +2392,7 @@ public enum SpectralRuntime {
     /// added to developed densities. Cine media use their published LAD targets instead.
     private static let reflectionPrintDensityTrims: [PrintPaper: SIMD3<Float>] = {
         Dictionary(uniqueKeysWithValues:
-            [PrintPaper.ektacolorEdge, .enduraPremier, .crystalArchive, .ilfochromeCPS1K, .ilfochromeCLM1K].map { paper in
+            PrintPaper.allCases.filter { $0.printProcess?.isReflection == true }.map { paper in
                 let anchor = paper.anchorDensity
                 let light = referenceViewingLight(for: paper)
                 return (paper, solveReflectionPrintSetup(
@@ -3125,15 +3135,11 @@ public enum SpectralGrid {
         return result
     }
 
-    /// The receiver supplied by PrintPaperSpectra, digitised from KODAK EKTACOLOR EDGE
-    /// publication E-7020.
-    static let paperDyeAmounts: [[Float]] =
-        zip(PrintPaperSpectra.dyeDensity, PrintPaperSpectra.neutralAmounts)
-            .map { record, amount in record.map { $0 * amount } }
-    static let paperDyes: [[Float]] = partition(paperDyeAmounts)
-    /// Extend and normalize the configured receiver sensitivity.
-    static let paperSensitivity: [[Float]] =
-        normalizeSensitivities(PrintPaperSpectra.layerSensitivity.map(continuedTails))
+    /// The RA-4 receiver: Kodak Ektacolor Edge's spectra, which also stand in for the outputs
+    /// that need a neutral visual judge but have no dyes of their own.
+    static var paperDyeAmounts: [[Float]] { PrintStock.ektacolorEdge.spectra.analyticalDyes }
+    static var paperDyes: [[Float]] { PrintStock.ektacolorEdge.spectra.dyes }
+    static var paperSensitivity: [[Float]] { PrintStock.ektacolorEdge.spectra.sensitivity }
 
     /// Planck's law on the grid, normalized to its own peak.
     static func blackbody(kelvinK: Float) -> [Float] {

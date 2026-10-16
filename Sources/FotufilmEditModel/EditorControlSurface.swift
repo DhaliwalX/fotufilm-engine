@@ -213,6 +213,8 @@ public enum EngineBinding: Equatable, Sendable {
     case screenGrade
     case screenExposureStops
     case screenCMY(Int)
+    /// One of the release printer's lights: 0 red, 1 green, 2 blue.
+    case printerLight(Int)
     case receiverBand(Int)
     case labScanDodging
     case labScanLook
@@ -277,6 +279,7 @@ public enum EngineBinding: Equatable, Sendable {
         case .screenGrade: return ["screenGrade"]
         case .screenExposureStops: return ["screenExposureEV"]
         case .screenCMY: return ["screenCMY"]
+        case .printerLight: return ["printerLights"]
         case .receiverBand: return ["receiverBands"]
         case .labScanDodging: return ["labScanDodging"]
         case .labScanLook: return ["labScanLook"]
@@ -414,6 +417,8 @@ public enum EngineBinding: Equatable, Sendable {
             if let number = value.number { options.screenExposureEV = Float(number) }
         case .screenCMY(let channel):
             if let number = value.number { options.screenCMY[channel] = Float(number) }
+        case .printerLight(let channel):
+            if let number = value.number { options.printerLights[channel] = Float(number) }
         case .receiverBand(let band):
             if let number = value.number { options.receiverBands[band] = Float(number) }
         case .labScanDodging:

@@ -9,7 +9,7 @@ final class DensitometryTests: XCTestCase {
 
     private static let physicalPrints: [PrintPaper] = [
         .ektacolorEdge, .enduraPremier, .crystalArchive,
-        .vision2383, .vision2393, .eternaCP,
+        .vision2383, .vision2393, .eternaCP, .exr5386, .agfaCP30, .eternaCP3521XD,
     ]
 
     private var stock: FilmStock { FilmStock.presets["example-negative-400"]! }

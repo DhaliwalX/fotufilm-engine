@@ -63,6 +63,10 @@ export function profileControlAvailable(c, edit, stock) {
     case "labScanDodging":
     case "labScanLook":
       return !!medium?.labScan;
+    case "printerRed":
+    case "printerGreen":
+    case "printerBlue":
+      return !!medium?.printerLights;
     case "screenGrade":
       return (
         !!medium?.screenGrade && edit.digitalReference !== "reference-exposure"

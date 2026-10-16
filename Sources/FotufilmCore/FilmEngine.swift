@@ -873,6 +873,8 @@ public struct FilmEngineInvocation {
         let printMedium = options.paper(for: stock)
         let printer = !noFilm && options.stage.writesPrint && options.negativeViewing == nil
             ? PrinterProfile.resolved(options.printer, stock: stock, paper: printMedium) : nil
+        let printerLights = !noFilm && options.stage.writesPrint && options.negativeViewing == nil
+            ? PrinterLights.resolved(options.printerLights, stock: stock, paper: printMedium) : nil
         // A crop keeps only `frameCoverage` of the frame's short edge, so the same buffer
         // spans fewer millimetres of emulsion and every millimetre-sized structure grows
         // in pixels. The floor keeps a degenerate sliver from asking for unbounded radii.
@@ -1591,7 +1593,7 @@ public struct FilmEngineInvocation {
                 for: stock, paper: printMedium,
                 bleachBypass: options.bleachBypass,
                 printViewingKelvin: options.printViewingKelvin,
-                callier: callier, printer: printer,
+                callier: callier, printer: printer, printerLights: printerLights,
                 digitalReference: options.digitalReference,
                 screenGrade: options.screenGrade, screenExposureEV: options.screenExposureEV,
                 labScanLook: options.labScanLook, receiverBands: options.receiverBands)
@@ -1599,7 +1601,7 @@ public struct FilmEngineInvocation {
                 for: stock, paper: printMedium,
                 bleachBypass: options.bleachBypass,
                 printViewingKelvin: options.printViewingKelvin,
-                callier: callier, printer: printer,
+                callier: callier, printer: printer, printerLights: printerLights,
                 digitalReference: options.digitalReference,
                 screenGrade: options.screenGrade, screenExposureEV: options.screenExposureEV,
                 labScanLook: options.labScanLook, receiverBands: options.receiverBands)

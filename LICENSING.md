@@ -39,8 +39,9 @@ document does not bring that work under the glyph licence. The generator
 
 The print media in `PrintPaperTables.swift` and the `*PaperSpectra.swift` /
 `*PrintSpectra.swift` files are digitised by this project from the manufacturers'
-publicly published datasheets: Kodak E-7020, E-4070, H-1-2383 and the 2393 curve
-sheets, and Fujifilm AF3-0250U2 and the ETERNA-CP 3513DI brochure. The digitised
+publicly published datasheets: Kodak E-7020, E-4070, H-1-2383, H-1-5386 and the 2393
+curve sheets, Fujifilm AF3-0250U2, the ETERNA-CP 3513DI brochure and the KB-0707E motion
+picture film manual, and Agfa's CP30 Technical Data. The digitised
 coordinates and the code that reads them are project-authored and Apache-2.0.
 
 The underlying publications remain the property of their publishers and are not

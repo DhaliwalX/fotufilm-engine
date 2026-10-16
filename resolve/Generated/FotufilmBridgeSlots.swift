@@ -68,5 +68,8 @@ enum BridgeSlot {
     static let screenYellow = 66
     static let labScanDodging = 67
     static let labScanLook = 68
-    static let count = 69
+    static let printerRed = 69
+    static let printerGreen = 70
+    static let printerBlue = 71
+    static let count = 72
 }

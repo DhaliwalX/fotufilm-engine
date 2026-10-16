@@ -255,7 +255,7 @@ See [Build support](docs/support.html) for stock-pack setup.
 
 ## Print media
 
-The six negative-to-positive physical media below are digitised from the manufacturers'
+The nine negative-to-positive physical media below are digitised from the manufacturers'
 published datasheets, on the same 380-780 nm grid at 5 nm the film model uses.
 Ilfochrome/Cibachrome adds two positive-to-positive papers with approximate profiles.
 
@@ -267,6 +267,9 @@ Ilfochrome/Cibachrome adds two positive-to-positive papers with approximate prof
 | Kodak Vision 2383 | Kodak H-1-2383 (March 2022) |
 | Kodak Vision Premier 2393 | Kodak 2393 curve sheets |
 | Fujifilm ETERNA-CP 3513DI | Fujifilm ETERNA-CP 3513DI brochure |
+| Kodak EXR 5386 | Kodak H-1-5386 (February 1999) |
+| Agfa CP30 | Agfa CP30 Technical Data (October 2011) |
+| Fujifilm ETERNA-CP 3521XD | Fujifilm KB-0707E (November 2007), curves; 3513DI spectra |
 | Ilfochrome Classic CPS.1K (Cibachrome), normal contrast | Ilford TDS 307US (August 2003), tone specifications |
 | Ilfochrome Classic CLM.1K (Cibachrome), medium contrast | Ilford TDS 307US (August 2003), tone specifications |
 
@@ -285,7 +288,8 @@ It does not reproduce measured Ilfochrome azo-dye color. Cibachrome aliases the 
 a separate historical coating is not simulated.
 
 A sheet that publishes one characteristic curve develops all three records along it;
-E-7020, E-4070, 2383, 2393 and ETERNA-CP publish three and are carried per record. The lab scan and
+E-7020, E-4070, 2383, 2393, ETERNA-CP, 5386, CP30 and 3521XD publish three and are carried per
+record. The lab scan and
 telecine are inversions rather than sheets, and are described in `PrintPaperTables.swift`.
 Lab Scan produces an editable positive and sets up each frame the way a minilab scanner
 does: the film base scans black and the frame's brightest content near white, a backlit
@@ -296,12 +300,18 @@ color profile. Telecine retains its finished Rec.709 transfer. Existing Lab Scan
 render differently with the new curve.
 
 Colour release prints time the reference negative to the published gross Status A
-LAD aims: 1.09/1.06/1.03 for Kodak 2383 and 2393, and 1.10/1.05/1.05 for ETERNA-CP.
+LAD aims: 1.09/1.06/1.03 for Kodak 2383 and 2393, 1.10/1.06/1.03 for Kodak 5386,
+1.10/1.05/1.05 for both ETERNA-CP stocks, and 1.15/1.05/1.05 for Agfa CP30.
 The solve preserves relative layer speeds and changes exposure through a non-negative,
 UV-blocked tungsten RGB additive head. These aims are not three equal densities
 above clear film. Reflection papers retain a visually balanced 0.744 D (18%) setup
 under D50. Viewing another lamp never changes the developed dyes. Optional digital
 channel-contrast correction is off by default.
+
+Red, Green and Blue Light re-time a release print from that aim in printer points:
+25-25-25 is the aim, and each point scales its own beam by 0.025 log exposure, so more
+red light adds cyan and all three together make the print denser. The 1-50 range is the
+conventional printer scale.
 
 The printer passbands and filtered 5400 K xenon reference are explicit approximations,
 not measured printer filters or the manufacturers' original calibration lamps. Output
