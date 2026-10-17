@@ -38,7 +38,7 @@ events and cancellation messages, rather than attempting to serialize functions.
 | --- | --- |
 | `createSession()` | A session with `render(request)`, `stages(stock, medium, halationModel, digitalReference)`, synchronous `dispose()`, and assignable `onRendererReady` callback. |
 | `prepare(session, report)` | Initialize processing; report `{value: 0…100, label, done}`. Resolve after preparation and report `done: true`. |
-| `loadStocks()` | Film entries matching the existing catalogue: `id`, `name`, `media`, `defaultMedium`, `available`, `profile`, `nativeFormat`, `readsNegative`, and any fixed-profile restrictions. |
+| `loadStocks()` | Film entries matching the existing catalogue: `id`, `name`, `media`, `defaultMedium`, `available`, `profile`, `nativeFormat`, `readsNegative`, the film type fields (`monochrome`, `reversal`, `reflectionPrint`, `motionPicture`, `referenceKelvin`), and any fixed-profile restrictions. |
 | `importMedia(file, options)` | Browser `File`; options `{signal, onProgress(text), negative}`. Resolve `{image, url}`. `negative` opens an unadjusted scan as a negative document (below). |
 | `releaseImage(image)` | Release the caller's image lease, including video resources. Idempotent, non-throwing, safe while previously submitted work completes. |
 | `negativeScans` | Optional. Scanned negatives read as a film and printed by the backend (below); without it the editor does not offer them. |

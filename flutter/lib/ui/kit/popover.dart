@@ -1,0 +1,92 @@
+// Floating surfaces: the popover's look, and an overlay anchored to a widget that closes on a
+// click outside it. Menus, pickers and help all open through `showAnchored`.
+import 'package:flutter/widgets.dart';
+
+import '../theme/theme.dart';
+
+/// Spectrum's popover: the lightest surface, rounded, with a soft drop shadow.
+class PopoverSurface extends StatelessWidget {
+  const PopoverSurface({super.key, required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = Palette.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: palette.popover,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: palette.border.withValues(alpha: .6), width: .5),
+        boxShadow: const [BoxShadow(color: Color(0x29000000), blurRadius: 14, offset: Offset(0, 4))],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: DefaultTextStyle(style: editorText(context), child: child),
+    );
+  }
+}
+
+/// An open overlay; `close` removes it.
+class AnchoredOverlay {
+  AnchoredOverlay._(this._entry);
+  final OverlayEntry _entry;
+  bool _open = true;
+
+  void close() {
+    if (!_open) return;
+    _open = false;
+    _entry.remove();
+  }
+}
+
+/// Opens `builder`'s content under (or over) the widget of `anchor`. A click elsewhere closes it.
+AnchoredOverlay showAnchored(
+  BuildContext anchor,
+  Widget Function(BuildContext context, VoidCallback close) builder, {
+  bool alignEnd = false,
+  double gap = 4,
+  double? width,
+  bool matchWidth = false,
+}) {
+  final overlay = Overlay.of(anchor);
+  final overlayBox = overlay.context.findRenderObject() as RenderBox;
+  final box = anchor.findRenderObject() as RenderBox;
+  final origin = box.localToGlobal(Offset.zero, ancestor: overlayBox);
+  late final AnchoredOverlay handle;
+  final entry = OverlayEntry(
+    builder: (context) => Stack(children: [
+      Positioned.fill(
+        child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => handle.close()),
+      ),
+      Positioned(
+        top: origin.dy + box.size.height + gap,
+        left: alignEnd ? null : origin.dx,
+        right: alignEnd ? overlayBox.size.width - origin.dx - box.size.width : null,
+        width: matchWidth ? box.size.width : width,
+        child: builder(context, () => handle.close()),
+      ),
+    ]),
+  );
+  handle = AnchoredOverlay._(entry);
+  overlay.insert(entry);
+  return handle;
+}
+
+/// A modal over the whole window: a dimmed backdrop and `child` centred on it.
+AnchoredOverlay showModal(BuildContext context, Widget Function(VoidCallback close) builder,
+    {bool dismissible = true}) {
+  late final AnchoredOverlay handle;
+  final entry = OverlayEntry(
+    builder: (context) => Stack(children: [
+      Positioned.fill(
+        child: GestureDetector(
+          onTap: dismissible ? () => handle.close() : null,
+          child: const ColoredBox(color: Color(0x66000000)),
+        ),
+      ),
+      Center(child: builder(() => handle.close())),
+    ]),
+  );
+  handle = AnchoredOverlay._(entry);
+  Overlay.of(context).insert(entry);
+  return handle;
+}

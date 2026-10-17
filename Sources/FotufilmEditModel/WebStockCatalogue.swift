@@ -81,6 +81,12 @@ public enum WebStockCatalogue {
                 "reflectionPrint": stock.isReflectionPrint,
                 // Whether a scanned negative can be read as this film: slides have no negative.
                 "readsNegative": NegativeScanPrint.reads(stock),
+                // What kind of film it is, for a library's film types: black-and-white, slide,
+                // shot for motion pictures, and the light it is balanced for (3200 K tungsten).
+                "monochrome": stock.isMonochrome,
+                "reversal": stock.isReversal,
+                "motionPicture": FilmFormat.native(forStockID: id).isMotionPicture,
+                "referenceKelvin": stock.referenceIlluminantKelvin,
             ]
             if let format = profile["nativeFormat"] { entry["nativeFormat"] = format }
             return entry
