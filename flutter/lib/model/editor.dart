@@ -10,6 +10,7 @@ import 'package:flutter/foundation.dart';
 
 import '../engine/engine.dart';
 import '../engine/presenter.dart';
+import 'app_dialogs.dart';
 import 'auto_adjust.dart';
 import 'band_sets.dart';
 import 'catalogue.dart';
@@ -19,21 +20,26 @@ import 'document.dart';
 import 'edit.dart';
 import 'edit_history.dart';
 import 'export.dart';
+import 'film_packs.dart';
 import 'film_suggestion.dart';
 import 'film_types.dart';
 import 'histogram.dart';
 import 'kept_edits.dart';
 import 'lens.dart';
 import 'negatives.dart';
+import 'panel_layout.dart';
 import 'photo_library.dart';
 import 'photo_strip.dart';
 import 'pipeline.dart';
+import 'plugins.dart';
 import 'presets.dart';
 import 'print_frame.dart';
 import 'renderer.dart';
 import 'selective.dart';
 import 'settings.dart';
+import 'startup.dart';
 import 'strip_selection.dart';
+import 'updates.dart';
 import 'view.dart';
 
 export 'catalogue.dart' show Json;
@@ -102,6 +108,14 @@ class EditorModel extends ChangeNotifier implements RenderHost {
   /// The photo library, and the strip of open and waiting photos.
   late final library = PhotoLibrary(this);
   late final strip = PhotoStripModel(this);
+
+  // ── App services (Settings, film packs, plug-ins, updates, the panels' layout) ────────────
+  late final dialogs = AppDialogs();
+  late final filmPacks = FilmPacks(this);
+  late final plugins = Plugins(this);
+  late final updates = Updates(this);
+  late final layout = PanelLayout(this);
+  final startup = ValueNotifier(StartupState.initial);
 
   /// Whether the engine has work in hand or waiting.
   bool get busy => (renderer?.busy ?? false) || status != null || _viewSettle != null;
@@ -239,25 +253,42 @@ class EditorModel extends ChangeNotifier implements RenderHost {
 
   Future<void> start() async {
     try {
+      startup.value = StartupState.connecting;
       final engine = await connectEngine();
-      final prepared = await engine.call('prepare');
-      final ids = ((prepared.json['stocks'] as List?) ?? const []).cast<String>().toSet();
-      stocks = [
-        for (final entry in ((prepared.json['catalogue'] as List?) ?? const []).cast<Json>())
-          if (ids.contains(entry['id'])) entry,
-      ]..sort((a, b) => _sortName(a).compareTo(_sortName(b)));
-      for (final s in stocks) {
-        _stockById[s['id'] as String] = s;
-      }
-      filmTypes = FilmType.offered(stocks);
+      startup.value = StartupState.loadingFilms;
+      await loadStocks(engine);
       final address = engine.address;
       if (address != null) presenter = await NativePresenter.attach(address);
       this.engine = engine;
       renderer = Renderer(engine: engine, catalogue: catalogue, host: this, presenter: presenter);
+      startup.value = StartupState.ready;
     } catch (e) {
       startupError = '$e';
+      startup.value = StartupState.failed;
     }
     notifyListeners();
+    if (engine != null) {
+      filmPacks.launch();
+      plugins.launch();
+      updates.launch();
+      filmSuggestion.refresh();
+    }
+  }
+
+  /// The engine's films (`prepare`'s catalogue), again after a film pack changes them.
+  Future<void> loadStocks([EngineConnection? via]) async {
+    final prepared = await (via ?? engine!).call('prepare');
+    final ids = ((prepared.json['stocks'] as List?) ?? const []).cast<String>().toSet();
+    stocks = [
+      for (final entry in ((prepared.json['catalogue'] as List?) ?? const []).cast<Json>())
+        if (ids.contains(entry['id'])) entry,
+    ]..sort((a, b) => _sortName(a).compareTo(_sortName(b)));
+    _stockById
+      ..clear()
+      ..addEntries(stocks.map((s) => MapEntry(s['id'] as String, s)));
+    filmTypes = FilmType.offered(stocks);
+    notifyListeners();
+    renderer?.schedule();
   }
 
   /// Films by name, ignoring a maker's prefix so Aerochrome sits with the A's.
@@ -310,7 +341,9 @@ class EditorModel extends ChangeNotifier implements RenderHost {
           history: History(asNegative && !start.saved
               ? negatives.startingEdit(start.edit, json['negative'] as Json?, scanLight)
               : start.edit),
-        )..negativeScan = json['negative'] as Json?;
+        )
+          ..negativeScan = json['negative'] as Json?
+          ..descriptor = json;
         keptEdits.opened(doc, saved: start.saved);
         filmSuggestion.opened(doc, saved: start.saved);
         final preview = answer.bytes('preview');

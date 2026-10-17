@@ -61,6 +61,14 @@
 //                                   a library photo is flying to the viewer
 //   {"key": "l", "meta": false}     presses and releases a key (a letter, a digit, Enter,
 //                                   Escape, Backspace or an arrow)
+//   {"dialog": "settings"}          opens an app dialog (settings, plugins, support, update)
+//   {"settingsPane": "filmModel"}   shows a Settings pane (general, output, filmModel)
+//   {"closeDialog": true}           closes the app dialog on show
+//   {"setting": ["startingFilm", "gold200"]}  sets a kept setting
+//   {"checkUpdates": true}          Check for Updates…, as the app menu runs it
+//   {"histogramView": "chroma"}     shows a histogram view (rgb, luma, chroma, oklab-l, oklab-ab)
+//   {"windowSize": [800, 700]}      resizes the window's content
+//   {"edit": true}                  logs the shown photograph's film, format and film model
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -71,11 +79,14 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import '../model/app_dialogs.dart';
 import '../model/band_sets.dart';
 import '../model/editor.dart';
 import '../model/export.dart';
 import '../model/library_model.dart';
 import '../ui/workspace/crop_overlay.dart';
+import '../ui/workspace/histogram_panel.dart';
+import '../ui/workspace/settings_dialog.dart';
 import 'editing_driver.dart';
 import 'negative_driver.dart';
 
@@ -326,6 +337,26 @@ class Driver {
           '${editor.library.handoff != null ? ' (handoff)' : ''}');
     }
     if (c['key'] case final String name) await _key(name, meta: c['meta'] == true);
+    if (c['setting'] case [final String key, final Object? value]) editor.settings.set(key, value);
+    if (c['settingsPane'] case final String pane) {
+      SettingsDialog.pane = SettingsPane.values.byName(pane);
+      if (editor.dialogs.open == AppDialog.settings) editor.dialogs.close();
+      editor.dialogs.request(AppDialog.settings);
+    }
+    if (c['dialog'] case final String name) editor.dialogs.request(AppDialog.values.byName(name));
+    if (c['closeDialog'] == true) editor.dialogs.close();
+    if (c['checkUpdates'] == true) await editor.updates.check();
+    if (c['histogramView'] case final String view) HistogramPanel.view.value = view;
+    if (c['windowSize'] case [final num w, final num h]) {
+      await const MethodChannel('fotufilm/window')
+          .invokeMethod('setContentSize', [w.toDouble(), h.toDouble()]);
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    }
+    if (c['edit'] == true) {
+      final e = editor.edit;
+      _log('edit stock=${e['stock']} format=${e['format']} halationModel=${e['halationModel']} '
+          'profile=${jsonEncode(e['profile'])}');
+    }
     if (c['wait'] == 'idle') {
       final deadline = DateTime.now().add(const Duration(seconds: 120));
       await Future<void>.delayed(const Duration(milliseconds: 400));

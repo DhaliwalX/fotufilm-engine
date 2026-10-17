@@ -4,16 +4,40 @@
 // photograph settles on is recorded, so the ranking learns this person's taste.
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
+
 import 'edit.dart';
 import 'editor.dart';
 
-class FilmSuggestion {
+class FilmSuggestion extends ChangeNotifier {
   FilmSuggestion(this.editor) {
     editor.addListener(_follow);
     editor.settings.addListener(_follow);
   }
 
   final EditorModel editor;
+
+  /// Whether the engine ranks films (`filmSuggestion`).
+  bool get available => editor.engine?.capabilities['filmSuggestion'] == true;
+
+  /// How many choices the engine has learned from (`filmChoices`); null until it has said.
+  int? learned;
+
+  Future<void> refresh() async {
+    if (!available) return;
+    try {
+      final answer = await editor.engine!.call('filmChoices');
+      learned = (answer.json['observations'] as num?)?.toInt();
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  /// Settings › Reset Film Suggestions: nothing learned is left.
+  Future<void> forget() async {
+    await editor.engine!.call('forgetFilmChoices');
+    learned = 0;
+    notifyListeners();
+  }
 
   /// Photographs opened with a kept edit, and those already ranked.
   final _kept = Expando<bool>('kept');
@@ -37,7 +61,7 @@ class FilmSuggestion {
 
   Future<void> _suggest(PhotoDocument doc) async {
     final engine = editor.engine;
-    if (engine == null || editor.settings.get<bool>('autoFilm') != true) return;
+    if (engine == null || !available || editor.settings.get<bool>('autoFilm') != true) return;
     // A negative's film is the one it was shot on, not a look to rank.
     if (doc.edit['negative'] != null || _kept[doc] == true || _suggested[doc] == true) return;
     _suggested[doc] = true;
@@ -75,7 +99,10 @@ class FilmSuggestion {
     if (next == null) return;
     _record = Timer(const Duration(milliseconds: 1500), () async {
       try {
-        await editor.engine?.call('recordFilmChoice', {'photoID': photoID(doc), 'film': stock});
+        final answer = await editor.engine
+            ?.call('recordFilmChoice', {'photoID': photoID(doc), 'film': stock});
+        learned = (answer?.json['observations'] as num?)?.toInt() ?? learned;
+        notifyListeners();
       } catch (_) {
         // Learning is a convenience; the choice stands either way.
       }

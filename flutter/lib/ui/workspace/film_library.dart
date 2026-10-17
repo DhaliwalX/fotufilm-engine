@@ -10,6 +10,7 @@ import '../../model/negative_document.dart';
 import '../kit/kit.dart';
 import '../theme/theme.dart';
 import 'editing_dialogs.dart';
+import 'panel_layout.dart';
 import 'picture.dart';
 import 'preset_list.dart';
 
@@ -77,12 +78,8 @@ class _FilmLibraryState extends State<FilmLibrary> {
                   ),
                   const SizedBox(width: 6),
                 ],
-                QuietButton(
-                  icon: 'sidebar',
-                  tooltip: open ? 'Collapse film library' : 'Expand film library',
-                  selected: open,
-                  onPressed: editor.toggleFilm,
-                ),
+                FilmSettingsButton(editor: editor),
+                FilmSidebarToggle(editor: editor),
               ],
             ),
           ),

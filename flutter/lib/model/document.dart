@@ -58,6 +58,8 @@ class PhotoDocument {
 
   /// How far above white the photograph records light (the import's `hdr.headroom`); 1 for SDR.
   final double headroom;
+  /// How the engine described the photograph as it opened (`hdr`, `original`, …).
+  Json descriptor = const {};
 
   String get name => path.split('/').last;
   Json get edit => history.present;

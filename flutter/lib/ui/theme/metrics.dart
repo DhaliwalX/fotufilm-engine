@@ -22,6 +22,16 @@ abstract final class Metrics {
   static const pictureMin = 420.0;
   static const resizerHit = 8.0;
 
+  // ── Compact layout (styles/phone-layout.css, phone-controls.css) ────────────────────────────
+  static const compactToolbarRow = 48.0;
+  static const compactTouch = 44.0;
+  static const compactRail = 60.0;
+  static const compactRailButton = 52.0;
+  static const compactFilmDock = 196.0;
+
+  /// The inspector's dock: 44% of the window's height, within these.
+  static const compactDockMin = 220.0, compactDockMax = 400.0;
+
   // ── Controls (Spectrum size S) ─────────────────────────────────────────────────────────────
   static const control = 24.0;
   static const icon = 18.0;

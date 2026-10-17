@@ -31,10 +31,16 @@ class AnchoredOverlay {
   final OverlayEntry _entry;
   bool _open = true;
 
+  /// Called once it closes, however it closes.
+  VoidCallback? onClose;
+
+  bool get isOpen => _open;
+
   void close() {
     if (!_open) return;
     _open = false;
     _entry.remove();
+    onClose?.call();
   }
 }
 

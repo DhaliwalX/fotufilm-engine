@@ -20,7 +20,8 @@ abstract interface class EngineConnection {
   void cancel();
 
   /// What the engine's platform services offer (`fotufilm_capabilities`): export formats, HDR,
-  /// Export All, the clipboard, subject selection. Empty where the engine does not say.
+  /// Export All, the clipboard, subject selection, film packs, plug-ins and updates, as
+  /// web/src/backend/desktop/host.js reads them. Empty where the engine does not say.
   Map<String, dynamic> get capabilities;
 
   /// The native `fotufilm_engine *`, for a platform presenter; null in a browser.

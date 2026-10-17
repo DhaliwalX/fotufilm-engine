@@ -48,6 +48,7 @@ class WebEngine implements EngineConnection {
   @override
   bool get opensPaths => false;
 
+  /// A browser installs no packs or plug-ins and has no update feed.
   @override
   Map<String, dynamic> get capabilities => const {};
 
