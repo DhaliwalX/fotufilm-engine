@@ -78,6 +78,7 @@ class _WorkspaceState extends State<Workspace> {
     if (!editor.ready) return;
     final files = await openFiles(acceptedTypeGroups: const [
       XTypeGroup(label: 'Images', extensions: imageExtensions),
+      XTypeGroup(label: 'Videos', extensions: videoExtensions),
     ]);
     // One file brings its folder into the strip.
     await editor.strip.open([for (final f in files) _photo(f)]);
@@ -129,7 +130,8 @@ class _WorkspaceState extends State<Workspace> {
     if (packs.isNotEmpty) editor.filmPacks.importPaths(packs);
     editor.openFiles([
       for (final f in detail.files)
-        if (imageExtensions.contains(f.name.split('.').last.toLowerCase())) _photo(f),
+        if (imageExtensions.contains(f.name.split('.').last.toLowerCase()) || isVideoName(f.name))
+          _photo(f),
     ]);
   }
 

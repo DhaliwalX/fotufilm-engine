@@ -33,13 +33,14 @@ class MenuItem {
 
 /// Opens a menu under the widget of `anchor`.
 void showMenu(BuildContext anchor, List<MenuItem> items,
-        {bool alignEnd = false, double? width, bool matchWidth = false}) =>
+        {bool alignEnd = false, double? width, bool matchWidth = false, bool above = false}) =>
     showAnchored(
       anchor,
       (context, close) => MenuList(items: items, onClose: close),
       alignEnd: alignEnd,
       width: width ?? 220,
       matchWidth: matchWidth,
+      above: above,
     );
 
 class MenuList extends StatefulWidget {
