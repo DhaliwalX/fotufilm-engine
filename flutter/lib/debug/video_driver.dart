@@ -6,7 +6,8 @@
 //   {"playToggle": true}             Play or Pause, as View › Play does
 //   {"seek": 1.5}                    moves the playhead (paused)
 //   {"scrub": [0.5, 3.0, 30]}        drags the seek bar from 0.5 s to 3 s in 30 steps a frame
-//                                    apart and logs how many frames reached the screen
+//                                    apart and logs the frames that reached the screen (movie
+//                                    time: engine call/develop ms + wall ms since the last)
 //   {"videoSettings": {"trimStart": 1}}  changes the edit's video settings
 //   {"playbackQuality": "draft"}     the transport's Playback Quality
 //   {"loop": true}                   loops the selection
@@ -54,10 +55,28 @@ Future<void> runVideoCommand(
     final renderer = editor.renderer!;
     final before = renderer.developed;
     video.startScrub();
+    // Each frame that reached the screen: its movie time and the engine's develop time.
+    final frames = <String>[];
+    var seen = before;
+    final wall = Stopwatch()..start();
+    var last = 0;
+    void note() {
+      if (renderer.developed == seen) return;
+      seen = renderer.developed;
+      final time = (editor.active?.shownRequest?['videoTime'] as num?)?.toStringAsFixed(2);
+      final answer = renderer.lastPreview;
+      final ms = (answer?['renderMilliseconds'] as num?)?.round();
+      final elapsed = (answer?['elapsed'] as num?)?.round();
+      frames.add('$time:$elapsed/${ms}ms+${wall.elapsedMilliseconds - last}');
+      last = wall.elapsedMilliseconds;
+    }
+
+    editor.addListener(note);
     for (var i = 0; i <= steps; i++) {
       video.seek(from + (to - from) * i / steps);
       await Future<void>.delayed(const Duration(milliseconds: 16));
     }
+    editor.removeListener(note);
     final shown = renderer.developed - before;
     final settle = Stopwatch()..start();
     video.endScrub();
@@ -66,7 +85,7 @@ Future<void> runVideoCommand(
       await Future<void>.delayed(const Duration(milliseconds: 1));
     }
     log('scrubbed $steps steps frames=$shown settle=${settle.elapsedMilliseconds}ms '
-        'position=${video.position.toStringAsFixed(3)}');
+        'position=${video.position.toStringAsFixed(3)} ${frames.join(' ')}');
   }
   if (c['videoFormat'] case final String id) editor.exporter.videoFormat = id;
   if (c['exportVideo'] case final String path) {
