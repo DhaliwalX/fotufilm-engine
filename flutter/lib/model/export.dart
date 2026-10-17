@@ -536,13 +536,18 @@ class ExportTool {
     return _queue('${docs.length} photos', [for (final d in docs) d.handle], (engine, job) async {
       _report(job, 'Preparing export', 0);
       final answer = await engine.callInBackground('exportBatch', request, (progress) {
-        final total = progress['total'], name = progress['name'];
+        final total = progress['total'], name = progress['name'], current = progress['current'];
+        // The engine counts photos written; the one developing counts as half done.
+        final written = (progress['progress'] as num?)?.toDouble() ?? 0;
+        final developing = current is num && total is num && total > 0
+            ? (current - .5) / total
+            : 0.0;
         _report(
             job,
             name is String
-                ? 'Exporting $name · ${progress['current']} of $total'
+                ? 'Exporting $name · $current of $total'
                 : 'Exported ${progress['done']} of $total',
-            (progress['progress'] as num?)?.toDouble());
+            written > developing ? written : developing);
       });
       final written = ((answer.json['written'] as List?) ?? const []).cast<Json>();
       final failed = ((answer.json['failed'] as List?) ?? const []).cast<Json>();

@@ -14,6 +14,7 @@ import '../../model/editor.dart';
 import '../../model/presets.dart' show pasteTitle;
 import '../kit/kit.dart';
 import '../theme/theme.dart';
+import 'export_progress.dart';
 import 'film_pack_notice.dart';
 import 'import_menu.dart';
 import 'support_dialog.dart';
@@ -225,6 +226,8 @@ class _EditGroup extends StatelessWidget {
           tooltip: 'Reset all edits',
           onPressed: doc != null && !exporting ? editor.resetEdit : null),
       gap,
+      // Exports running in the background (export_progress.dart).
+      if (editor.exporter.busy) ...[ExportProgressButton(editor: editor), gap],
       QuietButton(
           icon: 'export',
           tooltip: 'Export (${shortcutLabel('⌘E')})',
@@ -258,7 +261,9 @@ class _EditGroup extends StatelessWidget {
           if (child is QuietButton)
             _touch(child)
           else if (child is Builder)
-            Builder(builder: (anchor) => _touch(child.builder(anchor) as QuietButton)),
+            Builder(builder: (anchor) => _touch(child.builder(anchor) as QuietButton))
+          else if (child is ExportProgressButton)
+            ExportProgressButton(editor: editor, size: Metrics.compactTouch),
       ],
     );
   }
