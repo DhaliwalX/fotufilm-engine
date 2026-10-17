@@ -4806,6 +4806,43 @@
       "webTransform" : "runtime"
     },
     {
+      "availability" : "always",
+      "detail" : "Widen or narrow the margin around the photograph.",
+      "documentation" : "Scales the margin of a Paper Border, Carrier Border, White or Black Mount, or posting canvas, from none at 0% to three times the preset at 300%. A paper sheet keeps its size, so a wider easel margin prints a smaller picture; a mount or canvas grows around the photograph. Film Border and Slide Mount follow physical dimensions and have no Border Width. Included in saved edits and exports.",
+      "drives" : [
+
+      ],
+      "field" : "printFrameMargin",
+      "group" : "print",
+      "kind" : "slider",
+      "omitted" : {
+        "android" : "Frame finishing is offered in the iPhone, iPad and Mac photo editors.",
+        "app" : "Border Width is offered in the Mac and browser photo editors.",
+        "cli" : "Frame finishing is offered in the iPhone, iPad and Mac photo editors.",
+        "finalcut" : "The host owns output framing.",
+        "resolve" : "The host owns output framing."
+      },
+      "scale" : {
+        "admittedMax" : 3,
+        "admittedMin" : 0,
+        "max" : 3,
+        "min" : 0,
+        "neutral" : 1,
+        "stops" : [
+
+        ],
+        "unit" : "percent"
+      },
+      "scope" : "edit",
+      "section" : "printPaper",
+      "surfaces" : [
+        "desktop",
+        "web"
+      ],
+      "title" : "Border Width",
+      "webTransform" : "runtime"
+    },
+    {
       "availability" : "printStage",
       "commandLineFlag" : "--paper",
       "commandLineGeneric" : false,

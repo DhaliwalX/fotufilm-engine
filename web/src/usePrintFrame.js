@@ -21,6 +21,7 @@ export function usePrintFrame(edit, width = 1, height = 1, enabled = true) {
       {
         stock: request.stock,
         printFrame: request.frame,
+        printFrameMargin: request.margin,
         format: request.format,
         medium: request.medium,
         profile: edit.profile,

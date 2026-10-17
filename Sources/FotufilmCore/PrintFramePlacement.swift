@@ -29,7 +29,7 @@ public struct PrintFramePlacement: Codable, Equatable, Sendable {
             let band = configuration.frame == .emulsion
                 ? edge ?? UnexposedEdge.Margins(left: 0, right: 0, top: 0, bottom: 0)
                 : UnexposedEdge.Margins(left: 0, right: 0, top: 0, bottom: 0)
-            let short = Double(min(width, height))
+            let short = Double(min(width, height)) * (configuration.margin ?? 1)
             let horizontal = ceil(short * (configuration.frame == .emulsion ? 0.07 : 0.08))
             let vertical = ceil(short * (configuration.frame == .emulsion ? 0.11 : 0.08))
             return Self(size: Size(width: Double(width + band.left + band.right) + 2 * horizontal,
