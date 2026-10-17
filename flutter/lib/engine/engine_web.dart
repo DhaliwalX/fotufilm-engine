@@ -59,8 +59,7 @@ class WebEngine implements EngineConnection {
           ? const FotufilmCancelled()
           : FotufilmException(error);
     }
-    return EngineReply(jsonDecode(answer.json!.toDart) as Map<String, dynamic>,
-        answer.payload?.toDart);
+    return EngineReply(jsonDecode(answer.json!.toDart), answer.payload?.toDart);
   }
 
   @override

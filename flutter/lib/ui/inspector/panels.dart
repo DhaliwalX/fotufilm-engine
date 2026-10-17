@@ -7,14 +7,18 @@ import 'controls.dart';
 import 'develop_panel.dart';
 import 'expose_panel.dart';
 import 'film_panel.dart';
+import 'negative_panel.dart';
 import 'print_panel.dart';
+import 'roll_panel.dart';
 
 List<Widget> panelSections(Panel panel, InspectorControls controls) => switch (panel) {
+      // A scanned negative's Film panel is its reading (EditorInspector.jsx).
+      Panel.film when controls.edit['negative'] != null => negativePanel(controls),
       Panel.film => filmPanel(controls),
       Panel.light => exposePanel(controls),
       Panel.develop => developPanel(controls),
       Panel.print => printPanel(controls),
-      Panel.roll => const [],
+      Panel.roll => rollPanel(controls),
       Panel.crop => const [],
       Panel.selective => const [],
       Panel.pipeline => const [],

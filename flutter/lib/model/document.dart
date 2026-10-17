@@ -57,6 +57,10 @@ class PhotoDocument {
   String get name => path.split('/').last;
   Json get edit => history.present;
 
+  /// What the import said of a scanned negative (`negative`): the films its base looks like and
+  /// the light frames kept then. Null for a photograph.
+  Json? negativeScan;
+
   /// The undeveloped picture the import answered with: on show until the first develop, and the
   /// strip's picture.
   ui.Image? importPicture;

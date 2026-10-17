@@ -49,8 +49,7 @@ class NativeEngine implements EngineConnection {
         final completer = engine._pending.remove(id);
         if (completer == null) continue;
         if (result is String) {
-          completer.complete(EngineReply(jsonDecode(result) as Map<String, dynamic>,
-              bytes?.materialize().asUint8List()));
+          completer.complete(EngineReply(jsonDecode(result), bytes?.materialize().asUint8List()));
         } else if (result is (bool, String)) {
           completer.completeError(
               result.$1 ? const FotufilmCancelled() : FotufilmException(result.$2));

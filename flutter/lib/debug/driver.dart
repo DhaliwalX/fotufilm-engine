@@ -26,6 +26,7 @@
 //   {"benchDrag": ["ev", 2000]}     moves a slider every 16 ms for 2 s, as a hand does, and logs
 //                                   how many develops reached the screen, then the settle
 //   {"wait": "idle"}                answers once nothing is rendering
+//   and scanned negatives' commands (negative_driver.dart)
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -36,6 +37,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
 import '../model/editor.dart';
+import 'negative_driver.dart';
 
 class Driver {
   Driver._(this.dir, this.editor, this.boundary);
@@ -170,6 +172,7 @@ class Driver {
     }
     if (c['benchFilm'] case final String id) await _timed('film $id', () async => editor.chooseStock(id));
     if (c['benchDrag'] case [final String key, final int ms]) await _benchDrag(key, ms);
+    await driveNegatives(editor, c, _log);
     if (c['wait'] == 'idle') {
       final deadline = DateTime.now().add(const Duration(seconds: 120));
       await Future<void>.delayed(const Duration(milliseconds: 400));

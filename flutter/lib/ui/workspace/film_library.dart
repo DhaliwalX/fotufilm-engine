@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/widgets.dart';
 
 import '../../model/editor.dart';
+import '../../model/negative_document.dart';
 import '../kit/kit.dart';
 import '../theme/theme.dart';
 import 'picture.dart';
@@ -37,10 +38,12 @@ class _FilmLibraryState extends State<FilmLibrary> {
         editor.filmType.holds(stock) &&
         (query.isEmpty ||
             (stock?['name'] as String? ?? 'normal').toLowerCase().contains(query));
+    // A negative is read only as a film that has a negative (useOutputState.js).
+    final negative = isNegative(editor.edit);
     return [
       if (matches(null)) null,
       for (final s in editor.stocks)
-        if (matches(s)) s,
+        if (matches(s) && (!negative || readsNegative(s))) s,
     ];
   }
 

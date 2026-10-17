@@ -29,7 +29,13 @@ abstract interface class EngineConnection {
 Future<EngineConnection> connectEngine() => platform.connect();
 
 class EngineReply {
-  EngineReply(this.json, this.payload);
+  EngineReply(Object? answer, this.payload)
+      : value = answer,
+        json = answer is Map<String, dynamic> ? answer : const {};
+
+  /// The answer as decoded: an object for most calls, but a list or null for a few (`stages`,
+  /// `sampleScene`), which [json] reads as empty.
+  final Object? value;
   final Map<String, dynamic> json;
   final Uint8List? payload;
 

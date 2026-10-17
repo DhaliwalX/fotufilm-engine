@@ -19,10 +19,11 @@ class InspectorControls {
   Map get profile => edit['profile'] as Map;
   List get available => (stock?['available'] as List?) ?? const [];
 
-  /// The editor's own sliders of a group. Without a film, the film-only ones are left out.
-  List<Widget> sliders(String group) => [
+  /// The editor's own sliders of a group. Without a film, the film-only ones are left out, as
+  /// they are with `film` false (a scanned negative's light, which acts on its print).
+  List<Widget> sliders(String group, {bool film = true}) => [
         for (final s in catalogue.sliders)
-          if (s.group == group && (hasFilm || s.availability != 'film'))
+          if (s.group == group && ((film && hasFilm) || s.availability != 'film'))
             AdjustmentRow(
               key: ValueKey(s.key),
               label: s.label,
