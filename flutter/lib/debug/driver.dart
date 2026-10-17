@@ -60,7 +60,9 @@
 //   {"strip": true}                 logs the strip's photos ('*' shown, '…' waiting) and whether
 //                                   a library photo is flying to the viewer
 //   {"key": "l", "meta": false}     presses and releases a key (a letter, a digit, Enter,
-//                                   Escape, Backspace or an arrow)
+//                                   Escape, Backspace, an arrow, space, =, +, -, \ or ,), with
+//                                   "meta", "shift", "alt" and "ctrl" held
+//   and the menus' and keyboard's commands (commands_driver.dart)
 //   {"dialog": "settings"}          opens an app dialog (settings, plugins, support, update)
 //   {"settingsPane": "filmModel"}   shows a Settings pane (general, output, filmModel)
 //   {"closeDialog": true}           closes the app dialog on show
@@ -87,6 +89,7 @@ import '../model/library_model.dart';
 import '../ui/workspace/crop_overlay.dart';
 import '../ui/workspace/histogram_panel.dart';
 import '../ui/workspace/settings_dialog.dart';
+import 'commands_driver.dart';
 import 'editing_driver.dart';
 import 'negative_driver.dart';
 
@@ -336,7 +339,10 @@ class Driver {
       _log('strip ${editor.strip.items.map((i) => '${i.name}${i.doc == editor.active && i.doc != null ? '*' : ''}${i.waiting ? '…' : ''}').join(', ')}'
           '${editor.library.handoff != null ? ' (handoff)' : ''}');
     }
-    if (c['key'] case final String name) await _key(name, meta: c['meta'] == true);
+    if (c['key'] case final String name) {
+      await _key(name,
+          meta: c['meta'] == true, shift: c['shift'] == true, alt: c['alt'] == true, ctrl: c['ctrl'] == true);
+    }
     if (c['setting'] case [final String key, final Object? value]) editor.settings.set(key, value);
     if (c['settingsPane'] case final String pane) {
       SettingsDialog.pane = SettingsPane.values.byName(pane);
@@ -369,6 +375,7 @@ class Driver {
       }
     }
     await runEditingCommand(c, editor, boundary, _log);
+    await runCommandsCommand(c, editor, _log, key: _hold);
     await WidgetsBinding.instance.endOfFrame;
   }
 
@@ -390,10 +397,10 @@ class Driver {
       .expand((f) => f.photos)
       .firstWhere((p) => p.file == file, orElse: () => throw StateError('$file is not in the library.'));
 
-  /// A key pressed and released, through the focus tree as the keyboard's are.
-  Future<void> _key(String name, {bool meta = false}) async {
-    final lower = name.toLowerCase();
-    final (PhysicalKeyboardKey physical, LogicalKeyboardKey logical, String? character) = switch (lower) {
+  /// A key by its name: its physical and logical keys and the character it types.
+  static (PhysicalKeyboardKey, LogicalKeyboardKey, String?) _keyNamed(String name) {
+    final lower = name.length == 1 ? name : name.toLowerCase();
+    return switch (lower) {
       'enter' => (PhysicalKeyboardKey.enter, LogicalKeyboardKey.enter, null),
       'escape' => (PhysicalKeyboardKey.escape, LogicalKeyboardKey.escape, null),
       'backspace' => (PhysicalKeyboardKey.backspace, LogicalKeyboardKey.backspace, null),
@@ -401,10 +408,16 @@ class Driver {
       'arrowleft' => (PhysicalKeyboardKey.arrowLeft, LogicalKeyboardKey.arrowLeft, null),
       'arrowdown' => (PhysicalKeyboardKey.arrowDown, LogicalKeyboardKey.arrowDown, null),
       'arrowup' => (PhysicalKeyboardKey.arrowUp, LogicalKeyboardKey.arrowUp, null),
-      _ when RegExp(r'^[a-z]$').hasMatch(lower) => (
-          PhysicalKeyboardKey(0x00070004 + lower.codeUnitAt(0) - 0x61),
-          LogicalKeyboardKey(lower.codeUnitAt(0)),
-          lower,
+      'space' || ' ' => (PhysicalKeyboardKey.space, LogicalKeyboardKey.space, ' '),
+      '=' => (PhysicalKeyboardKey.equal, LogicalKeyboardKey.equal, '='),
+      '+' => (PhysicalKeyboardKey.equal, LogicalKeyboardKey.add, '+'),
+      '-' => (PhysicalKeyboardKey.minus, LogicalKeyboardKey.minus, '-'),
+      '\\' => (PhysicalKeyboardKey.backslash, LogicalKeyboardKey.backslash, '\\'),
+      ',' => (PhysicalKeyboardKey.comma, LogicalKeyboardKey.comma, ','),
+      _ when RegExp(r'^[a-zA-Z]$').hasMatch(lower) => (
+          PhysicalKeyboardKey(0x00070004 + lower.toLowerCase().codeUnitAt(0) - 0x61),
+          LogicalKeyboardKey(lower.toLowerCase().codeUnitAt(0)),
+          lower.toLowerCase(),
         ),
       _ when RegExp(r'^[0-9]$').hasMatch(lower) => (
           PhysicalKeyboardKey(lower == '0' ? 0x00070027 : 0x0007001d + int.parse(lower)),
@@ -413,22 +426,48 @@ class Driver {
         ),
       _ => throw ArgumentError('No key $name'),
     };
+  }
+
+  /// A key event through the focus tree, as the keyboard's arrive.
+  static void _send(KeyEvent event) {
     // The focus tree still takes key messages, which is how the engine's keys reach it.
     // ignore: deprecated_member_use
     final handler = ServicesBinding.instance.keyEventManager.keyMessageHandler;
-    final time = Duration(milliseconds: DateTime.now().millisecondsSinceEpoch);
-    void send(KeyEvent event) {
-      HardwareKeyboard.instance.handleKeyEvent(event);
-      // ignore: deprecated_member_use
-      handler?.call(KeyMessage([event], null));
-    }
+    HardwareKeyboard.instance.handleKeyEvent(event);
+    // ignore: deprecated_member_use
+    handler?.call(KeyMessage([event], null));
+  }
 
-    const metaKey = (PhysicalKeyboardKey.metaLeft, LogicalKeyboardKey.metaLeft);
-    if (meta) send(KeyDownEvent(physicalKey: metaKey.$1, logicalKey: metaKey.$2, timeStamp: time));
-    send(KeyDownEvent(physicalKey: physical, logicalKey: logical, character: character, timeStamp: time));
+  static Duration get _now => Duration(milliseconds: DateTime.now().millisecondsSinceEpoch);
+
+  /// A key held down, or let go.
+  Future<void> _hold(String name, {required bool down}) async {
+    final (physical, logical, character) = _keyNamed(name);
+    _send(down
+        ? KeyDownEvent(physicalKey: physical, logicalKey: logical, character: character, timeStamp: _now)
+        : KeyUpEvent(physicalKey: physical, logicalKey: logical, timeStamp: _now));
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+  }
+
+  /// A key pressed and released with the modifiers named held.
+  Future<void> _key(String name,
+      {bool meta = false, bool shift = false, bool alt = false, bool ctrl = false}) async {
+    final (physical, logical, character) = _keyNamed(name);
+    final modifiers = [
+      if (meta) (PhysicalKeyboardKey.metaLeft, LogicalKeyboardKey.metaLeft),
+      if (ctrl) (PhysicalKeyboardKey.controlLeft, LogicalKeyboardKey.controlLeft),
+      if (alt) (PhysicalKeyboardKey.altLeft, LogicalKeyboardKey.altLeft),
+      if (shift) (PhysicalKeyboardKey.shiftLeft, LogicalKeyboardKey.shiftLeft),
+    ];
+    for (final (p, l) in modifiers) {
+      _send(KeyDownEvent(physicalKey: p, logicalKey: l, timeStamp: _now));
+    }
+    _send(KeyDownEvent(physicalKey: physical, logicalKey: logical, character: character, timeStamp: _now));
     await Future<void>.delayed(const Duration(milliseconds: 30));
-    send(KeyUpEvent(physicalKey: physical, logicalKey: logical, timeStamp: time));
-    if (meta) send(KeyUpEvent(physicalKey: metaKey.$1, logicalKey: metaKey.$2, timeStamp: time));
+    _send(KeyUpEvent(physicalKey: physical, logicalKey: logical, timeStamp: _now));
+    for (final (p, l) in modifiers.reversed) {
+      _send(KeyUpEvent(physicalKey: p, logicalKey: l, timeStamp: _now));
+    }
     await Future<void>.delayed(const Duration(milliseconds: 200));
   }
 

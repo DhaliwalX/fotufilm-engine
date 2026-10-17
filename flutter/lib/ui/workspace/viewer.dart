@@ -1,6 +1,7 @@
 // The viewer (web/src/editor/EditorViewer.jsx, ImageCanvas.jsx, styles/viewer.css): the
-// photograph on the canvas colour, fitted or magnified, the original while Space is held, and the
-// viewer's overlays, with the photo strip under it.
+// photograph on the canvas colour, fitted or magnified, the original while Space or a press on it
+// is held, and the viewer's overlays, with the photo strip under it.
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
@@ -93,6 +94,48 @@ class _PhotoCanvasState extends State<PhotoCanvas> {
 
   EditorModel get editor => widget.editor;
 
+  // ── Press to compare (usePhotoNavigation.js) ──────────────────────────────────────────────
+
+  /// Where each pointer on the photograph went down.
+  final Map<int, Offset> _pressed = {};
+  Timer? _hold;
+
+  @override
+  void dispose() {
+    _hold?.cancel();
+    super.dispose();
+  }
+
+  /// A press shows the original at any zoom, a touch once it has been held a moment; a drag or a
+  /// second finger ends it. The crop and the samplers take the pointer for themselves.
+  void _pressDown(PointerDownEvent event) {
+    final touch = event.kind == PointerDeviceKind.touch;
+    if (!touch && event.buttons != kPrimaryButton) return;
+    if (editor.crop.showing || editor.selective.sampling || editor.negatives.sampling) return;
+    _pressed[event.pointer] = event.localPosition;
+    _hold?.cancel();
+    if (_pressed.length > 1) {
+      editor.setComparing(false);
+    } else if (touch) {
+      _hold = Timer(const Duration(milliseconds: 180), () => editor.setComparing(true));
+    } else {
+      editor.setComparing(true);
+    }
+  }
+
+  void _pressMove(PointerMoveEvent event) {
+    final start = _pressed[event.pointer];
+    if (start == null || (event.localPosition - start).distance <= 6) return;
+    _hold?.cancel();
+    editor.setComparing(false);
+  }
+
+  void _pressUp(PointerEvent event) {
+    if (_pressed.remove(event.pointer) == null) return;
+    _hold?.cancel();
+    editor.setComparing(false);
+  }
+
   void _scroll(PointerSignalEvent event) {
     if (event is! PointerScrollEvent) return;
     final keys = HardwareKeyboard.instance;
@@ -118,6 +161,10 @@ class _PhotoCanvasState extends State<PhotoCanvas> {
     final rect = editor.view.photoRect(photo);
     final detail = _detail(photo);
     return Listener(
+      onPointerDown: _pressDown,
+      onPointerMove: _pressMove,
+      onPointerUp: _pressUp,
+      onPointerCancel: _pressUp,
       onPointerSignal: _scroll,
       onPointerPanZoomStart: (_) => _pinchStart = editor.scale,
       onPointerPanZoomUpdate: _pinch,

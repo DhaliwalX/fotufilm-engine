@@ -1,14 +1,18 @@
 // The toolbar's Add media button (web/src/editor/ImportMenu.jsx): a menu of what to import, an
-// image or a scanned negative, and exposures to merge into trichromatic scans.
+// image or a scanned negative, and exposures to merge into trichromatic scans. Fotufilm Flutter
+// opens no video, so the web editor's Video item is left out.
 import 'package:flutter/widgets.dart';
 
 import '../../model/editor.dart';
 import '../kit/kit.dart';
+import '../theme/theme.dart';
 
 class ImportMenu extends StatelessWidget {
-  const ImportMenu({super.key, required this.editor, required this.onImage});
+  const ImportMenu(
+      {super.key, required this.editor, required this.onImage, this.size = Metrics.control});
   final EditorModel editor;
   final VoidCallback onImage;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
@@ -17,6 +21,7 @@ class ImportMenu extends StatelessWidget {
       builder: (anchor) => QuietButton(
         icon: 'plus',
         tooltip: 'Add media',
+        size: size,
         onPressed: editor.exporting
             ? null
             : () => showMenu(anchor, width: 200, [
@@ -24,9 +29,10 @@ class ImportMenu extends StatelessWidget {
                   MenuItem(
                       label: 'Negative',
                       onSelected: scans.canImport ? scans.chooseNegatives : null),
-                  MenuItem(
-                      label: 'Trichromatic Negative',
-                      onSelected: scans.canMerge ? scans.chooseExposures : null),
+                  if (editor.engine?.opensPaths ?? true)
+                    MenuItem(
+                        label: 'Trichromatic Negative',
+                        onSelected: scans.canMerge ? scans.chooseExposures : null),
                 ]),
       ),
     );

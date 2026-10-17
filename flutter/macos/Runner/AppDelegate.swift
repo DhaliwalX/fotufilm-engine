@@ -32,6 +32,7 @@ final class OpenedFiles {
 
   func add(_ paths: [String]) {
     guard !paths.isEmpty else { return }
+    RecentFiles.note(paths)
     if let channel {
       channel.invokeMethod("open", arguments: paths)
     } else {

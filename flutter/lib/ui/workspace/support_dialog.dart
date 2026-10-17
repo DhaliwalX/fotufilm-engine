@@ -51,6 +51,7 @@ List<MenuItem> legalMenuItems(Catalogue catalogue) => [
         MenuItem(
           label: link['title'] as String,
           icon: link['icon'] as String?,
+          link: true,
           onSelected: () => HostWindow.openUrl(link['href'] as String),
         ),
     ];

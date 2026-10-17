@@ -2,11 +2,10 @@
 // the frame outside the crop darkened, the crop's outline, its corner and edge handles, and the
 // rule of thirds while it moves. Dragging a handle resizes the crop, held to its ratio when one is
 // chosen; dragging inside moves it. A drag is one step of the history, made when it is let go.
-// Return applies the tool, Escape leaves it, and C opens or closes it (useEditorShortcuts.js).
+// Return applies the tool and Escape leaves it (app/editor_shortcuts.dart).
 import 'dart:convert';
 
 import 'package:flutter/gestures.dart' show kPrimaryMouseButton;
-import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../../model/crop_geometry.dart';
@@ -24,31 +23,6 @@ List<Widget> cropOverlays(EditorModel editor, Rect photo) {
       child: CropOverlay(key: CropOverlay.surface, editor: editor, photo: photo.size),
     ),
   ];
-}
-
-/// The crop tool's keys: Return applies it, Escape leaves it, and C opens or closes it, unless a
-/// text field has the keys.
-KeyEventResult cropKeys(EditorModel editor, KeyEvent event) {
-  if (event is! KeyDownEvent || editor.exporting) return KeyEventResult.ignored;
-  final focus = FocusManager.instance.primaryFocus?.context;
-  if (focus != null && (focus.widget is EditableText ||
-      focus.findAncestorWidgetOfExactType<EditableText>() != null)) {
-    return KeyEventResult.ignored;
-  }
-  final key = event.logicalKey;
-  final keys = HardwareKeyboard.instance;
-  final crop = editor.crop;
-  if (crop.showing && (key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.numpadEnter)) {
-    crop.done();
-  } else if (crop.showing && key == LogicalKeyboardKey.escape) {
-    crop.leave();
-  } else if (key == LogicalKeyboardKey.keyC && editor.active != null &&
-      !keys.isMetaPressed && !keys.isControlPressed && !keys.isAltPressed) {
-    crop.toggle();
-  } else {
-    return KeyEventResult.ignored;
-  }
-  return KeyEventResult.handled;
 }
 
 class CropOverlay extends StatefulWidget {

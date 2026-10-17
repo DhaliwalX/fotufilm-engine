@@ -69,9 +69,9 @@ class CropTool {
     if (editor.active != null) editor.toggleTool(Panel.crop);
   }
 
-  /// Leaves the tool for the tab it was opened from.
+  /// Leaves the tool for the Film panel, as Done and Esc do (CropInspector.jsx).
   void leave() {
-    if (editor.panel == Panel.crop) editor.toggleTool(Panel.crop);
+    if (editor.panel == Panel.crop) editor.setPanel(Panel.film);
   }
 
   /// Done: the edit so far is one step, and the cropped photograph shows.

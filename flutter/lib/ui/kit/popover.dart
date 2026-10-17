@@ -34,15 +34,23 @@ class AnchoredOverlay {
   /// Called once it closes, however it closes.
   VoidCallback? onClose;
 
+  /// A modal counts itself out of [openModals] as it closes.
+  bool _modal = false;
+
   bool get isOpen => _open;
 
   void close() {
     if (!_open) return;
     _open = false;
     _entry.remove();
+    if (_modal) openModals.value--;
     onClose?.call();
   }
 }
+
+/// How many modals are open over the window. While one is, the photograph's commands wait, as
+/// the web editor's do while it shows a dialog (useNativeCommands.js `dialog`).
+final openModals = ValueNotifier<int>(0);
 
 /// Opens `builder`'s content under (or over) the widget of `anchor`. A click elsewhere closes it.
 AnchoredOverlay showAnchored(
@@ -95,7 +103,8 @@ AnchoredOverlay showModal(BuildContext context, Widget Function(VoidCallback clo
       Center(child: builder(() => handle.close())),
     ])),
   );
-  handle = AnchoredOverlay._(entry);
+  handle = AnchoredOverlay._(entry).._modal = true;
   Overlay.of(context).insert(entry);
+  openModals.value++;
   return handle;
 }

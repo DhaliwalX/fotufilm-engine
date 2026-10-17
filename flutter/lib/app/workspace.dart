@@ -1,12 +1,11 @@
 // The editor's window: the toolbar over the film library, the viewer and the inspector, with the
-// panels' resizers, dropped files, Space to compare and the commands.
+// panels' resizers, dropped files, the commands and their menus, and the keyboard.
 import 'dart:math' as math;
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart' show Material, MaterialType;
-import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../model/editor.dart';
@@ -15,8 +14,7 @@ import '../model/panel_layout.dart';
 import '../ui/inspector/inspector.dart';
 import '../ui/theme/theme.dart';
 import '../ui/workspace/app_dialogs.dart';
-import '../ui/workspace/crop_overlay.dart';
-import '../ui/workspace/dialogs.dart';
+import '../ui/workspace/editing_dialogs.dart';
 import '../ui/workspace/export_dialog.dart';
 import '../ui/workspace/film_library.dart';
 import '../ui/workspace/library/library_handoff.dart';
@@ -26,7 +24,9 @@ import '../ui/workspace/saved_export_notice.dart';
 import '../ui/workspace/toolbar.dart';
 import '../ui/workspace/viewer.dart';
 import 'commands.dart';
+import 'editor_shortcuts.dart';
 import 'host_window.dart';
+import 'native_menu.dart';
 
 const imageExtensions = [
   'jpg', 'jpeg', 'png', 'tif', 'tiff', 'heic', 'heif', 'avif', 'exr', 'webp', //
@@ -45,6 +45,21 @@ class _WorkspaceState extends State<Workspace> {
   EditorModel get editor => widget.editor;
   final _focus = FocusNode(debugLabel: 'workspace');
   bool _dropping = false;
+  late final AppLifecycleListener _lifecycle;
+
+  /// The commands, with what they open in this window.
+  late final commands = EditorCommands(
+    editor,
+    CommandActions(
+      open: _open,
+      export: _export,
+      copySettings: () => showCopySettingsDialog(context, editor),
+      savePreset: () => showSavePresetDialog(context, editor),
+      managePresets: () => showPresetsDialog(context, editor),
+      importLooks: () => importLooks(context, editor),
+    ),
+  );
+  late final _shortcuts = EditorShortcuts(commands);
 
   @override
   void initState() {
@@ -52,6 +67,27 @@ class _WorkspaceState extends State<Workspace> {
     editor.addListener(_changed);
     editor.library.addListener(_libraryChanged);
     editor.layout.addListener(_changed);
+    // The window put behind ends the comparison and a slider's drag (useEditorShortcuts.js).
+    _lifecycle = AppLifecycleListener(onInactive: () {
+      editor.setComparing(false);
+      editor.endEdit();
+    });
+    FocusManager.instance.addListener(_keepKeys);
+  }
+
+  /// Keys that would go nowhere (a dialog closed, a focused control gone) come back to the
+  /// editor, as a page's keys reach its window whatever has the focus.
+  void _keepKeys() {
+    bool lost() => switch (FocusManager.instance.primaryFocus) {
+          null => true,
+          // A scope holds the focus itself when nothing in it does.
+          final FocusScopeNode _ => true,
+          _ => false,
+        };
+    if (!lost()) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && lost()) _focus.requestFocus();
+    });
   }
 
   @override
@@ -59,6 +95,8 @@ class _WorkspaceState extends State<Workspace> {
     editor.removeListener(_changed);
     editor.library.removeListener(_libraryChanged);
     editor.layout.removeListener(_changed);
+    _lifecycle.dispose();
+    FocusManager.instance.removeListener(_keepKeys);
     _focus.dispose();
     super.dispose();
   }
@@ -79,6 +117,7 @@ class _WorkspaceState extends State<Workspace> {
     final files = await openFiles(acceptedTypeGroups: const [
       XTypeGroup(label: 'Images', extensions: imageExtensions),
     ]);
+    if (!kIsWeb && files.isNotEmpty) HostWindow.noteRecent([for (final f in files) f.path]);
     // One file brings its folder into the strip.
     await editor.strip.open([for (final f in files) _photo(f)]);
   }
@@ -89,37 +128,6 @@ class _WorkspaceState extends State<Workspace> {
 
   void _export() {
     if (editor.active != null) showExportDialog(context, editor);
-  }
-
-  /// Holding Space shows the original, as in the web editor.
-  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
-    if (cropKeys(editor, event) == KeyEventResult.handled) return KeyEventResult.handled;
-    final keys = HardwareKeyboard.instance;
-    // L shows and hides the library, unless a field is being typed in (useEditorShortcuts.js).
-    if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.keyL &&
-        !keys.isMetaPressed && !keys.isControlPressed && !keys.isAltPressed &&
-        FocusManager.instance.primaryFocus?.context?.findAncestorWidgetOfExactType<EditableText>() == null) {
-      editor.library.toggle();
-      return KeyEventResult.handled;
-    }
-    // ⌘A chooses every open photo for Paste Settings and presets; Esc goes back to the shown one
-    // (useEditorShortcuts.js).
-    if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.keyA &&
-        (HostWindow.commandKeyIsMeta ? keys.isMetaPressed : keys.isControlPressed) &&
-        !keys.isShiftPressed && !keys.isAltPressed && editor.documents.length > 1 &&
-        !editor.library.open) {
-      editor.selection.selectAll();
-      return KeyEventResult.handled;
-    }
-    if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.escape) {
-      editor.selection.clear();
-    }
-    if (event.logicalKey != LogicalKeyboardKey.space || editor.library.open) {
-      return KeyEventResult.ignored;
-    }
-    if (event is KeyDownEvent) editor.setComparing(true);
-    if (event is KeyUpEvent) editor.setComparing(false);
-    return KeyEventResult.handled;
   }
 
   void _drop(DropDoneDetails detail) {
@@ -135,13 +143,12 @@ class _WorkspaceState extends State<Workspace> {
 
   @override
   Widget build(BuildContext context) {
-    final menus = editorCommands(editor, open: _open, export: _export, context: context);
-    return CommandHost(
-      menus: menus,
+    return NativeMenuBar(
+      commands: commands,
       child: Focus(
         focusNode: _focus,
         autofocus: true,
-        onKeyEvent: _onKey,
+        onKeyEvent: (node, event) => _shortcuts.handle(event),
         child: DropTarget(
           onDragEntered: (_) => setState(() => _dropping = true),
           onDragExited: (_) => setState(() => _dropping = false),
@@ -155,12 +162,7 @@ class _WorkspaceState extends State<Workspace> {
                 child: Stack(children: [
                   Column(children: [
                     AppDialogHost(editor: editor),
-                    EditorToolbar(
-                      editor: editor,
-                      onOpen: _open,
-                      onExport: _export,
-                      onShortcuts: () => showShortcutsDialog(context, shortcutRows(menus)),
-                    ),
+                    EditorToolbar(commands: commands),
                     // The photo library covers the panels when it is shown.
                     Expanded(
                       child: Stack(children: [

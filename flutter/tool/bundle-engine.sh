@@ -13,7 +13,8 @@ fi
 mkdir -p "$app/Contents/Frameworks" "$app/Contents/Resources"
 rsync -a "$engine/libfotufilm.dylib" "$app/Contents/Frameworks/"
 rsync -a --delete "$engine/Resources/Stocks" "$engine/Resources/CameraProfiles" "$app/Contents/Resources/"
-for file in rec2020-reflectance-prior.coeff LICENSE NOTICE ThirdPartyNotices.txt; do
+# sample.png is File › Use Sample Photo's generated chart (cef/build-engine.sh).
+for file in rec2020-reflectance-prior.coeff LICENSE NOTICE ThirdPartyNotices.txt sample.png; do
   [ -f "$engine/Resources/$file" ] && rsync -a "$engine/Resources/$file" "$app/Contents/Resources/"
 done
 codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY:--}" "$app/Contents/Frameworks/libfotufilm.dylib"
