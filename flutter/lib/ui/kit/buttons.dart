@@ -35,12 +35,16 @@ class QuietButton extends StatefulWidget {
     this.selected = false,
     this.size = Metrics.control,
     this.iconSize = Metrics.icon,
+    this.upsideDown = false,
   });
 
   final String? icon, label, tooltip;
   final VoidCallback? onPressed;
   final bool selected;
   final double size, iconSize;
+
+  /// The icon turned half round (a chevron pointing up).
+  final bool upsideDown;
 
   @override
   State<QuietButton> createState() => _QuietButtonState();
@@ -72,10 +76,15 @@ class _QuietButtonState extends State<QuietButton> with PointerTint {
           constraints: BoxConstraints(minWidth: widget.size),
           padding: widget.label == null ? null : const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(Metrics.radius)),
-          alignment: Alignment.center,
-          child: widget.label != null
+          // Centred in its own width, so a text button under a stretching column stays its size.
+          child: Center(
+            widthFactor: 1,
+            child: widget.label != null
               ? Text(widget.label!, style: editorText(context, color: fg))
-              : AppIcon(widget.icon!, size: widget.iconSize, color: fg),
+              : RotatedBox(
+                  quarterTurns: widget.upsideDown ? 2 : 0,
+                  child: AppIcon(widget.icon!, size: widget.iconSize, color: fg)),
+          ),
         ),
       ),
     );
@@ -121,13 +130,16 @@ class _PillButtonState extends State<PillButton> with PointerTint {
           height: Metrics.control,
           width: widget.expand ? double.infinity : null,
           padding: const EdgeInsets.symmetric(horizontal: 12),
-          alignment: Alignment.center,
           decoration: BoxDecoration(
             color: hovered && enabled ? Color.lerp(bg, palette.text, .06) : bg,
             borderRadius: BorderRadius.circular(Metrics.control / 2),
           ),
-          child: Text(widget.label,
-              style: editorText(context, weight: FontWeight.w700, color: fg)),
+          // Its own width unless it expands, even under a stretching column.
+          child: Center(
+            widthFactor: widget.expand ? null : 1,
+            child: Text(widget.label,
+                style: editorText(context, weight: FontWeight.w700, color: fg)),
+          ),
         ),
       ),
     );

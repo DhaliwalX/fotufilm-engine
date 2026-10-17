@@ -45,6 +45,7 @@ class PhotoDocument {
     required this.history,
     this.identity,
     this.raw = false,
+    this.headroom = 1,
   });
 
   final String path;
@@ -53,6 +54,9 @@ class PhotoDocument {
   final String? identity;
   final bool raw;
   final History history;
+
+  /// How far above white the photograph records light (the import's `hdr.headroom`); 1 for SDR.
+  final double headroom;
 
   String get name => path.split('/').last;
   Json get edit => history.present;

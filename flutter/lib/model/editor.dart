@@ -10,11 +10,14 @@ import 'package:flutter/foundation.dart';
 
 import '../engine/engine.dart';
 import '../engine/presenter.dart';
+import 'band_sets.dart';
 import 'catalogue.dart';
 import 'document.dart';
 import 'edit.dart';
 import 'film_types.dart';
 import 'histogram.dart';
+import 'lens.dart';
+import 'print_frame.dart';
 import 'renderer.dart';
 import 'settings.dart';
 import 'view.dart';
@@ -93,7 +96,7 @@ class EditorModel extends ChangeNotifier implements RenderHost {
 
   ui.Size get photoSize => active == null
       ? ui.Size.zero
-      : ui.Size(active!.width.toDouble(), active!.height.toDouble());
+      : printFrame.framed(ui.Size(active!.width.toDouble(), active!.height.toDouble()));
 
   // ── Workspace ─────────────────────────────────────────────────────────────────────────────
 
@@ -120,6 +123,11 @@ class EditorModel extends ChangeNotifier implements RenderHost {
 
   @override
   final ViewState view = ViewState();
+
+  /// The Expose panel's lens correction, and the Print panel's frame and receiver band sets.
+  late final lens = LensCorrection(this);
+  late final printFrame = PrintFrame(this);
+  late final bandSets = BandSets(catalogue, settings);
 
   /// What the foreground develops ask the engine for beyond the edit (session.js
   /// `renderRequest`): the crop tool's uncropped frame, a pipeline stage, the selection's mask.
@@ -214,8 +222,10 @@ class EditorModel extends ChangeNotifier implements RenderHost {
           height: (json['naturalHeight'] as num).toInt(),
           identity: json['identity'] as String?,
           raw: json['original'] != null,
+          headroom: ((json['hdr'] as Map?)?['headroom'] as num?)?.toDouble() ?? 1,
           history: History(defaultEdit(catalogue, stock)),
         );
+        bandSets.start(doc.history.present);
         final preview = answer.bytes('preview');
         if (preview != null) doc.importPicture = await decodePng(preview);
         documents.add(doc);
@@ -504,6 +514,7 @@ class EditorModel extends ChangeNotifier implements RenderHost {
           stock: stockById(doc.edit['stock'] as String?),
           maxEdge: maxEdge,
         ),
+        'printFrame': printFrame.request(doc.edit),
         'type': type,
         'quality': quality,
         'metadata': metadata,

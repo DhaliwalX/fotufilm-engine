@@ -49,7 +49,7 @@ class NativeEngine implements EngineConnection {
         final completer = engine._pending.remove(id);
         if (completer == null) continue;
         if (result is String) {
-          completer.complete(EngineReply(jsonDecode(result) as Map<String, dynamic>,
+          completer.complete(EngineReply(EngineReply.decode(result),
               bytes?.materialize().asUint8List()));
         } else if (result is (bool, String)) {
           completer.completeError(

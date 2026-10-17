@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 import '../../model/catalogue.dart';
 import '../../model/editor.dart';
 import '../kit/kit.dart';
+import 'spectrum_curve.dart';
 
 class InspectorControls {
   InspectorControls(this.editor);
@@ -19,10 +20,18 @@ class InspectorControls {
   Map get profile => edit['profile'] as Map;
   List get available => (stock?['available'] as List?) ?? const [];
 
-  /// The editor's own sliders of a group. Without a film, the film-only ones are left out.
-  List<Widget> sliders(String group) => [
+  /// A scanned negative printed on its film (negative-document.js `printsNegative`): its light
+  /// acts on the print, so the scene's controls do not apply.
+  bool get printsNegative => edit['negative'] != null && edit['stock'] != null;
+
+  /// A film whose profile cannot be changed (stock-settings.js `fixedStockSettings`).
+  bool get fixedSettings => (stock?['profile'] as Map?)?['settings'] == 'fixed';
+
+  /// The editor's own sliders of a group. Without a film (or with `film` false), the film-only
+  /// ones are left out.
+  List<Widget> sliders(String group, {bool film = true}) => [
         for (final s in catalogue.sliders)
-          if (s.group == group && (hasFilm || s.availability != 'film'))
+          if (s.group == group && ((hasFilm && film) || s.availability != 'film'))
             AdjustmentRow(
               key: ValueKey(s.key),
               label: s.label,
@@ -52,10 +61,11 @@ class InspectorControls {
       (_printerLights.contains(field) && profile['printerEnabled'] != true) ||
       (field == 'printCorrection' && profile['printerEnabled'] == true);
 
-  /// The film's profile controls among `fields`, those this film and medium have.
+  /// The film's profile controls among `fields`, those this film and medium have. A fixed
+  /// profile has none (ProfileFields.jsx).
   List<Widget> profileControls(List<String> fields) => [
-        for (final c in catalogue.profileFields(fields, edit, stock))
-          if (c['curve'] == null) _profileControl(c),
+        if (!fixedSettings)
+          for (final c in catalogue.profileFields(fields, edit, stock)) _profileControl(c),
       ];
 
   Widget _profileControl(Json c) {
@@ -66,6 +76,19 @@ class InspectorControls {
     final enabled = !_inactive(field);
     void set(Object? v) => editor.setProfile(field, v, grouped: false);
 
+    if (c['curve'] case final Json curve) {
+      return SpectrumCurve(
+        key: ValueKey(field),
+        title: title,
+        detail: detail,
+        curve: curve,
+        values: [for (final v in value as List) (v as num).toDouble()],
+        enabled: enabled,
+        onChanged: (values) => editor.setProfile(field, values),
+        onReset: () => set(Catalogue.profileDefault(c)),
+        onEnd: editor.endEdit,
+      );
+    }
     if (c['kind'] == 'toggle') {
       return SwitchRow(
         key: ValueKey(field),
@@ -90,7 +113,22 @@ class InspectorControls {
         onChanged: set,
       );
     }
-    if (c['scale'] case final Json scale) return _scaleControl(c, scale, value as num, enabled);
+    if (c['scale'] case final Json scale) {
+      final slider = _scaleControl(c, scale, value as num, enabled);
+      if (field != 'halationReturn') return slider;
+      // The return follows the film until it is moved; this gives it back to the film.
+      return Column(
+        key: ValueKey(field),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          slider,
+          QuietButton(
+            label: 'Use Film Return',
+            onPressed: enabled && profile.containsKey(field) ? () => set(null) : null,
+          ),
+        ],
+      );
+    }
     final choices = ((c['choices'] as List?) ?? const []).cast<Json>();
     final ids = choices.map((ch) => ch['id']).toList();
     return PickerField<Object?>(

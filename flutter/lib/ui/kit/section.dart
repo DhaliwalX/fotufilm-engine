@@ -7,16 +7,19 @@ import 'buttons.dart';
 import 'icons.dart';
 
 class Section extends StatefulWidget {
-  const Section({super.key, required this.title, required this.children});
+  const Section({super.key, required this.title, required this.children, this.initiallyOpen = true});
   final String title;
   final List<Widget> children;
+
+  /// Closed at first, as a nested disclosure (Lens Profiles) is.
+  final bool initiallyOpen;
 
   @override
   State<Section> createState() => _SectionState();
 }
 
 class _SectionState extends State<Section> with PointerTint {
-  bool _open = true;
+  late bool _open = widget.initiallyOpen;
 
   @override
   Widget build(BuildContext context) {

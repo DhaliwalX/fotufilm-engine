@@ -1,5 +1,5 @@
 // The Film panel (web/src/editor/FilmInspector.jsx): the loaded film, its format chosen by eye,
-// its condition and its halation.
+// its condition and its halation. A film with a fixed profile has none of its settings.
 import 'package:flutter/widgets.dart';
 
 import '../kit/kit.dart';
@@ -13,11 +13,13 @@ List<Widget> filmPanel(InspectorControls c) {
       Section(title: 'Normal', children: [InfoRow('Stock', 'None')]),
     ];
   }
+  final fixed = c.fixedSettings;
   return [
     Section(title: 'Loaded Film', children: [
+      if (fixed) const Note('Fixed profile: film settings are off.'),
       InfoRow('Stock', c.stock?['name'] as String? ?? ''),
     ]),
-    Section(title: 'Film Format', children: [
+    if (!fixed) Section(title: 'Film Format', children: [
       FormatPicker(editor: editor),
       SwitchRow(
         label: 'Magnified Detail',
@@ -26,7 +28,7 @@ List<Widget> filmPanel(InspectorControls c) {
       ),
       Note(c.edit['format'] == null ? 'Following the film.' : 'Chosen for this photograph.'),
     ]),
-    Section(title: 'Film Condition', children: c.profileControls(const ['expired'])),
+    if (!fixed) Section(title: 'Film Condition', children: c.profileControls(const ['expired'])),
     Section(title: 'Halation', children: [
       PickerField<String>(
         label: 'Halation Model',
@@ -42,10 +44,12 @@ List<Widget> filmPanel(InspectorControls c) {
         'halation',
         'halationReturn',
         'halationColour',
+        'halationSpectrum',
         'halationHaze',
         'antiHalation',
         'baseThickness',
         'pressurePlate',
+        'estimatedHalation',
       ]),
     ]),
   ];

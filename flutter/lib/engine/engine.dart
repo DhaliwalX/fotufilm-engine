@@ -3,6 +3,7 @@
 // own isolate (engine_native.dart); a browser build calls the web editor's WASM and WebGPU
 // engine through a JavaScript bridge that answers the same calls (engine_web.dart,
 // web/src/flutter-bridge.js).
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'engine_web.dart' if (dart.library.io) 'engine_native.dart' as platform;
@@ -32,6 +33,16 @@ class EngineReply {
   EngineReply(this.json, this.payload);
   final Map<String, dynamic> json;
   final Uint8List? payload;
+
+  /// An answer's JSON. A bare value (`lensCatalogue`'s list, a count, null) comes as
+  /// `{"value": …}`, so every answer is an object.
+  static Map<String, dynamic> decode(String text) {
+    final value = jsonDecode(text);
+    return value is Map<String, dynamic> ? value : {'value': value};
+  }
+
+  /// A bare answer's value.
+  Object? get value => json['value'];
 
   /// A named byte range of the payload ({"payloads": {"name": [offset, length]}}).
   Uint8List? bytes(String name) {
