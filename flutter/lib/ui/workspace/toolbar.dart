@@ -178,6 +178,11 @@ class _EditGroup extends StatelessWidget {
             const MenuItem.divider(),
             // OptionsMenu.jsx's Tools.
             MenuItem(
+              label: 'Crop',
+              icon: 'crop',
+              onSelected: doc != null && !editor.exporting ? () => editor.setPanel(Panel.crop) : null,
+            ),
+            MenuItem(
               label: 'Selective',
               icon: 'selective',
               onSelected: doc != null ? () => editor.setPanel(Panel.selective) : null,

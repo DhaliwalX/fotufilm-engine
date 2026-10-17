@@ -41,6 +41,12 @@
 //   {"difference": true}            shows the stage as its change from the one before
 //   {"tools": true}                 logs the selection, the subjects and the pipeline's stages
 //   and scanned negatives' commands (negative_driver.dart)
+//   {"key": "Enter"}                presses and releases a key: Enter, Escape or a letter
+//   {"crop": "rotate"}              the crop tool: rotate, flip, corners, reset or done
+//   {"cropRatio": "3:2"}            chooses the crop's aspect ratio
+//   {"cropGeometry": ["straighten", 5]}  sets straighten, perspectiveV or perspectiveH
+//   {"cropState": true}             logs the crop, the picture's size and the handles' window
+//                                   positions (corners clockwise from top left, then edges)
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -48,10 +54,12 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../model/editor.dart';
 import '../model/export.dart';
+import '../ui/workspace/crop_overlay.dart';
 import 'negative_driver.dart';
 
 class Driver {
@@ -241,6 +249,37 @@ class Driver {
           '${[for (var i = 0; i < pipeline.stages.length; i++) pipeline.stageName(i)].join(', ')}');
     }
     await driveNegatives(editor, c, _log);
+    if (c['key'] case final String name) await _key(name);
+    if (c['crop'] case final String action) {
+      final crop = editor.crop;
+      switch (action) {
+        case 'rotate':
+          crop.rotateLeft();
+        case 'flip':
+          crop.flip();
+        case 'corners':
+          crop.fourCorners();
+        case 'reset':
+          crop.reset();
+        case 'done':
+          crop.done();
+      }
+    }
+    if (c['cropRatio'] case final String ratio) editor.crop.setRatio(ratio);
+    if (c['cropGeometry'] case [final String key, final num value]) {
+      editor.crop.setGeometry(key, value.toDouble());
+      editor.endEdit();
+    }
+    if (c['cropState'] == true) {
+      final handles = CropOverlay.surface.currentState?.handlesInWindow() ?? const [];
+      final e = editor.edit;
+      _log('crop showing=${editor.crop.showing} panel=${editor.panel.id} '
+          'photo=${editor.photoSize.width.round()}x${editor.photoSize.height.round()} '
+          'rect=${editor.view.photoRect(editor.photoSize)} '
+          'rotation=${e['rotation']} flip=${e['flip']} ratio=${e['ratio']} shape=${e['cropShape']} '
+          'crop=${jsonEncode(e['crop'])} undo=${editor.active?.history.past.length} '
+          'handles=${[for (final h in handles) '${h.dx.round()},${h.dy.round()}'].join(' ')}');
+    }
     if (c['wait'] == 'idle') {
       final deadline = DateTime.now().add(const Duration(seconds: 120));
       await Future<void>.delayed(const Duration(milliseconds: 400));
@@ -254,6 +293,33 @@ class Driver {
   void _logSaved(SavedExport? saved) => _log(saved == null
       ? 'saved nothing error=${editor.error}'
       : 'saved ${saved.path} (${saved.filename}) count=${saved.count} error=${editor.error}');
+  /// A key pressed and let go, as the keyboard sends it.
+  Future<void> _key(String name) async {
+    final (logical, physical, character) = switch (name) {
+      'Enter' => (LogicalKeyboardKey.enter, PhysicalKeyboardKey.enter, '\n'),
+      'Escape' => (LogicalKeyboardKey.escape, PhysicalKeyboardKey.escape, null),
+      _ => (
+          LogicalKeyboardKey(name.toLowerCase().codeUnitAt(0)),
+          PhysicalKeyboardKey(0x00070004 + name.toLowerCase().codeUnitAt(0) - 0x61),
+          name.toLowerCase(),
+        ),
+    };
+    for (final type in [ui.KeyEventType.down, ui.KeyEventType.up]) {
+      // ignore: deprecated_member_use
+      ServicesBinding.instance.keyEventManager.handleKeyData(ui.KeyData(
+        timeStamp: Duration(milliseconds: DateTime.now().millisecondsSinceEpoch),
+        type: type,
+        physical: physical.usbHidUsage,
+        logical: logical.keyId,
+        character: type == ui.KeyEventType.down ? character : null,
+        synthesized: true,
+      ));
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+    }
+    final focus = FocusManager.instance.primaryFocus;
+    _log('key $name focus=${focus?.context?.widget.runtimeType} '
+        'pressed=${HardwareKeyboard.instance.logicalKeysPressed.length}');
+  }
 
   /// Times an action to its first develop on screen and to idle (thumbnails and all).
   Future<void> _timed(String name, Future<void> Function() action) async {

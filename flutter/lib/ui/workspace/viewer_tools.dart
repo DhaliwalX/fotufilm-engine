@@ -4,6 +4,7 @@
 import 'package:flutter/widgets.dart';
 
 import '../../model/editor.dart';
+import 'crop_overlay.dart';
 import 'film_base_sampler.dart';
 import 'selective_sampling.dart';
 
@@ -14,4 +15,5 @@ List<Widget> viewerToolOverlays(EditorModel editor, Rect photo) => [
         Positioned.fill(child: SamplingOverlay(editor: editor, photo: photo)),
       if (editor.negatives.sampling && editor.negatives.negative != null)
         Positioned.fromRect(rect: photo, child: FilmBaseSampler(editor: editor)),
+      ...cropOverlays(editor, photo),
     ];

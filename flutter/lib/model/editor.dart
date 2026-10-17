@@ -11,6 +11,8 @@ import 'package:flutter/foundation.dart';
 import '../engine/engine.dart';
 import '../engine/presenter.dart';
 import 'catalogue.dart';
+import 'crop.dart';
+import 'crop_geometry.dart';
 import 'document.dart';
 import 'edit.dart';
 import 'export.dart';
@@ -53,7 +55,13 @@ enum Panel {
 
 class EditorModel extends ChangeNotifier implements RenderHost {
   EditorModel(this.catalogue, {AppSettings? settings})
-      : settings = settings ?? AppSettings.memory();
+      : settings = settings ?? AppSettings.memory() {
+    // The features attach now: they add to the render options before anything develops.
+    [crop, selective, pipeline, negatives];
+  }
+
+  /// The crop tool (crop.dart).
+  late final crop = CropTool(this);
 
   final Catalogue catalogue;
 
@@ -98,9 +106,11 @@ class EditorModel extends ChangeNotifier implements RenderHost {
   late final Json _emptyEdit = defaultEdit(catalogue);
   Json? get selectedStock => stockById(edit['stock'] as String?);
 
+  /// The picture on show at full size: the cropped photograph, or the crop tool's whole frame.
+  /// Until one is on show, the one asked for.
   ui.Size get photoSize => active == null
       ? ui.Size.zero
-      : ui.Size(active!.width.toDouble(), active!.height.toDouble());
+      : active!.shownSize ?? developedSize(active!, renderOptions(active!));
 
   // ── Workspace ─────────────────────────────────────────────────────────────────────────────
 
@@ -418,7 +428,11 @@ class EditorModel extends ChangeNotifier implements RenderHost {
   /// Opens a canvas tool, or closes it back to the tab it was opened from.
   void toggleTool(Panel tool) => setPanel(panel == tool ? _lastTab : tool);
   void toggleFilm() => _set(() => filmOpen = !filmOpen);
-  void toggleInspector() => _set(() => inspectorOpen = !inspectorOpen);
+  void toggleInspector() {
+    _set(() => inspectorOpen = !inspectorOpen);
+    // A tool shows its picture only while the inspector does.
+    if (panel.isTool) renderer?.schedule();
+  }
   void setPresetsTab(bool value) => _set(() => presetsTab = value);
   void setSearch(String value) => _set(() => search = value);
   void setFilmType(FilmType value) => _set(() => filmType = value);
@@ -476,6 +490,8 @@ class EditorModel extends ChangeNotifier implements RenderHost {
 
   /// Magnifies to `value` around the viewer's centre, or fits the photograph when null.
   void setZoom(double? value) {
+    // The crop tool shows the whole frame, fitted.
+    if (value != null && crop.showing) return;
     if (value == null) {
       view
         ..zoom = null
@@ -488,6 +504,7 @@ class EditorModel extends ChangeNotifier implements RenderHost {
 
   /// Magnifies to `value`, keeping the point under `focal` (viewer coordinates) still.
   void zoomAround(double value, ui.Offset focal) {
+    if (crop.showing) return;
     view.zoomAround(photoSize, value, focal);
     _viewChanged();
   }

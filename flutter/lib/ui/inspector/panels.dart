@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 
 import '../../model/editor.dart';
 import 'controls.dart';
+import 'crop_panel.dart';
 import 'develop_panel.dart';
 import 'expose_panel.dart';
 import 'film_panel.dart';
@@ -21,7 +22,7 @@ List<Widget> panelSections(Panel panel, InspectorControls controls) => switch (p
       Panel.develop => developPanel(controls),
       Panel.print => printPanel(controls),
       Panel.roll => rollPanel(controls),
-      Panel.crop => const [],
+      Panel.crop => cropPanel(controls),
       Panel.selective => selectivePanel(controls),
       Panel.pipeline => pipelinePanel(controls),
     };

@@ -16,6 +16,7 @@ import 'dart:ui' as ui;
 import '../engine/engine.dart';
 import '../engine/presenter.dart';
 import 'catalogue.dart';
+import 'crop_geometry.dart';
 import 'document.dart';
 import 'edit.dart';
 import 'histogram.dart';
@@ -113,8 +114,9 @@ class Renderer {
   // ── Foreground ────────────────────────────────────────────────────────────────────────────
 
   int _previewEdge(PhotoDocument doc, bool interactive) {
-    final photo = ui.Size(doc.width.toDouble(), doc.height.toDouble());
-    final long = math.max(doc.width, doc.height);
+    // The picture delivered: cropped, or the crop tool's whole frame.
+    final photo = developedSize(doc, host.renderOptions(doc));
+    final long = math.max(photo.width, photo.height).round();
     final view = host.view;
     // The preview is the fitted picture; magnified, the detail layer carries the pixels.
     final scale = view.magnified(photo) ? view.fitScale(photo) : view.scale(photo);
@@ -133,9 +135,13 @@ class Renderer {
         draft: draft,
       );
 
-  /// What a shown picture is developed from: the edit and the view's options.
-  String _signature(PhotoDocument doc, Json options) =>
-      options.isEmpty ? jsonEncode(doc.edit) : '${jsonEncode(doc.edit)}${jsonEncode(options)}';
+  /// What a shown picture is developed from: the edit and the view's options, or the edit the
+  /// options carry instead (the crop tool's, without the crop).
+  String _signature(PhotoDocument doc, Json options) => options.isEmpty
+      ? jsonEncode(doc.edit)
+      : options.containsKey('edit')
+          ? jsonEncode(options)
+          : '${jsonEncode(doc.edit)}${jsonEncode(options)}';
 
   /// The presenter's scope: frames for the crop tool or a stage never stand in for the photograph.
   static String _scope(PhotoDocument doc, Json options) =>
@@ -145,6 +151,7 @@ class Renderer {
     final options = host.renderOptions(doc);
     final signature = _signature(doc, options);
     final edge = _previewEdge(doc, interactive);
+    final shown = _Shown(developedSize(doc, options), options['cropMode'] == true);
     final presenter = this.presenter;
     if (presenter != null) {
       final current = doc.preview;
@@ -152,30 +159,29 @@ class Renderer {
           math.max(current.width, current.height) == edge && shows('preview', doc)) {
         return;
       }
-      final shown = {..._request(doc, doc.edit, maxEdge: edge, draft: interactive), ...options};
+      final request = {..._request(doc, doc.edit, maxEdge: edge, draft: interactive), ...options};
       final answer = await engine.call('render', {
-        ..._request(doc, doc.edit, maxEdge: edge, draft: interactive),
-        ...options,
+        ...request,
         'original': true,
         'present': {'slot': 'preview', 'scope': _scope(doc, options)},
       });
-      doc..shownRequest = shown..shownAnswer = answer.json;
-      await _place(doc, answer, 'preview', signature);
+      doc..shownRequest = request..shownAnswer = answer.json;
+      await _place(doc, answer, 'preview', signature, shown: shown);
     } else {
       if (!interactive && doc.previewSignature == signature && doc.previewEdge == edge) return;
-      final shown = {..._request(doc, doc.edit, maxEdge: edge, draft: interactive), ...options};
+      final request = {..._request(doc, doc.edit, maxEdge: edge, draft: interactive), ...options};
       final answer = await engine.call('render', {
-        ..._request(doc, doc.edit, maxEdge: edge, draft: interactive),
-        ...options,
+        ...request,
         'original': true,
         if (doc.originalKey != null) 'haveOriginal': doc.originalKey,
       });
-      doc..shownRequest = shown..shownAnswer = answer.json;
+      doc..shownRequest = request..shownAnswer = answer.json;
       final preview = answer.bytes('preview');
       if (preview != null) doc.previewImage = await decodePng(preview);
       final original = answer.bytes('original');
       if (original != null) doc.originalImage = await decodePng(original);
       doc.originalKey = answer.json['originalKey'] as String? ?? doc.originalKey;
+      shown.apply(doc);
       doc.previewSignature = interactive ? null : signature;
       doc.previewEdge = interactive ? 0 : edge;
       developed++;
@@ -187,7 +193,7 @@ class Renderer {
   Future<void> _detail(PhotoDocument doc) async {
     final presenter = this.presenter;
     final view = host.view;
-    final photo = ui.Size(doc.width.toDouble(), doc.height.toDouble());
+    final photo = developedSize(doc, host.renderOptions(doc));
     if (presenter == null || !view.magnified(photo)) {
       doc.detail = null;
       return;
@@ -220,7 +226,7 @@ class Renderer {
 
   /// Shows a presented frame and its original, then lays the frame out.
   Future<void> _place(PhotoDocument doc, EngineReply answer, String layer, String signature,
-      {ui.Rect? region, double? scale}) async {
+      {ui.Rect? region, double? scale, _Shown? shown}) async {
     final presented = answer.json['presented'] as Map?;
     if (presented == null) return;
     final frame = (presented['frame'] as num).toInt();
@@ -239,6 +245,7 @@ class Renderer {
     );
     if (layer == 'preview') {
       doc.preview = placed;
+      shown?.apply(doc);
     } else {
       doc.detail = placed;
     }
@@ -339,6 +346,18 @@ class Renderer {
       // The row keeps what it showed.
     }
     set.fresh.add(key);
+  }
+}
+
+/// What a preview is of, noted when it is asked for and put on the document once it shows.
+class _Shown {
+  const _Shown(this.size, this.uncropped);
+  final ui.Size size;
+  final bool uncropped;
+
+  void apply(PhotoDocument doc) {
+    doc.shownSize = size;
+    doc.shownUncropped = uncropped;
   }
 }
 

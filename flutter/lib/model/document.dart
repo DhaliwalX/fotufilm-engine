@@ -75,6 +75,11 @@ class PhotoDocument {
   PresentedFrame? preview;
   PresentedFrame? detail;
 
+  /// The full-size picture the preview on show is of, and whether it is the crop tool's whole
+  /// frame, so the viewer lays out what is there while a develop for a new geometry is on its way.
+  ui.Size? shownSize;
+  bool shownUncropped = false;
+
   // ── Encoded fallback (a host without a presenter) ──────────────────────────────────────────
   ui.Image? previewImage;
   ui.Image? originalImage;
