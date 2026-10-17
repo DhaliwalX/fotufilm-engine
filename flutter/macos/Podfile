@@ -40,6 +40,11 @@ post_install do |installer|
     flutter_additional_macos_build_settings(target)
     target.build_configurations.each do |config|
       config.build_settings['MACOSX_DEPLOYMENT_TARGET'] = '14.0'
+      # The plug-ins' sources live in the pub cache; no local path reaches the shipped app.
+      next unless config.name == 'Release'
+      config.build_settings['OTHER_LDFLAGS'] = '$(inherited) -Wl,-S -Wl,-x'
+      config.build_settings['OTHER_SWIFT_FLAGS'] =
+        "$(inherited) -file-prefix-map #{ENV['PUB_CACHE'] || File.join(Dir.home, '.pub-cache')}=pub-cache"
     end
   end
 end

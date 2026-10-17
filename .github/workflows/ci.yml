@@ -23,6 +23,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.41.7'
+      - name: Flutter editor
+        working-directory: flutter
+        run: tool/prepare.sh && flutter analyze && flutter test
       - name: Portable RAW limits and radiance
         run: tools/test-raw-codec.sh
       - name: Portable TIFF limits, colour and precision
@@ -49,7 +56,7 @@ jobs:
       - run: swift build
       - run: finalcut/build.sh --test
         if: github.event_name == 'workflow_dispatch'
-      - run: cef/build.sh
+      - run: flutter/build.sh
         if: github.event_name == 'workflow_dispatch'
       - run: tools/verify-aot-parity.sh
         if: github.event_name == 'workflow_dispatch'

@@ -304,9 +304,15 @@ class EditorModel extends ChangeNotifier implements RenderHost {
   // ── Opening and closing ───────────────────────────────────────────────────────────────────
 
   /// Opens photographs the system named by path (the Finder, the command line, the driver); one
-  /// brings its folder into the strip.
-  Future<void> openPaths(List<String> paths) =>
-      strip.open([for (final path in paths) PhotoFile(path.split('/').last, path: path)]);
+  /// brings its folder into the strip. Film packs among them are installed instead
+  /// (useFilmPacks.js `acceptWithPacks`).
+  Future<void> openPaths(List<String> paths) async {
+    final packs = paths.where(isFilmPack).toList();
+    if (packs.isNotEmpty) await filmPacks.importPaths(packs);
+    final photos = paths.where((path) => !isFilmPack(path)).toList();
+    if (photos.isEmpty) return;
+    await strip.open([for (final path in photos) PhotoFile(path.split('/').last, path: path)]);
+  }
 
   /// Opens photographs: by path where the engine reads files itself, otherwise by their bytes.
   /// `negative` opens them as scanned negatives, read as a film (negatives.dart).
