@@ -1,0 +1,57 @@
+// The engine, as the editor reaches it on any platform: host calls answered in order
+// (fotufilm.h's `fotufilm_host_call`). A desktop build calls libfotufilm through dart:ffi on its
+// own isolate (engine_native.dart); a browser build calls the web editor's WASM and WebGPU
+// engine through a JavaScript bridge that answers the same calls (engine_web.dart,
+// web/src/flutter-bridge.js).
+import 'dart:typed_data';
+
+import 'engine_web.dart' if (dart.library.io) 'engine_native.dart' as platform;
+
+abstract interface class EngineConnection {
+  /// A host call, answered in the order it was made.
+  Future<EngineReply> call(String method,
+      [Map<String, dynamic> params = const {}, Uint8List? payload]);
+
+  /// Stops the develop in progress at its next opportunity.
+  void cancel();
+
+  /// The native `fotufilm_engine *`, for a platform presenter; null in a browser.
+  int? get address;
+
+  /// Whether pictures arrive in Display P3 (native) rather than sRGB (a browser).
+  bool get picturesAreDisplayP3;
+
+  /// Whether photographs open by path (`importPath`) rather than by their bytes (`importFile`).
+  bool get opensPaths;
+}
+
+/// Starts this platform's engine.
+Future<EngineConnection> connectEngine() => platform.connect();
+
+class EngineReply {
+  EngineReply(this.json, this.payload);
+  final Map<String, dynamic> json;
+  final Uint8List? payload;
+
+  /// A named byte range of the payload ({"payloads": {"name": [offset, length]}}).
+  Uint8List? bytes(String name) {
+    final ranges = json['payloads'];
+    if (payload == null || ranges is! Map || ranges[name] is! List) return null;
+    final range = ranges[name] as List;
+    final offset = (range[0] as num).toInt(), length = (range[1] as num).toInt();
+    return Uint8List.sublistView(payload!, offset, offset + length);
+  }
+}
+
+class FotufilmException implements Exception {
+  FotufilmException(this.message);
+  final String message;
+  @override
+  String toString() => message;
+}
+
+class FotufilmCancelled implements Exception {
+  const FotufilmCancelled();
+  @override
+  String toString() => 'Cancelled';
+}

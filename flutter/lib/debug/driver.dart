@@ -21,6 +21,10 @@
 //   {"compare": true}               shows the original, as holding Space does
 //   {"bench": ["ev", 30]}           drags a slider in 30 steps a frame apart and logs how long
 //                                   each develop took to reach the screen, then the settle
+//   {"benchOpen": "/path"}          opens a photograph: ms to its first develop, and to idle
+//   {"benchFilm": "gold200"}        chooses a film: ms to its first develop, and to idle
+//   {"benchDrag": ["ev", 2000]}     moves a slider every 16 ms for 2 s, as a hand does, and logs
+//                                   how many develops reached the screen, then the settle
 //   {"wait": "idle"}                answers once nothing is rendering
 import 'dart:async';
 import 'dart:convert';
@@ -48,6 +52,7 @@ class Driver {
     if (path == null || path.isEmpty) return;
     final dir = Directory(path)..createSync(recursive: true);
     final driver = Driver._(dir, editor, boundary);
+    driver._log('ready ${DateTime.now().millisecondsSinceEpoch}');
     Timer.periodic(const Duration(milliseconds: 250), (_) => driver._poll());
   }
 
@@ -160,6 +165,11 @@ class Driver {
     if (c['pan'] case [final num dx, final num dy]) editor.panBy(Offset(dx.toDouble(), dy.toDouble()));
     if (c['compare'] case final bool on) editor.setComparing(on);
     if (c['bench'] case [final String key, final int steps]) await _bench(key, steps);
+    if (c['benchOpen'] case final String path) {
+      await _timed('open', () => editor.openPaths([path]));
+    }
+    if (c['benchFilm'] case final String id) await _timed('film $id', () async => editor.chooseStock(id));
+    if (c['benchDrag'] case [final String key, final int ms]) await _benchDrag(key, ms);
     if (c['wait'] == 'idle') {
       final deadline = DateTime.now().add(const Duration(seconds: 120));
       await Future<void>.delayed(const Duration(milliseconds: 400));
@@ -168,6 +178,50 @@ class Driver {
       }
     }
     await WidgetsBinding.instance.endOfFrame;
+  }
+
+  /// Times an action to its first develop on screen and to idle (thumbnails and all).
+  Future<void> _timed(String name, Future<void> Function() action) async {
+    final renderer = editor.renderer!;
+    final before = renderer.developed;
+    final clock = Stopwatch()..start();
+    await action();
+    final acted = clock.elapsedMilliseconds;
+    while (renderer.developed == before && clock.elapsedMilliseconds < 60000) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
+    final first = clock.elapsedMilliseconds;
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    while (editor.busy && clock.elapsedMilliseconds < 120000) {
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+    }
+    // The background waits 250 ms after a settle before it starts; that wait is not work.
+    _log('bench $name action=${acted}ms firstDevelop=${first}ms idle=${clock.elapsedMilliseconds}ms');
+  }
+
+  /// A slider moved a step every frame for `ms`, as a dragging hand: how many develops reached the
+  /// screen while it moved, and how long the full-size develop took after it was let go.
+  Future<void> _benchDrag(String key, int ms) async {
+    final renderer = editor.renderer!;
+    final start = (editor.edit['params'] as Map)[key] as num? ?? 0;
+    final before = renderer.developed;
+    final clock = Stopwatch()..start();
+    var steps = 0;
+    while (clock.elapsedMilliseconds < ms) {
+      steps++;
+      editor.setParam(key, start + (steps % 60) / 60);
+      await Future<void>.delayed(const Duration(milliseconds: 16));
+    }
+    final shown = renderer.developed - before;
+    final settle = Stopwatch()..start();
+    editor.endEdit();
+    await Future<void>.delayed(const Duration(milliseconds: 1));
+    while (renderer.busy) {
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+    }
+    _log('bench drag $key ${ms}ms steps=$steps develops=$shown '
+        'fps=${(shown * 1000 / ms).toStringAsFixed(1)} settle=${settle.elapsedMilliseconds}ms');
+    editor.undo();
   }
 
   /// A slider dragged a step a frame: each step's time until a develop for it (or a newer one)

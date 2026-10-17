@@ -16,7 +16,7 @@ class Command {
   final LogicalKeyboardKey? key;
   final bool shift, alt;
 
-  static bool get _mac => HostWindow.usesMenuBar;
+  static bool get _mac => HostWindow.commandKeyIsMeta;
 
   SingleActivator? get activator => key == null
       ? null

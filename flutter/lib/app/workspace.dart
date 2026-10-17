@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart' show Material, MaterialType;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -56,8 +57,12 @@ class _WorkspaceState extends State<Workspace> {
     final files = await openFiles(acceptedTypeGroups: const [
       XTypeGroup(label: 'Images', extensions: imageExtensions),
     ]);
-    await editor.openPaths([for (final f in files) f.path]);
+    await editor.openFiles([for (final f in files) _photo(f)]);
   }
+
+  /// A chosen or dropped file: by path on the desktop, by its bytes in a browser.
+  static PhotoFile _photo(XFile file) =>
+      PhotoFile(file.name, path: kIsWeb ? null : file.path, read: file.readAsBytes);
 
   void _export() {
     if (editor.active != null) showExportDialog(context, editor);
@@ -73,9 +78,9 @@ class _WorkspaceState extends State<Workspace> {
 
   void _drop(DropDoneDetails detail) {
     setState(() => _dropping = false);
-    editor.openPaths([
+    editor.openFiles([
       for (final f in detail.files)
-        if (imageExtensions.contains(f.path.split('.').last.toLowerCase())) f.path,
+        if (imageExtensions.contains(f.name.split('.').last.toLowerCase())) _photo(f),
     ]);
   }
 

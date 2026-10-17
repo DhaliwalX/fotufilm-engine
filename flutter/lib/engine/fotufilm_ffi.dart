@@ -6,6 +6,8 @@ import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
 
+import 'engine.dart';
+
 const fotufilmOk = 0;
 const fotufilmCancelled = 2;
 
@@ -121,17 +123,4 @@ class HostAnswer {
   HostAnswer(this.json, this.payload);
   final String json;
   final Uint8List? payload;
-}
-
-class FotufilmException implements Exception {
-  FotufilmException(this.message);
-  final String message;
-  @override
-  String toString() => message;
-}
-
-class FotufilmCancelled implements Exception {
-  const FotufilmCancelled();
-  @override
-  String toString() => 'Cancelled';
 }

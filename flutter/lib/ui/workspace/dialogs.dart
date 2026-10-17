@@ -1,6 +1,7 @@
 // The workspace's dialogs: Export (web/src/editor/ExportDialog.jsx, styles/dialogs.css), which
 // asks where to save and lets the engine write the file, and the keyboard shortcuts.
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/widgets.dart';
 
 import '../../model/editor.dart';
@@ -95,24 +96,29 @@ class _ExportDialogState extends State<_ExportDialog> {
     final doc = widget.editor.active!;
     final ext = _extensions[_type]!;
     final base = doc.name.replaceAll(RegExp(r'\.[^.]+$'), '');
-    final location = await getSaveLocation(
-      suggestedName: '$base-fotufilm.$ext',
-      acceptedTypeGroups: [XTypeGroup(label: ext.toUpperCase(), extensions: [ext])],
-    );
-    if (location == null) return;
+    final suggested = '$base-fotufilm.$ext';
+    // A browser saves to its downloads; the desktop asks where.
+    final path = kIsWeb
+        ? suggested
+        : (await getSaveLocation(
+            suggestedName: suggested,
+            acceptedTypeGroups: [XTypeGroup(label: ext.toUpperCase(), extensions: [ext])],
+          ))
+            ?.path;
+    if (path == null) return;
     setState(() {
       _busy = true;
       _result = null;
     });
     try {
-      final path = await widget.editor.export(
-        path: location.path,
+      final saved = await widget.editor.export(
+        path: path,
         type: _type,
         quality: _quality,
         maxEdge: _size,
         metadata: _metadata,
       );
-      _result = 'Saved ${path.split('/').last}.';
+      _result = 'Saved ${saved.split('/').last}.';
     } catch (e) {
       _result = 'Export failed. $e';
     }

@@ -8,6 +8,9 @@ import 'package:flutter/widgets.dart';
 abstract final class ColourConversion {
   static ui.FragmentProgram? _program;
 
+  /// Off where the engine already delivers sRGB (a browser).
+  static bool enabled = true;
+
   static Future<void> load() async {
     try {
       _program = await ui.FragmentProgram.fromAsset('shaders/display_p3_to_srgb.frag');
@@ -19,7 +22,7 @@ abstract final class ColourConversion {
   /// `child` drawn in sRGB. `swapRedBlue` for RGBA pixels in a BGRA texture.
   static Widget apply(Widget child, {bool swapRedBlue = false}) {
     final program = _program;
-    if (program == null || !ui.ImageFilter.isShaderFilterSupported) return child;
+    if (!enabled || program == null || !ui.ImageFilter.isShaderFilterSupported) return child;
     // Uniforms 0 and 1 are the size, which the filter sets; 2 is the swap.
     final shader = program.fragmentShader()..setFloat(2, swapRedBlue ? 1 : 0);
     return ImageFiltered(imageFilter: ui.ImageFilter.shader(shader), child: child);

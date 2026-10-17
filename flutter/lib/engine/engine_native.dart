@@ -1,30 +1,19 @@
-// The engine thread. One isolate owns the engine and answers the editor's host calls in order,
-// as the CEF host's engine thread does, so the UI isolate never waits for a develop.
+// The desktop engine: libfotufilm through dart:ffi. One isolate owns the engine and answers the
+// editor's host calls in order, as the CEF host's engine thread does, so the UI isolate never
+// waits for a develop.
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ffi';
 import 'dart:isolate';
 import 'dart:typed_data';
 
+import 'engine.dart';
 import 'fotufilm_ffi.dart';
 
-class EngineReply {
-  EngineReply(this.json, this.payload);
-  final Map<String, dynamic> json;
-  final Uint8List? payload;
+Future<EngineConnection> connect() => NativeEngine.start();
 
-  /// A named byte range of the payload ({"payloads": {"name": [offset, length]}}).
-  Uint8List? bytes(String name) {
-    final ranges = json['payloads'];
-    if (payload == null || ranges is! Map || ranges[name] is! List) return null;
-    final range = ranges[name] as List;
-    final offset = (range[0] as num).toInt(), length = (range[1] as num).toInt();
-    return Uint8List.sublistView(payload!, offset, offset + length);
-  }
-}
-
-class Engine {
-  Engine._(this._commands, this._address, this.capabilities, this.description);
+class NativeEngine implements EngineConnection {
+  NativeEngine._(this._commands, this._address, this.capabilities, this.description);
 
   final SendPort _commands;
   final int _address;
@@ -32,11 +21,17 @@ class Engine {
   final Map<String, dynamic> description;
   int _next = 0;
 
-  /// The `fotufilm_engine *`, for a native presenter to be lent to it.
+  @override
   int get address => _address;
+
+  @override
+  bool get picturesAreDisplayP3 => true;
+
+  @override
+  bool get opensPaths => true;
   final _pending = <int, Completer<EngineReply>>{};
 
-  static Future<Engine> start() async {
+  static Future<NativeEngine> start() async {
     final replies = ReceivePort();
     await Isolate.spawn(_serve, replies.sendPort, debugName: 'fotufilm-engine');
     final events = StreamIterator(replies);
@@ -45,7 +40,7 @@ class Engine {
     if (hello is String) throw FotufilmException(hello);
     final (SendPort commands, int address, String caps, String describe) =
         hello as (SendPort, int, String, String);
-    final engine = Engine._(commands, address, jsonDecode(caps) as Map<String, dynamic>,
+    final engine = NativeEngine._(commands, address, jsonDecode(caps) as Map<String, dynamic>,
         jsonDecode(describe) as Map<String, dynamic>);
     () async {
       while (await events.moveNext()) {
@@ -65,7 +60,7 @@ class Engine {
     return engine;
   }
 
-  /// A host call, answered on the engine isolate in the order it was made.
+  @override
   Future<EngineReply> call(String method, [Map<String, dynamic> params = const {},
       Uint8List? payload]) {
     final id = _next++;
@@ -79,7 +74,8 @@ class Engine {
     return completer.future;
   }
 
-  /// Stops the develop in progress at its next opportunity. Safe from any thread.
+  /// Safe from any thread.
+  @override
   void cancel() => FotufilmLibrary.open().cancel(Pointer<Void>.fromAddress(_address));
 }
 

@@ -13,8 +13,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
-import '../engine/engine_isolate.dart';
-import '../engine/fotufilm_ffi.dart';
+import '../engine/engine.dart';
 import '../engine/presenter.dart';
 import 'catalogue.dart';
 import 'document.dart';
@@ -38,7 +37,7 @@ abstract interface class RenderHost {
 class Renderer {
   Renderer({required this.engine, required this.catalogue, required this.host, this.presenter});
 
-  final Engine engine;
+  final EngineConnection engine;
   final Catalogue catalogue;
   final RenderHost host;
   final NativePresenter? presenter;

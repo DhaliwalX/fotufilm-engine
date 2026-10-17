@@ -1,18 +1,23 @@
 // The window the editor runs in. On macOS the toolbar shares the titlebar, so the toolbar drags
 // and zooms the window and leaves room for the traffic lights; photographs opened from the Finder
-// arrive here. Elsewhere the system draws the titlebar and these are no-ops.
-import 'dart:io';
-
+// arrive here. Elsewhere the system draws the titlebar, and in a browser the page is the window;
+// there these are no-ops.
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 abstract final class HostWindow {
   static const _channel = MethodChannel('fotufilm/window');
 
-  /// The toolbar is the titlebar (macOS's full-size content view).
-  static bool get toolbarIsTitlebar => Platform.isMacOS;
+  static bool get _macApp => !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
 
-  /// Menus are the system's menu bar, and shortcuts use ⌘ rather than Ctrl.
-  static bool get usesMenuBar => Platform.isMacOS;
+  /// The toolbar is the titlebar (macOS's full-size content view).
+  static bool get toolbarIsTitlebar => _macApp;
+
+  /// Commands are the system's menu bar.
+  static bool get usesMenuBar => _macApp;
+
+  /// Shortcuts use ⌘ rather than Ctrl: on a Mac, in the app or in a browser.
+  static bool get commandKeyIsMeta => defaultTargetPlatform == TargetPlatform.macOS;
 
   static Future<void> startDrag() => _call('startDrag');
   static Future<void> zoom() => _call('zoom');

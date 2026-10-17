@@ -8,7 +8,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 
-import '../engine/engine_isolate.dart';
+import '../engine/engine.dart';
 import '../engine/presenter.dart';
 import 'catalogue.dart';
 import 'document.dart';
@@ -35,7 +35,7 @@ class EditorModel extends ChangeNotifier implements RenderHost {
   EditorModel(this.catalogue);
 
   final Catalogue catalogue;
-  Engine? engine;
+  EngineConnection? engine;
   NativePresenter? presenter;
   Renderer? renderer;
   String? startupError;
@@ -121,7 +121,7 @@ class EditorModel extends ChangeNotifier implements RenderHost {
 
   Future<void> start() async {
     try {
-      final engine = await Engine.start();
+      final engine = await connectEngine();
       final prepared = await engine.call('prepare');
       final ids = ((prepared.json['stocks'] as List?) ?? const []).cast<String>().toSet();
       stocks = [
@@ -132,7 +132,8 @@ class EditorModel extends ChangeNotifier implements RenderHost {
         _stockById[s['id'] as String] = s;
       }
       filmTypes = FilmType.offered(stocks);
-      presenter = await NativePresenter.attach(engine.address);
+      final address = engine.address;
+      if (address != null) presenter = await NativePresenter.attach(address);
       this.engine = engine;
       renderer = Renderer(engine: engine, catalogue: catalogue, host: this, presenter: presenter);
     } catch (e) {
@@ -148,25 +149,34 @@ class EditorModel extends ChangeNotifier implements RenderHost {
 
   // ── Opening and closing ───────────────────────────────────────────────────────────────────
 
-  Future<void> openPaths(List<String> paths) async {
+  /// Opens photographs the system named by path (the Finder, the command line, the driver).
+  Future<void> openPaths(List<String> paths) =>
+      openFiles([for (final path in paths) PhotoFile(path.split('/').last, path: path)]);
+
+  /// Opens photographs: by path where the engine reads files itself, otherwise by their bytes.
+  Future<void> openFiles(List<PhotoFile> files) async {
     final engine = this.engine;
-    if (engine == null || paths.isEmpty) return;
+    if (engine == null || files.isEmpty) return;
     // A new photograph starts on the film the shown one is on, as the web editor's do.
     final stock = edit['stock'] as String?;
     var opened = 0;
-    for (final path in paths) {
-      final existing = documents.indexWhere((d) => d.path == path);
+    for (final file in files) {
+      final key = file.path ?? file.name;
+      final existing = documents.indexWhere((d) => d.path == key);
       if (existing >= 0) {
         _activate(existing);
         continue;
       }
-      status = 'Opening ${path.split('/').last}…';
+      status = 'Opening ${file.name}…';
       notifyListeners();
       try {
-        final answer = await engine.call('importPath', {'path': path, 'negative': false});
+        final answer = engine.opensPaths && file.path != null
+            ? await engine.call('importPath', {'path': file.path, 'negative': false})
+            : await engine.call(
+                'importFile', {'name': file.name, 'negative': false}, await file.read!());
         final json = answer.json;
         final doc = PhotoDocument(
-          path: path,
+          path: key,
           handle: (json['handle'] as num).toInt(),
           width: (json['naturalWidth'] as num).toInt(),
           height: (json['naturalHeight'] as num).toInt(),
@@ -180,7 +190,7 @@ class EditorModel extends ChangeNotifier implements RenderHost {
         _activate(documents.length - 1);
         opened++;
       } catch (e) {
-        error = '${path.split('/').last} could not be opened. $e';
+        error = '${file.name} could not be opened. $e';
       }
     }
     status = null;
@@ -463,4 +473,12 @@ class EditorModel extends ChangeNotifier implements RenderHost {
       _set(() => exporting = false);
     }
   }
+}
+
+/// A photograph to open: its name, and its path where there is a file system, or its bytes.
+class PhotoFile {
+  PhotoFile(this.name, {this.path, this.read});
+  final String name;
+  final String? path;
+  final Future<Uint8List> Function()? read;
 }
