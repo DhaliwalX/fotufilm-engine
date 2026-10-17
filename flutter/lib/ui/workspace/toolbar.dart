@@ -38,12 +38,18 @@ class EditorToolbar extends StatelessWidget {
             const SizedBox(width: 7),
             const FotufilmBrand(),
             const SizedBox(width: 8),
-            const QuietButton(icon: 'library', tooltip: 'Photo library'),
+            QuietButton(
+              icon: 'library',
+              tooltip: 'Library (L)',
+              selected: editor.library.open,
+              onPressed: editor.exporting ? null : editor.library.toggle,
+            ),
             QuietButton(icon: 'plus', tooltip: 'Open image or video', onPressed: onOpen),
           ]),
         ),
-        Expanded(child: _ViewGroup(editor: editor)),
-        _EditGroup(editor: editor, onExport: onExport, onShortcuts: onShortcuts),
+        // The library hides the photograph's controls (photo-library.css).
+        Expanded(child: _whileEditing(_ViewGroup(editor: editor))),
+        _whileEditing(_EditGroup(editor: editor, onExport: onExport, onShortcuts: onShortcuts)),
       ]),
     );
     if (!titlebar) return bar;
@@ -54,6 +60,12 @@ class EditorToolbar extends StatelessWidget {
       child: bar,
     );
   }
+  Widget _whileEditing(Widget child) => Visibility(
+      visible: !editor.library.open,
+      maintainSize: true,
+      maintainAnimation: true,
+      maintainState: true,
+      child: child);
 }
 
 /// Zoom, the canvas tools and the photograph's size.

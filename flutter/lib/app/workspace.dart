@@ -14,6 +14,8 @@ import '../ui/inspector/inspector.dart';
 import '../ui/theme/theme.dart';
 import '../ui/workspace/dialogs.dart';
 import '../ui/workspace/film_library.dart';
+import '../ui/workspace/library/library_handoff.dart';
+import '../ui/workspace/library/photo_library_view.dart';
 import '../ui/workspace/toolbar.dart';
 import '../ui/workspace/viewer.dart';
 import 'commands.dart';
@@ -41,23 +43,35 @@ class _WorkspaceState extends State<Workspace> {
   void initState() {
     super.initState();
     editor.addListener(_changed);
+    editor.library.addListener(_libraryChanged);
   }
 
   @override
   void dispose() {
     editor.removeListener(_changed);
+    editor.library.removeListener(_libraryChanged);
     _focus.dispose();
     super.dispose();
   }
 
   void _changed() => setState(() {});
 
+  /// The library shown or hidden; hidden, the keyboard comes back to the editor.
+  bool _libraryOpen = false;
+  void _libraryChanged() {
+    final open = editor.library.open;
+    if (_libraryOpen == open) return;
+    setState(() => _libraryOpen = open);
+    if (!open) _focus.requestFocus();
+  }
+
   Future<void> _open() async {
     if (!editor.ready) return;
     final files = await openFiles(acceptedTypeGroups: const [
       XTypeGroup(label: 'Images', extensions: imageExtensions),
     ]);
-    await editor.openFiles([for (final f in files) _photo(f)]);
+    // One file brings its folder into the strip.
+    await editor.strip.open([for (final f in files) _photo(f)]);
   }
 
   /// A chosen or dropped file: by path on the desktop, by its bytes in a browser.
@@ -70,7 +84,17 @@ class _WorkspaceState extends State<Workspace> {
 
   /// Holding Space shows the original, as in the web editor.
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
-    if (event.logicalKey != LogicalKeyboardKey.space) return KeyEventResult.ignored;
+    // L shows and hides the library, unless a field is being typed in (useEditorShortcuts.js).
+    final keys = HardwareKeyboard.instance;
+    if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.keyL &&
+        !keys.isMetaPressed && !keys.isControlPressed && !keys.isAltPressed &&
+        FocusManager.instance.primaryFocus?.context?.findAncestorWidgetOfExactType<EditableText>() == null) {
+      editor.library.toggle();
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey != LogicalKeyboardKey.space || editor.library.open) {
+      return KeyEventResult.ignored;
+    }
     if (event is KeyDownEvent) editor.setComparing(true);
     if (event is KeyUpEvent) editor.setComparing(false);
     return KeyEventResult.handled;
@@ -103,14 +127,23 @@ class _WorkspaceState extends State<Workspace> {
               style: editorText(context),
               child: ColoredBox(
                 color: Palette.of(context).page,
-                child: Column(children: [
-                  EditorToolbar(
-                    editor: editor,
-                    onOpen: _open,
-                    onExport: _export,
-                    onShortcuts: () => showShortcutsDialog(context, shortcutRows(menus)),
-                  ),
-                  Expanded(child: LayoutBuilder(builder: _panels)),
+                child: Stack(children: [
+                  Column(children: [
+                    EditorToolbar(
+                      editor: editor,
+                      onOpen: _open,
+                      onExport: _export,
+                      onShortcuts: () => showShortcutsDialog(context, shortcutRows(menus)),
+                    ),
+                    // The photo library covers the panels when it is shown.
+                    Expanded(
+                      child: Stack(children: [
+                        Positioned.fill(child: LayoutBuilder(builder: _panels)),
+                        Positioned.fill(child: PhotoLibraryView(editor: editor)),
+                      ]),
+                    ),
+                  ]),
+                  Positioned.fill(child: LibraryHandoffLayer(editor: editor)),
                 ]),
               ),
             ),

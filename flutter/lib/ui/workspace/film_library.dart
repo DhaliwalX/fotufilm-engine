@@ -114,6 +114,8 @@ class _FilmLibraryState extends State<FilmLibrary> {
       controller: _scroll,
       child: ListView.builder(
         controller: _scroll,
+        // Rows are built as they come into view, which is when their pictures develop.
+        cacheExtent: 0,
         padding: open ? Metrics.stockListPadding : Metrics.stockListCollapsedPadding,
         itemCount: films.length,
         itemBuilder: (context, index) {
@@ -122,13 +124,17 @@ class _FilmLibraryState extends State<FilmLibrary> {
           return Padding(
             padding: EdgeInsets.only(
                 bottom: stock == null ? Metrics.normalRowGap : Metrics.stockRowGap),
-            child: StockRow(
+            child: _ShownRow(
+              editor: editor,
+              id: id ?? '',
+              child: StockRow(
               name: stock?['name'] as String? ?? 'Normal',
               kind: stock == null ? 'No film' : 'Film',
               thumbnail: doc?.filmThumbnails[id ?? ''] ?? doc?.importPicture,
               selected: id == selected,
               compact: !open,
               onPressed: doc == null ? null : () => editor.chooseStock(id),
+            ),
             ),
           );
         },
@@ -305,4 +311,42 @@ class _StockRowState extends State<StockRow> with PointerTint {
     );
     return widget.compact ? HoverTip(message: widget.name, child: row) : row;
   }
+}
+
+/// Tells the editor while a film row is on screen, so only shown rows develop their pictures
+/// (useThumbnail.js's IntersectionObserver).
+class _ShownRow extends StatefulWidget {
+  const _ShownRow({required this.editor, required this.id, required this.child});
+  final EditorModel editor;
+  final String id;
+  final Widget child;
+
+  @override
+  State<_ShownRow> createState() => _ShownRowState();
+}
+
+class _ShownRowState extends State<_ShownRow> {
+  @override
+  void initState() {
+    super.initState();
+    widget.editor.showFilmRow(widget.id, true);
+  }
+
+  @override
+  void didUpdateWidget(_ShownRow old) {
+    super.didUpdateWidget(old);
+    if (old.id == widget.id) return;
+    widget.editor
+      ..showFilmRow(old.id, false)
+      ..showFilmRow(widget.id, true);
+  }
+
+  @override
+  void dispose() {
+    widget.editor.showFilmRow(widget.id, false);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

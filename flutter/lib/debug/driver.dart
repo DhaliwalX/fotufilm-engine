@@ -26,6 +26,17 @@
 //   {"benchDrag": ["ev", 2000]}     moves a slider every 16 ms for 2 s, as a hand does, and logs
 //                                   how many develops reached the screen, then the settle
 //   {"wait": "idle"}                answers once nothing is rendering
+//   {"library": true}               shows (or hides) the photo library
+//   {"libraryAdd": "/dir", "negative": false}  adds a folder as the folder panel does, and logs
+//                                   its photos once read
+//   {"libraryRename": ["/dir/a.png", "b.png"]}  renames a library photo
+//   {"libraryTrash": ["/dir/a.png"]}  moves library photos to the Trash
+//   {"libraryOpen": "/dir/a.png"}   opens a library photo with its roll, as a double-click does
+//   {"libraryRemove": "/dir"}       removes a folder from the library
+//   {"strip": true}                 logs the strip's photos ('*' shown, '…' waiting) and whether
+//                                   a library photo is flying to the viewer
+//   {"key": "l", "meta": false}     presses and releases a key (a letter, a digit, Enter,
+//                                   Escape, Backspace or an arrow)
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -33,9 +44,11 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../model/editor.dart';
+import '../model/library_model.dart';
 
 class Driver {
   Driver._(this.dir, this.editor, this.boundary);
@@ -170,6 +183,27 @@ class Driver {
     }
     if (c['benchFilm'] case final String id) await _timed('film $id', () async => editor.chooseStock(id));
     if (c['benchDrag'] case [final String key, final int ms]) await _benchDrag(key, ms);
+    if (c['library'] case final bool open) editor.library.setOpen(open);
+    if (c['libraryAdd'] case final String path) await _libraryAdd(path, c['negative'] == true);
+    if (c['libraryRename'] case [final String file, final String name]) {
+      final photo = _libraryPhoto(file);
+      _log('renamed ${await editor.library.renamePhoto(photo, name)} ${editor.library.error ?? ''}');
+    }
+    if (c['libraryTrash'] case final List files) {
+      final trashed = await editor.library.trashPhotos([for (final f in files) _libraryPhoto(f as String)]);
+      _log('trashed ${trashed.join(', ')}');
+    }
+    if (c['libraryRemove'] case final String path) {
+      for (final f in [...editor.library.folders]) {
+        if (f.path == path) editor.library.removeFolder(f.id);
+      }
+    }
+    if (c['libraryOpen'] case final String file) await editor.library.openPhotos([_libraryPhoto(file)]);
+    if (c['strip'] == true) {
+      _log('strip ${editor.strip.items.map((i) => '${i.name}${i.doc == editor.active && i.doc != null ? '*' : ''}${i.waiting ? '…' : ''}').join(', ')}'
+          '${editor.library.handoff != null ? ' (handoff)' : ''}');
+    }
+    if (c['key'] case final String name) await _key(name, meta: c['meta'] == true);
     if (c['wait'] == 'idle') {
       final deadline = DateTime.now().add(const Duration(seconds: 120));
       await Future<void>.delayed(const Duration(milliseconds: 400));
@@ -178,6 +212,62 @@ class Driver {
       }
     }
     await WidgetsBinding.instance.endOfFrame;
+  }
+
+  Future<void> _libraryAdd(String path, bool negative) async {
+    final library = editor.library..setOpen(true);
+    final id = library.addFolder(path, negative: negative);
+    final folder = id == null ? null : library.folderById(id);
+    while (folder != null && folder.status == 'scanning') {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    }
+    _log('library ${folder?.name}: ${folder?.photos.map((p) => p.path).join(', ')} ${folder?.error ?? ''}');
+  }
+
+  LibraryPhoto _libraryPhoto(String file) => editor.library.folders
+      .expand((f) => f.photos)
+      .firstWhere((p) => p.file == file, orElse: () => throw StateError('$file is not in the library.'));
+
+  /// A key pressed and released, through the focus tree as the keyboard's are.
+  Future<void> _key(String name, {bool meta = false}) async {
+    final lower = name.toLowerCase();
+    final (PhysicalKeyboardKey physical, LogicalKeyboardKey logical, String? character) = switch (lower) {
+      'enter' => (PhysicalKeyboardKey.enter, LogicalKeyboardKey.enter, null),
+      'escape' => (PhysicalKeyboardKey.escape, LogicalKeyboardKey.escape, null),
+      'backspace' => (PhysicalKeyboardKey.backspace, LogicalKeyboardKey.backspace, null),
+      'arrowright' => (PhysicalKeyboardKey.arrowRight, LogicalKeyboardKey.arrowRight, null),
+      'arrowleft' => (PhysicalKeyboardKey.arrowLeft, LogicalKeyboardKey.arrowLeft, null),
+      'arrowdown' => (PhysicalKeyboardKey.arrowDown, LogicalKeyboardKey.arrowDown, null),
+      'arrowup' => (PhysicalKeyboardKey.arrowUp, LogicalKeyboardKey.arrowUp, null),
+      _ when RegExp(r'^[a-z]$').hasMatch(lower) => (
+          PhysicalKeyboardKey(0x00070004 + lower.codeUnitAt(0) - 0x61),
+          LogicalKeyboardKey(lower.codeUnitAt(0)),
+          lower,
+        ),
+      _ when RegExp(r'^[0-9]$').hasMatch(lower) => (
+          PhysicalKeyboardKey(lower == '0' ? 0x00070027 : 0x0007001d + int.parse(lower)),
+          LogicalKeyboardKey(lower.codeUnitAt(0)),
+          lower,
+        ),
+      _ => throw ArgumentError('No key $name'),
+    };
+    // The focus tree still takes key messages, which is how the engine's keys reach it.
+    // ignore: deprecated_member_use
+    final handler = ServicesBinding.instance.keyEventManager.keyMessageHandler;
+    final time = Duration(milliseconds: DateTime.now().millisecondsSinceEpoch);
+    void send(KeyEvent event) {
+      HardwareKeyboard.instance.handleKeyEvent(event);
+      // ignore: deprecated_member_use
+      handler?.call(KeyMessage([event], null));
+    }
+
+    const metaKey = (PhysicalKeyboardKey.metaLeft, LogicalKeyboardKey.metaLeft);
+    if (meta) send(KeyDownEvent(physicalKey: metaKey.$1, logicalKey: metaKey.$2, timeStamp: time));
+    send(KeyDownEvent(physicalKey: physical, logicalKey: logical, character: character, timeStamp: time));
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+    send(KeyUpEvent(physicalKey: physical, logicalKey: logical, timeStamp: time));
+    if (meta) send(KeyUpEvent(physicalKey: metaKey.$1, logicalKey: metaKey.$2, timeStamp: time));
+    await Future<void>.delayed(const Duration(milliseconds: 200));
   }
 
   /// Times an action to its first develop on screen and to idle (thumbnails and all).
