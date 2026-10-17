@@ -4,6 +4,7 @@
 //
 //   {"snapshot": "name"}            the window's pixels to <dir>/name.png
 //   {"tap": [x, y]}                 a click at logical point (x, y)
+//   {"rightTap": [x, y]}            a right-click there
 //   {"drag": [x0, y0, x1, y1]}      a press, a move and a release
 //   {"open": ["/path/photo.jpg"]}   opens photographs
 //   {"stock": "gold200"}            chooses a film ("" for Normal)
@@ -149,6 +150,15 @@ class Driver {
       final image = await render.toImage(pixelRatio: dpr);
       final png = await image.toByteData(format: ui.ImageByteFormat.png);
       File('${dir.path}/$name.png').writeAsBytesSync(png!.buffer.asUint8List());
+    }
+    if (c['rightTap'] case [final num x, final num y]) {
+      final at = Offset(x.toDouble(), y.toDouble());
+      final id = _pointer++;
+      GestureBinding.instance.handlePointerEvent(PointerAddedEvent(pointer: id, position: at, kind: PointerDeviceKind.mouse));
+      GestureBinding.instance.handlePointerEvent(PointerDownEvent(pointer: id, position: at, kind: PointerDeviceKind.mouse, buttons: kSecondaryMouseButton));
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      GestureBinding.instance.handlePointerEvent(PointerUpEvent(pointer: id, position: at, kind: PointerDeviceKind.mouse));
+      await Future<void>.delayed(const Duration(milliseconds: 350));
     }
     if (c['tap'] case [final num x, final num y]) {
       final at = Offset(x.toDouble(), y.toDouble());

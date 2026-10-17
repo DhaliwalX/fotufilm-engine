@@ -120,13 +120,36 @@ class PhotoStripModel extends ChangeNotifier {
     await _openFile(PhotoFile(item.name, path: item.path, negative: item.negative));
   }
 
+  /// What the strip's menu on `item` acts on: the photos chosen with the shown one when it is
+  /// among them, otherwise it alone.
+  List<StripItem> targetsOf(StripItem item) {
+    final chosen = editor.selection.chosen;
+    if (item.doc == null || chosen.length < 2 || !chosen.contains(item.doc)) return [item];
+    return [for (final i in items) if (chosen.contains(i.doc)) i];
+  }
+
   /// Closes a photo: an open one's photograph is released, a waiting one leaves the strip.
-  Future<void> close(StripItem item) async {
-    final doc = item.doc;
-    if (doc != null) {
-      await editor.closeDocument(editor.documents.indexOf(doc));
-    } else {
-      _entries.removeWhere((e) => e.path == item.path);
+  Future<void> close(StripItem item) => closeAll([item]);
+
+  /// Closes photos; when the shown one goes, its neighbour in the strip is shown in its place.
+  Future<void> closeAll(List<StripItem> items) async {
+    final closing = {for (final i in items) i.path};
+    final shown = editor.active;
+    if (shown != null && closing.contains(shown.path)) {
+      final strip = this.items;
+      final at = strip.indexWhere((i) => i.path == shown.path);
+      final next = [...strip.skip(at + 1), ...strip.take(at).toList().reversed]
+          .where((i) => !closing.contains(i.path))
+          .firstOrNull;
+      if (next != null) await choose(next);
+    }
+    final waiting = {for (final i in items) if (i.waiting) i.path};
+    _entries.removeWhere((e) => waiting.contains(e.path));
+    for (final item in items) {
+      final doc = item.doc;
+      if (doc != null && editor.documents.contains(doc)) {
+        await editor.closeDocument(editor.documents.indexOf(doc));
+      }
     }
     notifyListeners();
   }

@@ -27,8 +27,9 @@ class _ExportDialogState extends State<ExportDialog> {
   EditorModel get editor => widget.editor;
   ExportTool get exporter => editor.exporter;
 
-  /// This Photo or All N Photos; each opening starts on the photo, as React's does.
-  String _scope = 'photo';
+  /// This Photo or All N Photos; each opening starts on the photo, as React's does, or on the
+  /// photos chosen in the strip when there are several.
+  late String _scope = exporter.batchChosen ? 'all' : 'photo';
 
   @override
   void initState() {
@@ -100,7 +101,7 @@ class _ExportDialogState extends State<ExportDialog> {
                   value: _scope,
                   options: [
                     const PickerOption('photo', 'This Photo'),
-                    PickerOption('all', 'All $count Photos'),
+                    PickerOption('all', x.batchChosen ? '$count Chosen Photos' : 'All $count Photos'),
                   ],
                   onChanged: (v) => setState(() => _scope = v),
                 )),

@@ -129,7 +129,18 @@ class PhotoLibrary extends ChangeNotifier {
   /// An edit to a library folder's photo marks it edited, for the grid's Edited filter, whether
   /// or not the library has been shown yet.
   void _edited(EditChange change) {
-    final file = change.doc.path;
+    final key = keyOf(change.doc.path);
+    if (key == null) return;
+    _loadRecords();
+    if (records[key]?['edit'] == true) return;
+    records = {...records, key: {...?records[key], 'edit': true}};
+    _saveRecords();
+    notifyListeners();
+  }
+
+  /// The record key of a file in a library folder, whether or not the library has been shown
+  /// yet; null for a file outside them.
+  String? keyOf(String file) {
     final roots = _started
         ? [for (final f in folders) (f.id, f.path)]
         : [
@@ -137,15 +148,15 @@ class PhotoLibrary extends ChangeNotifier {
               if (item is Map) (item['id'] as String, item['path'] as String),
           ];
     for (final (id, root) in roots) {
-      if (!file.startsWith('$root/')) continue;
-      final key = photoKey(id, file.substring(root.length + 1));
-      _loadRecords();
-      if (records[key]?['edit'] == true) return;
-      records = {...records, key: {...?records[key], 'edit': true}};
-      _saveRecords();
-      notifyListeners();
-      return;
+      if (file.startsWith('$root/')) return photoKey(id, file.substring(root.length + 1));
     }
+    return null;
+  }
+
+  /// A photo's stars, 0 for none.
+  int ratingOf(String key) {
+    _loadRecords();
+    return (records[key]?['rating'] as num?)?.toInt() ?? 0;
   }
 
   void _saveFolders() =>
@@ -248,6 +259,7 @@ class PhotoLibrary extends ChangeNotifier {
 
   /// Ratings change at once and are kept.
   void rate(Iterable<String> keys, int rating) {
+    _loadRecords();
     // A new map, so views sorted by rating see the change.
     records = {...records};
     for (final key in keys) {
@@ -260,60 +272,86 @@ class PhotoLibrary extends ChangeNotifier {
   /// Renames a photo in its folder; its rating follows it, and an open photograph or a waiting
   /// one in the strip keeps its place. Answers its new key, or null when the name was refused.
   Future<String?> renamePhoto(LibraryPhoto photo, String name) async {
-    final folder = folderById(photo.folderId);
-    if (folder == null) return null;
+    final path = await renameAt(photo.file, name);
+    return path == null ? null : keyOf(path);
+  }
+
+  /// Renames a file, in a library folder or not; its rating follows it, and an open photograph
+  /// or a waiting one in the strip keeps its place. Answers its new path, or null when the name
+  /// was refused (the library's notice, or the editor's outside it, says why).
+  Future<String?> renameAt(String file, String name) async {
     final String path;
     try {
-      path = renameFile(photo.file, name);
+      path = renameFile(file, name);
     } catch (e) {
-      _set(() => error = e is UnsupportedError ? '${photo.name} could not be renamed.' : fileProblem(e));
+      final problem = e is UnsupportedError ? '${file.split('/').last} could not be renamed.' : fileProblem(e);
+      open ? _set(() => error = problem) : editor.showError(problem);
       return null;
     }
-    final relative = path.substring(folder.path.length + 1);
-    final renamed = LibraryPhoto(
-        folderId: folder.id,
-        root: folder.path,
-        path: relative,
-        size: photo.size,
-        modified: photo.modified,
-        negative: photo.negative);
-    folder.photos = [for (final p in folder.photos) p.key == photo.key ? renamed : p];
-    final record = records.remove(photo.key);
-    if (record != null) {
-      records[renamed.key] = record;
-      _saveRecords();
+    final from = keyOf(file), to = keyOf(path);
+    for (final folder in folders) {
+      if (!file.startsWith('${folder.path}/')) continue;
+      folder.photos = [
+        for (final p in folder.photos)
+          p.file == file
+              ? LibraryPhoto(
+                  folderId: folder.id,
+                  root: folder.path,
+                  path: path.substring(folder.path.length + 1),
+                  size: p.size,
+                  modified: p.modified,
+                  negative: p.negative)
+              : p,
+      ];
     }
-    thumbnails.forget(photo.file);
+    if (from != null && to != null) {
+      _loadRecords();
+      final record = records.remove(from);
+      if (record != null) {
+        records[to] = record;
+        _saveRecords();
+      }
+    }
+    thumbnails.forget(file);
     for (final doc in editor.documents) {
-      if (doc.path == photo.file) doc.path = renamed.file;
+      if (doc.path == file) doc.path = path;
     }
-    editor.strip.renamed(photo.file, renamed.file);
+    editor.strip.renamed(file, path);
     notifyListeners();
-    return renamed.key;
+    return path;
   }
 
   /// Moves photos to the Trash; they leave the library with their records, and the strip with
   /// their photographs. Answers the keys of those that went.
   Future<Set<String>> trashPhotos(List<LibraryPhoto> photos) async {
-    final gone = (await HostWindow.trash([for (final p in photos) p.file])).toSet();
-    final removed = {for (final p in photos) if (gone.contains(p.file)) p.key};
+    final gone = await trashFiles([for (final p in photos) p.file]);
+    return {for (final p in photos) if (gone.contains(p.file)) p.key};
+  }
+
+  /// Moves files to the Trash, in library folders or not; answers the paths that went.
+  Future<Set<String>> trashFiles(List<String> files) async {
+    final gone = (await HostWindow.trash(files)).toSet();
     for (final folder in folders) {
-      if (photos.any((p) => p.folderId == folder.id)) {
-        folder.photos = [for (final p in folder.photos) if (!removed.contains(p.key)) p];
+      if (gone.any((f) => f.startsWith('${folder.path}/'))) {
+        folder.photos = [for (final p in folder.photos) if (!gone.contains(p.file)) p];
       }
     }
+    final removed = {for (final f in gone) ?keyOf(f)};
+    _loadRecords();
     if (records.keys.any(removed.contains)) {
       records.removeWhere((key, _) => removed.contains(key));
       _saveRecords();
     }
     gone.forEach(thumbnails.forget);
-    final failed = [for (final p in photos) if (!gone.contains(p.file)) p.name];
+    final failed = [for (final f in files) if (!gone.contains(f)) f.split('/').last];
     if (failed.isNotEmpty) {
-      error = '${failed.join(', ')}: ${failed.length == 1 ? 'It' : 'They'} could not be moved to the Trash.';
+      final problem =
+          '${failed.join(', ')}: ${failed.length == 1 ? 'It' : 'They'} could not be moved to the Trash.';
+      open ? error = problem : editor.showError(problem);
     }
     await editor.strip.trashed(gone);
     notifyListeners();
-    return removed;
+    return gone;
   }
 
   /// Shows photos in the Finder.

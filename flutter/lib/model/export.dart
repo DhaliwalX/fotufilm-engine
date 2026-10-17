@@ -119,8 +119,18 @@ class ExportTool {
 
   /// How many photographs Export All would write; 0 where the engine has no Export All. Movies
   /// export one at a time, so it leaves them out.
-  int get batchCount =>
-      _capabilities['batchExport'] == true ? editor.documents.where((d) => !d.isMovie).length : 0;
+  int get batchCount => _capabilities['batchExport'] == true ? _batch.length : 0;
+
+  /// Whether Export All writes the photos chosen in the strip rather than all it shows.
+  bool get batchChosen => editor.selection.chosen.length > 1;
+
+  /// The photographs Export All writes: those chosen in the strip, or every open one it shows.
+  List<PhotoDocument> get _batch => [
+        for (final d in batchChosen
+            ? editor.selection.chosen
+            : [for (final item in editor.strip.items) ?item.doc])
+          if (!d.isMovie) d,
+      ];
 
   /// Whether a HEIC across photographs may carry HDR, for those whose film delivers it.
   bool get batchHDR => _capabilities['hdrExport'] == true;
@@ -368,11 +378,12 @@ class ExportTool {
     });
   }
 
-  /// Export All: every photograph in the strip, each with its own edit, into one folder the
-  /// panel asks for (or `directory`). The engine numbers names past files already there.
+  /// Export All: the photographs chosen in the strip, or all it shows, each with its own edit,
+  /// into one folder the panel asks for (or `directory`). The engine numbers names past files
+  /// already there.
   Future<SavedExport?> exportAll({String? directory}) async {
     final engine = _engine;
-    final docs = [...editor.documents.where((d) => !d.isMovie)];
+    final docs = _batch;
     if (engine == null || docs.isEmpty || editor.exporting) return null;
     directory ??= await _chooseFolder();
     if (directory == null) return null;

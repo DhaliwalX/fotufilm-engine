@@ -52,13 +52,13 @@ class _MenuPlacement extends SingleChildLayoutDelegate {
   bool shouldRelayout(_MenuPlacement old) => old.at != at || old.width != width;
 }
 
-/// Renames one photo: the name field opens with the name before the extension selected.
-void showRenameDialog(BuildContext context, LibraryPhoto photo, ValueChanged<String> onRename) =>
-    showModal(context, (close) => _RenameDialog(photo: photo, onRename: onRename, onClose: close));
+/// Renames one photo named `name`: the field opens with the name before the extension selected.
+void showRenameDialog(BuildContext context, String name, ValueChanged<String> onRename) =>
+    showModal(context, (close) => _RenameDialog(name: name, onRename: onRename, onClose: close));
 
 class _RenameDialog extends StatefulWidget {
-  const _RenameDialog({required this.photo, required this.onRename, required this.onClose});
-  final LibraryPhoto photo;
+  const _RenameDialog({required this.name, required this.onRename, required this.onClose});
+  final String name;
   final ValueChanged<String> onRename;
   final VoidCallback onClose;
 
@@ -67,15 +67,15 @@ class _RenameDialog extends StatefulWidget {
 }
 
 class _RenameDialogState extends State<_RenameDialog> {
-  late final _name = TextEditingController(text: widget.photo.name);
+  late final _name = TextEditingController(text: widget.name);
   final _focus = FocusNode();
 
   @override
   void initState() {
     super.initState();
-    final dot = widget.photo.name.lastIndexOf('.');
+    final dot = widget.name.lastIndexOf('.');
     _name.selection =
-        TextSelection(baseOffset: 0, extentOffset: dot > 0 ? dot : widget.photo.name.length);
+        TextSelection(baseOffset: 0, extentOffset: dot > 0 ? dot : widget.name.length);
     WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
   }
 
@@ -90,7 +90,7 @@ class _RenameDialogState extends State<_RenameDialog> {
 
   void _submit() {
     if (nameProblem(_trimmed) != null) return;
-    if (_trimmed != widget.photo.name) widget.onRename(_trimmed);
+    if (_trimmed != widget.name) widget.onRename(_trimmed);
     widget.onClose();
   }
 

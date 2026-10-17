@@ -5,9 +5,10 @@
 // Shift-click and ⌘-click choose more open photos for Paste Settings and presets
 // (strip_selection.dart); those chosen with the shown one are ringed in a fainter accent.
 // The strip holds the shown photo's folder; scrolled away from its frame, a button at its top
-// right brings the frame back.
+// right brings the frame back. A right-click (or Control-click) opens its menu (strip_menu.dart).
 import 'dart:ui' as ui;
 
+import 'package:flutter/gestures.dart' show kPrimaryButton, kSecondaryButton;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -16,6 +17,7 @@ import '../../model/library_model.dart' show stripPath;
 import '../kit/kit.dart';
 import '../theme/theme.dart';
 import 'picture.dart';
+import 'strip_menu.dart';
 
 class PhotoStrip extends StatefulWidget {
   const PhotoStrip({super.key, required this.editor});
@@ -164,8 +166,11 @@ class _PhotoStripState extends State<PhotoStrip> {
                   item: item,
                   selected: doc != null && doc == active,
                   chosen: doc != null && editor.selection.isChosen(doc),
+                  onMenu: (position) => showStripMenu(context, editor, item, position),
                   onTap: () {
                     final keys = HardwareKeyboard.instance;
+                    // A Control-click is the menu's.
+                    if (keys.isControlPressed && !keys.isMetaPressed) return;
                     final range = keys.isShiftPressed;
                     final toggle = keys.isMetaPressed || keys.isControlPressed;
                     // A modified click chooses among open photos; a waiting one opens first.
@@ -195,11 +200,13 @@ class _StripItem extends StatefulWidget {
     required this.chosen,
     required this.onTap,
     required this.onClose,
+    required this.onMenu,
   });
   final EditorModel editor;
   final StripItem item;
   final bool selected, chosen;
   final VoidCallback onTap, onClose;
+  final ValueChanged<Offset> onMenu;
 
   @override
   State<_StripItem> createState() => _StripItemState();
@@ -243,59 +250,68 @@ class _StripItemState extends State<_StripItem> with PointerTint {
     final palette = Palette.of(context);
     final image = widget.item.doc?.importPicture ?? _thumbnail;
     return tinted(
-      child: Padding(
-        padding: const EdgeInsets.only(top: 6, right: 6),
-        child: Stack(clipBehavior: Clip.none, children: [
-          GestureDetector(
-            onTap: widget.onTap,
-            child: Container(
-              width: Metrics.stripItem.width,
-              height: Metrics.stripItem.height,
-              padding: const EdgeInsets.all(1),
-              decoration: BoxDecoration(
-                border: Border.all(
-                    color: widget.selected
-                        ? palette.accent
-                        : widget.chosen
-                            ? palette.accent.withValues(alpha: .45)
-                            : const Color(0x00000000),
-                    width: 2),
-                borderRadius: BorderRadius.circular(3),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(2),
-                child: image == null
-                    ? Container(
-                        color: palette.canvas,
-                        alignment: Alignment.center,
-                        child: Text(widget.item.name,
-                            maxLines: 2,
-                            textAlign: TextAlign.center,
-                            style: editorText(context,
-                                size: TextSizes.caption, color: palette.muted)))
-                    : EnginePicture(image, fit: BoxFit.contain),
-              ),
-            ),
-          ),
-          if (hovered)
-            Positioned(
-              top: -6,
-              right: -6,
-              child: GestureDetector(
-                onTap: widget.onClose,
-                child: Container(
-                  width: 18,
-                  height: 18,
-                  decoration: BoxDecoration(
-                    color: palette.panel,
-                    shape: BoxShape.circle,
-                    boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 3)],
-                  ),
-                  child: const Center(child: AppIcon('close', size: 12)),
+      child: Listener(
+        onPointerDown: (event) {
+          final keys = HardwareKeyboard.instance;
+          if (event.buttons == kSecondaryButton ||
+              (event.buttons == kPrimaryButton && keys.isControlPressed && !keys.isMetaPressed)) {
+            widget.onMenu(event.position);
+          }
+        },
+        child: Padding(
+          padding: const EdgeInsets.only(top: 6, right: 6),
+          child: Stack(clipBehavior: Clip.none, children: [
+            GestureDetector(
+              onTap: widget.onTap,
+              child: Container(
+                width: Metrics.stripItem.width,
+                height: Metrics.stripItem.height,
+                padding: const EdgeInsets.all(1),
+                decoration: BoxDecoration(
+                  border: Border.all(
+                      color: widget.selected
+                          ? palette.accent
+                          : widget.chosen
+                              ? palette.accent.withValues(alpha: .45)
+                              : const Color(0x00000000),
+                      width: 2),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(2),
+                  child: image == null
+                      ? Container(
+                          color: palette.canvas,
+                          alignment: Alignment.center,
+                          child: Text(widget.item.name,
+                              maxLines: 2,
+                              textAlign: TextAlign.center,
+                              style: editorText(context,
+                                  size: TextSizes.caption, color: palette.muted)))
+                      : EnginePicture(image, fit: BoxFit.contain),
                 ),
               ),
             ),
-        ]),
+            if (hovered)
+              Positioned(
+                top: -6,
+                right: -6,
+                child: GestureDetector(
+                  onTap: widget.onClose,
+                  child: Container(
+                    width: 18,
+                    height: 18,
+                    decoration: BoxDecoration(
+                      color: palette.panel,
+                      shape: BoxShape.circle,
+                      boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 3)],
+                    ),
+                    child: const Center(child: AppIcon('close', size: 12)),
+                  ),
+                ),
+              ),
+          ]),
+        ),
       ),
     );
   }

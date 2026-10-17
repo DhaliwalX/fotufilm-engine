@@ -174,7 +174,7 @@ class _PhotoLibraryViewState extends State<PhotoLibraryView> {
       if (single)
         MenuItem(
           label: 'Rename…',
-          onSelected: () => showRenameDialog(context, targets.single, (name) => _rename(targets.single, name)),
+          onSelected: () => showRenameDialog(context, targets.single.name, (name) => _rename(targets.single, name)),
         ),
       MenuItem(label: 'Move to Trash…', onSelected: () => _confirmTrash(targets)),
     ]);

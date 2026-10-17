@@ -83,7 +83,13 @@ class Presets {
   }
 
   /// Pastes `settings` onto the chosen photos, or the shown one alone.
-  void apply(CopiedSettings settings) {
+  void apply(CopiedSettings settings) =>
+      _each((doc) => pastedEdit(editor.catalogue, doc.edit, settings, editor.stocks));
+
+  /// Reset Edits on the chosen photos, or the shown one alone; each keeps its film.
+  void reset() => _each((doc) => defaultEdit(editor.catalogue, doc.edit['stock'] as String?));
+
+  void _each(Json Function(PhotoDocument doc) next) {
     final shown = editor.active;
     if (shown == null || editor.exporting) return;
     final docs = editor.selection.chosen;
@@ -91,7 +97,7 @@ class Presets {
     for (final doc in docs) {
       final Json after;
       try {
-        after = pastedEdit(editor.catalogue, doc.edit, settings, editor.stocks);
+        after = next(doc);
       } on EditProblem catch (e) {
         failed.add(docs.length > 1 ? '${doc.name}: ${e.message}' : e.message);
         continue;
