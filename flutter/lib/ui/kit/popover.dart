@@ -2,7 +2,9 @@
 // click outside it. Menus, pickers and help all open through `showAnchored`. Every overlay comes
 // and goes as Spectrum's do: a popover fades in with a short move from its anchor, a dialog fades
 // and grows a little over its dimming backdrop, and each fades out quicker than it came. With
-// reduced motion they only fade.
+// reduced motion they only fade. Each holds the keyboard while open: Tab goes round its controls,
+// Esc closes it, and the keys go back where they were.
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../theme/theme.dart';
@@ -40,6 +42,9 @@ class AnchoredOverlay {
   /// Called once it closes, however it closes.
   VoidCallback? onClose;
 
+  /// Gives the keys back to what had them before it opened.
+  VoidCallback? _returnKeys;
+
   /// A modal counts itself out of [openModals] as it closes.
   bool _modal = false;
 
@@ -54,6 +59,7 @@ class AnchoredOverlay {
       openModals.value--;
     }
     onClose?.call();
+    _returnKeys?.call();
   }
 }
 
@@ -73,25 +79,51 @@ bool dismissTopModal() {
   return true;
 }
 
+/// The keys of an open overlay, which the workspace leaves with it (workspace.dart `_keepKeys`).
+class OverlayFocusScope extends FocusScopeNode {
+  OverlayFocusScope() : super(debugLabel: 'overlay');
+}
+
 /// Inserts an overlay whose content `builder` draws with `shown`, 0 to 1 as it comes in and back
 /// to 0 as it goes; `close` starts its way out.
 AnchoredOverlay showOverlay(BuildContext context,
     Widget Function(BuildContext context, Animation<double> shown, VoidCallback close) builder) {
   final handle = AnchoredOverlay._();
   final palette = Palette.of(context);
+  final opener = FocusManager.instance.primaryFocus;
+  final scope = OverlayFocusScope();
   handle._entry = OverlayEntry(
     builder: (context) => PaletteScope(
       palette: palette,
-      child: _Presence(
-        leaving: handle._leaving,
-        onGone: () {
-          if (handle._entry.mounted) handle._entry.remove();
+      child: FocusScope(
+        node: scope,
+        onKeyEvent: (_, event) {
+          if (event is! KeyDownEvent || event.logicalKey != LogicalKeyboardKey.escape) {
+            return KeyEventResult.ignored;
+          }
+          // A modal that may not be dismissed keeps the key.
+          if (!handle._modal || !dismissTopModal()) handle.close();
+          return KeyEventResult.handled;
         },
-        builder: (context, shown) => builder(context, shown, handle.close),
+        child: _Presence(
+          leaving: handle._leaving,
+          onGone: () {
+            if (handle._entry.mounted) handle._entry.remove();
+            scope.dispose();
+          },
+          builder: (context, shown) => builder(context, shown, handle.close),
+        ),
       ),
     ),
   );
   Overlay.of(context).insert(handle._entry);
+  // A field that focuses itself keeps it; otherwise the overlay takes the keys.
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (handle.isOpen && !scope.hasFocus) scope.requestFocus();
+  });
+  handle._returnKeys = () {
+    if (opener != null && opener.context != null && opener.canRequestFocus) opener.requestFocus();
+  };
   return handle;
 }
 

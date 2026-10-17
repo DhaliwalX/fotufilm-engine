@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/widgets.dart';
 
 import '../../model/editor.dart';
+import '../kit/focus.dart';
 import '../theme/theme.dart';
 import '../workspace/picture.dart';
 
@@ -68,7 +69,12 @@ class _FormatTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = Palette.of(context);
-    return GestureDetector(
+    return KeyTarget(
+      onActivate: onTap,
+      label: label,
+      selected: selected,
+      radius: 6,
+      child: GestureDetector(
       onTap: onTap,
       child: Container(
         width: width,
@@ -96,6 +102,7 @@ class _FormatTile extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: editorText(context, size: TextSizes.label)),
         ]),
+      ),
       ),
     );
   }

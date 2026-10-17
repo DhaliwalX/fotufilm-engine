@@ -12,6 +12,7 @@ import '../model/editor.dart';
 import '../model/film_packs.dart';
 import '../model/panel_layout.dart';
 import '../ui/inspector/inspector.dart';
+import '../ui/kit/popover.dart' show OverlayFocusScope;
 import '../ui/theme/theme.dart';
 import '../ui/workspace/app_dialogs.dart';
 import '../ui/workspace/editing_dialogs.dart';
@@ -81,6 +82,8 @@ class _WorkspaceState extends State<Workspace> {
   void _keepKeys() {
     bool lost() => switch (FocusManager.instance.primaryFocus) {
           null => true,
+          // An open popover or dialog holds them until it closes.
+          OverlayFocusScope _ => false,
           // A scope holds the focus itself when nothing in it does.
           final FocusScopeNode _ => true,
           _ => false,

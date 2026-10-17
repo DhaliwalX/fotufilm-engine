@@ -4,6 +4,7 @@ import 'package:flutter/gestures.dart' show kPrimaryButton;
 import 'package:flutter/widgets.dart';
 
 import '../theme/theme.dart';
+import 'focus.dart';
 import 'icons.dart';
 import 'tooltip.dart';
 
@@ -12,19 +13,38 @@ import 'tooltip.dart';
 mixin PointerTint<T extends StatefulWidget> on State<T> {
   bool hovered = false, pressed = false;
 
-  Widget tinted({required Widget child, VoidCallback? onTap, bool opensMenu = false}) =>
-      MouseRegion(
-        onEnter: (_) => setState(() => hovered = true),
-        onExit: (_) => setState(() => hovered = pressed = false),
-        child: opensMenu
-            ? PressTrigger(onPress: onTap, child: child)
-            : GestureDetector(
-                onTapDown: onTap == null ? null : (_) => setState(() => pressed = true),
-                onTapUp: (_) => setState(() => pressed = false),
-                onTapCancel: () => setState(() => pressed = false),
-                onTap: onTap,
-                child: child,
-              ),
+  /// The control under the pointer and the keyboard (KeyTarget): `label` and the states are
+  /// what VoiceOver reads.
+  Widget tinted({
+    required Widget child,
+    VoidCallback? onTap,
+    bool opensMenu = false,
+    String? label,
+    String? value,
+    bool? selected,
+    bool? expanded,
+    double radius = Metrics.radius,
+  }) =>
+      KeyTarget(
+        onActivate: onTap,
+        label: label,
+        value: value,
+        selected: selected,
+        expanded: expanded,
+        radius: radius,
+        child: MouseRegion(
+          onEnter: (_) => setState(() => hovered = true),
+          onExit: (_) => setState(() => hovered = pressed = false),
+          child: opensMenu
+              ? PressTrigger(onPress: onTap, child: child)
+              : GestureDetector(
+                  onTapDown: onTap == null ? null : (_) => setState(() => pressed = true),
+                  onTapUp: (_) => setState(() => pressed = false),
+                  onTapCancel: () => setState(() => pressed = false),
+                  onTap: onTap,
+                  child: child,
+                ),
+        ),
       );
 }
 
@@ -100,6 +120,8 @@ class _QuietButtonState extends State<QuietButton> with PointerTint {
       child: tinted(
         onTap: widget.onPressed,
         opensMenu: widget.opensMenu,
+        label: widget.label ?? widget.tooltip,
+        selected: widget.selected ? true : null,
         child: Container(
           height: widget.size,
           constraints: BoxConstraints(minWidth: widget.size),
@@ -153,6 +175,8 @@ class _PillButtonState extends State<PillButton> with PointerTint {
     };
     return tinted(
       onTap: widget.onPressed,
+      label: widget.label,
+      radius: Metrics.control / 2,
       child: Opacity(
         opacity: enabled ? 1 : .45,
         child: Container(

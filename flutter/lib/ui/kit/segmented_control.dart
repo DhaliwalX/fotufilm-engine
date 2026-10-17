@@ -2,6 +2,7 @@
 import 'package:flutter/widgets.dart';
 
 import '../theme/theme.dart';
+import 'focus.dart';
 
 class SegmentedControl<T> extends StatelessWidget {
   const SegmentedControl({
@@ -24,7 +25,12 @@ class SegmentedControl<T> extends StatelessWidget {
       child: Row(children: [
         for (final (value, label) in items)
           Expanded(
-            child: GestureDetector(
+            child: KeyTarget(
+              onActivate: () => onChanged(value),
+              label: label,
+              selected: value == selected,
+              radius: 8,
+              child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: () => onChanged(value),
               child: Container(
@@ -47,6 +53,7 @@ class SegmentedControl<T> extends StatelessWidget {
                         size: TextSizes.heading - 1,
                         color: value == selected ? palette.text : palette.text.withValues(alpha: .7))),
               ),
+            ),
             ),
           ),
       ]),

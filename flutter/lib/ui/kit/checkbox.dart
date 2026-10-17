@@ -3,6 +3,7 @@
 import 'package:flutter/widgets.dart';
 
 import '../theme/theme.dart';
+import 'focus.dart';
 import 'icons.dart';
 
 class CheckboxRow extends StatelessWidget {
@@ -14,7 +15,11 @@ class CheckboxRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = Palette.of(context);
-    return GestureDetector(
+    return KeyTarget(
+      onActivate: () => onChanged(!value),
+      label: label,
+      toggled: value,
+      child: GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => onChanged(!value),
       child: Padding(
@@ -33,6 +38,7 @@ class CheckboxRow extends StatelessWidget {
           const SizedBox(width: 8),
           Flexible(child: Text(label, style: editorText(context))),
         ]),
+      ),
       ),
     );
   }

@@ -4,6 +4,7 @@
 // A menu with selectable rows (Spectrum's selectionMode) keeps a column before the icons for
 // their checkmarks, or checkboxes where several may be chosen; a description goes under its
 // label, and a link out of the app shows Spectrum's link-out arrow.
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -99,7 +100,13 @@ class _MenuListState extends State<MenuList> {
     ];
     // Spectrum's menu grid gives every row the checkmark column once any row needs it.
     final checks = items.any((i) => i.selection != null && i.submenu == null);
-    return PopoverSurface(
+    // The arrow keys move through the rows, as a menu's do; Return chooses (KeyTarget).
+    return Shortcuts(
+      shortcuts: const {
+        SingleActivator(LogicalKeyboardKey.arrowDown): NextFocusIntent(),
+        SingleActivator(LogicalKeyboardKey.arrowUp): PreviousFocusIntent(),
+      },
+      child: FocusTraversalGroup(child: PopoverSurface(
       child: ConstrainedBox(
         // As tall as the window allows below the toolbar, as Spectrum's popover is.
         constraints: BoxConstraints(
@@ -126,6 +133,7 @@ class _MenuListState extends State<MenuList> {
           ]),
         ),
       ),
+    )),
     );
   }
 }
@@ -160,6 +168,11 @@ class _MenuRowState extends State<_MenuRow> with PointerTint {
               if (!widget.back) item.onSelected?.call();
             }
           : null,
+      label: widget.back
+          ? 'Back to ${item.label}'
+          : [item.label, ?item.description, ?item.detail].join(', '),
+      selected: item.checked,
+      radius: 5,
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 4),
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

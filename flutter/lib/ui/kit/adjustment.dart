@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart';
 
 import '../theme/theme.dart';
 import 'fields.dart';
+import 'focus.dart';
 import 'icons.dart';
 
 /// A slider's value as the number field shows it: up to three decimals, grouped thousands.
@@ -73,9 +74,13 @@ class AdjustmentRow extends StatelessWidget {
             if (ends != null) _End(ends!.$1),
             Expanded(
               child: TrackSlider(
+                label: label,
+                describe: (t) => formatNumber(reciprocal ? (1e6 / t).roundToDouble() : range.snap(t)),
                 value: trackValue.clamp(trackMin, trackMax).toDouble(),
                 min: trackMin,
                 max: trackMax,
+                // A key moves it a hundredth of the track, and never less than a step.
+                keyStep: reciprocal ? null : math.max(range.step, (range.max - range.min) / 100),
                 onChanged: (t) => onChanged(reciprocal ? (1e6 / t).roundToDouble() : range.snap(t)),
                 onEnd: onEnd,
                 onReset: () {
@@ -121,11 +126,21 @@ class TrackSlider extends StatefulWidget {
     required this.onChanged,
     this.onEnd,
     this.onReset,
+    this.label,
+    this.describe,
+    this.keyStep,
   });
 
   final double value, min, max;
   final ValueChanged<double> onChanged;
   final VoidCallback? onEnd, onReset;
+
+  /// What VoiceOver reads: its name, and a value along the track as the number field shows it.
+  final String? label;
+  final String Function(double value)? describe;
+
+  /// How far an arrow key moves it; a hundredth of the track by default.
+  final double? keyStep;
 
   @override
   State<TrackSlider> createState() => _TrackSliderState();
@@ -149,6 +164,20 @@ class _TrackSliderState extends State<TrackSlider> {
     widget.onEnd?.call();
   }
 
+  /// Where `steps` arrow keys take it.
+  double _stepped(int steps) {
+    final step = widget.keyStep ?? (widget.max - widget.min) / 100;
+    return (widget.value + steps * step).clamp(widget.min, widget.max).toDouble();
+  }
+
+  /// An arrow key: one change, as a click on the track is.
+  void _nudge(int steps) {
+    widget.onChanged(_stepped(steps));
+    widget.onEnd?.call();
+  }
+
+  String _describe(double value) => widget.describe?.call(value) ?? formatNumber(value);
+
   @override
   Widget build(BuildContext context) {
     final palette = Palette.of(context);
@@ -158,7 +187,15 @@ class _TrackSliderState extends State<TrackSlider> {
       final value = _dragged ?? widget.value;
       final t = span == 0 ? 0.0 : ((value - widget.min) / span).clamp(0.0, 1.0);
       final x = _knob / 2 + t * (width - _knob);
-      return GestureDetector(
+      return KeyTarget(
+        label: widget.label,
+        value: _describe(widget.value),
+        increasedValue: _describe(_stepped(1)),
+        decreasedValue: _describe(_stepped(-1)),
+        onIncrease: _nudge,
+        onDecrease: (steps) => _nudge(-steps),
+        radius: Metrics.control / 2,
+        child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onDoubleTap: widget.onReset,
         onHorizontalDragStart: (d) => _update(d.localPosition.dx, width),
@@ -172,6 +209,7 @@ class _TrackSliderState extends State<TrackSlider> {
           height: Metrics.control,
           child: CustomPaint(painter: _TrackPainter(x, palette)),
         ),
+      ),
       );
     });
   }

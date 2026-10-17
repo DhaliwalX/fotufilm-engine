@@ -3,6 +3,7 @@ export 'adjustment.dart';
 export 'buttons.dart';
 export 'checkbox.dart';
 export 'fields.dart';
+export 'focus.dart';
 export 'help.dart';
 export 'icons.dart';
 export 'menu.dart';

@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 
 import '../theme/theme.dart';
 import 'buttons.dart';
+import 'focus.dart';
 import 'icons.dart';
 import 'popover.dart';
 
@@ -15,11 +16,8 @@ class HelpButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final detail = this.detail;
     if (detail == null || detail.isEmpty) return const SizedBox.shrink();
-    return Builder(
-      builder: (anchor) => MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: PressTrigger(
-          onPress: () => showAnchored(
+    return Builder(builder: (anchor) {
+      void open() => showAnchored(
             anchor,
             (context, _) => PopoverSurface(
               child: Padding(
@@ -28,13 +26,22 @@ class HelpButton extends StatelessWidget {
               ),
             ),
             width: 240,
-          ),
+          );
+      return KeyTarget(
+        onActivate: open,
+        label: 'Help',
+        radius: size,
+        child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: PressTrigger(
+          onPress: open,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 3),
             child: AppIcon('help', size: size, color: Palette.of(context).text.withValues(alpha: .8)),
           ),
         ),
       ),
-    );
+      );
+    });
   }
 }

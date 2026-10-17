@@ -29,6 +29,8 @@ class _SectionState extends State<Section> with PointerTint {
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         tinted(
           onTap: () => setState(() => _open = !_open),
+          label: widget.title,
+          expanded: _open,
           child: Container(
             height: Metrics.sectionTitleHeight,
             padding: const EdgeInsets.symmetric(horizontal: 6),

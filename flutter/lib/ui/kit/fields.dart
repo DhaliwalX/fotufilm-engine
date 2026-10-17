@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 
 import '../theme/theme.dart';
 import 'buttons.dart';
+import 'focus.dart';
 import 'help.dart';
 import 'icons.dart';
 import 'menu.dart';
@@ -100,7 +101,11 @@ class SwitchRow extends StatelessWidget {
     return Opacity(
       opacity: enabled ? 1 : .45,
       child: Row(children: [
-        GestureDetector(
+        KeyTarget(
+          onActivate: enabled ? () => onChanged(!value) : null,
+          label: label,
+          toggled: value,
+          child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: enabled ? () => onChanged(!value) : null,
           child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -122,6 +127,7 @@ class SwitchRow extends StatelessWidget {
             const SizedBox(width: 8),
             Text(label, style: editorText(context, size: TextSizes.label)),
           ]),
+        ),
         ),
         HelpButton(detail: detail),
       ]),
@@ -172,18 +178,23 @@ class PickerField<T> extends StatelessWidget {
           FieldLabel(label!, detail: detail),
           const SizedBox(height: 3),
         ],
-        Builder(
-          builder: (anchor) => PressTrigger(
-            onPress: enabled
-                ? () => showMenu(anchor, matchWidth: true, [
-                      for (final o in options)
-                        MenuItem(
-                          label: o.label,
-                          checked: o.value == value,
-                          onSelected: o.enabled ? () => onChanged(o.value) : null,
-                        ),
-                    ])
-                : null,
+        Builder(builder: (anchor) {
+          final open = enabled
+              ? () => showMenu(anchor, matchWidth: true, [
+                    for (final o in options)
+                      MenuItem(
+                        label: o.label,
+                        checked: o.value == value,
+                        onSelected: o.enabled ? () => onChanged(o.value) : null,
+                      ),
+                  ])
+              : null;
+          return KeyTarget(
+            onActivate: open,
+            label: label,
+            value: current?.label ?? placeholder,
+            child: PressTrigger(
+            onPress: open,
             child: Container(
               height: Metrics.control,
               padding: const EdgeInsets.only(left: 8, right: 6),
@@ -198,7 +209,8 @@ class PickerField<T> extends StatelessWidget {
               ]),
             ),
           ),
-        ),
+          );
+        }),
       ]),
     );
   }

@@ -66,8 +66,9 @@
 //   {"strip": true}                 logs the strip's photos ('*' shown, '…' waiting) and whether
 //                                   a library photo is flying to the viewer
 //   {"key": "l", "meta": false}     presses and releases a key (a letter, a digit, Enter,
-//                                   Escape, Backspace, an arrow, space, =, +, -, \ or ,), with
-//                                   "meta", "shift", "alt" and "ctrl" held
+//                                   Escape, Tab, Backspace, an arrow, space, =, +, -, \ or ,),
+//                                   with "meta", "shift", "alt" and "ctrl" held
+//   {"focus": true}                 logs the control the keys are at (its KeyTarget's name)
 //   and the menus' and keyboard's commands (commands_driver.dart)
 //   {"dialog": "settings"}          opens an app dialog (settings, plugins, support, update)
 //   {"settingsPane": "filmModel"}   shows a Settings pane (general, output, filmModel)
@@ -92,6 +93,7 @@ import '../model/band_sets.dart';
 import '../model/editor.dart';
 import '../model/export.dart';
 import '../model/library_model.dart';
+import '../ui/kit/focus.dart' show KeyTarget;
 import '../ui/workspace/crop_overlay.dart';
 import '../ui/workspace/histogram_panel.dart';
 import '../ui/workspace/picture.dart' show PresentedLayer;
@@ -396,6 +398,11 @@ class Driver {
       _log('strip ${editor.strip.items.map((i) => '${i.name}${i.doc == editor.active && i.doc != null ? '*' : ''}${i.waiting ? '…' : ''}').join(', ')}'
           '${editor.library.handoff != null ? ' (handoff)' : ''}');
     }
+    if (c['focus'] == true) {
+      final node = FocusManager.instance.primaryFocus;
+      final target = node?.context?.findAncestorWidgetOfExactType<KeyTarget>();
+      _log('focus ${node.runtimeType} ${target?.label ?? target?.value ?? '-'}');
+    }
     if (c['key'] case final String name) {
       await _key(name,
           meta: c['meta'] == true, shift: c['shift'] == true, alt: c['alt'] == true, ctrl: c['ctrl'] == true);
@@ -461,6 +468,7 @@ class Driver {
     return switch (lower) {
       'enter' => (PhysicalKeyboardKey.enter, LogicalKeyboardKey.enter, null),
       'escape' => (PhysicalKeyboardKey.escape, LogicalKeyboardKey.escape, null),
+      'tab' => (PhysicalKeyboardKey.tab, LogicalKeyboardKey.tab, null),
       'backspace' => (PhysicalKeyboardKey.backspace, LogicalKeyboardKey.backspace, null),
       'arrowright' => (PhysicalKeyboardKey.arrowRight, LogicalKeyboardKey.arrowRight, null),
       'arrowleft' => (PhysicalKeyboardKey.arrowLeft, LogicalKeyboardKey.arrowLeft, null),
