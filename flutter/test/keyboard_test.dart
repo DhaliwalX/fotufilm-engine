@@ -39,6 +39,54 @@ void main() {
     expect(pressed, 2);
   });
 
+  testWidgets('a click elsewhere takes the keys off a button, so Space goes past it', (tester) async {
+    var pressed = 0;
+    await show(
+        tester,
+        SizedBox(
+          width: 300,
+          height: 200,
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: QuietButton(icon: 'close', tooltip: 'Close', onPressed: () => pressed++),
+          ),
+        ));
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    await tester.tapAt(const Offset(200, 150));
+    await tester.pump();
+    expect(FocusManager.instance.primaryFocus, isA<FocusScopeNode>());
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    expect(pressed, 0);
+  });
+
+  testWidgets('while Return belongs to the editor, a focused button lets it past', (tester) async {
+    var pressed = 0, returns = 0;
+    returnGoesPast = () => true;
+    addTearDown(() => returnGoesPast = null);
+    await show(
+        tester,
+        // The editor, which hears the keys a control lets past.
+        Focus(
+          canRequestFocus: false,
+          onKeyEvent: (_, event) {
+            // It applies the crop, as editor_shortcuts.dart does.
+            if (event is! KeyDownEvent || event.logicalKey != LogicalKeyboardKey.enter) {
+              return KeyEventResult.ignored;
+            }
+            returns++;
+            return KeyEventResult.handled;
+          },
+          child: QuietButton(icon: 'close', tooltip: 'Close', onPressed: () => pressed++),
+        ));
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    expect((pressed, returns), (0, 1));
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    expect(pressed, 1, reason: 'Space still presses it');
+  });
+
   testWidgets('a click puts no ring on a button; the keyboard does', (tester) async {
     await show(tester, QuietButton(icon: 'close', tooltip: 'Close', onPressed: () {}));
     Finder ring() => find.descendant(

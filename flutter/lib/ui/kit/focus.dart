@@ -1,11 +1,37 @@
 // The keyboard and VoiceOver on the kit's controls, as react-aria gives Spectrum's: Tab reaches a
 // control, Return or Space works it, the arrow keys move a slider, and a ring shows where the
 // keyboard is (a click puts none there). Each names itself to the screen reader with its role and
-// state.
+// state. The keys stay only while the keyboard moves among controls: any click gives them back
+// (to the editor, or to the popover the control is in), so Space compares or plays a movie again.
+import 'package:flutter/gestures.dart' show GestureBinding, PointerDownEvent, PointerEvent;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../theme/theme.dart';
+import 'popover.dart' show OverlayFocusScope;
+
+/// Return belongs to the editor rather than a focused control (the Crop tool applies with it);
+/// inside a popover or dialog Return still works the control. The workspace sets it.
+bool Function()? returnGoesPast;
+
+class _ReturnIntent extends Intent {
+  const _ReturnIntent();
+}
+
+class _ReturnAction extends Action<_ReturnIntent> {
+  _ReturnAction(this.node, this.activate);
+  final FocusNode node;
+  final VoidCallback? activate;
+
+  // Disabled, the key goes on to the editor.
+  @override
+  bool isEnabled(_ReturnIntent intent) =>
+      activate != null &&
+      (node.nearestScope is OverlayFocusScope || !(returnGoesPast?.call() ?? false));
+
+  @override
+  void invoke(_ReturnIntent intent) => activate?.call();
+}
 
 class KeyTarget extends StatefulWidget {
   const KeyTarget({
@@ -67,8 +93,39 @@ class _NudgeIntent extends Intent {
   final bool shift;
 }
 
+/// A control's node, told apart from the editor's, a text field's and the viewer's.
+class _KeyTargetNode extends FocusNode {
+  _KeyTargetNode() : super(debugLabel: 'key target');
+}
+
+/// A click anywhere ends the keyboard's stay on a control. It runs after the click's own
+/// handlers, so a field or the movie viewer that takes the keys on a click keeps them.
+void _releaseOnClick(PointerEvent event) {
+  if (event is! PointerDownEvent) return;
+  final node = FocusManager.instance.primaryFocus;
+  if (node is _KeyTargetNode) node.unfocus(disposition: UnfocusDisposition.scope);
+}
+
+bool _listening = false;
+
 class _KeyTargetState extends State<KeyTarget> {
   bool _ring = false;
+  final _node = _KeyTargetNode();
+
+  @override
+  void initState() {
+    super.initState();
+    if (!_listening) {
+      _listening = true;
+      GestureBinding.instance.pointerRouter.addGlobalRoute(_releaseOnClick);
+    }
+  }
+
+  @override
+  void dispose() {
+    _node.dispose();
+    super.dispose();
+  }
 
   bool get _slider => widget.onIncrease != null || widget.onDecrease != null;
   bool get _nudges => widget.onNudge != null;
@@ -79,8 +136,8 @@ class _KeyTargetState extends State<KeyTarget> {
   }
 
   static const _activate = <ShortcutActivator, Intent>{
-    SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
-    SingleActivator(LogicalKeyboardKey.numpadEnter): ActivateIntent(),
+    SingleActivator(LogicalKeyboardKey.enter): _ReturnIntent(),
+    SingleActivator(LogicalKeyboardKey.numpadEnter): _ReturnIntent(),
     SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
   };
 
@@ -127,6 +184,7 @@ class _KeyTargetState extends State<KeyTarget> {
       onIncrease: widget.onIncrease == null ? null : () => _step(1),
       onDecrease: widget.onDecrease == null ? null : () => _step(-1),
       child: FocusableActionDetector(
+        focusNode: _node,
         enabled: enabled,
         shortcuts: {
           if (activate != null) ..._activate,
@@ -135,6 +193,7 @@ class _KeyTargetState extends State<KeyTarget> {
         },
         actions: {
           ActivateIntent: CallbackAction<ActivateIntent>(onInvoke: (_) => activate?.call()),
+          _ReturnIntent: _ReturnAction(_node, activate),
           _StepIntent: CallbackAction<_StepIntent>(onInvoke: (intent) => _step(intent.steps)),
           _NudgeIntent: CallbackAction<_NudgeIntent>(
               onInvoke: (intent) => widget.onNudge?.call(intent.direction, intent.shift)),

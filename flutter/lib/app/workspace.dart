@@ -12,7 +12,7 @@ import '../model/editor.dart';
 import '../model/film_packs.dart';
 import '../model/panel_layout.dart';
 import '../ui/inspector/inspector.dart';
-import '../ui/kit/focus.dart' show KeyTarget;
+import '../ui/kit/focus.dart' show KeyTarget, returnGoesPast;
 import '../ui/kit/popover.dart' show OverlayFocusScope;
 import '../ui/theme/theme.dart';
 import '../ui/workspace/app_dialogs.dart';
@@ -76,6 +76,8 @@ class _WorkspaceState extends State<Workspace> {
       editor.endEdit();
     });
     FocusManager.instance.addListener(_keepKeys);
+    // Return applies the crop whatever control the keyboard is at (editor_shortcuts.dart).
+    returnGoesPast = () => editor.crop.showing;
   }
 
   /// Keys that would go nowhere (a dialog closed, a focused control gone) come back to the
