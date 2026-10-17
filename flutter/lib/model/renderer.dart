@@ -280,7 +280,13 @@ class Renderer {
     final set = doc.filmThumbnails;
     final base = Map<String, dynamic>.of(doc.edit)..remove('stock');
     set.renew(jsonEncode(base));
-    for (final id in <String?>[null, ...host.stocks.map((s) => s['id'] as String)]) {
+    // A negative is read only as a film that has a negative.
+    final negative = doc.edit['negative'] != null;
+    for (final id in <String?>[
+      null,
+      for (final s in host.stocks)
+        if (!negative || s['readsNegative'] == true) s['id'] as String,
+    ]) {
       if (_stale(doc)) return;
       final key = id ?? '';
       if (set.fresh.contains(key)) continue;
@@ -299,6 +305,8 @@ class Renderer {
   /// Each format tile: the photograph on that gauge, whole or as a magnified detail.
   Future<void> _formatThumbnails(PhotoDocument doc) async {
     if (doc.edit['stock'] == null) return;
+    // A scanned negative's Film panel has no format to choose.
+    if (doc.edit['negative'] != null) return;
     final set = doc.formatThumbnails;
     final detail = host.formatDetail;
     final base = Map<String, dynamic>.of(doc.edit)..remove('format');

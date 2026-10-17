@@ -15,6 +15,7 @@ import 'document.dart';
 import 'edit.dart';
 import 'film_types.dart';
 import 'histogram.dart';
+import 'negatives.dart';
 import 'pipeline.dart';
 import 'renderer.dart';
 import 'selective.dart';
@@ -34,7 +35,7 @@ enum Panel {
   light('light', 'Expose', 'expose'),
   develop('develop', 'Develop', 'develop'),
   print('print', 'Print', 'print'),
-  roll('roll', 'Roll', 'roll'),
+  roll('roll', 'Roll', 'negative'),
   crop('crop', 'Crop', 'crop'),
   selective('selective', 'Selective', 'selective'),
   pipeline('pipeline', 'Pipeline', 'pipeline');
@@ -102,7 +103,7 @@ class EditorModel extends ChangeNotifier implements RenderHost {
   Panel panel = Panel.film;
 
   /// The inspector's tabs for the shown photograph (negative-document.js `documentPanels`).
-  List<Panel> get inspectorTabs => Panel.tabs;
+  List<Panel> get inspectorTabs => negatives.tabs(Panel.tabs);
   bool filmOpen = true;
   bool inspectorOpen = true;
   @override
@@ -136,6 +137,13 @@ class EditorModel extends ChangeNotifier implements RenderHost {
 
   late final selective = SelectiveTool(this)..addListener(notifyListeners);
   late final pipeline = PipelineTool(this)..addListener(notifyListeners);
+  /// Tells the UI that a feature's model (lib/model/*) changed what it shows.
+  void changed() => notifyListeners();
+
+  // ── Features ──────────────────────────────────────────────────────────────────────────────
+
+  /// Scanned negatives: importing them, their reading, their roll and Show Negative.
+  late final negatives = NegativeScans(this);
 
   // ── RenderHost ────────────────────────────────────────────────────────────────────────────
 
@@ -193,7 +201,8 @@ class EditorModel extends ChangeNotifier implements RenderHost {
       openFiles([for (final path in paths) PhotoFile(path.split('/').last, path: path)]);
 
   /// Opens photographs: by path where the engine reads files itself, otherwise by their bytes.
-  Future<void> openFiles(List<PhotoFile> files) async {
+  /// `negative` opens them as scanned negatives, read as a film (negatives.dart).
+  Future<void> openFiles(List<PhotoFile> files, {bool negative = false, String? scanLight}) async {
     final engine = this.engine;
     if (engine == null || files.isEmpty) return;
     // A new photograph starts on the film the shown one is on, as the web editor's do.
@@ -210,9 +219,9 @@ class EditorModel extends ChangeNotifier implements RenderHost {
       notifyListeners();
       try {
         final answer = engine.opensPaths && file.path != null
-            ? await engine.call('importPath', {'path': file.path, 'negative': false})
+            ? await engine.call('importPath', {'path': file.path, 'negative': negative})
             : await engine.call(
-                'importFile', {'name': file.name, 'negative': false}, await file.read!());
+                'importFile', {'name': file.name, 'negative': negative}, await file.read!());
         final json = answer.json;
         final doc = PhotoDocument(
           path: key,
@@ -221,8 +230,10 @@ class EditorModel extends ChangeNotifier implements RenderHost {
           height: (json['naturalHeight'] as num).toInt(),
           identity: json['identity'] as String?,
           raw: json['original'] != null,
-          history: History(defaultEdit(catalogue, stock)),
-        );
+          history: History(negative
+              ? negatives.startingEdit(json['negative'] as Json?, stock, scanLight)
+              : defaultEdit(catalogue, stock)),
+        )..negativeScan = json['negative'] as Json?;
         final preview = answer.bytes('preview');
         if (preview != null) doc.importPicture = await decodePng(preview);
         documents.add(doc);

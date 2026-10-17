@@ -3,6 +3,7 @@
 import 'package:flutter/widgets.dart';
 
 import '../../model/catalogue.dart';
+import '../../model/negative_document.dart';
 import '../kit/kit.dart';
 import 'controls.dart';
 import 'grade_deck.dart';
@@ -17,17 +18,19 @@ List<Widget> exposePanel(InspectorControls c) {
   final sceneLight = c.catalogue.control('sceneLight');
   final graded = _gradeKeys.any((k) => (c.params[k] as num? ?? 0) != 0);
   final hdr = c.profileControls(const ['hdrRange', 'hdrRollOff']);
+  // A scanned negative's light acts on its print: nothing reaches a scene it never had.
+  final negative = printsNegative(c.edit);
   return [
     Section(title: 'Light', children: [
-      ...c.sliders('Light'),
-      SwitchRow(
+      ...c.sliders('Light', film: !negative),
+      if (!negative) SwitchRow(
         label: 'Regional',
         detail: c.catalogue.detail('localTone'),
         value: c.edit['localTone'] == true,
         onChanged: (v) => editor.change({'localTone': v}),
       ),
     ]),
-    Section(title: 'Source Illuminant', children: [
+    if (!negative) Section(title: 'Source Illuminant', children: [
       PickerField<String>(
         label: sceneLight['title'] as String,
         detail: sceneLight['detail'] as String?,
@@ -58,8 +61,8 @@ List<Widget> exposePanel(InspectorControls c) {
         ),
       ),
     ]),
-    if (c.available.contains('shutter'))
+    if (!negative && c.available.contains('shutter'))
       Section(title: 'Long Exposure', children: c.profileControls(const ['shutter'])),
-    if (hdr.isNotEmpty) Section(title: 'HDR Highlights', children: hdr),
+    if (!negative && hdr.isNotEmpty) Section(title: 'HDR Highlights', children: hdr),
   ];
 }

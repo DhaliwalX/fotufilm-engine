@@ -8,6 +8,7 @@ import '../../app/host_window.dart';
 import '../../model/editor.dart';
 import '../kit/kit.dart';
 import '../theme/theme.dart';
+import 'import_menu.dart';
 
 class EditorToolbar extends StatelessWidget {
   const EditorToolbar({
@@ -39,7 +40,7 @@ class EditorToolbar extends StatelessWidget {
             const FotufilmBrand(),
             const SizedBox(width: 8),
             const QuietButton(icon: 'library', tooltip: 'Photo library'),
-            QuietButton(icon: 'plus', tooltip: 'Open image or video', onPressed: onOpen),
+            ImportMenu(editor: editor, onImage: onOpen),
           ]),
         ),
         Expanded(child: _ViewGroup(editor: editor)),
@@ -150,6 +151,17 @@ class _EditGroup extends StatelessWidget {
           icon: 'more',
           tooltip: 'More options',
           onPressed: () => showMenu(anchor, alignEnd: true, width: 240, [
+            MenuItem(
+              label: 'Import Scanned Negative…',
+              icon: 'negative',
+              onSelected: editor.negatives.canImport ? editor.negatives.chooseNegatives : null,
+            ),
+            MenuItem(
+              label: 'Import Trichromatic Scan…',
+              icon: 'negative',
+              onSelected: editor.negatives.canMerge ? editor.negatives.chooseExposures : null,
+            ),
+            const MenuItem.divider(),
             MenuItem(
               label: 'Auto Adjust',
               icon: 'autoAdjust',

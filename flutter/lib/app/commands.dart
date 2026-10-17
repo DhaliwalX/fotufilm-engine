@@ -64,6 +64,10 @@ List<CommandMenu> editorCommands(
     CommandMenu('File', [
       [
         Command('Open…', when(editor.ready, open), key: LogicalKeyboardKey.keyO),
+        Command('Import Scanned Negative…',
+            when(editor.negatives.canImport, editor.negatives.chooseNegatives)),
+        Command('Import Trichromatic Scan…',
+            when(editor.negatives.canMerge, editor.negatives.chooseExposures)),
         Command('Close Photo', when(photo, () => editor.closeDocument(editor.activeIndex)),
             key: LogicalKeyboardKey.keyW),
       ],
@@ -103,6 +107,9 @@ List<CommandMenu> editorCommands(
         Command(editor.histogramOpen ? 'Hide Histogram' : 'Show Histogram',
             when(photo, editor.toggleHistogram),
             key: LogicalKeyboardKey.keyH, alt: true),
+        Command(editor.negatives.showNegative ? 'Hide Negative' : 'Show Negative',
+            when(editor.negatives.canShowNegativeNow, editor.negatives.toggleShowNegative),
+            key: LogicalKeyboardKey.keyN, alt: true),
       ],
       [
         for (final (i, p) in Panel.tabs.indexed)

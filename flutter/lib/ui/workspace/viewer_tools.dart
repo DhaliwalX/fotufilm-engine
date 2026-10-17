@@ -4,6 +4,7 @@
 import 'package:flutter/widgets.dart';
 
 import '../../model/editor.dart';
+import 'film_base_sampler.dart';
 import 'selective_sampling.dart';
 
 /// The overlays for what the editor is doing now, over `photo` (the picture's rectangle in the
@@ -11,4 +12,6 @@ import 'selective_sampling.dart';
 List<Widget> viewerToolOverlays(EditorModel editor, Rect photo) => [
       if (editor.selective.sampling)
         Positioned.fill(child: SamplingOverlay(editor: editor, photo: photo)),
+      if (editor.negatives.sampling && editor.negatives.negative != null)
+        Positioned.fromRect(rect: photo, child: FilmBaseSampler(editor: editor)),
     ];

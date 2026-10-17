@@ -32,6 +32,7 @@
 //   {"stage": 3}                    shows a pipeline stage (null the finished print)
 //   {"difference": true}            shows the stage as its change from the one before
 //   {"tools": true}                 logs the selection, the subjects and the pipeline's stages
+//   and scanned negatives' commands (negative_driver.dart)
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -42,6 +43,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
 import '../model/editor.dart';
+import 'negative_driver.dart';
 
 class Driver {
   Driver._(this.dir, this.editor, this.boundary);
@@ -191,6 +193,7 @@ class Driver {
       _log('pipeline stage=${pipeline.stage} difference=${pipeline.difference} stages='
           '${[for (var i = 0; i < pipeline.stages.length; i++) pipeline.stageName(i)].join(', ')}');
     }
+    await driveNegatives(editor, c, _log);
     if (c['wait'] == 'idle') {
       final deadline = DateTime.now().add(const Duration(seconds: 120));
       await Future<void>.delayed(const Duration(milliseconds: 400));
