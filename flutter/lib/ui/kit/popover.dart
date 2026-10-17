@@ -64,7 +64,7 @@ AnchoredOverlay showAnchored(
         left: alignEnd ? null : origin.dx,
         right: alignEnd ? overlayBox.size.width - origin.dx - box.size.width : null,
         width: matchWidth ? box.size.width : width,
-        child: builder(context, () => handle.close()),
+        child: Builder(builder: (context) => builder(context, () => handle.close())),
       ),
     ])),
   );

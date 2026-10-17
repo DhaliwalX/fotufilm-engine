@@ -50,6 +50,7 @@
 //   {"cropGeometry": ["straighten", 5]}  sets straighten, perspectiveV or perspectiveH
 //   {"cropState": true}             logs the crop, the picture's size and the handles' window
 //                                   positions (corners clockwise from top left, then edges)
+//   and the editing actions' commands (editing_driver.dart)
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -64,6 +65,7 @@ import '../model/band_sets.dart';
 import '../model/editor.dart';
 import '../model/export.dart';
 import '../ui/workspace/crop_overlay.dart';
+import 'editing_driver.dart';
 import 'negative_driver.dart';
 
 class Driver {
@@ -300,6 +302,7 @@ class Driver {
         await Future<void>.delayed(const Duration(milliseconds: 100));
       }
     }
+    await runEditingCommand(c, editor, boundary, _log);
     await WidgetsBinding.instance.endOfFrame;
   }
 

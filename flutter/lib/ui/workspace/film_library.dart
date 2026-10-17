@@ -9,7 +9,9 @@ import '../../model/editor.dart';
 import '../../model/negative_document.dart';
 import '../kit/kit.dart';
 import '../theme/theme.dart';
+import 'editing_dialogs.dart';
 import 'picture.dart';
+import 'preset_list.dart';
 
 class FilmLibrary extends StatefulWidget {
   const FilmLibrary({super.key, required this.editor});
@@ -66,7 +68,11 @@ class _FilmLibraryState extends State<FilmLibrary> {
                     child: SegmentedControl<bool>(
                       items: const [(false, 'Films'), (true, 'Presets')],
                       selected: editor.presetsTab,
-                      onChanged: editor.setPresetsTab,
+                      onChanged: (presets) {
+                        // Each tab keeps its own search.
+                        _search.text = presets ? editor.presets.search : editor.search;
+                        editor.setPresetsTab(presets);
+                      },
                     ),
                   ),
                   const SizedBox(width: 6),
@@ -89,9 +95,18 @@ class _FilmLibraryState extends State<FilmLibrary> {
                 child: _SearchField(
                   controller: _search,
                   placeholder: editor.presetsTab ? 'Search presets' : 'Search films',
-                  onChanged: editor.setSearch,
+                  onChanged: editor.presetsTab ? editor.presets.setSearch : editor.setSearch,
                 ),
               ),
+              if (editor.presetsTab) ...[
+                const SizedBox(width: 4),
+                QuietButton(
+                  icon: 'plus',
+                  tooltip: 'Save Preset…',
+                  onPressed:
+                      editor.active == null ? null : () => showSavePresetDialog(context, editor),
+                ),
+              ],
               if (!editor.presetsTab && editor.filmTypes.length > 1) ...[
                 const SizedBox(width: 6),
                 _FilmTypePicker(
@@ -102,7 +117,7 @@ class _FilmLibraryState extends State<FilmLibrary> {
               ],
             ]),
           ),
-        Expanded(child: editor.presetsTab ? _Empty(open ? 'No presets yet.' : '') : _list(open)),
+        Expanded(child: editor.presetsTab ? PresetList(editor: editor, open: open) : _list(open)),
       ]),
     );
   }
@@ -110,7 +125,7 @@ class _FilmLibraryState extends State<FilmLibrary> {
   Widget _list(bool open) {
     final editor = widget.editor;
     final films = _films();
-    if (films.isEmpty) return const _Empty('No matching films.');
+    if (films.isEmpty) return const LibraryEmpty('No matching films.');
     final selected = editor.edit['stock'] as String?;
     final doc = editor.active;
     return ThinScroll(
@@ -225,8 +240,8 @@ class _FilmTypePickerState extends State<_FilmTypePicker> with PointerTint {
   }
 }
 
-class _Empty extends StatelessWidget {
-  const _Empty(this.text);
+class LibraryEmpty extends StatelessWidget {
+  const LibraryEmpty(this.text, {super.key});
   final String text;
 
   @override

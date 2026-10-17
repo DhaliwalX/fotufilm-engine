@@ -56,7 +56,7 @@ class NegativeScans {
     if (offersPanel(_doc?.edit, panel.id)) return;
     editor.panel = Panel.film;
     if (panel.isTool) editor.renderer?.schedule();
-    editor.changed();
+    editor.notify();
   }
 
   // ── Importing ───────────────────────────────────────────────────────────────────────────
@@ -80,9 +80,11 @@ class NegativeScans {
   Future<void> openNegatives(List<PhotoFile> scans, {String? scanLight}) =>
       editor.openFiles(scans, negative: true, scanLight: scanLight);
 
-  /// A new negative's edit: on the film its base looks like, read against an estimated base.
-  Json startingEdit(Json? scan, String? current, String? scanLight) => {
-        ...defaultEdit(editor.catalogue, negativeStartingStock(scan, editor.stocks, current)),
+  /// A new negative's edit: a new photograph's (`base`), on the film its base looks like, read
+  /// against an estimated base.
+  Json startingEdit(Json base, Json? scan, String? scanLight) => {
+        ...base,
+        'stock': negativeStartingStock(scan, editor.stocks, base['stock'] as String?),
         'negative': newNegative(scanLight ?? 'white'),
       };
 
@@ -106,7 +108,7 @@ class NegativeScans {
     if (engine == null || paths.isEmpty) return;
     editor
       ..status = 'Merging exposures'
-      ..changed();
+      ..notify();
     Json merged;
     try {
       merged = (await engine.call('mergeTrichromatic', {'paths': paths})).json;
@@ -114,7 +116,7 @@ class NegativeScans {
       editor
         ..status = null
         ..error = e is FotufilmCancelled ? null : 'The exposures could not be merged. $e'
-        ..changed();
+        ..notify();
       return;
     }
     editor.status = null;
@@ -126,7 +128,7 @@ class NegativeScans {
     }
     final left = trichromaticNotes(merged);
     if (left.isNotEmpty) editor.error = left;
-    editor.changed();
+    editor.notify();
   }
 
   // ── The reading (NegativeInspector.jsx) ─────────────────────────────────────────────────
@@ -165,7 +167,7 @@ class NegativeScans {
   void setSampling(bool on) {
     if (sampling == on) return;
     sampling = on;
-    editor.changed();
+    editor.notify();
   }
 
   /// Samples clear film where `point` (0–1 across the shown picture) falls, and reads the scan
@@ -203,7 +205,7 @@ class NegativeScans {
       if (editor.active == doc) {
         editor
           ..error = '$e'
-          ..changed();
+          ..notify();
       }
     }
   }
@@ -227,7 +229,7 @@ class NegativeScans {
     try {
       final answer = await engine.call('negativeLightFrames');
       _lightFrames = [for (final f in (answer.value as List?) ?? const []) (f as Map).cast()];
-      editor.changed();
+      editor.notify();
     } catch (_) {
       // The list the scan opened with stands.
     } finally {
@@ -258,7 +260,7 @@ class NegativeScans {
     } catch (e) {
       editor
         ..error = '$e'
-        ..changed();
+        ..notify();
     }
   }
 
@@ -297,7 +299,7 @@ class NegativeScans {
     if (docs.length < 2 || measuring != null) return;
     _cancelMeasure = false;
     measuring = RollProgress(0, docs.length);
-    editor.changed();
+    editor.notify();
     try {
       final ends = <List?>[];
       String? failure;
@@ -312,7 +314,7 @@ class NegativeScans {
           }
         }
         measuring = RollProgress(index + 1, docs.length);
-        editor.changed();
+        editor.notify();
       }
       if (_cancelMeasure) return;
       final roll = rollBalance(ends);
@@ -327,7 +329,7 @@ class NegativeScans {
       _applyRoll(docs, roll);
     } finally {
       measuring = null;
-      editor.changed();
+      editor.notify();
     }
   }
 
@@ -373,7 +375,7 @@ class NegativeScans {
       h.present = copyEdit(h.present)..['negative'] = after;
       h.group = null;
     }
-    editor.changed();
+    editor.notify();
   }
 
   /// Balance Every Frame Alone: every frame of the roll back on its own balance.
@@ -398,7 +400,7 @@ class NegativeScans {
 
   void toggleShowNegative() {
     showNegative = !showNegative;
-    editor.changed();
+    editor.notify();
     editor.renderer?.schedule();
   }
 

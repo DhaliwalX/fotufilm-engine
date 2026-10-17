@@ -1,6 +1,7 @@
 // The editor's controls, drawn as the web editor's Spectrum 2 components.
 export 'adjustment.dart';
 export 'buttons.dart';
+export 'checkbox.dart';
 export 'fields.dart';
 export 'help.dart';
 export 'icons.dart';
