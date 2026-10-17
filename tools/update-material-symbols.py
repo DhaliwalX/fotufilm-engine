@@ -30,7 +30,7 @@ SYMBOLS = {
     'library': 'photo_library', 'folder': 'folder', 'addFolder': 'create_new_folder',
     'refresh': 'refresh', 'star': 'star', 'starFilled': 'star_fill1',
     'edited': 'edit', 'copySettings': 'content_copy', 'pasteSettings': 'content_paste',
-    'presets': 'bookmarks', 'delete': 'delete',
+    'presets': 'bookmarks', 'delete': 'delete', 'locate': 'my_location',
 }
 ROOT = Path(__file__).resolve().parents[1]
 

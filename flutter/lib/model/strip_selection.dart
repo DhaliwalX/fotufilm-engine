@@ -56,10 +56,14 @@ class StripSelection {
 
   Selection<PhotoDocument> _selection = Selection.start(null);
 
+  /// The open photographs the strip shows: those in the shown photo's folder, in its order.
+  List<PhotoDocument> get _shown => [for (final item in editor.strip.items) ?item.doc];
+
   /// The chosen photos, in the strip's order; the shown one alone unless more were chosen.
   List<PhotoDocument> get chosen {
-    final keys = chosenKeys(editor.documents, editor.active, _current);
-    return [for (final d in editor.documents) if (keys.contains(d)) d];
+    final shown = _shown;
+    final keys = chosenKeys(shown, editor.active, _current);
+    return [for (final d in shown) if (keys.contains(d)) d];
   }
 
   /// Whether `doc` is chosen with others (the strip rings it).
@@ -77,7 +81,7 @@ class StripSelection {
   /// A click on a photo of the strip: Shift spans, ⌘ toggles, a plain click shows it.
   void press(PhotoDocument doc, {bool range = false, bool toggle = false}) {
     if (editor.exporting) return;
-    _selection = pressedStrip(editor.documents, editor.active, _current, doc,
+    _selection = pressedStrip(_shown, editor.active, _current, doc,
         range: range, toggle: toggle);
     if (!range && !toggle) {
       editor.selectDocument(editor.documents.indexOf(doc));
@@ -86,10 +90,11 @@ class StripSelection {
     editor.notify();
   }
 
-  /// ⌘A: every open photo.
+  /// ⌘A: every open photo the strip shows.
   void selectAll() {
-    if (editor.documents.length < 2) return;
-    _selection = Selection(editor.documents, editor.active);
+    final shown = _shown;
+    if (shown.length < 2) return;
+    _selection = Selection(shown, editor.active);
     editor.notify();
   }
 

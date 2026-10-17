@@ -44,9 +44,13 @@ class PhotoStripModel extends ChangeNotifier {
   /// The edge of a waiting photo's picture (useDocumentActions.js `drawThumbnails`).
   static const thumbnailEdge = 256;
 
-  /// The strip's photos: each open photograph and the waiting ones, in the order they came; a
-  /// photograph opened some other way joins at the end.
+  /// The strip's photos in the shown photo's folder: each open photograph and the waiting ones,
+  /// in the order they came; a photograph opened some other way joins at the end. Photographs
+  /// open from other folders stay open, and come back with their folder.
   List<StripItem> get items {
+    final shown = editor.active?.path;
+    final folder = shown == null ? null : folderOf(shown);
+    bool here(String path) => folder == null || folderOf(path) == folder;
     final docs = {for (final d in editor.documents) d.path: d};
     final placed = <String>{};
     final items = <StripItem>[];
@@ -54,13 +58,15 @@ class PhotoStripModel extends ChangeNotifier {
       final doc = docs[entry.path];
       if (doc == null && entry.opened) continue;
       placed.add(entry.path);
-      items.add(StripItem(entry.path, doc: doc, negative: entry.negative));
+      if (here(entry.path)) items.add(StripItem(entry.path, doc: doc, negative: entry.negative));
     }
     for (final doc in editor.documents) {
-      if (!placed.contains(doc.path)) items.add(StripItem(doc.path, doc: doc));
+      if (!placed.contains(doc.path) && here(doc.path)) items.add(StripItem(doc.path, doc: doc));
     }
     return items;
   }
+
+  static String folderOf(String path) => path.substring(0, path.lastIndexOf('/') + 1);
 
   /// Opens files as Open…, the Finder and the command line do: one file with a path brings the
   /// files beside it in its folder, not those of folders below, in name order (`withOpenedFolder`).

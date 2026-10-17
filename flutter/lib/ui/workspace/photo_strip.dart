@@ -4,6 +4,8 @@
 // engine's picture of the file, drawn once their frame is on screen; one is imported when chosen.
 // Shift-click and ⌘-click choose more open photos for Paste Settings and presets
 // (strip_selection.dart); those chosen with the shown one are ringed in a fainter accent.
+// The strip holds the shown photo's folder; scrolled away from its frame, a button at its top
+// right brings the frame back.
 import 'dart:ui' as ui;
 
 import 'package:flutter/services.dart';
@@ -34,11 +36,15 @@ class _PhotoStripState extends State<PhotoStrip> {
   String? _shown;
   int _count = 0;
 
+  /// Whether the shown photo's frame is scrolled out of view.
+  bool _away = false;
+
   @override
   void initState() {
     super.initState();
     editor.addListener(_shownChanged);
     editor.strip.addListener(_stripChanged);
+    _scroll.addListener(_scrolled);
   }
 
   @override
@@ -70,6 +76,20 @@ class _PhotoStripState extends State<PhotoStrip> {
     if (path != null) WidgetsBinding.instance.addPostFrameCallback((_) => _reveal(path));
   }
 
+  void _scrolled() {
+    final away = _shownOutOfView();
+    if (away != _away) setState(() => _away = away);
+  }
+
+  bool _shownOutOfView() {
+    if (!_scroll.hasClients) return false;
+    final index = editor.strip.items.indexWhere((i) => i.path == _shown);
+    if (index < 0) return false;
+    final position = _scroll.position, start = index * _stride;
+    return start + _stride <= position.pixels ||
+        start >= position.pixels + position.viewportDimension;
+  }
+
   void _reveal(String path) {
     if (!mounted || !_scroll.hasClients) return;
     final index = editor.strip.items.indexWhere((i) => i.path == path);
@@ -77,7 +97,7 @@ class _PhotoStripState extends State<PhotoStrip> {
     final position = _scroll.position;
     final start = index * _stride, end = start + _stride;
     final view = position.viewportDimension;
-    if (start >= position.pixels && end <= position.pixels + view) return;
+    if (start >= position.pixels && end <= position.pixels + view) return _scrolled();
     final target = (start - (view - _stride) / 2).clamp(0.0, position.maxScrollExtent);
     // A step to a neighbour glides; a jump across the roll goes straight there.
     if ((target - position.pixels).abs() <= view) {
@@ -89,7 +109,7 @@ class _PhotoStripState extends State<PhotoStrip> {
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-        listenable: editor.strip,
+        listenable: Listenable.merge([editor.strip, editor]),
         builder: (context, _) {
           final items = editor.strip.items;
           if (items.length < 2) return const SizedBox.shrink();
@@ -104,8 +124,25 @@ class _PhotoStripState extends State<PhotoStrip> {
       color: palette.panel,
       padding: Metrics.stripPadding,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        _StartClipped(active == null ? '' : stripPath(active.path),
-            style: editorText(context, size: TextSizes.caption, color: palette.muted, height: 1.3)),
+        Stack(clipBehavior: Clip.none, children: [
+          Padding(
+            padding: EdgeInsets.only(right: _away ? 24 : 0),
+            child: _StartClipped(active == null ? '' : stripPath(active.path),
+                style: editorText(context, size: TextSizes.caption, color: palette.muted, height: 1.3)),
+          ),
+          if (_away && _shown != null)
+            Positioned(
+              top: -4,
+              right: 0,
+              child: QuietButton(
+                icon: 'locate',
+                tooltip: 'Show Current Photo',
+                size: 20,
+                iconSize: 14,
+                onPressed: () => _reveal(_shown!),
+              ),
+            ),
+        ]),
         const SizedBox(height: 2),
         SizedBox(
           height: Metrics.stripItem.height + 6,
