@@ -135,6 +135,7 @@ enum SoundtrackChannel {
       result(nil)
     }
   }
+}
 
 /// File › Open Recent's files, kept as the CEF host keeps them (main_menu.mm
 /// `FotufilmRecentFiles`): the newest first, ten at most, those gone filtered out as they are read.

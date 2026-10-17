@@ -407,7 +407,6 @@ class Driver {
       'enter' => (PhysicalKeyboardKey.enter, LogicalKeyboardKey.enter, null),
       'escape' => (PhysicalKeyboardKey.escape, LogicalKeyboardKey.escape, null),
       'backspace' => (PhysicalKeyboardKey.backspace, LogicalKeyboardKey.backspace, null),
-      'space' => (PhysicalKeyboardKey.space, LogicalKeyboardKey.space, ' '),
       'arrowright' => (PhysicalKeyboardKey.arrowRight, LogicalKeyboardKey.arrowRight, null),
       'arrowleft' => (PhysicalKeyboardKey.arrowLeft, LogicalKeyboardKey.arrowLeft, null),
       'arrowdown' => (PhysicalKeyboardKey.arrowDown, LogicalKeyboardKey.arrowDown, null),
