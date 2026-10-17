@@ -10,10 +10,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../model/editor.dart';
+import '../model/film_packs.dart';
+import '../model/panel_layout.dart';
 import '../ui/inspector/inspector.dart';
 import '../ui/theme/theme.dart';
+import '../ui/workspace/app_dialogs.dart';
 import '../ui/workspace/dialogs.dart';
 import '../ui/workspace/film_library.dart';
+import '../ui/workspace/panel_layout.dart';
 import '../ui/workspace/toolbar.dart';
 import '../ui/workspace/viewer.dart';
 import 'commands.dart';
@@ -35,17 +39,18 @@ class _WorkspaceState extends State<Workspace> {
   EditorModel get editor => widget.editor;
   final _focus = FocusNode(debugLabel: 'workspace');
   bool _dropping = false;
-  double _filmWidth = Metrics.filmWidth, _inspectorWidth = Metrics.inspectorWidth;
 
   @override
   void initState() {
     super.initState();
     editor.addListener(_changed);
+    editor.layout.addListener(_changed);
   }
 
   @override
   void dispose() {
     editor.removeListener(_changed);
+    editor.layout.removeListener(_changed);
     _focus.dispose();
     super.dispose();
   }
@@ -78,6 +83,9 @@ class _WorkspaceState extends State<Workspace> {
 
   void _drop(DropDoneDetails detail) {
     setState(() => _dropping = false);
+    // Film packs are installed; the rest open (useFilmPacks.js `acceptWithPacks`).
+    final packs = [for (final f in detail.files) if (isFilmPack(f.name)) f.path];
+    if (packs.isNotEmpty) editor.filmPacks.importPaths(packs);
     editor.openFiles([
       for (final f in detail.files)
         if (imageExtensions.contains(f.name.split('.').last.toLowerCase())) _photo(f),
@@ -104,6 +112,7 @@ class _WorkspaceState extends State<Workspace> {
               child: ColoredBox(
                 color: Palette.of(context).page,
                 child: Column(children: [
+                  AppDialogHost(editor: editor),
                   EditorToolbar(
                     editor: editor,
                     onOpen: _open,
@@ -124,34 +133,92 @@ class _WorkspaceState extends State<Workspace> {
   /// its minimum width (web/src/editor/usePanelWidths.js).
   Widget _panels(BuildContext context, BoxConstraints constraints) {
     final total = constraints.maxWidth;
-    var film = editor.filmOpen ? _filmWidth : Metrics.filmCollapsed;
-    var inspector = editor.inspectorOpen ? _inspectorWidth : Metrics.railWidth;
+    final layout = editor.layout;
+    // The window's width chooses the layout; the model hears of it after this frame.
+    if (layout.window != total) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => layout.layOut(total));
+    }
+    if (total <= compactMaxWidth) return _compactPanels(context, constraints);
+    final preferred = layout.preferred;
+    var film = editor.filmOpen ? preferred.film : Metrics.filmCollapsed;
+    var inspector = editor.inspectorOpen ? preferred.inspector : Metrics.railWidth;
     final excess = film + inspector + Metrics.pictureMin - total;
     if (excess > 0 && editor.inspectorOpen) {
       inspector = math.max(Metrics.inspectorMin, inspector - excess);
     }
     final still = film + inspector + Metrics.pictureMin - total;
     if (still > 0 && editor.filmOpen) film = math.max(Metrics.filmMin, film - still);
-    return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      SizedBox(width: film, child: FilmLibrary(editor: editor)),
-      if (editor.filmOpen)
-        _Resizer(
-          onDrag: (dx) => setState(() =>
-              _filmWidth = (_filmWidth + dx).clamp(Metrics.filmMin, Metrics.filmMax)),
-          onReset: () => setState(() => _filmWidth = Metrics.filmWidth),
+    // The resizers straddle the panels' edges, over the panels (PanelResizer.jsx).
+    const hit = Metrics.resizerHit;
+    return Stack(children: [
+      Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        SizedBox(width: film, child: FilmLibrary(editor: editor)),
+        Expanded(child: EditorViewer(editor: editor, onOpen: _open, dropping: _dropping)),
+        SizedBox(
+          width: inspector,
+          child: editor.inspectorOpen
+              ? EditorInspector(editor: editor)
+              : InspectorRail(editor: editor),
         ),
-      Expanded(child: EditorViewer(editor: editor, onOpen: _open, dropping: _dropping)),
+      ]),
+      if (editor.filmOpen)
+        Positioned(
+          left: film - hit / 2,
+          top: 0,
+          bottom: 0,
+          width: hit,
+          child: _Resizer(
+            onDrag: (dx) => layout.setWidth(PanelSide.film, layout.widths.film + dx),
+            onEnd: layout.keepWidths,
+            onReset: () => layout.setWidth(PanelSide.film, Metrics.filmWidth, keep: true),
+          ),
+        ),
       if (editor.inspectorOpen)
-        _Resizer(
-          onDrag: (dx) => setState(() => _inspectorWidth =
-              (_inspectorWidth - dx).clamp(Metrics.inspectorMin, Metrics.inspectorMax)),
-          onReset: () => setState(() => _inspectorWidth = Metrics.inspectorWidth),
+        Positioned(
+          right: inspector - hit / 2,
+          top: 0,
+          bottom: 0,
+          width: hit,
+          child: _Resizer(
+            onDrag: (dx) =>
+                layout.setWidth(PanelSide.inspector, layout.widths.inspector - dx),
+            onEnd: layout.keepWidths,
+            onReset: () =>
+                layout.setWidth(PanelSide.inspector, Metrics.inspectorWidth, keep: true),
+          ),
+        ),
+    ]);
+  }
+
+  /// The phone's stacked layout (phone-layout.css): the picture, the film list's dock when it is
+  /// open, and the inspector's dock over the rail of panels.
+  Widget _compactPanels(BuildContext context, BoxConstraints constraints) {
+    final height = MediaQuery.sizeOf(context).height;
+    final short = height <= 500;
+    final dock = short
+        ? height * .42
+        : (height * .44).clamp(Metrics.compactDockMin, Metrics.compactDockMax).toDouble();
+    Widget sheet(Widget child) => DecoratedBox(
+          decoration: const BoxDecoration(boxShadow: [
+            BoxShadow(color: Color(0x09000000), blurRadius: 18, offset: Offset(0, -4)),
+          ]),
+          child: ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+            child: child,
+          ),
+        );
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Expanded(child: EditorViewer(editor: editor, onOpen: _open, dropping: _dropping)),
+      if (editor.filmOpen)
+        SizedBox(
+          height: short ? 138 : Metrics.compactFilmDock,
+          child: sheet(FilmLibrary(editor: editor)),
         ),
       SizedBox(
-        width: inspector,
+        height: editor.inspectorOpen ? dock : Metrics.compactRail,
         child: editor.inspectorOpen
-            ? EditorInspector(editor: editor)
-            : InspectorRail(editor: editor),
+            ? sheet(EditorInspector(editor: editor))
+            : CompactRail(editor: editor),
       ),
     ]);
   }
@@ -159,9 +226,9 @@ class _WorkspaceState extends State<Workspace> {
 
 /// The strip on a panel's edge that resizes it, with the accent line while hovered.
 class _Resizer extends StatefulWidget {
-  const _Resizer({required this.onDrag, required this.onReset});
+  const _Resizer({required this.onDrag, required this.onEnd, required this.onReset});
   final ValueChanged<double> onDrag;
-  final VoidCallback onReset;
+  final VoidCallback onEnd, onReset;
 
   @override
   State<_Resizer> createState() => _ResizerState();
@@ -171,26 +238,21 @@ class _ResizerState extends State<_Resizer> {
   bool _active = false;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-        width: 0,
-        child: OverflowBox(
-          maxWidth: Metrics.resizerHit,
-          child: MouseRegion(
-            cursor: SystemMouseCursors.resizeColumn,
-            onEnter: (_) => setState(() => _active = true),
-            onExit: (_) => setState(() => _active = false),
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onHorizontalDragUpdate: (d) => widget.onDrag(d.delta.dx),
-              onDoubleTap: widget.onReset,
-              child: Center(
-                child: Container(
-                  width: 2,
-                  decoration: BoxDecoration(
-                    color: _active ? Palette.of(context).accent : const Color(0x00000000),
-                    borderRadius: BorderRadius.circular(1),
-                  ),
-                ),
+  Widget build(BuildContext context) => MouseRegion(
+        cursor: SystemMouseCursors.resizeColumn,
+        onEnter: (_) => setState(() => _active = true),
+        onExit: (_) => setState(() => _active = false),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onHorizontalDragUpdate: (d) => widget.onDrag(d.delta.dx),
+          onHorizontalDragEnd: (_) => widget.onEnd(),
+          onDoubleTap: widget.onReset,
+          child: Center(
+            child: Container(
+              width: 2,
+              decoration: BoxDecoration(
+                color: _active ? Palette.of(context).accent : const Color(0x00000000),
+                borderRadius: BorderRadius.circular(1),
               ),
             ),
           ),

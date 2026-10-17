@@ -8,6 +8,7 @@ import 'package:flutter/widgets.dart';
 import '../../model/editor.dart';
 import '../kit/kit.dart';
 import '../theme/theme.dart';
+import 'panel_layout.dart';
 import 'picture.dart';
 
 class FilmLibrary extends StatefulWidget {
@@ -68,12 +69,8 @@ class _FilmLibraryState extends State<FilmLibrary> {
                   ),
                   const SizedBox(width: 6),
                 ],
-                QuietButton(
-                  icon: 'sidebar',
-                  tooltip: open ? 'Collapse film library' : 'Expand film library',
-                  selected: open,
-                  onPressed: editor.toggleFilm,
-                ),
+                FilmSettingsButton(editor: editor),
+                FilmSidebarToggle(editor: editor),
               ],
             ),
           ),

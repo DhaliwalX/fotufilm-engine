@@ -13,6 +13,8 @@ import 'histogram_panel.dart';
 import 'overlays.dart';
 import 'photo_strip.dart';
 import 'picture.dart';
+import 'startup_progress.dart';
+import 'viewer_status.dart';
 import 'viewer_tools.dart';
 
 class EditorViewer extends StatelessWidget {
@@ -50,8 +52,17 @@ class EditorViewer extends StatelessWidget {
               if (editor.error != null)
                 ErrorBanner(text: editor.error!, onClose: editor.dismissError),
               if (editor.histogramOpen && doc != null)
-                HistogramPanel(data: editor.histogram, onClose: editor.toggleHistogram),
+                HistogramPanel(
+                  data: editor.histogram,
+                  onClose: editor.toggleHistogram,
+                  labels: editor.catalogue.module['HISTOGRAM'] as Json?,
+                ),
               if (dropping) const DropOverlay(),
+              StartupProgress(
+                  key: const ValueKey('startup'),
+                  progress: editor.startup,
+                  compact: editor.layout.compact),
+              ViewerStatus(editor: editor),
             ]);
           }),
         ),

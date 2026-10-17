@@ -54,6 +54,9 @@ class PhotoDocument {
   final bool raw;
   final History history;
 
+  /// How the engine described the photograph as it opened (`hdr`, `original`, …).
+  Json descriptor = const {};
+
   String get name => path.split('/').last;
   Json get edit => history.present;
 

@@ -3,6 +3,7 @@
 // own isolate (engine_native.dart); a browser build calls the web editor's WASM and WebGPU
 // engine through a JavaScript bridge that answers the same calls (engine_web.dart,
 // web/src/flutter-bridge.js).
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'engine_web.dart' if (dart.library.io) 'engine_native.dart' as platform;
@@ -23,6 +24,10 @@ abstract interface class EngineConnection {
 
   /// Whether photographs open by path (`importPath`) rather than by their bytes (`importFile`).
   bool get opensPaths;
+
+  /// What the engine's platform services offer (`fotufilm_capabilities`): film packs, plug-ins,
+  /// updates and the rest, as web/src/backend/desktop/host.js reads them.
+  Map<String, dynamic> get capabilities;
 }
 
 /// Starts this platform's engine.
@@ -30,6 +35,13 @@ Future<EngineConnection> connectEngine() => platform.connect();
 
 class EngineReply {
   EngineReply(this.json, this.payload);
+
+  /// An answer's text: an object as it is, any other value (`plugins`' list, `stages`) under
+  /// `value`.
+  factory EngineReply.decode(String text, Uint8List? payload) {
+    final value = jsonDecode(text);
+    return EngineReply(value is Map<String, dynamic> ? value : {'value': value}, payload);
+  }
   final Map<String, dynamic> json;
   final Uint8List? payload;
 

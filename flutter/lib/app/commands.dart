@@ -3,7 +3,9 @@
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import '../model/app_dialogs.dart';
 import '../model/editor.dart';
+import '../ui/workspace/film_pack_notice.dart';
 import 'host_window.dart';
 
 class Command {
@@ -61,11 +63,24 @@ List<CommandMenu> editorCommands(
     LogicalKeyboardKey.digit4,
   ];
   return [
+    // The app menu's own commands (cef/src/platform/mac/main_menu.mm), around the system's.
+    CommandMenu(appMenu, [
+      [Command('Check for Updates…', when(editor.updates.available, editor.updates.check))],
+      [
+        Command('Settings…', () => editor.dialogs.request(AppDialog.settings),
+            key: LogicalKeyboardKey.comma),
+      ],
+    ]),
     CommandMenu('File', [
       [
         Command('Open…', when(editor.ready, open), key: LogicalKeyboardKey.keyO),
         Command('Close Photo', when(photo, () => editor.closeDocument(editor.activeIndex)),
             key: LogicalKeyboardKey.keyW),
+      ],
+      [
+        Command('Import Film Pack…',
+            when(editor.filmPacks.available && !editor.exporting, () => chooseFilmPacks(editor)),
+            key: LogicalKeyboardKey.keyI, shift: true),
       ],
       [Command('Export…', when(photo, export), key: LogicalKeyboardKey.keyE)],
     ]),
@@ -111,7 +126,31 @@ List<CommandMenu> editorCommands(
             when(photo && editor.edit['stock'] != null, editor.newGrainPattern)),
       ],
     ]),
+    // Two items per editor, Install reading Reinstall once the plug-in is there.
+    if (editor.plugins.available)
+      CommandMenu('Plugins', [
+        for (final p in editor.plugins.catalogue)
+          [
+            Command(
+              '${_pluginInstalled(editor, p) ? 'Reinstall' : 'Install'} ${p['name']} Plug-in…',
+              when(editor.plugins.busy == null && !editor.exporting, () {
+                editor.dialogs.request(AppDialog.plugins);
+                editor.plugins.install(p['id'] as String);
+              }),
+            ),
+            Command('Show ${p['name']} Plug-in in Finder',
+                when(_pluginInstalled(editor, p), () => editor.plugins.reveal(p['id'] as String))),
+          ],
+      ]),
   ];
+}
+
+/// The menu whose commands join the system's app menu on macOS.
+const appMenu = 'Fotufilm';
+
+bool _pluginInstalled(EditorModel editor, Json plugin) {
+  final state = editor.plugins.status(plugin['id'] as String)?['state'];
+  return state != null && state != 'notInstalled' && state != 'notBundled';
 }
 
 /// The shortcuts dialog's rows: each command with a shortcut, and holding Space.
@@ -141,27 +180,29 @@ class CommandHost extends StatelessWidget {
     );
   }
 
+  static PlatformMenuItemGroup _group(List<Command> group) => PlatformMenuItemGroup(members: [
+        for (final c in group)
+          PlatformMenuItem(label: c.label, shortcut: c.activator, onSelected: c.run),
+      ]);
+
   List<PlatformMenuItem> _menuBar() => [
-        const PlatformMenu(label: 'Fotufilm', menus: [
-          PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.about),
-          PlatformMenuItemGroup(members: [
+        PlatformMenu(label: 'Fotufilm', menus: [
+          const PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.about),
+          for (final menu in menus)
+            if (menu.label == appMenu) ...menu.groups.map(_group),
+          const PlatformMenuItemGroup(members: [
             PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.servicesSubmenu),
           ]),
-          PlatformMenuItemGroup(members: [
+          const PlatformMenuItemGroup(members: [
             PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.hide),
             PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.hideOtherApplications),
             PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.showAllApplications),
           ]),
-          PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.quit),
+          const PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.quit),
         ]),
         for (final menu in menus)
-          PlatformMenu(label: menu.label, menus: [
-            for (final group in menu.groups)
-              PlatformMenuItemGroup(members: [
-                for (final c in group)
-                  PlatformMenuItem(label: c.label, shortcut: c.activator, onSelected: c.run),
-              ]),
-          ]),
+          if (menu.label != appMenu)
+            PlatformMenu(label: menu.label, menus: [for (final group in menu.groups) _group(group)]),
         const PlatformMenu(label: 'Window', menus: [
           PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.minimizeWindow),
           PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.zoomWindow),

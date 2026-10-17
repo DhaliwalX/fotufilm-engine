@@ -31,10 +31,16 @@ class AnchoredOverlay {
   final OverlayEntry _entry;
   bool _open = true;
 
+  /// Called once it closes, however it closes.
+  VoidCallback? onClose;
+
+  bool get isOpen => _open;
+
   void close() {
     if (!_open) return;
     _open = false;
     _entry.remove();
+    onClose?.call();
   }
 }
 
@@ -48,6 +54,8 @@ AnchoredOverlay showAnchored(
   bool matchWidth = false,
 }) {
   final overlay = Overlay.of(anchor);
+  // The overlay sits above the app's palette: the content keeps the anchor's.
+  final palette = Palette.of(anchor);
   final overlayBox = overlay.context.findRenderObject() as RenderBox;
   final box = anchor.findRenderObject() as RenderBox;
   final origin = box.localToGlobal(Offset.zero, ancestor: overlayBox);
@@ -62,7 +70,7 @@ AnchoredOverlay showAnchored(
         left: alignEnd ? null : origin.dx,
         right: alignEnd ? overlayBox.size.width - origin.dx - box.size.width : null,
         width: matchWidth ? box.size.width : width,
-        child: builder(context, () => handle.close()),
+        child: PaletteScope(palette: palette, child: builder(context, () => handle.close())),
       ),
     ]),
   );
@@ -75,6 +83,7 @@ AnchoredOverlay showAnchored(
 AnchoredOverlay showModal(BuildContext context, Widget Function(VoidCallback close) builder,
     {bool dismissible = true}) {
   late final AnchoredOverlay handle;
+  final palette = Palette.of(context);
   final entry = OverlayEntry(
     builder: (context) => Stack(children: [
       Positioned.fill(
@@ -83,7 +92,7 @@ AnchoredOverlay showModal(BuildContext context, Widget Function(VoidCallback clo
           child: const ColoredBox(color: Color(0x66000000)),
         ),
       ),
-      Center(child: builder(() => handle.close())),
+      Center(child: PaletteScope(palette: palette, child: builder(() => handle.close()))),
     ]),
   );
   handle = AnchoredOverlay._(entry);

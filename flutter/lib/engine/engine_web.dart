@@ -48,6 +48,10 @@ class WebEngine implements EngineConnection {
   @override
   bool get opensPaths => false;
 
+  /// A browser installs no packs or plug-ins and has no update feed.
+  @override
+  Map<String, dynamic> get capabilities => const {};
+
   @override
   Future<EngineReply> call(String method,
       [Map<String, dynamic> params = const {}, Uint8List? payload]) async {
@@ -59,8 +63,7 @@ class WebEngine implements EngineConnection {
           ? const FotufilmCancelled()
           : FotufilmException(error);
     }
-    return EngineReply(jsonDecode(answer.json!.toDart) as Map<String, dynamic>,
-        answer.payload?.toDart);
+    return EngineReply.decode(answer.json!.toDart, answer.payload?.toDart);
   }
 
   @override

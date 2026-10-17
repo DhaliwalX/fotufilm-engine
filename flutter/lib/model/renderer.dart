@@ -66,6 +66,9 @@ class Renderer {
   /// Foreground develops placed on screen so far, for timing checks.
   int developed = 0;
 
+  /// The shown preview's develop answer (its size, time and backend), for the viewer's status.
+  Json? lastPreview;
+
   /// Whether `layer` holds a frame of `doc`, so the viewer may draw it.
   bool shows(String layer, PhotoDocument doc) => _layerOwner[layer] == doc.handle;
 
@@ -171,6 +174,7 @@ class Renderer {
       doc.originalKey = answer.json['originalKey'] as String? ?? doc.originalKey;
       doc.previewSignature = interactive ? null : signature;
       doc.previewEdge = interactive ? 0 : edge;
+      lastPreview = answer.json;
       developed++;
       host.rendered();
     }
@@ -231,6 +235,7 @@ class Renderer {
       scale: scale,
     );
     if (layer == 'preview') {
+      lastPreview = answer.json;
       doc.preview = placed;
     } else {
       doc.detail = placed;
@@ -268,7 +273,10 @@ class Renderer {
     } else {
       image = doc.previewImage;
     }
-    if (image != null) host.measured(await HistogramData.measure(image));
+    if (image != null) {
+      host.measured(
+          await HistogramData.measure(image, displayP3: engine.picturesAreDisplayP3));
+    }
   }
 
   /// Each film row: the photograph on that film, without grain or halation.

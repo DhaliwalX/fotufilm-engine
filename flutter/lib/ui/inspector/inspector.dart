@@ -4,8 +4,10 @@
 import 'package:flutter/widgets.dart';
 
 import '../../model/editor.dart';
+import '../../model/panel_layout.dart';
 import '../kit/kit.dart';
 import '../theme/theme.dart';
+import '../workspace/panel_layout.dart';
 import 'controls.dart';
 import 'panels.dart';
 
@@ -66,6 +68,8 @@ class _EditorInspectorState extends State<EditorInspector> {
                   style: editorText(context,
                       size: TextSizes.label, color: Palette.of(context).muted)),
             ],
+            const Spacer(),
+            PanelDismissButton(editor: editor, side: PanelSide.inspector),
           ]),
         ),
         Padding(

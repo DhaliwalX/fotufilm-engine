@@ -121,13 +121,16 @@ class _PillButtonState extends State<PillButton> with PointerTint {
           height: Metrics.control,
           width: widget.expand ? double.infinity : null,
           padding: const EdgeInsets.symmetric(horizontal: 12),
-          alignment: Alignment.center,
           decoration: BoxDecoration(
             color: hovered && enabled ? Color.lerp(bg, palette.text, .06) : bg,
             borderRadius: BorderRadius.circular(Metrics.control / 2),
           ),
-          child: Text(widget.label,
-              style: editorText(context, weight: FontWeight.w700, color: fg)),
+          // As wide as its label unless it expands, wherever it is placed.
+          child: Center(
+            widthFactor: widget.expand ? null : 1,
+            child: Text(widget.label,
+                style: editorText(context, weight: FontWeight.w700, color: fg)),
+          ),
         ),
       ),
     );

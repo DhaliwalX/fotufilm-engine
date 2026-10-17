@@ -11,7 +11,8 @@ class MainFlutterWindow: NSWindow {
     self.titlebarAppearsTransparent = true
     self.styleMask.insert(.fullSizeContentView)
     self.isMovableByWindowBackground = false
-    self.minSize = NSSize(width: 960, height: 600)
+    // The CEF app's least size, narrow enough for the compact layout (below 834 points).
+    self.minSize = NSSize(width: 720, height: 520)
     self.setContentSize(NSSize(width: 1440, height: 900))
     self.center()
     self.setFrameAutosaveName("FotufilmEditor")
@@ -36,6 +37,12 @@ enum WindowChannel {
         result(nil)
       case "zoom":
         window.zoom(nil)
+        result(nil)
+      case "setContentSize":
+        // Scripted checks resize the window, as a person dragging its edge does.
+        if let size = call.arguments as? [Double], size.count == 2 {
+          window.setContentSize(NSSize(width: size[0], height: size[1]))
+        }
         result(nil)
       case "takeOpenedFiles":
         result(OpenedFiles.shared.take(listening: channel))

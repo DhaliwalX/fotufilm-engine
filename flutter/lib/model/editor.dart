@@ -10,13 +10,20 @@ import 'package:flutter/foundation.dart';
 
 import '../engine/engine.dart';
 import '../engine/presenter.dart';
+import 'app_dialogs.dart';
 import 'catalogue.dart';
 import 'document.dart';
 import 'edit.dart';
+import 'film_packs.dart';
 import 'film_types.dart';
 import 'histogram.dart';
+import 'new_photo.dart';
+import 'panel_layout.dart';
+import 'plugins.dart';
 import 'renderer.dart';
 import 'settings.dart';
+import 'startup.dart';
+import 'updates.dart';
 import 'view.dart';
 
 export 'catalogue.dart' show Json;
@@ -61,6 +68,15 @@ class EditorModel extends ChangeNotifier implements RenderHost {
   String? startupError;
 
   bool get ready => renderer != null && stocks.isNotEmpty;
+
+  // ── App services (Settings, film packs, plug-ins, updates, the panels' layout) ────────────
+  late final dialogs = AppDialogs();
+  late final filmPacks = FilmPacks(this);
+  late final plugins = Plugins(this);
+  late final updates = Updates(this);
+  late final filmSuggestion = FilmSuggestion(this);
+  late final layout = PanelLayout(this);
+  final startup = ValueNotifier(StartupState.initial);
 
   /// Whether the engine has work in hand or waiting.
   bool get busy => (renderer?.busy ?? false) || status != null || _viewSettle != null;
@@ -153,25 +169,42 @@ class EditorModel extends ChangeNotifier implements RenderHost {
 
   Future<void> start() async {
     try {
+      startup.value = StartupState.connecting;
       final engine = await connectEngine();
-      final prepared = await engine.call('prepare');
-      final ids = ((prepared.json['stocks'] as List?) ?? const []).cast<String>().toSet();
-      stocks = [
-        for (final entry in ((prepared.json['catalogue'] as List?) ?? const []).cast<Json>())
-          if (ids.contains(entry['id'])) entry,
-      ]..sort((a, b) => _sortName(a).compareTo(_sortName(b)));
-      for (final s in stocks) {
-        _stockById[s['id'] as String] = s;
-      }
-      filmTypes = FilmType.offered(stocks);
+      startup.value = StartupState.loadingFilms;
+      await loadStocks(engine);
       final address = engine.address;
       if (address != null) presenter = await NativePresenter.attach(address);
       this.engine = engine;
       renderer = Renderer(engine: engine, catalogue: catalogue, host: this, presenter: presenter);
+      startup.value = StartupState.ready;
     } catch (e) {
       startupError = '$e';
+      startup.value = StartupState.failed;
     }
     notifyListeners();
+    if (engine != null) {
+      filmPacks.launch();
+      plugins.launch();
+      updates.launch();
+      filmSuggestion.refresh();
+    }
+  }
+
+  /// The engine's films (`prepare`'s catalogue), again after a film pack changes them.
+  Future<void> loadStocks([EngineConnection? via]) async {
+    final prepared = await (via ?? engine!).call('prepare');
+    final ids = ((prepared.json['stocks'] as List?) ?? const []).cast<String>().toSet();
+    stocks = [
+      for (final entry in ((prepared.json['catalogue'] as List?) ?? const []).cast<Json>())
+        if (ids.contains(entry['id'])) entry,
+    ]..sort((a, b) => _sortName(a).compareTo(_sortName(b)));
+    _stockById
+      ..clear()
+      ..addEntries(stocks.map((s) => MapEntry(s['id'] as String, s)));
+    filmTypes = FilmType.offered(stocks);
+    notifyListeners();
+    renderer?.schedule();
   }
 
   /// Films by name, ignoring a maker's prefix so Aerochrome sits with the A's.
@@ -214,12 +247,13 @@ class EditorModel extends ChangeNotifier implements RenderHost {
           height: (json['naturalHeight'] as num).toInt(),
           identity: json['identity'] as String?,
           raw: json['original'] != null,
-          history: History(defaultEdit(catalogue, stock)),
-        );
+          history: History(newPhotoEdit(defaultEdit(catalogue, stock), settings, _stockById.keys)),
+        )..descriptor = json;
         final preview = answer.bytes('preview');
         if (preview != null) doc.importPicture = await decodePng(preview);
         documents.add(doc);
         _activate(documents.length - 1);
+        filmSuggestion.suggest(doc);
         opened++;
       } catch (e) {
         error = '${file.name} could not be opened. $e';
@@ -508,7 +542,7 @@ class EditorModel extends ChangeNotifier implements RenderHost {
         'quality': quality,
         'metadata': metadata,
         'hdr': false,
-        'photoQuality': 'accurate',
+        'photoQuality': settings.get<String>('photoQuality') ?? 'accurate',
         'filename': path.split('/').last,
         'path': path,
       });
