@@ -1,0 +1,429 @@
+// Export and output, as the React editor does them on the desktop (web/src/editor/
+// useExportActions.js, useExportOptions.js, useOutputState.js, backend/desktop/host.js): one
+// photograph to a file, every photograph into a folder (Export All), a camera RAW as itself
+// (Export Original) and the developed picture to the clipboard (Copy Photo). The engine develops,
+// encodes and writes; the editor chooses where, as the CEF shell's save panels do.
+import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+
+import '../app/environment.dart';
+import '../engine/engine.dart';
+import 'edit.dart';
+import 'editor.dart';
+import 'export_sizes.dart';
+
+export 'export_sizes.dart';
+
+/// The still formats the desktop engine may write, in the order the dialog lists them
+/// (backend/desktop/host.js `EXPORT_LABELS`).
+const exportTypeLabels = {
+  'image/png': 'PNG',
+  'image/tiff': 'TIFF · 16-bit',
+  'image/jpeg': 'JPEG',
+  'image/heic': 'HEIC',
+};
+
+/// Export Original's format: the camera RAW file itself.
+const originalType = 'original';
+
+/// The export sheet's names for each metadata policy (useExportOptions.js `METADATA_LABELS`).
+const metadataLabels = {
+  'preserve': 'Include Location',
+  'preserveWithoutLocation': 'Capture Details',
+  'strip': 'No Metadata',
+};
+
+const lossyTypes = {'image/jpeg', 'image/webp', 'image/heic'};
+
+/// A photograph's file name with no extension, safe for any file system (file-download.js).
+String cleanName(String name) {
+  final stem = name
+      .replaceFirst(RegExp(r'\.[^.]+$'), '')
+      .replaceAll(RegExp(r'[^\p{L}\p{N}_-]+', unicode: true), '-');
+  final cut = stem.runes.length > 100 ? String.fromCharCodes(stem.runes.take(100)) : stem;
+  return cut.isEmpty ? 'photo' : cut;
+}
+
+/// A still's file name: the photograph's, its film and its print medium (useExportActions.js).
+String stillFilename(String name, Json edit, String type) {
+  final stock = edit['stock'] as String?;
+  final medium = edit['medium'] as String?;
+  final ext = type == 'image/jpeg' ? 'jpg' : type.split('/').last;
+  return '${cleanName(name)}-${stock == null || stock.isEmpty ? 'normal' : stock}'
+      '${medium == null || medium.isEmpty ? '' : '-$medium'}.$ext';
+}
+
+/// What the engine can write for this edit beyond the format list (`exportOptions`).
+class ExportOptions {
+  ExportOptions.fromJson(Json json)
+      : metadata = (json['metadata'] as List?)?.cast<String>(),
+        hdr = json['hdr'] == true,
+        unavailable = ((json['unavailable'] as List?) ?? const []).cast<String>();
+
+  /// The metadata policies; null hides the picker.
+  final List<String>? metadata;
+
+  /// Whether a HEIC may carry HDR: the film delivers light above display white.
+  final bool hdr;
+
+  /// The size ids past the developer's memory limit at this photo quality.
+  final List<String> unavailable;
+}
+
+/// What an export just saved, for the notice: one file, or `count` files in `directory`.
+class SavedExport {
+  const SavedExport({required this.filename, required this.path, this.count, this.directory});
+  final String filename, path;
+  final int? count;
+  final String? directory;
+}
+
+class ExportTool {
+  ExportTool(this.editor);
+  final EditorModel editor;
+
+  // The dialog's choices, kept while the editor is open (useEditorState.js).
+  String type = 'image/png';
+  String size = 'full';
+  int quality = 95;
+  String metadata = 'preserveWithoutLocation';
+
+  /// The engine's answer for the shown photograph; null while unknown.
+  ExportOptions? options;
+
+  /// The last export saved, until it is dismissed (SavedExportNotice.jsx).
+  SavedExport? saved;
+
+  /// A folder every export goes to without asking, as the CEF shell's --export-dir: for
+  /// scripted checks.
+  String? fixedDirectory = environment('FOTUFILM_EXPORT_DIR');
+
+  EngineConnection? get _engine => editor.engine;
+  Map<String, dynamic> get _capabilities => _engine?.capabilities ?? const {};
+  AppSettings get _settings => editor.settings;
+
+  // ── What may be offered ───────────────────────────────────────────────────────────────────
+
+  /// The formats the engine's encoder writes, (id, label).
+  List<(String, String)> get types {
+    final offered = (_capabilities['imageExportTypes'] as List?)?.cast<String>() ?? const [];
+    return [
+      for (final MapEntry(:key, :value) in exportTypeLabels.entries)
+        if (offered.isEmpty || offered.contains(key)) (key, value),
+    ];
+  }
+
+  /// How many photographs Export All would write; 0 where the engine has no Export All.
+  int get batchCount => _capabilities['batchExport'] == true ? editor.documents.length : 0;
+
+  /// Whether a HEIC across photographs may carry HDR, for those whose film delivers it.
+  bool get batchHDR => _capabilities['hdrExport'] == true;
+
+  /// A camera RAW opened from a file can be exported as itself.
+  bool originalAvailable(PhotoDocument doc) => doc.raw && (_engine?.opensPaths ?? false);
+
+  bool get canCopy => _capabilities['copyImage'] == true && editor.active != null;
+
+  /// HDR HEIC, kept as the app's Photo HDR setting.
+  bool get hdr => _settings.get<bool>('photoHDR') == true;
+  set hdr(bool value) {
+    _settings.set('photoHDR', value);
+    editor.notify();
+  }
+
+  String get photoQuality => _settings.get<String>('photoQuality') ?? 'accurate';
+
+  /// The settings of the last photo exported, offered back (Use Last Export Settings).
+  Json? get last => _settings.get<Map>('lastPhotoExport')?.cast<String, dynamic>();
+
+  /// The settings the dialog shows now, as `last` keeps them.
+  Json get current => {'type': type, 'size': size, 'quality': quality, 'metadata': metadata};
+
+  // ── Sizes (useOutputState.js) ─────────────────────────────────────────────────────────────
+
+  /// The cropped picture of `doc`, upright, which export sizes are measured on.
+  PixelSize cropSize(PhotoDocument doc) {
+    final turned = ((doc.edit['rotation'] as num?) ?? 0).toInt().isOdd;
+    final (w, h) = turned ? (doc.height, doc.width) : (doc.width, doc.height);
+    final crop = doc.edit['crop'];
+    return crop is List && crop.length == 4 ? outputSize(crop, w, h) : (width: w, height: h);
+  }
+
+  List<ExportSize> sizes({required bool batch}) {
+    final doc = editor.active;
+    return batch || doc == null ? batchExportSizeOptions() : exportSizeOptions(cropSize(doc));
+  }
+
+  /// The sizes past the memory limit; Export All reduces each photograph as it needs instead.
+  List<String> unavailable({required bool batch}) =>
+      batch ? const [] : options?.unavailable ?? const [];
+
+  /// The size an export uses: the one chosen where it is offered, else the full picture, and
+  /// the largest that fits in place of one that does not, as the Mac app selects.
+  String sizeId({required bool batch}) {
+    final offered = sizes(batch: batch);
+    final blocked = unavailable(batch: batch);
+    final chosen = offered.any((s) => s.id == size) ? size : 'full';
+    if (!blocked.contains(chosen)) return chosen;
+    return offered.where((s) => !blocked.contains(s.id)).firstOrNull?.id ?? chosen;
+  }
+
+  /// What the chosen size delivers of the shown photograph.
+  PixelSize delivered(PhotoDocument doc) {
+    final crop = cropSize(doc);
+    final edge = exportMaxEdge(sizeId(batch: false), crop);
+    return edge == null ? crop : exportPixels(edge, crop);
+  }
+
+  // ── Requests ──────────────────────────────────────────────────────────────────────────────
+
+  /// A photograph's render request as an export sends it: the finished picture, framed where
+  /// its print frame says (session.js `renderRequest`).
+  Json _request(PhotoDocument doc, {int? maxEdge}) {
+    final frame = editor.renderOptions(doc)['printFrame'];
+    return {
+      ...renderRequest(
+        catalogue: editor.catalogue,
+        handle: doc.handle,
+        edit: doc.edit,
+        stock: editor.stockById(doc.edit['stock'] as String?),
+        maxEdge: maxEdge,
+      ),
+      'printFrame': ?frame,
+    };
+  }
+
+  /// Asks what the engine can write for the shown photograph (useExportOptions.js).
+  Future<void> loadOptions() async {
+    final doc = editor.active, engine = _engine;
+    if (doc == null || engine == null || types.isEmpty) return;
+    final edit = doc.edit;
+    try {
+      final answer = await engine.call('exportOptions', {
+        ..._request(doc, maxEdge: 1024),
+        'sizes': [
+          for (final s in sizes(batch: false))
+            if (s.pixels case final pixels?)
+              {'id': s.id, 'width': pixels.width, 'height': pixels.height},
+        ],
+        'photoQuality': photoQuality,
+      });
+      if (editor.active != doc || !identical(doc.edit, edit)) return;
+      options = ExportOptions.fromJson(answer.json);
+    } catch (_) {
+      options = null;
+    }
+    editor.notify();
+  }
+
+  // ── Exports ───────────────────────────────────────────────────────────────────────────────
+
+  /// Runs an export: the editor waits and the renderer leaves the engine's work alone, so that
+  /// a develop the view asks for does not cancel it. Cancelling is not a failure.
+  Future<T?> _run<T>(String status, Future<T> Function() body) async {
+    if (editor.exporting) return null;
+    editor
+      ..exporting = true
+      ..error = null
+      ..status = status;
+    editor.renderer?.holdCancel = true;
+    editor.notify();
+    try {
+      return await body();
+    } on FotufilmCancelled {
+      return null;
+    } catch (e) {
+      editor.error = '$e';
+      return null;
+    } finally {
+      editor
+        ..exporting = false
+        ..status = null;
+      editor.renderer?.holdCancel = false;
+      editor.notify();
+    }
+  }
+
+  void _setStatus(String status) {
+    editor.status = status;
+    editor.notify();
+  }
+
+  void _remember({required bool batch}) => _settings.set('lastPhotoExport', {
+        'type': type,
+        'size': sizeId(batch: batch),
+        'quality': quality,
+        'metadata': metadata,
+      });
+
+  SavedExport _show(SavedExport export) {
+    saved = export;
+    editor.notify();
+    return export;
+  }
+
+  void dismissSaved() {
+    saved = null;
+    editor.notify();
+  }
+
+  /// The shown photograph, at the chosen size and format, where the save panel says (or to
+  /// `path`). Answers what was saved, or null when nothing was.
+  Future<SavedExport?> exportPhoto({String? path}) async {
+    final doc = editor.active, engine = _engine;
+    if (doc == null || engine == null || editor.exporting) return null;
+    if (type == originalType) return exportOriginal(path: path);
+    final filename = stillFilename(doc.name, doc.edit, type);
+    path ??= await _chooseFile(filename, type);
+    if (path == null) return null;
+    return _run('Rendering native export', () async {
+      final answer = await engine.call('export', {
+        ..._request(doc, maxEdge: exportMaxEdge(sizeId(batch: false), cropSize(doc))),
+        'type': type,
+        'quality': quality / 100,
+        'metadata': metadata,
+        'hdr': hdr,
+        'photoQuality': photoQuality,
+        'filename': filename,
+        'path': path,
+      });
+      _remember(batch: false);
+      return _show(SavedExport(
+          filename: answer.json['filename'] as String? ?? filename,
+          path: answer.json['path'] as String? ?? path!));
+    });
+  }
+
+  /// Export All: every photograph in the strip, each with its own edit, into one folder the
+  /// panel asks for (or `directory`). The engine numbers names past files already there.
+  Future<SavedExport?> exportAll({String? directory}) async {
+    final engine = _engine;
+    final docs = [...editor.documents];
+    if (engine == null || docs.isEmpty || editor.exporting) return null;
+    directory ??= await _chooseFolder();
+    if (directory == null) return null;
+    return _run<SavedExport?>('Preparing export', () async {
+      final answer = await engine.callWithProgress('exportBatch', {
+        'items': [
+          for (final doc in docs)
+            {
+              ..._request(doc),
+              'name': doc.name,
+              'filename': stillFilename(doc.name, doc.edit, type),
+            },
+        ],
+        'size': sizeId(batch: true),
+        'type': type,
+        'quality': quality / 100,
+        'metadata': metadata,
+        'hdr': hdr,
+        'photoQuality': photoQuality,
+        'directory': directory,
+      }, (progress) {
+        final total = progress['total'], name = progress['name'];
+        _setStatus(name is String
+            ? 'Exporting $name · ${progress['current']} of $total'
+            : 'Exported ${progress['done']} of $total');
+      });
+      _remember(batch: true);
+      final written = ((answer.json['written'] as List?) ?? const []).cast<Json>();
+      final failed = ((answer.json['failed'] as List?) ?? const []).cast<Json>();
+      final reduced = ((answer.json['reduced'] as List?) ?? const []).cast<String>();
+      final problems = [
+        for (final f in failed) '${f['name']}: ${f['error']}',
+        if (reduced.isNotEmpty)
+          'Exported smaller to stay within this device’s safe memory limit: '
+              '${reduced.join(', ')}.',
+      ];
+      if (problems.isNotEmpty) editor.error = problems.join(' ');
+      if (written.isEmpty) return null;
+      return _show(SavedExport(
+        filename: '${written.length} photos',
+        path: written.first['path'] as String,
+        count: written.length,
+        directory: answer.json['directory'] as String? ?? directory,
+      ));
+    });
+  }
+
+  /// Export Original: the camera RAW file itself, no edit and no size.
+  Future<SavedExport?> exportOriginal({String? path}) async {
+    final doc = editor.active, engine = _engine;
+    if (doc == null || engine == null || !originalAvailable(doc) || editor.exporting) return null;
+    path ??= await _chooseFile(doc.name, '');
+    if (path == null) return null;
+    return _run('Copying the original', () async {
+      final answer = await engine.call('exportOriginal',
+          {'handle': doc.handle, 'filename': doc.name, 'type': '', 'path': path});
+      return _show(SavedExport(
+          filename: answer.json['filename'] as String? ?? doc.name,
+          path: answer.json['path'] as String? ?? path!));
+    });
+  }
+
+  /// Use Last Export Settings: the last photo export's settings, exported again.
+  Future<SavedExport?> exportWithLast() {
+    applyLast();
+    return exportPhoto();
+  }
+
+  /// Puts the last photo export's settings back in the dialog.
+  void applyLast() {
+    final last = this.last;
+    if (last == null) return;
+    if (last['type'] case final String value) type = value;
+    if (last['size'] case final String value) size = value;
+    if (last['quality'] case final num value) quality = value.round();
+    if (last['metadata'] case final String value) metadata = value;
+    editor.notify();
+  }
+
+  /// Stops an export in flight: the engine stops at its next develop, keeping what Export All
+  /// already wrote.
+  void cancel() {
+    if (editor.exporting) _engine?.cancel();
+  }
+
+  /// Copy Photo: the developed picture, full size, on the clipboard, written by the engine.
+  Future<void> copyPhoto() async {
+    final doc = editor.active, engine = _engine;
+    if (doc == null || engine == null || !canCopy || editor.exporting) return;
+    editor
+      ..error = null
+      ..status = 'Copying the photo';
+    editor.renderer?.holdCancel = true;
+    editor.notify();
+    try {
+      await engine.call('copyImage', {..._request(doc), 'photoQuality': photoQuality});
+    } on FotufilmCancelled {
+      // A newer develop took the engine; nothing was copied.
+    } catch (e) {
+      editor.error = '$e';
+    } finally {
+      editor.status = null;
+      editor.renderer?.holdCancel = false;
+      editor.notify();
+    }
+  }
+
+  // ── Destinations (the CEF shell's export panels) ──────────────────────────────────────────
+
+  Future<String?> _chooseFile(String filename, String type) async {
+    if (fixedDirectory case final dir? when dir.isNotEmpty) return '$dir/$filename';
+    // A browser saves to its downloads.
+    if (kIsWeb) return filename;
+    final ext = filename.contains('.') ? filename.split('.').last : '';
+    final location = await getSaveLocation(
+      suggestedName: filename,
+      acceptedTypeGroups: [
+        if (ext.isNotEmpty) XTypeGroup(label: ext.toUpperCase(), extensions: [ext]),
+      ],
+    );
+    return location?.path;
+  }
+
+  Future<String?> _chooseFolder() async {
+    if (fixedDirectory case final dir? when dir.isNotEmpty) return dir;
+    return getDirectoryPath(confirmButtonText: 'Export');
+  }
+}

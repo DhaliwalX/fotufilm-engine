@@ -7,6 +7,8 @@ import 'dart:ffi';
 import 'dart:isolate';
 import 'dart:typed_data';
 
+import 'package:ffi/ffi.dart';
+
 import 'engine.dart';
 import 'fotufilm_ffi.dart';
 
@@ -31,6 +33,7 @@ class NativeEngine implements EngineConnection {
   @override
   bool get opensPaths => true;
   final _pending = <int, Completer<EngineReply>>{};
+  final _progress = <int, void Function(Map<String, dynamic>)>{};
 
   static Future<NativeEngine> start() async {
     final replies = ReceivePort();
@@ -47,6 +50,12 @@ class NativeEngine implements EngineConnection {
       while (await events.moveNext()) {
         final (int id, Object? result, TransferableTypedData? bytes) =
             events.current as (int, Object?, TransferableTypedData?);
+        // A long call's progress, while it runs.
+        if (result is (String,)) {
+          engine._progress[id]?.call(jsonDecode(result.$1) as Map<String, dynamic>);
+          continue;
+        }
+        engine._progress.remove(id);
         final completer = engine._pending.remove(id);
         if (completer == null) continue;
         if (result is String) {
@@ -70,7 +79,18 @@ class NativeEngine implements EngineConnection {
       method,
       jsonEncode(params),
       payload == null ? null : TransferableTypedData.fromList([payload]),
+      false,
     ));
+    return completer.future;
+  }
+
+  @override
+  Future<EngineReply> callWithProgress(String method, Map<String, dynamic> params,
+      void Function(Map<String, dynamic> progress) onProgress) {
+    final id = _next++;
+    final completer = _pending[id] = Completer<EngineReply>();
+    _progress[id] = onProgress;
+    _commands.send((id, method, jsonEncode(params), null, true));
     return completer.future;
   }
 
@@ -93,10 +113,16 @@ void _serve(SendPort replies) {
   replies.send((commands.sendPort, engine.address, library.capabilities(),
       library.describe(engine)));
   commands.listen((message) {
-    final (int id, String method, String params, TransferableTypedData? bytes) =
-        message as (int, String, String, TransferableTypedData?);
+    final (int id, String method, String params, TransferableTypedData? bytes, bool reports) =
+        message as (int, String, String, TransferableTypedData?, bool);
+    // The engine reports on this thread while the call runs; each report goes straight back.
+    final progress = reports
+        ? NativeCallable<ProgressCallback>.isolateLocal(
+            (Pointer<Void> _, Pointer<Utf8> json) => replies.send((id, (json.toDartString(),), null)))
+        : null;
     try {
-      final answer = library.call(engine, method, params, bytes?.materialize().asUint8List());
+      final answer = library.call(
+          engine, method, params, bytes?.materialize().asUint8List(), progress?.nativeFunction);
       replies.send((
         id,
         answer.json,
@@ -106,6 +132,8 @@ void _serve(SendPort replies) {
       replies.send((id, (true, 'Cancelled'), null));
     } catch (error) {
       replies.send((id, (false, '$error'), null));
+    } finally {
+      progress?.close();
     }
   });
 }

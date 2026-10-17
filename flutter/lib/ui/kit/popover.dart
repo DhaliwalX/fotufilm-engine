@@ -51,9 +51,11 @@ AnchoredOverlay showAnchored(
   final overlayBox = overlay.context.findRenderObject() as RenderBox;
   final box = anchor.findRenderObject() as RenderBox;
   final origin = box.localToGlobal(Offset.zero, ancestor: overlayBox);
+  // The overlay sits above the app's palette; the opener's goes with it.
+  final palette = Palette.of(anchor);
   late final AnchoredOverlay handle;
   final entry = OverlayEntry(
-    builder: (context) => Stack(children: [
+    builder: (context) => PaletteScope(palette: palette, child: Stack(children: [
       Positioned.fill(
         child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => handle.close()),
       ),
@@ -64,7 +66,7 @@ AnchoredOverlay showAnchored(
         width: matchWidth ? box.size.width : width,
         child: builder(context, () => handle.close()),
       ),
-    ]),
+    ])),
   );
   handle = AnchoredOverlay._(entry);
   overlay.insert(entry);
@@ -74,9 +76,10 @@ AnchoredOverlay showAnchored(
 /// A modal over the whole window: a dimmed backdrop and `child` centred on it.
 AnchoredOverlay showModal(BuildContext context, Widget Function(VoidCallback close) builder,
     {bool dismissible = true}) {
+  final palette = Palette.of(context);
   late final AnchoredOverlay handle;
   final entry = OverlayEntry(
-    builder: (context) => Stack(children: [
+    builder: (context) => PaletteScope(palette: palette, child: Stack(children: [
       Positioned.fill(
         child: GestureDetector(
           onTap: dismissible ? () => handle.close() : null,
@@ -84,7 +87,7 @@ AnchoredOverlay showModal(BuildContext context, Widget Function(VoidCallback clo
         ),
       ),
       Center(child: builder(() => handle.close())),
-    ]),
+    ])),
   );
   handle = AnchoredOverlay._(entry);
   Overlay.of(context).insert(entry);

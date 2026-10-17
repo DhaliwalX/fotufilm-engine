@@ -58,6 +58,9 @@ class Renderer {
   bool _interactive = false;
   Timer? _background;
 
+  /// Set while a long call (an export) has the engine: a cancel would stop it, not a develop.
+  bool holdCancel = false;
+
   /// Which photograph's frame each native layer holds now.
   final Map<String, int> _layerOwner = {};
 
@@ -75,7 +78,7 @@ class Renderer {
     _dirty = true;
     _background?.cancel();
     if (_running) {
-      if (_foreground) engine.cancel();
+      if (_foreground && !holdCancel) engine.cancel();
       return;
     }
     _run();

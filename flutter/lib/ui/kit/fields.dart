@@ -129,9 +129,12 @@ class SwitchRow extends StatelessWidget {
 }
 
 class PickerOption<T> {
-  const PickerOption(this.value, this.label);
+  const PickerOption(this.value, this.label, {this.enabled = true});
   final T value;
   final String label;
+
+  /// Listed but greyed out (Spectrum's `disabledKeys`).
+  final bool enabled;
 }
 
 /// Spectrum's Picker at size S: its label above, a filled field with the choice and a chevron,
@@ -172,7 +175,7 @@ class PickerField<T> extends StatelessWidget {
                         MenuItem(
                           label: o.label,
                           checked: o.value == value,
-                          onSelected: () => onChanged(o.value),
+                          onSelected: o.enabled ? () => onChanged(o.value) : null,
                         ),
                     ])
                 : null,

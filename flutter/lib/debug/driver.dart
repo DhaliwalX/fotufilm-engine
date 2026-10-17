@@ -12,7 +12,15 @@
 //   {"param": ["ev", 1.0]}          sets an edit parameter
 //   {"profile": ["push", 1]}        sets a film control
 //   {"probe": "/path/x.png"}       logs the first pixel as Flutter decodes it
-//   {"export": ["/out.jpg", "image/jpeg"]}  exports the shown photograph at full size
+//   {"export": ["/out.jpg", "image/jpeg"]}  exports the shown photograph with the dialog's settings
+//   {"exportSettings": {"type": "image/heic", "size": "0.5", "quality": 80,
+//                       "metadata": "strip", "hdr": true}}   the Export dialog's choices
+//   {"exportDir": "/dir"}           every export saves there without a panel
+//   {"exportAll": "/dir"}           Export All into a folder; add "cancelAfter": ms to cancel it
+//   {"exportOriginal": "/x.ARW"}    Export Original of the shown camera RAW
+//   {"useLastExport": true}         File › Use Last Export Settings (into exportDir)
+//   {"copyPhoto": true}             Edit › Copy Photo
+//   {"select": 1}                   shows the strip's second photograph
 //   {"histogram": true}           shows the histogram
 //   {"wheel": [x, y, dy]}           a mouse wheel turn at (x, y)
 //   {"trackpad": [x, y, dy]}        a two-finger trackpad scroll at (x, y)
@@ -43,6 +51,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
 import '../model/editor.dart';
+import '../model/export.dart';
 import 'negative_driver.dart';
 
 class Driver {
@@ -132,8 +141,46 @@ class Driver {
       final rgba = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
       _log('probe $path ${rgba!.buffer.asUint8List().sublist(0, 4)}');
     }
+    final exporter = editor.exporter;
+    if (c['exportSettings'] case final Map settings) {
+      if (settings['type'] case final String type) exporter.type = type;
+      if (settings['size'] case final String size) exporter.size = size;
+      if (settings['quality'] case final num quality) exporter.quality = quality.round();
+      if (settings['metadata'] case final String metadata) exporter.metadata = metadata;
+      if (settings['hdr'] case final bool hdr) exporter.hdr = hdr;
+      await exporter.loadOptions();
+      final o = exporter.options;
+      _log('exportOptions metadata=${o?.metadata} hdr=${o?.hdr} unavailable=${o?.unavailable} '
+          'types=${exporter.types.map((t) => t.$1).toList()} batch=${exporter.batchCount}');
+    }
+    if (c['exportDir'] case final String dir) exporter.fixedDirectory = dir;
+    if (c['select'] case final int index) editor.selectDocument(index);
     if (c['export'] case [final String path, final String type]) {
-      _log('exported ${await editor.export(path: path, type: type, quality: .95, maxEdge: null, metadata: 'preserve')}');
+      exporter.type = type;
+      _logSaved(await exporter.exportPhoto(path: path));
+    }
+    if (c['exportAll'] case final String dir) {
+      if (c['cancelAfter'] case final int ms) {
+        Timer(Duration(milliseconds: ms), exporter.cancel);
+      }
+      final clock = Stopwatch()..start();
+      // The statuses its progress showed.
+      final shown = <String>[];
+      final watch = Timer.periodic(const Duration(milliseconds: 10), (_) {
+        final status = editor.status;
+        if (status != null && (shown.isEmpty || shown.last != status)) shown.add(status);
+      });
+      _logSaved(await exporter.exportAll(directory: dir));
+      watch.cancel();
+      _log('exportAll ${clock.elapsedMilliseconds}ms statuses=$shown');
+    }
+    if (c['exportOriginal'] case final String path) {
+      _logSaved(await exporter.exportOriginal(path: path));
+    }
+    if (c['useLastExport'] == true) _logSaved(await exporter.exportWithLast());
+    if (c['copyPhoto'] == true) {
+      await exporter.copyPhoto();
+      _log('copied error=${editor.error}');
     }
     if (c['histogram'] == true && !editor.histogramOpen) editor.toggleHistogram();
     if (c['open'] case final List paths) await editor.openPaths(paths.cast<String>());
@@ -203,6 +250,10 @@ class Driver {
     }
     await WidgetsBinding.instance.endOfFrame;
   }
+
+  void _logSaved(SavedExport? saved) => _log(saved == null
+      ? 'saved nothing error=${editor.error}'
+      : 'saved ${saved.path} (${saved.filename}) count=${saved.count} error=${editor.error}');
 
   /// Times an action to its first develop on screen and to idle (thumbnails and all).
   Future<void> _timed(String name, Future<void> Function() action) async {

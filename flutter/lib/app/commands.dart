@@ -71,7 +71,12 @@ List<CommandMenu> editorCommands(
         Command('Close Photo', when(photo, () => editor.closeDocument(editor.activeIndex)),
             key: LogicalKeyboardKey.keyW),
       ],
-      [Command('Export…', when(photo, export), key: LogicalKeyboardKey.keyE)],
+      [
+        Command('Export…', when(photo && !editor.exporting, export), key: LogicalKeyboardKey.keyE),
+        Command('Use Last Export Settings',
+            when(photo && !editor.exporting && editor.exporter.last != null,
+                editor.exporter.exportWithLast)),
+      ],
     ]),
     CommandMenu('Edit', [
       [
@@ -87,6 +92,10 @@ List<CommandMenu> editorCommands(
         Command('Sample a Selection',
             when(editor.selective.canSample, editor.selective.startSampling),
             key: LogicalKeyboardKey.keyS, shift: true),
+      ],
+      [
+        Command('Copy Photo', when(editor.exporter.canCopy && !editor.exporting,
+            editor.exporter.copyPhoto), key: LogicalKeyboardKey.keyC, shift: true),
       ],
     ]),
     CommandMenu('View', [
