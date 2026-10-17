@@ -17,6 +17,7 @@ import '../ui/workspace/film_library.dart';
 import '../ui/workspace/toolbar.dart';
 import '../ui/workspace/viewer.dart';
 import 'commands.dart';
+import 'host_window.dart';
 
 const imageExtensions = [
   'jpg', 'jpeg', 'png', 'tif', 'tiff', 'heic', 'heif', 'avif', 'exr', 'webp', //
@@ -70,6 +71,18 @@ class _WorkspaceState extends State<Workspace> {
 
   /// Holding Space shows the original, as in the web editor.
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    // ⌘A chooses every open photo for Paste Settings and presets; Esc goes back to the shown one
+    // (useEditorShortcuts.js).
+    final keys = HardwareKeyboard.instance;
+    if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.keyA &&
+        (HostWindow.commandKeyIsMeta ? keys.isMetaPressed : keys.isControlPressed) &&
+        !keys.isShiftPressed && !keys.isAltPressed && editor.documents.length > 1) {
+      editor.strip.selectAll();
+      return KeyEventResult.handled;
+    }
+    if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.escape) {
+      editor.strip.clear();
+    }
     if (event.logicalKey != LogicalKeyboardKey.space) return KeyEventResult.ignored;
     if (event is KeyDownEvent) editor.setComparing(true);
     if (event is KeyUpEvent) editor.setComparing(false);
@@ -86,7 +99,7 @@ class _WorkspaceState extends State<Workspace> {
 
   @override
   Widget build(BuildContext context) {
-    final menus = editorCommands(editor, open: _open, export: _export);
+    final menus = editorCommands(editor, open: _open, export: _export, context: context);
     return CommandHost(
       menus: menus,
       child: Focus(

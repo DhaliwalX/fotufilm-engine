@@ -4,12 +4,18 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../model/editor.dart';
+import '../model/presets.dart' show pasteTitle;
+import '../ui/workspace/editing_dialogs.dart';
 import 'host_window.dart';
 
 class Command {
-  const Command(this.label, this.run, {this.key, this.shift = false, this.alt = false});
+  const Command(this.label, this.run,
+      {this.key, this.shift = false, this.alt = false, this.submenu});
 
   final String label;
+
+  /// The commands of a submenu (Edit History, Presets); the command itself does not run.
+  final List<List<Command>>? submenu;
 
   /// Null while the command does not apply.
   final VoidCallback? run;
@@ -51,6 +57,7 @@ List<CommandMenu> editorCommands(
   EditorModel editor, {
   required VoidCallback open,
   required VoidCallback export,
+  BuildContext? context,
 }) {
   final photo = editor.active != null;
   VoidCallback? when(bool enabled, VoidCallback run) => enabled ? run : null;
@@ -71,15 +78,47 @@ List<CommandMenu> editorCommands(
     ]),
     CommandMenu('Edit', [
       [
-        Command('Undo', when(editor.canUndo, editor.undo), key: LogicalKeyboardKey.keyZ),
-        Command('Redo', when(editor.canRedo, editor.redo),
+        Command(editor.history.undo, when(editor.canUndo, editor.undo),
+            key: LogicalKeyboardKey.keyZ),
+        Command(editor.history.redo, when(editor.canRedo, editor.redo),
             key: LogicalKeyboardKey.keyZ, shift: true),
+        // Every step of the shown photograph's history; choosing one goes to it.
+        Command('Edit History', null, submenu: [
+          [
+            for (final (i, title) in editor.history.timeline.titles.indexed)
+              Command(title, () => editor.history.goTo(i)),
+            if (editor.active == null) const Command('No Open Edit', null),
+          ],
+        ]),
       ],
       [
         Command('Reset All Edits', when(editor.edited, editor.resetEdit)),
-        Command('Auto Adjust', when(photo, editor.runAutoAdjust),
+        Command(editor.auto.busy ? 'Cancel Auto Adjust' : 'Auto Adjust',
+            when(photo && editor.auto.available, editor.toggleAutoAdjust),
             key: LogicalKeyboardKey.keyA, shift: true),
       ],
+      // Copy Settings, Paste Settings and presets (editing_dialogs.dart).
+      if (context != null)
+        [
+          Command('Copy Settings…', when(photo, () => showCopySettingsDialog(context, editor)),
+              key: LogicalKeyboardKey.keyC, alt: true),
+          Command(pasteTitle(editor.strip.chosen.length),
+              when(photo && editor.presets.copied != null, editor.presets.paste),
+              key: LogicalKeyboardKey.keyV, alt: true),
+          Command('Presets', null, submenu: [
+            [
+              for (final preset in editor.presets.list)
+                Command(preset.name, when(photo, () => editor.presets.applyPreset(preset.id))),
+              if (editor.presets.list.isEmpty) const Command('No Presets', null),
+            ],
+            [
+              Command('Save Preset…', when(photo, () => showSavePresetDialog(context, editor))),
+              Command('Manage Presets…',
+                  when(editor.presets.list.isNotEmpty, () => showPresetsDialog(context, editor))),
+              Command('Import Looks…', () => importLooks(context, editor)),
+            ],
+          ]),
+        ],
     ]),
     CommandMenu('View', [
       [
@@ -157,10 +196,7 @@ class CommandHost extends StatelessWidget {
         for (final menu in menus)
           PlatformMenu(label: menu.label, menus: [
             for (final group in menu.groups)
-              PlatformMenuItemGroup(members: [
-                for (final c in group)
-                  PlatformMenuItem(label: c.label, shortcut: c.activator, onSelected: c.run),
-              ]),
+              PlatformMenuItemGroup(members: [for (final c in group) _menuItem(c)]),
           ]),
         const PlatformMenu(label: 'Window', menus: [
           PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.minimizeWindow),
@@ -168,4 +204,16 @@ class CommandHost extends StatelessWidget {
           PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.toggleFullScreen),
         ]),
       ];
+
+  /// A command, or a submenu of them.
+  static PlatformMenuItem _menuItem(Command c) {
+    final submenu = c.submenu;
+    if (submenu == null) {
+      return PlatformMenuItem(label: c.label, shortcut: c.activator, onSelected: c.run);
+    }
+    return PlatformMenu(label: c.label, menus: [
+      for (final group in submenu)
+        if (group.isNotEmpty) PlatformMenuItemGroup(members: [for (final c in group) _menuItem(c)]),
+    ]);
+  }
 }

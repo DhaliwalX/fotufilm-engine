@@ -51,6 +51,8 @@ AnchoredOverlay showAnchored(
   final overlayBox = overlay.context.findRenderObject() as RenderBox;
   final box = anchor.findRenderObject() as RenderBox;
   final origin = box.localToGlobal(Offset.zero, ancestor: overlayBox);
+  // The overlay sits above the palette's scope, so the anchor's palette goes with it.
+  final palette = Palette.of(anchor);
   late final AnchoredOverlay handle;
   final entry = OverlayEntry(
     builder: (context) => Stack(children: [
@@ -62,7 +64,10 @@ AnchoredOverlay showAnchored(
         left: alignEnd ? null : origin.dx,
         right: alignEnd ? overlayBox.size.width - origin.dx - box.size.width : null,
         width: matchWidth ? box.size.width : width,
-        child: builder(context, () => handle.close()),
+        child: PaletteScope(
+          palette: palette,
+          child: Builder(builder: (context) => builder(context, () => handle.close())),
+        ),
       ),
     ]),
   );
@@ -74,6 +79,7 @@ AnchoredOverlay showAnchored(
 /// A modal over the whole window: a dimmed backdrop and `child` centred on it.
 AnchoredOverlay showModal(BuildContext context, Widget Function(VoidCallback close) builder,
     {bool dismissible = true}) {
+  final palette = Palette.of(context);
   late final AnchoredOverlay handle;
   final entry = OverlayEntry(
     builder: (context) => Stack(children: [
@@ -83,7 +89,7 @@ AnchoredOverlay showModal(BuildContext context, Widget Function(VoidCallback clo
           child: const ColoredBox(color: Color(0x66000000)),
         ),
       ),
-      Center(child: builder(() => handle.close())),
+      Center(child: PaletteScope(palette: palette, child: builder(() => handle.close()))),
     ]),
   );
   handle = AnchoredOverlay._(entry);

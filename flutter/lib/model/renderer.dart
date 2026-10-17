@@ -33,6 +33,9 @@ abstract interface class RenderHost {
   /// Options the shown picture's develops carry beyond the edit (cropMode, stage, difference,
   /// showMask, printFrame); small pictures never carry them.
   Json renderOptions(PhotoDocument doc);
+
+  /// The preset rows' edits, by preset id, while the Presets tab shows them.
+  Map<String, Json> presetEdits(PhotoDocument doc);
   void rendered();
   void renderFailed(String message);
   void measured(HistogramData? histogram);
@@ -247,6 +250,7 @@ class Renderer {
     _running = true;
     try {
       if (host.histogramOpen) await _histogram(doc);
+      await _presetThumbnails(doc);
       await _filmThumbnails(doc);
       await _formatThumbnails(doc);
     } catch (_) {
@@ -281,6 +285,20 @@ class Renderer {
       final key = id ?? '';
       if (set.fresh.contains(key)) continue;
       await _thumbnail(doc, set, key, thumbnailEdit(doc.edit, id), 160);
+    }
+  }
+
+  /// Each preset row: the photograph with the preset pasted on, without grain or halation
+  /// (PresetRow.jsx).
+  Future<void> _presetThumbnails(PhotoDocument doc) async {
+    final edits = host.presetEdits(doc);
+    if (edits.isEmpty) return;
+    final set = doc.presetThumbnails;
+    set.renew(jsonEncode(doc.edit));
+    for (final MapEntry(:key, :value) in edits.entries) {
+      if (_stale(doc)) return;
+      if (set.fresh.contains(key)) continue;
+      await _thumbnail(doc, set, key, thumbnailEdit(value, value['stock'] as String?), 160);
     }
   }
 

@@ -10,13 +10,19 @@ import 'package:flutter/foundation.dart';
 
 import '../engine/engine.dart';
 import '../engine/presenter.dart';
+import 'auto_adjust.dart';
 import 'catalogue.dart';
 import 'document.dart';
 import 'edit.dart';
+import 'edit_history.dart';
+import 'film_suggestion.dart';
 import 'film_types.dart';
 import 'histogram.dart';
+import 'kept_edits.dart';
+import 'presets.dart';
 import 'renderer.dart';
 import 'settings.dart';
+import 'strip_selection.dart';
 import 'view.dart';
 
 export 'catalogue.dart' show Json;
@@ -55,6 +61,14 @@ class EditorModel extends ChangeNotifier implements RenderHost {
 
   /// Preferences and remembered things, kept on this device.
   final AppSettings settings;
+
+  // ── Features ──────────────────────────────────────────────────────────────────────────────
+  late final history = EditHistory(this);
+  late final strip = StripSelection(this);
+  late final presets = Presets(this);
+  late final keptEdits = KeptEdits(this);
+  late final auto = AutoAdjustment(this);
+  late final filmSuggestion = FilmSuggestion(this);
   EngineConnection? engine;
   NativePresenter? presenter;
   Renderer? renderer;
@@ -110,7 +124,7 @@ class EditorModel extends ChangeNotifier implements RenderHost {
   @override
   bool formatDetail = true;
   bool presetsTab = false;
-  bool autoAdjust = false;
+  bool get autoAdjust => auto.active;
   bool comparing = false;
   bool exporting = false;
   String search = '';
@@ -142,6 +156,14 @@ class EditorModel extends ChangeNotifier implements RenderHost {
     if (doc == null || doc.edit['stock'] != null || doc.preview == null) error = message;
     notifyListeners();
   }
+
+  /// The Presets tab's rows, while it is shown: each preset pasted onto the photograph.
+  @override
+  Map<String, Json> presetEdits(PhotoDocument doc) => {
+        if (filmOpen && presetsTab)
+          for (final preset in presets.visible)
+            preset.id: ?presets.shownWith(preset, doc.edit),
+      };
 
   @override
   void measured(HistogramData? data) {
@@ -191,7 +213,6 @@ class EditorModel extends ChangeNotifier implements RenderHost {
     if (engine == null || files.isEmpty) return;
     // A new photograph starts on the film the shown one is on, as the web editor's do.
     final stock = edit['stock'] as String?;
-    var opened = 0;
     for (final file in files) {
       final key = file.path ?? file.name;
       final existing = documents.indexWhere((d) => d.path == key);
@@ -207,6 +228,8 @@ class EditorModel extends ChangeNotifier implements RenderHost {
             : await engine.call(
                 'importFile', {'name': file.name, 'negative': false}, await file.read!());
         final json = answer.json;
+        // A photograph opened before starts from the edit it was left with.
+        final start = keptEdits.startingEdit(json['identity'] as String?, stock);
         final doc = PhotoDocument(
           path: key,
           handle: (json['handle'] as num).toInt(),
@@ -214,19 +237,19 @@ class EditorModel extends ChangeNotifier implements RenderHost {
           height: (json['naturalHeight'] as num).toInt(),
           identity: json['identity'] as String?,
           raw: json['original'] != null,
-          history: History(defaultEdit(catalogue, stock)),
+          history: History(start.edit),
         );
+        keptEdits.opened(doc, saved: start.saved);
+        filmSuggestion.opened(doc, saved: start.saved);
         final preview = answer.bytes('preview');
         if (preview != null) doc.importPicture = await decodePng(preview);
         documents.add(doc);
         _activate(documents.length - 1);
-        opened++;
       } catch (e) {
         error = '${file.name} could not be opened. $e';
       }
     }
     status = null;
-    if (opened > 0 && autoAdjust) await runAutoAdjust();
     notifyListeners();
   }
 
@@ -263,8 +286,35 @@ class EditorModel extends ChangeNotifier implements RenderHost {
   bool get edited =>
       active != null && !sameEdit(edit, defaultEdit(catalogue, edit['stock'] as String?));
 
+  /// Told of each change to a photograph's history, so features follow edits (kept edits, Auto
+  /// Adjust).
+  final List<void Function(EditChange change)> editListeners = [];
+
+  /// A photograph's history changed (`kind`: edit, undo, redo, goTo or replace) from `before`:
+  /// the picture follows and the features are told.
+  void historyChanged(PhotoDocument doc, String kind, Json before, {bool restoring = false}) {
+    notifyListeners();
+    renderer?.schedule(interactive: doc.history.group != null);
+    final change = EditChange(doc, kind, before, restoring: restoring);
+    for (final listener in [...editListeners]) {
+      listener(change);
+    }
+  }
+
+  /// Tells the UI that a feature's state changed.
+  void notify() => notifyListeners();
+
+  void showError(String message) => _set(() => error = message);
+
+  /// Replaces the edit with a whole one (a paste, a preset, Load Edits), as one step.
+  void restore(Json edit) {
+    endEdit();
+    error = null;
+    patch(edit, restoring: true);
+  }
+
   /// Changes the edit. Changes under one `group` (a slider being dragged) make one step.
-  void patch(Json changes, {String? group}) {
+  void patch(Json changes, {String? group, bool restoring = false}) {
     final doc = active;
     if (doc == null) return;
     final h = doc.history;
@@ -274,10 +324,10 @@ class EditorModel extends ChangeNotifier implements RenderHost {
       h.past.add(h.present);
       h.future.clear();
     }
+    final before = h.present;
     h.present = next;
     h.group = group;
-    notifyListeners();
-    renderer?.schedule(interactive: group != null);
+    historyChanged(doc, 'edit', before, restoring: restoring);
   }
 
   /// A change made in one step: a picker, a switch or a button.
@@ -337,6 +387,7 @@ class EditorModel extends ChangeNotifier implements RenderHost {
   void _step({required bool back}) {
     final h = active?.history;
     if (h == null || (back ? h.past : h.future).isEmpty) return;
+    final before = h.present;
     if (back) {
       h.future.insert(0, h.present);
       h.present = h.past.removeLast();
@@ -345,8 +396,7 @@ class EditorModel extends ChangeNotifier implements RenderHost {
       h.present = h.future.removeAt(0);
     }
     h.group = null;
-    notifyListeners();
-    renderer?.schedule();
+    historyChanged(active!, back ? 'undo' : 'redo', before);
   }
 
   void resetEdit() {
@@ -355,22 +405,8 @@ class EditorModel extends ChangeNotifier implements RenderHost {
 
   void newGrainPattern() => change({'seed': math.Random().nextInt(0x7fffffff) + 1});
 
-  Future<void> runAutoAdjust() async {
-    final doc = active, engine = this.engine;
-    if (doc == null || engine == null) return;
-    try {
-      final answer = await engine.call('autoAdjust', {'handle': doc.handle, 'edit': doc.edit});
-      final params = Map<String, dynamic>.from(edit['params'] as Map);
-      for (final key in const ['ev', 'highlights', 'shadows']) {
-        final value = answer.json[key];
-        if (value is num) params[key] = value.toDouble();
-      }
-      change({'params': params});
-    } catch (e) {
-      error = 'Auto adjust failed. $e';
-      notifyListeners();
-    }
-  }
+  /// Auto Adjust's mode on or off (auto_adjust.dart).
+  void toggleAutoAdjust() => auto.toggle();
 
   // ── Workspace actions ─────────────────────────────────────────────────────────────────────
 
@@ -397,7 +433,11 @@ class EditorModel extends ChangeNotifier implements RenderHost {
   void toggleTool(Panel tool) => setPanel(panel == tool ? _lastTab : tool);
   void toggleFilm() => _set(() => filmOpen = !filmOpen);
   void toggleInspector() => _set(() => inspectorOpen = !inspectorOpen);
-  void setPresetsTab(bool value) => _set(() => presetsTab = value);
+  void setPresetsTab(bool value) {
+    _set(() => presetsTab = value);
+    // The preset rows' pictures develop in the background.
+    renderer?.schedule();
+  }
   void setSearch(String value) => _set(() => search = value);
   void setFilmType(FilmType value) => _set(() => filmType = value);
   void dismissError() => _set(() => error = null);
@@ -410,11 +450,6 @@ class EditorModel extends ChangeNotifier implements RenderHost {
   void toggleHistogram() {
     _set(() => histogramOpen = !histogramOpen);
     if (histogramOpen) renderer?.schedule();
-  }
-
-  void toggleAutoAdjust() {
-    _set(() => autoAdjust = !autoAdjust);
-    if (autoAdjust) runAutoAdjust();
   }
 
   void setFormatDetail(bool value) {
@@ -517,6 +552,19 @@ class EditorModel extends ChangeNotifier implements RenderHost {
       _set(() => exporting = false);
     }
   }
+}
+
+/// A change to a photograph's history, as features are told of it.
+class EditChange {
+  const EditChange(this.doc, this.kind, this.before, {this.restoring = false});
+  final PhotoDocument doc;
+
+  /// edit, undo, redo, goTo or replace (a film the app chose, not a step to undo).
+  final String kind;
+  final Json before;
+
+  /// A whole edit put in place: a paste, a preset, Load Edits.
+  final bool restoring;
 }
 
 /// A photograph to open: its name, and its path where there is a file system, or its bytes.

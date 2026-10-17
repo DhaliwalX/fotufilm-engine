@@ -6,8 +6,10 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../app/host_window.dart';
 import '../../model/editor.dart';
+import '../../model/presets.dart' show pasteTitle;
 import '../kit/kit.dart';
 import '../theme/theme.dart';
+import 'editing_dialogs.dart';
 
 class EditorToolbar extends StatelessWidget {
   const EditorToolbar({
@@ -133,9 +135,16 @@ class _EditGroup extends StatelessWidget {
         margin: const EdgeInsets.symmetric(horizontal: 3),
         color: Palette.of(context).border,
       ),
-      QuietButton(icon: 'undo', tooltip: 'Undo', onPressed: editor.canUndo ? editor.undo : null),
+      // What Undo and Redo will change, as the Edit menu names it (EditToolbar.jsx).
+      QuietButton(
+          icon: 'undo',
+          tooltip: '${editor.history.undo} (${HostWindow.commandKeyIsMeta ? '⌘Z' : 'Ctrl+Z'})',
+          onPressed: editor.canUndo ? editor.undo : null),
       gap,
-      QuietButton(icon: 'redo', tooltip: 'Redo', onPressed: editor.canRedo ? editor.redo : null),
+      QuietButton(
+          icon: 'redo',
+          tooltip: '${editor.history.redo} (${HostWindow.commandKeyIsMeta ? '⇧⌘Z' : 'Ctrl+Shift+Z'})',
+          onPressed: editor.canRedo ? editor.redo : null),
       gap,
       QuietButton(
           icon: 'reset', tooltip: 'Reset all edits', onPressed: editor.edited ? editor.resetEdit : null),
@@ -151,11 +160,13 @@ class _EditGroup extends StatelessWidget {
           tooltip: 'More options',
           onPressed: () => showMenu(anchor, alignEnd: true, width: 240, [
             MenuItem(
-              label: 'Auto Adjust',
-              icon: 'autoAdjust',
+              label: editor.auto.busy ? 'Cancel Auto Adjust' : 'Auto Adjust',
+              icon: editor.auto.busy ? 'close' : 'autoAdjust',
               checked: editor.autoAdjust,
-              onSelected: editor.toggleAutoAdjust,
+              onSelected: editor.auto.available ? editor.toggleAutoAdjust : null,
             ),
+            const MenuItem.divider(),
+            ..._editingItems(anchor),
             const MenuItem.divider(),
             MenuItem(
               label: 'New Grain Pattern',
@@ -176,6 +187,67 @@ class _EditGroup extends StatelessWidget {
         onPressed: editor.toggleInspector,
       ),
     ]);
+  }
+
+  /// Edit History, Copy and Paste Settings, presets and the edit files (OptionsMenu.jsx).
+  List<MenuItem> _editingItems(BuildContext context) {
+    final photo = editor.active != null && !editor.exporting;
+    final steps = editor.history.timeline;
+    final mac = HostWindow.commandKeyIsMeta;
+    return [
+      MenuItem(
+        label: 'Edit History',
+        icon: 'undo',
+        submenu: photo
+            ? [
+                for (final (i, title) in steps.titles.indexed)
+                  MenuItem(
+                      label: title,
+                      checked: i == steps.index,
+                      onSelected: () => editor.history.goTo(i)),
+              ]
+            : const [],
+      ),
+      const MenuItem.divider(),
+      MenuItem(
+        label: 'Copy Settings…',
+        icon: 'copySettings',
+        detail: mac ? '⌥⌘C' : 'Ctrl+Alt+C',
+        onSelected: photo ? () => showCopySettingsDialog(context, editor) : null,
+      ),
+      MenuItem(
+        label: pasteTitle(editor.strip.chosen.length),
+        icon: 'pasteSettings',
+        detail: mac ? '⌥⌘V' : 'Ctrl+Alt+V',
+        onSelected: photo && editor.presets.copied != null ? editor.presets.paste : null,
+      ),
+      MenuItem(label: 'Presets', icon: 'presets', submenu: [
+        for (final preset in editor.presets.list)
+          MenuItem(
+              label: preset.name,
+              onSelected: photo ? () => editor.presets.applyPreset(preset.id) : null),
+        if (editor.presets.list.isNotEmpty) const MenuItem.divider(),
+        MenuItem(
+            label: 'Save Preset…',
+            onSelected: photo ? () => showSavePresetDialog(context, editor) : null),
+        MenuItem(
+            label: 'Manage Presets…',
+            onSelected:
+                editor.presets.list.isEmpty ? null : () => showPresetsDialog(context, editor)),
+        MenuItem(
+            label: 'Import Looks…',
+            onSelected: editor.exporting ? null : () => importLooks(context, editor)),
+      ]),
+      const MenuItem.divider(),
+      MenuItem(
+          label: 'Save edits…',
+          icon: 'saveEdits',
+          onSelected: photo ? editor.keptEdits.saveFile : null),
+      MenuItem(
+          label: 'Load edits…',
+          icon: 'loadEdits',
+          onSelected: photo ? editor.keptEdits.loadFile : null),
+    ];
   }
 }
 

@@ -1,5 +1,8 @@
 // The open photographs (web/src/editor/PhotoStrip.jsx), compact: the shown one's path, then a
 // row of frames, the shown one ringed in the accent, each closed by the button on its corner.
+// Shift-click and ⌘-click choose more photos for Paste Settings and presets (strip_selection.dart);
+// those chosen with the shown one are ringed in a fainter accent.
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../../model/editor.dart';
@@ -32,7 +35,13 @@ class PhotoStrip extends StatelessWidget {
             itemBuilder: (context, index) => _StripItem(
               doc: editor.documents[index],
               selected: index == editor.activeIndex,
-              onTap: () => editor.selectDocument(index),
+              chosen: editor.strip.isChosen(editor.documents[index]),
+              onTap: () {
+                final keys = HardwareKeyboard.instance;
+                editor.strip.press(editor.documents[index],
+                    range: keys.isShiftPressed,
+                    toggle: keys.isMetaPressed || keys.isControlPressed);
+              },
               onClose: () => editor.closeDocument(index),
             ),
           ),
@@ -43,10 +52,15 @@ class PhotoStrip extends StatelessWidget {
 }
 
 class _StripItem extends StatefulWidget {
-  const _StripItem(
-      {required this.doc, required this.selected, required this.onTap, required this.onClose});
+  const _StripItem({
+    required this.doc,
+    required this.selected,
+    required this.chosen,
+    required this.onTap,
+    required this.onClose,
+  });
   final PhotoDocument doc;
-  final bool selected;
+  final bool selected, chosen;
   final VoidCallback onTap, onClose;
 
   @override
@@ -70,7 +84,12 @@ class _StripItemState extends State<_StripItem> with PointerTint {
               padding: const EdgeInsets.all(1),
               decoration: BoxDecoration(
                 border: Border.all(
-                    color: widget.selected ? palette.accent : const Color(0x00000000), width: 2),
+                    color: widget.selected
+                        ? palette.accent
+                        : widget.chosen
+                            ? palette.accent.withValues(alpha: .45)
+                            : const Color(0x00000000),
+                    width: 2),
                 borderRadius: BorderRadius.circular(3),
               ),
               child: ClipRRect(

@@ -75,6 +75,7 @@ class PhotoDocument {
   // ── Small pictures, developed in the background ────────────────────────────────────────────
   /// Each one stays on show until its successor for a newer edit arrives.
   final filmThumbnails = ThumbnailSet();
+  final presetThumbnails = ThumbnailSet();
   final formatThumbnails = ThumbnailSet();
 }
 

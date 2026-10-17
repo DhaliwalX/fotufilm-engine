@@ -26,6 +26,7 @@
 //   {"benchDrag": ["ev", 2000]}     moves a slider every 16 ms for 2 s, as a hand does, and logs
 //                                   how many develops reached the screen, then the settle
 //   {"wait": "idle"}                answers once nothing is rendering
+//   and the editing actions' commands (editing_driver.dart)
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -36,6 +37,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
 import '../model/editor.dart';
+import 'editing_driver.dart';
 
 class Driver {
   Driver._(this.dir, this.editor, this.boundary);
@@ -177,6 +179,7 @@ class Driver {
         await Future<void>.delayed(const Duration(milliseconds: 100));
       }
     }
+    await runEditingCommand(c, editor, boundary, _log);
     await WidgetsBinding.instance.endOfFrame;
   }
 
