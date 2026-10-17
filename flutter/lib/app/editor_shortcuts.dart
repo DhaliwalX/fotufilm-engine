@@ -4,11 +4,16 @@
 //      editor's single keys and Esc leave it alone.
 //   2. The photo library, while it is shown, takes its keys first: its grid has the focus
 //      (photo_library_view.dart). Of the editor's keys only L, which hides it, still answers.
-//   3. The canvas tools: Return applies the crop, and Esc leaves it.
-//   4. The editor's keys: L, H, C, 0, + and − alone; Space held compares; Esc chooses the shown
+//   3. The viewer, while it has the keyboard (a click on a movie gives it) and shows a movie:
+//      the player's Space, K, J, L, ←, → and M (video_controls.dart `VideoKeys`, after
+//      usePlayerShortcuts.js, which stops them reaching the editor). There Space plays rather
+//      than compares and L skips forward rather than showing the library, as in React; with the
+//      keyboard anywhere else they are the editor's.
+//   4. The canvas tools: Return applies the crop, and Esc leaves it.
+//   5. The editor's keys: L, H, C, 0, + and − alone; Space held compares; Esc chooses the shown
 //      photo alone, ends the comparison and fits the photograph; ⌘A chooses every open photo and
 //      ⌘S exports, as in the web editor.
-//   5. The menus' key equivalents (commands.dart), with Ctrl for ⌘ on Linux and Windows; one
+//   6. The menus' key equivalents (commands.dart), with Ctrl for ⌘ on Linux and Windows; one
 //      whose command does not apply now goes nowhere, as the CEF host's menus swallow it.
 //
 // While a dialog is up, or an export runs, only the menus' keys answer.

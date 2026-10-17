@@ -68,6 +68,10 @@ class Renderer {
   /// Set while a long call (an export) has the engine: a cancel would stop it, not a develop.
   bool holdCancel = false;
 
+  /// Set while a movie plays or is scrubbed (video.dart): its frame in flight is never cancelled,
+  /// so the newest time waits behind it, and the background pictures wait.
+  bool playing = false;
+
   /// Which photograph's frame each native layer holds now.
   final Map<String, int> _layerOwner = {};
 
@@ -102,7 +106,7 @@ class Renderer {
     _dirty = true;
     _background?.cancel();
     if (_running) {
-      if (_foreground && !holdCancel) engine.cancel();
+      if (_foreground && !holdCancel && !playing) engine.cancel();
       return;
     }
     _run();
@@ -186,7 +190,8 @@ class Renderer {
       final request = {..._request(doc, doc.edit, maxEdge: edge, draft: interactive), ...options};
       final answer = await engine.call('render', {
         ...request,
-        'original': true,
+        // A playing movie may leave its original out (video.dart).
+        'original': options['original'] ?? true,
         'present': {'slot': 'preview', 'scope': _scope(doc, options)},
       });
       doc..shownRequest = request..shownAnswer = answer.json;
@@ -285,7 +290,7 @@ class Renderer {
 
   Future<void> _runBackground() async {
     final doc = host.active;
-    if (doc == null || _running || doc.history.group != null) return;
+    if (doc == null || _running || playing || doc.history.group != null) return;
     _running = true;
     _moreShown = false;
     try {

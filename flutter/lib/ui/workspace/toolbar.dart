@@ -152,7 +152,7 @@ class _ViewGroup extends StatelessWidget {
         icon: 'selective',
         tooltip: 'Selective',
         selected: editor.panel == Panel.selective && editor.inspectorOpen,
-        onPressed: !photo || editor.exporting ? null : () => open(Panel.selective),
+        onPressed: !photo || editor.exporting || doc.isMovie ? null : () => open(Panel.selective),
       ),
       const SizedBox(width: Metrics.toolbarGap),
       QuietButton(
@@ -269,8 +269,7 @@ void showMoreOptions(BuildContext anchor, EditorCommands commands) {
   final exporting = editor.exporting;
   final doc = editor.active;
   final noPhoto = doc == null || exporting;
-  // Fotufilm Flutter opens no video, so only a photo or an export greys the image-only tools.
-  final imageOnlyDisabled = noPhoto;
+  final imageOnlyDisabled = noPhoto || doc.isMovie;
   final auto = editor.auto;
   final presets = editor.presets;
   final steps = editor.history.timeline;

@@ -45,7 +45,7 @@ class _NativeMenuBarState extends State<NativeMenuBar> {
   Listenable _listen() {
     final e = editor;
     final sources = Listenable.merge([
-      e, e.library, e.layout, e.plugins, e.filmSuggestion, e.settings, e.updates, e.dialogs,
+      e, e.library, e.layout, e.plugins, e.filmSuggestion, e.settings, e.updates, e.dialogs, e.video,
       openModals, FocusManager.instance,
     ]);
     sources.addListener(_schedule);

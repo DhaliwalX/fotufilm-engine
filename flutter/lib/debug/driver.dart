@@ -50,6 +50,7 @@
 //   {"cropState": true}             logs the crop, the picture's size and the handles' window
 //                                   positions (corners clockwise from top left, then edges)
 //   and the editing actions' commands (editing_driver.dart)
+//   and movies' commands (video_driver.dart)
 //   {"library": true}               shows (or hides) the photo library
 //   {"libraryAdd": "/dir", "negative": false}  adds a folder as the folder panel does, and logs
 //                                   its photos once read
@@ -92,6 +93,7 @@ import '../ui/workspace/settings_dialog.dart';
 import 'commands_driver.dart';
 import 'editing_driver.dart';
 import 'negative_driver.dart';
+import 'video_driver.dart';
 
 class Driver {
   Driver._(this.dir, this.editor, this.boundary);
@@ -375,6 +377,7 @@ class Driver {
       }
     }
     await runEditingCommand(c, editor, boundary, _log);
+    await runVideoCommand(c, editor, boundary, _log);
     await runCommandsCommand(c, editor, _log, key: _hold);
     await WidgetsBinding.instance.endOfFrame;
   }
@@ -404,6 +407,7 @@ class Driver {
       'enter' => (PhysicalKeyboardKey.enter, LogicalKeyboardKey.enter, null),
       'escape' => (PhysicalKeyboardKey.escape, LogicalKeyboardKey.escape, null),
       'backspace' => (PhysicalKeyboardKey.backspace, LogicalKeyboardKey.backspace, null),
+      'space' => (PhysicalKeyboardKey.space, LogicalKeyboardKey.space, ' '),
       'arrowright' => (PhysicalKeyboardKey.arrowRight, LogicalKeyboardKey.arrowRight, null),
       'arrowleft' => (PhysicalKeyboardKey.arrowLeft, LogicalKeyboardKey.arrowLeft, null),
       'arrowdown' => (PhysicalKeyboardKey.arrowDown, LogicalKeyboardKey.arrowDown, null),

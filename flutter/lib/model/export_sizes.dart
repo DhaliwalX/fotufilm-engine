@@ -19,6 +19,9 @@ class ExportSize {
 const _fractions = [('Large', .75), ('Medium', .5), ('Small', .25)];
 const _stillEdges = [3840, 2048, 1600];
 
+/// A movie's sizes after its source (export-sizes.js `VIDEO_EDGES`).
+const _videoEdges = [('4K', 3840), ('1440p', 2560), ('1080p', 1920), ('720p', 1280)];
+
 /// The size of the picture a crop (four corners in unit coordinates) cuts from a `width` x
 /// `height` one (geometry.js `outputSize`).
 PixelSize outputSize(List crop, int width, int height) {
@@ -41,16 +44,23 @@ PixelSize exportPixels(num edge, PixelSize output) {
 }
 
 /// The sizes one photograph offers, each naming the pixels it delivers of `output`, its
-/// cropped picture.
-List<ExportSize> exportSizeOptions(PixelSize output) {
+/// cropped picture. A movie offers its source, then 4K, 1440p, 1080p and 720p below it.
+List<ExportSize> exportSizeOptions(PixelSize output, {bool video = false}) {
   final long = math.max(output.width, output.height);
   ExportSize size(String id, String label, num edge) {
     final pixels = exportPixels(edge, output);
     return ExportSize(id, label, detail: '${pixels.width} × ${pixels.height}', pixels: pixels);
   }
 
-  if (long <= 0) return const [ExportSize('full', 'Full resolution')];
-  final options = [size('full', 'Full resolution', long)];
+  final full = video ? 'Source' : 'Full resolution';
+  if (long <= 0) return [ExportSize('full', full)];
+  final options = [size('full', full, long)];
+  if (video) {
+    for (final (label, edge) in _videoEdges) {
+      if (edge < long - 1) options.add(size('$edge', label, edge));
+    }
+    return options;
+  }
   for (final (label, fraction) in _fractions) {
     final edge = (long * fraction).round();
     if (edge >= 640 && edge < long - 1) options.add(size('$fraction', label, edge));
@@ -91,3 +101,10 @@ String? resolutionLimitWarning(List<ExportSize> sizes, String selected, List<Str
       '${size.label} (${size.detail}) is selected instead, so the export will contain fewer '
       'pixels.';
 }
+
+/// 4:2:0 codecs need even sizes: at most one pixel is added, never the aspect changed
+/// (video-settings.js `evenSize`).
+PixelSize evenSize(PixelSize size) => (
+      width: math.max(2, (size.width / 2).ceil() * 2),
+      height: math.max(2, (size.height / 2).ceil() * 2),
+    );

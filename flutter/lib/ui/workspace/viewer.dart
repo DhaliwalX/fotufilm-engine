@@ -16,6 +16,7 @@ import 'overlays.dart';
 import 'photo_strip.dart';
 import 'picture.dart';
 import 'startup_progress.dart';
+import 'video_controls.dart';
 import 'viewer_status.dart';
 import 'viewer_tools.dart';
 
@@ -36,7 +37,8 @@ class EditorViewer extends StatelessWidget {
     final doc = editor.active;
     return ColoredBox(
       color: Palette.of(context).canvas,
-      child: Column(children: [
+      // A movie's keys while the viewer has the keyboard (video_controls.dart).
+      child: VideoKeys(editor: editor, child: Column(children: [
         Expanded(
           child: LayoutBuilder(key: libraryViewerKey, builder: (context, constraints) {
             final dpr = MediaQuery.devicePixelRatioOf(context);
@@ -71,9 +73,11 @@ class EditorViewer extends StatelessWidget {
             ]);
           }),
         ),
+        // A movie's transport (VideoControls.jsx).
+        if (doc != null && doc.isMovie) VideoControls(editor: editor, doc: doc),
         // Shown once it holds more than one photo.
         PhotoStrip(editor: editor),
-      ]),
+      ])),
     );
   }
 }

@@ -1,6 +1,7 @@
 // The Export dialog (web/src/editor/ExportDialog.jsx, styles/dialogs.css): this photograph or
 // all of them, the format (or the original RAW), the size the engine can develop, quality,
-// metadata and HDR, what the file will be, and Cancel that stops an export in flight.
+// metadata and HDR, what the file will be, and Cancel that stops an export in flight. A movie
+// offers its formats, sizes, HDR, frame rate, processing and file size instead.
 import 'package:flutter/widgets.dart';
 
 import '../../model/editor.dart';
@@ -8,6 +9,7 @@ import '../../model/export.dart';
 import '../kit/kit.dart';
 import '../theme/theme.dart';
 import 'dialogs.dart';
+import 'video_controls.dart' show videoLabel;
 
 void showExportDialog(BuildContext context, EditorModel editor) =>
     showModal(context, (close) => ExportDialog(editor: editor, onClose: close));
@@ -45,6 +47,7 @@ class _ExportDialogState extends State<ExportDialog> {
   Widget _build(BuildContext context, Widget? _) {
     final doc = editor.active;
     if (doc == null) return const SizedBox.shrink();
+    if (doc.isMovie) return _buildMovie(context, doc);
     final x = exporter;
     final exporting = editor.exporting;
     final count = x.batchCount;
@@ -168,6 +171,108 @@ class _ExportDialogState extends State<ExportDialog> {
                         'folder.'
                     : 'Exports the finished image with the current crop and adjustments.'),
               ],
+            ]),
+          ),
+        ),
+        if (exporting)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Text(editor.status ?? 'Preparing export',
+                style: editorText(context, color: palette.text)),
+          ),
+      ],
+    );
+  }
+
+  /// A movie's export (ExportDialog.jsx with `image.video`).
+  Widget _buildMovie(BuildContext context, PhotoDocument doc) {
+    final x = exporter;
+    final exporting = editor.exporting;
+    final palette = Palette.of(context);
+    final type = x.videoType;
+    final sizes = x.sizes(batch: false);
+    final sizeId = x.sizeId(batch: false);
+    if (x.size != sizeId) x.size = sizeId;
+    final last = x.last;
+    final delivered = x.delivered(doc);
+    final hdr = type?['hdr'] == true;
+    final rates = x.videoFrameRates;
+    String label(String key) => videoLabel(editor, key);
+    return DialogCard(
+      title: label('export'),
+      width: 480,
+      actions: [
+        PillButton('Cancel', onPressed: exporting ? x.cancel : widget.onClose),
+        PillButton(
+          exporting ? 'Exporting…' : 'Export',
+          variant: ButtonVariant.accent,
+          onPressed: exporting || type == null ? null : () => _export(false),
+        ),
+      ],
+      children: [
+        IgnorePointer(
+          ignoring: exporting,
+          child: Opacity(
+            opacity: exporting ? .45 : 1,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              if (last != null && !_same(last, x.current))
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(children: [
+                    PillButton('Use Last Export Settings', onPressed: x.applyLast),
+                  ]),
+                ),
+              _SelectRow('Format', PickerField<String>(
+                value: type?['id'] as String? ?? x.videoFormat,
+                options: [
+                  for (final t in x.videoTypes)
+                    PickerOption(t['id'] as String, t['label'] as String),
+                ],
+                onChanged: (v) => setState(() => x.videoFormat = v),
+              )),
+              _SelectRow('Size', PickerField<String>(
+                value: sizeId,
+                options: [
+                  for (final s in sizes) PickerOption(s.id, [s.label, ?s.detail].join(' · ')),
+                ],
+                onChanged: (v) => setState(() => x.size = v),
+              )),
+              if (hdr)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: SwitchRow(
+                      label: 'HDR', value: x.videoHDR, onChanged: (v) => x.videoHDR = v),
+                ),
+              if (rates.isNotEmpty)
+                _SelectRow(label('frameRate'), PickerField<int?>(
+                  value: x.videoFrameRate,
+                  options: [
+                    PickerOption(null, label('frameRateSource')),
+                    for (final rate in rates) PickerOption(rate, '$rate fps'),
+                  ],
+                  onChanged: (v) => x.videoFrameRate = v,
+                )),
+              if (x.videoProcessingOffered)
+                _SelectRow('Processing', PickerField<String>(
+                  value: x.videoProcessing,
+                  options: const [PickerOption('full', 'Full'), PickerOption('fast', 'Fast')],
+                  onChanged: (v) => x.videoProcessing = v,
+                )),
+              if (type?['quality'] != false && x.videoBitrates.isNotEmpty)
+                _SelectRow('File Size', PickerField<String>(
+                  value: x.videoBitrate,
+                  options: [
+                    for (final b in x.videoBitrates)
+                      PickerOption(b['id'] as String, b['label'] as String),
+                  ],
+                  onChanged: (v) => x.videoBitrate = v,
+                )),
+              _Detail('${delivered.width} × ${delivered.height} pixels · '
+                  '${type?['colorSpace'] == 'display-p3' ? 'Display P3' : 'sRGB'} · '
+                  '${type?['bits'] ?? 8}-bit${hdr && x.videoHDR ? ' HLG' : ''}'),
+              const _Detail('Exports every frame in the trim range with the current film, crop, '
+                  'and adjustments. Writes directly to disk; no upload. Odd dimensions are '
+                  'padded by one pixel.'),
             ]),
           ),
         ),

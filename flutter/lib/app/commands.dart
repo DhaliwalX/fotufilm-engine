@@ -395,8 +395,7 @@ class EditorCommands {
     // A dialog or the library covers the photo, as it does for the editor's own shortcuts.
     final free = !e.exporting && !e.library.open && !_dialog;
     final photo = free && e.active != null;
-    // Fotufilm Flutter opens no video, so every photo is a still.
-    final still = photo;
+    final still = photo && e.active?.isMovie != true;
     final reach = _reach;
     final cropMode = e.crop.showing;
     final history = e.active?.history;
@@ -433,7 +432,7 @@ class EditorCommands {
       'zoomToFit': photo && reach != 'fit',
       'showOriginal': photo,
       'histogram': photo,
-      'play': false,
+      'play': photo && e.active?.isMovie == true,
       'showNegative': photo && e.negatives.canShowNegativeNow,
       'filmSidebar': !e.library.open,
       'inspector': !e.library.open,
@@ -485,7 +484,8 @@ class EditorCommands {
     final titles = <String, String>{
       'undo': e.history.undo,
       'redo': e.history.redo,
-      'play': 'Play',
+      // What it will do next, as the Mac app names it.
+      'play': e.video.playing ? 'Pause' : 'Play',
       'pasteSettings': pasteTitle(e.selection.chosen.length),
     };
     final toolTips = <String, String>{};
@@ -618,7 +618,10 @@ class EditorCommands {
     'showOriginal': (c) => c.editor.setComparing(!c.editor.comparing),
     'histogram': (c) => c.editor.toggleHistogram(),
     'showNegative': (c) => c.editor.negatives.toggleShowNegative(),
-    'play': (c) {},
+    // The same toggle as the player's Space (usePlayerShortcuts.js `PLAYBACK_TOGGLE`).
+    'play': (c) {
+      if (!c.editor.video.disabled) c.editor.video.toggle();
+    },
     // App-wide on the Mac, and so here: the setting new photos start with, and the open photo.
     'estimatedHalation': (c) {
       final on = !c._estimatedHalationShown;

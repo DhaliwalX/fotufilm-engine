@@ -52,7 +52,8 @@ class AnchoredOverlay {
 /// the web editor's do while it shows a dialog (useNativeCommands.js `dialog`).
 final openModals = ValueNotifier<int>(0);
 
-/// Opens `builder`'s content under (or over) the widget of `anchor`. A click elsewhere closes it.
+/// Opens `builder`'s content under the widget of `anchor`, or over it with `above` (a control at
+/// the bottom of the window). A click elsewhere closes it.
 AnchoredOverlay showAnchored(
   BuildContext anchor,
   Widget Function(BuildContext context, VoidCallback close) builder, {
@@ -60,6 +61,7 @@ AnchoredOverlay showAnchored(
   double gap = 4,
   double? width,
   bool matchWidth = false,
+  bool above = false,
 }) {
   final overlay = Overlay.of(anchor);
   final overlayBox = overlay.context.findRenderObject() as RenderBox;
@@ -74,7 +76,8 @@ AnchoredOverlay showAnchored(
         child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => handle.close()),
       ),
       Positioned(
-        top: origin.dy + box.size.height + gap,
+        top: above ? null : origin.dy + box.size.height + gap,
+        bottom: above ? overlayBox.size.height - origin.dy + gap : null,
         left: alignEnd ? null : origin.dx,
         right: alignEnd ? overlayBox.size.width - origin.dx - box.size.width : null,
         width: matchWidth ? box.size.width : width,

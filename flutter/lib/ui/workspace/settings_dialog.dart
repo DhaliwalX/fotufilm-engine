@@ -150,9 +150,10 @@ class _SettingsDialogState extends State<SettingsDialog> {
     final exports =
         ((widget.editor.engine?.capabilities['imageExportTypes'] as List?) ?? const []).isNotEmpty;
     if (!exports) {
-      return const [
-        PaneHeading('Photos'),
-        PaneNote('This engine exports photos in standard dynamic range.'),
+      return [
+        const PaneHeading('Photos'),
+        const PaneNote('This engine exports photos in standard dynamic range.'),
+        ..._video(),
       ];
     }
     return [
@@ -170,6 +171,53 @@ class _SettingsDialogState extends State<SettingsDialog> {
       ),
       const PaneNote('Accurate uses exact film curves. Fast uses an approximation to reduce '
           'processing time.'),
+      ..._video(),
+    ];
+  }
+
+  /// Video Quality, HDR and Video File Size where the engine's platform offers them, and the
+  /// transport's Playback Quality where it plays movies (SettingsDialog.jsx `Output`).
+  List<Widget> _video() {
+    final exporter = widget.editor.exporter;
+    final playable = widget.editor.engine?.capabilities['video'] == true;
+    final hdr = exporter.videoTypes.any((t) => t['hdr'] == true);
+    final bitrates = exporter.videoBitrates;
+    if (!playable) return const [];
+    return [
+      const PaneHeading('Video'),
+      _SettingPicker(
+        label: 'Playback Quality',
+        setting: 'videoPlaybackQuality',
+        settings: _settings,
+        options: [for (final (id, name, _) in playbackQualities) PickerOption(id, name)],
+      ),
+      const PaneNote(playbackQualityHelp),
+      if (exporter.videoProcessingOffered) ...[
+        _SettingPicker(
+          label: 'Video Quality',
+          setting: 'videoProcessing',
+          settings: _settings,
+          options: const [PickerOption('full', 'Full'), PickerOption('fast', 'Fast')],
+        ),
+        const PaneNote('Video quality sets the processing resolution. Full uses the source '
+            'resolution; Fast processes at up to 1080p.'),
+      ],
+      if (hdr) ...[
+        _SettingSwitch(label: 'HDR', setting: 'videoHDR', settings: _settings),
+        const PaneNote('HEVC and ProRes movies of films that deliver HDR are written as HLG; '
+            'H.264 stays standard.'),
+      ],
+      if (bitrates.isNotEmpty) ...[
+        _SettingPicker(
+          label: 'Video File Size',
+          setting: 'videoBitrate',
+          settings: _settings,
+          options: [
+            for (final b in bitrates) PickerOption(b['id'] as String, b['label'] as String),
+          ],
+        ),
+        const PaneNote('Automatic lets the encoder choose. ProRes keeps its own rate.'),
+      ],
     ];
   }
 
