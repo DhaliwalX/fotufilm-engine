@@ -52,12 +52,18 @@ class EditorViewer extends StatelessWidget {
                     : PhotoCanvas(editor: editor, doc: doc),
               ),
               if (editor.comparing) const OriginalBadge(),
-              if (editor.status != null) StatusPill(text: editor.status!),
+              if (editor.status != null)
+                StatusPill(
+                    text: editor.status!, onCancel: editor.importing ? editor.cancelImport : null),
               // What Auto Adjust is doing (ViewerStatus.jsx).
               if (editor.status == null && editor.auto.status != null)
                 StatusPill(text: editor.auto.status!),
               if (editor.error != null)
-                ErrorBanner(text: editor.error!, onClose: editor.dismissError),
+                ErrorBanner(
+                  text: editor.error!,
+                  onClose: editor.dismissError,
+                  onRetry: editor.canRetry ? editor.retry : null,
+                ),
               if (editor.histogramOpen && doc != null)
                 HistogramPanel(
                   data: editor.histogram,

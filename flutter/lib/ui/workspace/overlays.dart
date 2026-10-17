@@ -59,8 +59,10 @@ class OriginalBadge extends StatelessWidget {
 }
 
 class StatusPill extends StatelessWidget {
-  const StatusPill({super.key, required this.text});
+  const StatusPill({super.key, required this.text, this.onCancel});
   final String text;
+  /// Shows Cancel (the import pill's, EditorViewer.jsx).
+  final VoidCallback? onCancel;
 
   @override
   Widget build(BuildContext context) => Positioned(
@@ -69,7 +71,8 @@ class StatusPill extends StatelessWidget {
         right: 0,
         child: Center(
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            padding: EdgeInsets.fromLTRB(10, onCancel == null ? 6 : 2, onCancel == null ? 10 : 2,
+                onCancel == null ? 6 : 2),
             decoration: BoxDecoration(
               color: Palette.of(context).panel,
               borderRadius: BorderRadius.circular(6),
@@ -77,16 +80,23 @@ class StatusPill extends StatelessWidget {
                 BoxShadow(color: Color(0x22000000), blurRadius: 12, offset: Offset(0, 2)),
               ],
             ),
-            child: Text(text, style: editorText(context)),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Text(text, style: editorText(context)),
+              if (onCancel != null) ...[
+                const SizedBox(width: 6),
+                QuietButton(label: 'Cancel', size: 24, onPressed: onCancel),
+              ],
+            ]),
           ),
         ),
       );
 }
 
 class ErrorBanner extends StatelessWidget {
-  const ErrorBanner({super.key, required this.text, required this.onClose});
+  const ErrorBanner({super.key, required this.text, required this.onClose, this.onRetry});
   final String text;
   final VoidCallback onClose;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -111,6 +121,7 @@ class ErrorBanner extends StatelessWidget {
               child: Text(text,
                   style: editorText(context, size: TextSizes.label, color: fg, height: 1.45)),
             ),
+            if (onRetry != null) QuietButton(label: 'Retry', size: 24, onPressed: onRetry),
             QuietButton(icon: 'close', tooltip: 'Dismiss', onPressed: onClose, iconSize: 15),
           ]),
         ),

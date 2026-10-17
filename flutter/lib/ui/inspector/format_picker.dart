@@ -8,6 +8,13 @@ import '../../model/editor.dart';
 import '../theme/theme.dart';
 import '../workspace/picture.dart';
 
+/// The format the photograph develops on: the chosen one, else the camera's frame where the
+/// file records it, else the film's.
+String? followedFormat(EditorModel editor) =>
+    editor.edit['format'] as String? ??
+    editor.active?.sensorGauge ??
+    editor.selectedStock?['nativeFormat'] as String?;
+
 class FormatPicker extends StatelessWidget {
   const FormatPicker({super.key, required this.editor});
   final EditorModel editor;
@@ -23,7 +30,7 @@ class FormatPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final selected = editor.edit['format'] ?? editor.selectedStock?['nativeFormat'];
+    final selected = followedFormat(editor);
     return LayoutBuilder(builder: (context, constraints) {
       const gap = Metrics.formatGap;
       final columns =

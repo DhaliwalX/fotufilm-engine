@@ -196,8 +196,38 @@ class EditorModel extends ChangeNotifier implements RenderHost {
   bool exporting = false;
   String search = '';
   String? status;
-  String? error;
   HistogramData? histogram;
+
+  /// The banner over the photograph. A new message drops the Retry of the one before.
+  String? get error => _error;
+  set error(String? message) {
+    _error = message;
+    _retry = null;
+  }
+  String? _error;
+
+  /// What the banner's Retry does again (EditorViewer.jsx's `setRetry`): opening the files that
+  /// failed, or developing the photograph again. Null offers no Retry.
+  Future<void> Function()? _retry;
+  bool get canRetry => _retry != null;
+
+  void retry() {
+    final again = _retry;
+    _set(() => error = null);
+    again?.call();
+  }
+
+  /// Opening runs a file at a time; Cancel stops it after the one being read, which is let go.
+  int _imports = 0, _cancelledImports = 0;
+
+  /// The status is an opening's, which Cancel stops.
+  bool get importing => status != null && _importStatus == status;
+  String? _importStatus;
+
+  void cancelImport() {
+    _cancelledImports = _imports;
+    _set(() => status = null);
+  }
 
   @override
   final ViewState view = ViewState();
@@ -236,7 +266,10 @@ class EditorModel extends ChangeNotifier implements RenderHost {
   void renderFailed(String message) {
     // Without a film there may be nothing to develop; that is not worth a banner.
     final doc = active;
-    if (doc == null || doc.edit['stock'] != null || doc.preview == null) error = message;
+    if (doc == null || doc.edit['stock'] != null || doc.preview == null) {
+      error = message;
+      _retry = () async => renderer?.schedule();
+    }
     notifyListeners();
   }
 
@@ -323,7 +356,12 @@ class EditorModel extends ChangeNotifier implements RenderHost {
     if (engine == null || files.isEmpty) return;
     // A new photograph starts on the film the shown one is on, as the web editor's do.
     final stock = edit['stock'] as String?;
+    final run = ++_imports;
+    bool cancelled() => run <= _cancelledImports;
+    final failed = <PhotoFile>[];
+    final failures = <String>[];
     for (final file in files) {
+      if (cancelled()) break;
       final key = file.path ?? file.name;
       // A negatives folder's photos are negatives however they are opened.
       final asNegative = negative || file.negative;
@@ -332,7 +370,7 @@ class EditorModel extends ChangeNotifier implements RenderHost {
         _activate(existing);
         continue;
       }
-      status = 'Opening ${file.name}…';
+      status = _importStatus = 'Opening ${file.name}…';
       notifyListeners();
       try {
         final answer = engine.opensPaths && file.path != null
@@ -340,6 +378,10 @@ class EditorModel extends ChangeNotifier implements RenderHost {
             : await engine.call(
                 'importFile', {'name': file.name, 'negative': asNegative}, await file.read!());
         final json = answer.json;
+        if (cancelled()) {
+          await engine.call('release', {'handle': (json['handle'] as num).toInt()});
+          break;
+        }
         // A photograph opened before starts from the edit it was left with.
         final start = keptEdits.startingEdit(json['identity'] as String?, stock);
         final doc = PhotoDocument(
@@ -364,10 +406,16 @@ class EditorModel extends ChangeNotifier implements RenderHost {
         documents.add(doc);
         _activate(documents.length - 1);
       } catch (e) {
-        error = '${file.name} could not be opened. $e';
+        failed.add(file);
+        failures.add('${file.name} could not be opened. $e');
       }
     }
-    status = null;
+    if (failed.isNotEmpty) {
+      error = failures.join(' ');
+      _retry = () => openFiles(failed, negative: negative, scanLight: scanLight);
+    }
+    // A later opening's status stays.
+    if (run == _imports) status = null;
     notifyListeners();
   }
 

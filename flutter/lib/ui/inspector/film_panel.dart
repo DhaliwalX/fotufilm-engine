@@ -2,9 +2,31 @@
 // its condition and its halation. A film with a fixed profile has none of its settings.
 import 'package:flutter/widgets.dart';
 
+import '../../model/editor.dart';
 import '../kit/kit.dart';
 import 'controls.dart';
 import 'format_picker.dart';
+
+/// A chosen format goes back to the camera's or the film's; otherwise which one is followed.
+List<Widget> _following(EditorModel editor) {
+  final camera = editor.active?.sensorGauge != null;
+  if (editor.edit['format'] != null) {
+    return [
+      Align(
+        alignment: Alignment.centerLeft,
+        child: PillButton(camera ? 'Match the Camera' : 'Match the Film',
+            onPressed: () => editor.change({'format': null})),
+      ),
+    ];
+  }
+  if (!camera) return const [Note('Following the film.')];
+  final followed = followedFormat(editor);
+  final name = editor.catalogue.filmFormats
+      .where((f) => f['id'] == followed)
+      .map((f) => f['name'] as String)
+      .firstOrNull;
+  return [Note('Following the camera: ${name ?? followed}.')];
+}
 
 List<Widget> filmPanel(InspectorControls c) {
   final editor = c.editor;
@@ -26,7 +48,7 @@ List<Widget> filmPanel(InspectorControls c) {
         value: editor.formatDetail,
         onChanged: editor.setFormatDetail,
       ),
-      Note(c.edit['format'] == null ? 'Following the film.' : 'Chosen for this photograph.'),
+      ..._following(editor),
     ]),
     if (!fixed) Section(title: 'Film Condition', children: c.profileControls(const ['expired'])),
     Section(title: 'Halation', children: [

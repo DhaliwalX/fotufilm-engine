@@ -8,15 +8,21 @@ class MainFlutterWindow: NSWindow {
     self.contentViewController = flutterViewController
     // The editor's toolbar is the title bar, as in the CEF app: the traffic lights sit over its
     // leading inset and the empty toolbar drags the window.
+    // The title still names the window in the Window menu, Mission Control and the Dock: the
+    // open photograph's name, or the app's (setTitle).
+    self.title = "Fotufilm"
     self.titleVisibility = .hidden
     self.titlebarAppearsTransparent = true
     self.styleMask.insert(.fullSizeContentView)
     self.isMovableByWindowBackground = false
     // The CEF app's least size, narrow enough for the compact layout (below 834 points).
     self.minSize = NSSize(width: 720, height: 520)
+    self.tabbingMode = .disallowed
+    self.collectionBehavior.insert(.fullScreenPrimary)
     self.setContentSize(NSSize(width: 1440, height: 900))
     self.center()
-    self.setFrameAutosaveName("FotufilmEditor")
+    // The CEF window's name, so the window opens where it was before the update.
+    self.setFrameAutosaveName("FotufilmDesktopWindow")
 
     RegisterGeneratedPlugins(registry: flutterViewController)
     WindowChannel.register(with: flutterViewController, window: self)
@@ -40,6 +46,9 @@ enum WindowChannel {
         result(nil)
       case "zoom":
         window.zoom(nil)
+        result(nil)
+      case "setTitle":
+        window.title = call.arguments as? String ?? "Fotufilm"
         result(nil)
       case "setContentSize":
         // Scripted checks resize the window, as a person dragging its edge does.

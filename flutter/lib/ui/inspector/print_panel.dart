@@ -3,6 +3,7 @@
 import 'package:flutter/widgets.dart';
 
 import '../../model/catalogue.dart';
+import '../../model/video.dart' show MovieDocument;
 import '../kit/kit.dart';
 import '../workspace/export_dialog.dart';
 import 'controls.dart';
@@ -102,7 +103,8 @@ List<Widget> printPanel(InspectorControls c) {
       Builder(
         builder: (context) => Align(
           alignment: Alignment.centerLeft,
-          child: PillButton('Export Photo…', onPressed: () => showExportDialog(context, editor)),
+          child: PillButton(editor.active?.isMovie == true ? 'Export Video…' : 'Export Photo…',
+              onPressed: () => showExportDialog(context, editor)),
         ),
       ),
     ]),

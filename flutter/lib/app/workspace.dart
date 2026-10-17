@@ -102,7 +102,19 @@ class _WorkspaceState extends State<Workspace> {
     super.dispose();
   }
 
-  void _changed() => setState(() {});
+  void _changed() {
+    setState(() {});
+    _nameWindow();
+  }
+
+  /// The window is named after the photo open in it; with none, after the app.
+  String? _title;
+  void _nameWindow() {
+    final title = editor.active?.name ?? 'Fotufilm';
+    if (title == _title) return;
+    _title = title;
+    HostWindow.setTitle(title);
+  }
 
   /// The library shown or hidden; hidden, the keyboard comes back to the editor.
   bool _libraryOpen = false;
@@ -149,11 +161,13 @@ class _WorkspaceState extends State<Workspace> {
     // Film packs are installed; the rest open (useFilmPacks.js `acceptWithPacks`).
     final packs = [for (final f in detail.files) if (isFilmPack(f.name)) f.path];
     if (packs.isNotEmpty) editor.filmPacks.importPaths(packs);
-    editor.openFiles([
+    final photos = [
       for (final f in detail.files)
-        if (imageExtensions.contains(f.name.split('.').last.toLowerCase()) || isVideoName(f.name))
-          _photo(f),
-    ]);
+        if (imageExtensions.contains(f.name.split('.').last.toLowerCase()) || isVideoName(f.name)) f,
+    ];
+    // Dropped photographs join Open Recent too, as the CEF host's do.
+    if (!kIsWeb && photos.isNotEmpty) HostWindow.noteRecent([for (final f in photos) f.path]);
+    editor.openFiles([for (final f in photos) _photo(f)]);
   }
 
   @override

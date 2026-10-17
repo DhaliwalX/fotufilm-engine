@@ -22,6 +22,9 @@ abstract final class HostWindow {
   static Future<void> startDrag() => _call('startDrag');
   static Future<void> zoom() => _call('zoom');
 
+  /// Names the window (Window menu, Mission Control, the Dock), as useDocumentTitle.js does.
+  static Future<void> setTitle(String title) => _call('setTitle', title);
+
   /// Photographs the system asked the app to open, and from then on calls `open` as more come.
   /// `arguments` are main's: Linux and Windows runners pass the command line there.
   static Future<List<String>> takeOpenedFiles(Future<void> Function(List<String>) open,

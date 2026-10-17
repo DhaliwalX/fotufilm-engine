@@ -62,6 +62,9 @@ class PhotoDocument {
   Json descriptor = const {};
 
   String get name => path.split('/').last;
+
+  /// The camera's frame as a film format, where the file records it (the import's `sensor`).
+  String? get sensorGauge => (descriptor['sensor'] as Map?)?['gauge'] as String?;
   Json get edit => history.present;
 
   /// What the import said of a scanned negative (`negative`): the films its base looks like and
