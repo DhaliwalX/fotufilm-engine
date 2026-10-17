@@ -347,6 +347,7 @@ class _MenuButton extends StatelessWidget {
           label: text,
           tooltip: tooltip,
           size: Metrics.videoButton,
+          opensMenu: true,
           onPressed:
               enabled ? () => showMenu(anchor, items, alignEnd: true, width: 140, above: true) : null,
         ),

@@ -117,6 +117,7 @@ class _LibraryFoldersState extends State<LibraryFolders> {
               builder: (anchor) => QuietButton(
                 icon: 'addFolder',
                 tooltip: 'Add Folder',
+                opensMenu: true,
                 onPressed: () => showMenu(anchor, alignEnd: true, width: 210, [
                   MenuItem(label: 'Add Folder…', onSelected: () => widget.onAdd(negative: false)),
                   MenuItem(
@@ -266,6 +267,7 @@ class _FolderRowState extends State<_FolderRow> {
                 size: 20,
                 iconSize: 16,
                 tooltip: '${widget.name} options',
+                opensMenu: true,
                 onPressed: () => showMenu(anchor, alignEnd: true, width: 200, widget.menu!),
               ),
             ),

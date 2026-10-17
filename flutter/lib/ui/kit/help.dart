@@ -2,6 +2,7 @@
 import 'package:flutter/widgets.dart';
 
 import '../theme/theme.dart';
+import 'buttons.dart';
 import 'icons.dart';
 import 'popover.dart';
 
@@ -17,8 +18,8 @@ class HelpButton extends StatelessWidget {
     return Builder(
       builder: (anchor) => MouseRegion(
         cursor: SystemMouseCursors.click,
-        child: GestureDetector(
-          onTap: () => showAnchored(
+        child: PressTrigger(
+          onPress: () => showAnchored(
             anchor,
             (context, _) => PopoverSurface(
               child: Padding(

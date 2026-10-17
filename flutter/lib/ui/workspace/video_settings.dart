@@ -20,6 +20,7 @@ class VideoSettingsButton extends StatelessWidget {
           tooltip: videoLabel(editor, 'settings'),
           size: Metrics.videoButton,
           iconSize: Metrics.videoIcon,
+          opensMenu: true,
           onPressed: editor.video.disabled ? null : () => showVideoSettings(anchor, editor),
         ),
       );

@@ -21,6 +21,7 @@ class ImportMenu extends StatelessWidget {
         icon: 'plus',
         tooltip: 'Add media',
         size: size,
+        opensMenu: true,
         onPressed: editor.exporting
             ? null
             : () => showMenu(anchor, width: 200, [

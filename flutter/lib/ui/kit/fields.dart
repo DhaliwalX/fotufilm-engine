@@ -5,6 +5,7 @@ import 'package:flutter/material.dart'
 import 'package:flutter/widgets.dart';
 
 import '../theme/theme.dart';
+import 'buttons.dart';
 import 'help.dart';
 import 'icons.dart';
 import 'menu.dart';
@@ -172,8 +173,8 @@ class PickerField<T> extends StatelessWidget {
           const SizedBox(height: 3),
         ],
         Builder(
-          builder: (anchor) => GestureDetector(
-            onTap: enabled
+          builder: (anchor) => PressTrigger(
+            onPress: enabled
                 ? () => showMenu(anchor, matchWidth: true, [
                       for (final o in options)
                         MenuItem(

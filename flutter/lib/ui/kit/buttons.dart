@@ -1,25 +1,49 @@
 // Spectrum's buttons at size S: the quiet ActionButton and ToggleButton the toolbars use, and the
 // filled pill Button of dialogs and inspector actions.
+import 'package:flutter/gestures.dart' show kPrimaryButton;
 import 'package:flutter/widgets.dart';
 
 import '../theme/theme.dart';
 import 'icons.dart';
 import 'tooltip.dart';
 
-/// Tracks hover and press for a control that tints itself.
+/// Tracks hover and press for a control that tints itself. A control that opens a menu or a
+/// popover acts as the press starts (`opensMenu`), the rest as it ends.
 mixin PointerTint<T extends StatefulWidget> on State<T> {
   bool hovered = false, pressed = false;
 
-  Widget tinted({required Widget child, VoidCallback? onTap}) => MouseRegion(
+  Widget tinted({required Widget child, VoidCallback? onTap, bool opensMenu = false}) =>
+      MouseRegion(
         onEnter: (_) => setState(() => hovered = true),
         onExit: (_) => setState(() => hovered = pressed = false),
-        child: GestureDetector(
-          onTapDown: onTap == null ? null : (_) => setState(() => pressed = true),
-          onTapUp: (_) => setState(() => pressed = false),
-          onTapCancel: () => setState(() => pressed = false),
-          onTap: onTap,
-          child: child,
-        ),
+        child: opensMenu
+            ? PressTrigger(onPress: onTap, child: child)
+            : GestureDetector(
+                onTapDown: onTap == null ? null : (_) => setState(() => pressed = true),
+                onTapUp: (_) => setState(() => pressed = false),
+                onTapCancel: () => setState(() => pressed = false),
+                onTap: onTap,
+                child: child,
+              ),
+      );
+}
+
+/// Runs `onPress` as the primary button goes down, as Spectrum's menu triggers and pickers open
+/// (react-aria `usePress` onPressStart). It reads the pointer outside the gesture arena, so a
+/// scroll view or a double-click around the control adds no wait.
+class PressTrigger extends StatelessWidget {
+  const PressTrigger({super.key, required this.onPress, required this.child});
+  final VoidCallback? onPress;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Listener(
+        onPointerDown: onPress == null
+            ? null
+            : (event) {
+                if (event.buttons == kPrimaryButton) onPress!();
+              },
+        child: child,
       );
 }
 
@@ -36,11 +60,15 @@ class QuietButton extends StatefulWidget {
     this.size = Metrics.control,
     this.iconSize = Metrics.icon,
     this.upsideDown = false,
+    this.opensMenu = false,
   });
 
   final String? icon, label, tooltip;
   final VoidCallback? onPressed;
   final bool selected;
+
+  /// It opens a menu or popover, so it acts as the press starts.
+  final bool opensMenu;
   final double size, iconSize;
 
   /// The icon turned half round (a chevron pointing up).
@@ -71,6 +99,7 @@ class _QuietButtonState extends State<QuietButton> with PointerTint {
       message: widget.tooltip,
       child: tinted(
         onTap: widget.onPressed,
+        opensMenu: widget.opensMenu,
         child: Container(
           height: widget.size,
           constraints: BoxConstraints(minWidth: widget.size),

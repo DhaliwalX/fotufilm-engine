@@ -209,6 +209,7 @@ class _FilmTypePickerState extends State<_FilmTypePicker> with PointerTint {
       message: 'Film type',
       child: Builder(
         builder: (anchor) => tinted(
+          opensMenu: true,
           onTap: () => showMenu(anchor, alignEnd: true, width: 170, [
             for (final type in widget.types)
               MenuItem(

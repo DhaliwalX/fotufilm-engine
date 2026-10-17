@@ -29,9 +29,12 @@ class EditorToolbar extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = Palette.of(context);
     final titlebar = HostWindow.toolbarIsTitlebar;
-    final bar = editor.layout.compact ? _compact(palette, titlebar) : Container(
+    // As the title bar, the colour is painted behind the controls by the window's drag and zoom
+    // surface (below), so a press on empty space reaches it.
+    final colour = titlebar ? null : palette.panel;
+    final bar = editor.layout.compact ? _compact(colour, titlebar) : Container(
       height: Metrics.toolbarHeight,
-      color: palette.panel,
+      color: colour,
       padding: const EdgeInsets.symmetric(horizontal: Metrics.toolbarPadding),
       child: Row(children: [
         ConstrainedBox(
@@ -52,12 +55,20 @@ class EditorToolbar extends StatelessWidget {
       ]),
     );
     if (!titlebar) return bar;
-    return GestureDetector(
-      behavior: HitTestBehavior.translucent,
-      onPanStart: (_) => HostWindow.startDrag(),
-      onDoubleTap: HostWindow.zoom,
-      child: bar,
-    );
+    // Empty space drags and zooms the window, as a title bar does. The surface sits behind the
+    // controls rather than around them: its double-click would otherwise hold every button's
+    // press in the gesture arena until a second click could no longer come.
+    return Stack(children: [
+      Positioned.fill(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onPanStart: (_) => HostWindow.startDrag(),
+          onDoubleTap: HostWindow.zoom,
+          child: ColoredBox(color: palette.panel),
+        ),
+      ),
+      bar,
+    ]);
   }
 
   Widget _whileEditing(Widget child) => Visibility(
@@ -71,8 +82,8 @@ class EditorToolbar extends StatelessWidget {
 /// The compact layout's toolbar (phone-layout.css): the brand, the library and Add media on one
 /// row, and the edit buttons spread across the next; zoom gives way.
 extension on EditorToolbar {
-  Widget _compact(Palette palette, bool titlebar) => Container(
-        color: palette.panel,
+  Widget _compact(Color? colour, bool titlebar) => Container(
+        color: colour,
         padding: const EdgeInsets.fromLTRB(6, 0, 6, 4),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           SizedBox(
@@ -226,6 +237,7 @@ class _EditGroup extends StatelessWidget {
         builder: (anchor) => QuietButton(
           icon: 'more',
           tooltip: 'More options',
+          opensMenu: true,
           onPressed: () => showMoreOptions(anchor, commands),
         ),
       ),
