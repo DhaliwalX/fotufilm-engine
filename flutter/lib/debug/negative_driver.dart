@@ -8,7 +8,6 @@
 //   {"measureRoll": true}                   Measure Roll on the shown frame's roll
 //   {"clearRoll": true}                     Balance Every Frame Alone
 //   {"negative": {"crosstalk": 0.4}}        changes the shown negative's reading
-//   {"select": 1}                           shows the strip's photograph at that index
 import 'dart:ui' show Offset;
 
 import '../model/editor.dart';
@@ -38,5 +37,4 @@ Future<void> driveNegatives(
   }
   if (c['clearRoll'] == true) scans.clearRoll();
   if (c['negative'] case final Map change) scans.read(change.cast());
-  if (c['select'] case final int index) editor.selectDocument(index);
 }

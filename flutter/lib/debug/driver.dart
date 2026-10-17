@@ -343,7 +343,11 @@ class Driver {
       if (editor.dialogs.open == AppDialog.settings) editor.dialogs.close();
       editor.dialogs.request(AppDialog.settings);
     }
-    if (c['dialog'] case final String name) editor.dialogs.request(AppDialog.values.byName(name));
+    // The editing dialogs (copySettings, savePreset, presets) open from editing_driver.dart.
+    if (c['dialog'] case final String name) {
+      final dialog = AppDialog.values.where((d) => d.name == name).firstOrNull;
+      if (dialog != null) editor.dialogs.request(dialog);
+    }
     if (c['closeDialog'] == true) editor.dialogs.close();
     if (c['checkUpdates'] == true) await editor.updates.check();
     if (c['histogramView'] case final String view) HistogramPanel.view.value = view;
