@@ -1,32 +1,29 @@
 // The editor's toolbar (web/src/editor/EditorToolbar.jsx), compact: 40 px in the panels' colour.
-// The brand and Open on the left, zoom and the canvas tools in the middle, history, export and
-// the panels on the right. On macOS it is the titlebar: its empty space drags the window.
+// The brand, the library and Add media on the left (FileToolbar.jsx), zoom and the canvas tools in
+// the middle (ViewToolbar.jsx), the histogram, history, export, More and the inspector on the
+// right (EditToolbar.jsx, OptionsMenu.jsx). On macOS it is the titlebar: its empty space drags
+// the window.
 import 'package:flutter/widgets.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../../app/commands.dart';
+import '../../app/editor_shortcuts.dart' show shortcutLabel;
 import '../../app/host_window.dart';
 import '../../model/app_dialogs.dart';
 import '../../model/editor.dart';
 import '../../model/presets.dart' show pasteTitle;
 import '../kit/kit.dart';
 import '../theme/theme.dart';
-import 'editing_dialogs.dart';
 import 'film_pack_notice.dart';
 import 'import_menu.dart';
 import 'support_dialog.dart';
 import 'viewer_status.dart';
 
 class EditorToolbar extends StatelessWidget {
-  const EditorToolbar({
-    super.key,
-    required this.editor,
-    required this.onOpen,
-    required this.onExport,
-    required this.onShortcuts,
-  });
+  const EditorToolbar({super.key, required this.commands});
 
-  final EditorModel editor;
-  final VoidCallback onOpen, onExport, onShortcuts;
+  final EditorCommands commands;
+  EditorModel get editor => commands.editor;
 
   @override
   Widget build(BuildContext context) {
@@ -45,18 +42,13 @@ class EditorToolbar extends StatelessWidget {
             const SizedBox(width: 7),
             const FotufilmBrand(),
             const SizedBox(width: 8),
-            QuietButton(
-              icon: 'library',
-              tooltip: 'Library (L)',
-              selected: editor.library.open,
-              onPressed: editor.exporting ? null : editor.library.toggle,
-            ),
-            ImportMenu(editor: editor, onImage: onOpen),
+            _LibraryButton(editor: editor),
+            ImportMenu(editor: editor, onImage: commands.actions.open),
           ]),
         ),
         // The library hides the photograph's controls (photo-library.css).
         Expanded(child: _whileEditing(_ViewGroup(editor: editor))),
-        _whileEditing(_EditGroup(editor: editor, onExport: onExport, onShortcuts: onShortcuts)),
+        _whileEditing(_EditGroup(commands: commands)),
       ]),
     );
     if (!titlebar) return bar;
@@ -67,6 +59,7 @@ class EditorToolbar extends StatelessWidget {
       child: bar,
     );
   }
+
   Widget _whileEditing(Widget child) => Visibility(
       visible: !editor.library.open,
       maintainSize: true,
@@ -75,8 +68,8 @@ class EditorToolbar extends StatelessWidget {
       child: child);
 }
 
-/// The compact layout's toolbar (phone-layout.css): the brand, the library and Open on one row,
-/// and the edit buttons spread across the next; zoom gives way.
+/// The compact layout's toolbar (phone-layout.css): the brand, the library and Add media on one
+/// row, and the edit buttons spread across the next; zoom gives way.
 extension on EditorToolbar {
   Widget _compact(Palette palette, bool titlebar) => Container(
         color: palette.panel,
@@ -88,26 +81,36 @@ extension on EditorToolbar {
               if (titlebar) const SizedBox(width: Metrics.trafficLightInset),
               const FotufilmBrand(),
               const Spacer(),
-              const QuietButton(
-                  icon: 'library', tooltip: 'Photo library', size: Metrics.compactTouch),
+              _LibraryButton(editor: editor, size: Metrics.compactTouch),
               const SizedBox(width: 8),
-              QuietButton(
-                  icon: 'plus',
-                  tooltip: 'Open image or video',
-                  size: Metrics.compactTouch,
-                  onPressed: onOpen),
+              ImportMenu(editor: editor, onImage: commands.actions.open, size: Metrics.compactTouch),
             ]),
           ),
           SizedBox(
             height: Metrics.compactToolbarRow,
-            child: _EditGroup(
-                editor: editor, onExport: onExport, onShortcuts: onShortcuts, compact: true),
+            child: _EditGroup(commands: commands, compact: true),
           ),
         ]),
       );
 }
 
-/// Zoom, the canvas tools and the photograph's size.
+/// The library's toggle (FileToolbar.jsx).
+class _LibraryButton extends StatelessWidget {
+  const _LibraryButton({required this.editor, this.size = Metrics.control});
+  final EditorModel editor;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => QuietButton(
+        icon: 'library',
+        tooltip: 'Library (L)',
+        selected: editor.library.open,
+        size: size,
+        onPressed: editor.exporting ? null : editor.library.toggle,
+      );
+}
+
+/// Zoom, the canvas tools and the photograph's size (ViewToolbar.jsx).
 class _ViewGroup extends StatelessWidget {
   const _ViewGroup({required this.editor});
   final EditorModel editor;
@@ -116,33 +119,47 @@ class _ViewGroup extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = Palette.of(context);
     final doc = editor.active;
-    final zoomed = doc != null && editor.zoomed;
+    final photo = doc != null;
+    // Where the view stands between fit and the largest zoom (photo-view.js `zoomReach`).
+    final fit = !editor.zoomed;
+    final max = editor.zoomed && editor.scale >= ViewState.maxZoom * .999;
+    final cropMode = editor.crop.showing;
+    // Each tool opens in the inspector (useEditingActions.js `setInspector`).
+    void open(Panel panel) => editor.layout.choosePanel(panel);
     return Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-      QuietButton(icon: 'minus', tooltip: 'Zoom out', onPressed: zoomed ? editor.zoomOut : null),
+      QuietButton(
+          icon: 'minus',
+          tooltip: 'Zoom out',
+          onPressed: !photo || fit || cropMode ? null : editor.zoomOut),
       SizedBox(
         width: 40,
-        child: Text(zoomed ? '${(editor.scale * 100).round()}%' : 'Fit',
+        child: Text(fit ? 'Fit' : '${(editor.scale * 100).round()}%',
             textAlign: TextAlign.center,
             style: editorText(context,
                 color: doc == null ? palette.text.withValues(alpha: .4) : palette.text)),
       ),
-      QuietButton(icon: 'plus', tooltip: 'Zoom in', onPressed: doc != null ? editor.zoomIn : null),
+      QuietButton(
+          icon: 'plus',
+          tooltip: 'Zoom in',
+          onPressed: !photo || max || cropMode ? null : editor.zoomIn),
       const SizedBox(width: Metrics.toolbarGap),
       QuietButton(
-          icon: 'fit', tooltip: 'Zoom to fit', onPressed: zoomed ? () => editor.setZoom(null) : null),
+          icon: 'fit',
+          tooltip: 'Zoom to fit (0)',
+          onPressed: !photo || fit ? null : () => editor.setZoom(null)),
       const SizedBox(width: Metrics.toolbarGap),
       QuietButton(
         icon: 'selective',
         tooltip: 'Selective',
-        selected: editor.panel == Panel.selective,
-        onPressed: doc != null ? () => editor.toggleTool(Panel.selective) : null,
+        selected: editor.panel == Panel.selective && editor.inspectorOpen,
+        onPressed: !photo || editor.exporting || doc.isMovie ? null : () => open(Panel.selective),
       ),
       const SizedBox(width: Metrics.toolbarGap),
       QuietButton(
         icon: 'crop',
         tooltip: 'Crop',
-        selected: editor.panel == Panel.crop,
-        onPressed: doc != null ? () => editor.toggleTool(Panel.crop) : null,
+        selected: editor.panel == Panel.crop && editor.inspectorOpen,
+        onPressed: !photo || editor.exporting ? null : () => open(Panel.crop),
       ),
       // A middling window gives the readout's room to the tools (responsive.css).
       if (!_crowded(editor.layout.window)) PixelReadout(doc: doc),
@@ -152,27 +169,26 @@ class _ViewGroup extends StatelessWidget {
 
 bool _crowded(double? window) => window != null && window > 833 && window < 1010;
 
-/// The histogram, history, export, more and the inspector.
+/// The histogram, history, reset, export, More and the inspector (EditToolbar.jsx).
 class _EditGroup extends StatelessWidget {
-  const _EditGroup(
-      {required this.editor,
-      required this.onExport,
-      required this.onShortcuts,
-      this.compact = false});
-  final EditorModel editor;
-  final VoidCallback onExport, onShortcuts;
+  const _EditGroup({required this.commands, this.compact = false});
+  final EditorCommands commands;
 
   /// Spread across the compact toolbar's second row, at touch size.
   final bool compact;
 
+  EditorModel get editor => commands.editor;
+
   @override
   Widget build(BuildContext context) {
     final doc = editor.active;
+    final exporting = editor.exporting;
+    final history = doc?.history;
     const gap = SizedBox(width: Metrics.toolbarGap);
     final row = Row(children: [
       QuietButton(
         icon: 'histogram',
-        tooltip: editor.histogramOpen ? 'Hide histogram' : 'Show histogram',
+        tooltip: 'Histogram (H)',
         selected: editor.histogramOpen,
         onPressed: doc != null ? editor.toggleHistogram : null,
       ),
@@ -182,109 +198,41 @@ class _EditGroup extends StatelessWidget {
         margin: const EdgeInsets.symmetric(horizontal: 3),
         color: Palette.of(context).border,
       ),
-      // What Undo and Redo will change, as the Edit menu names it (EditToolbar.jsx).
+      // What Undo and Redo will change, as the Edit menu names it.
       QuietButton(
           icon: 'undo',
-          tooltip: '${editor.history.undo} (${HostWindow.commandKeyIsMeta ? '⌘Z' : 'Ctrl+Z'})',
-          onPressed: editor.canUndo ? editor.undo : null),
+          tooltip: '${editor.history.undo} (${shortcutLabel('⌘Z')})',
+          onPressed: (history?.past.isNotEmpty ?? false) && !exporting ? editor.undo : null),
       gap,
       QuietButton(
           icon: 'redo',
-          tooltip: '${editor.history.redo} (${HostWindow.commandKeyIsMeta ? '⇧⌘Z' : 'Ctrl+Shift+Z'})',
-          onPressed: editor.canRedo ? editor.redo : null),
+          tooltip: '${editor.history.redo} (${shortcutLabel('⇧⌘Z')})',
+          onPressed: (history?.future.isNotEmpty ?? false) && !exporting ? editor.redo : null),
       gap,
       QuietButton(
-          icon: 'reset', tooltip: 'Reset all edits', onPressed: editor.edited ? editor.resetEdit : null),
+          icon: 'reset',
+          tooltip: 'Reset all edits',
+          onPressed: doc != null && !exporting ? editor.resetEdit : null),
       gap,
       QuietButton(
           icon: 'export',
-          tooltip: 'Export',
-          onPressed: doc != null && !editor.exporting ? onExport : null),
+          tooltip: 'Export (${shortcutLabel('⌘E')})',
+          onPressed: doc != null && editor.stocks.isNotEmpty && !exporting
+              ? commands.actions.export
+              : null),
       gap,
       Builder(
+        key: moreOptionsKey,
         builder: (anchor) => QuietButton(
           icon: 'more',
           tooltip: 'More options',
-          onPressed: () => showMenu(anchor, alignEnd: true, width: 240, [
-            if (editor.filmPacks.available) ...[
-              MenuItem(
-                label: 'Import Film Pack…',
-                icon: 'film',
-                onSelected: editor.exporting ? null : () => chooseFilmPacks(editor),
-              ),
-              const MenuItem.divider(),
-            ],
-            MenuItem(
-              label: 'Import Scanned Negative…',
-              icon: 'negative',
-              onSelected: editor.negatives.canImport ? editor.negatives.chooseNegatives : null,
-            ),
-            MenuItem(
-              label: 'Import Trichromatic Scan…',
-              icon: 'negative',
-              onSelected: editor.negatives.canMerge ? editor.negatives.chooseExposures : null,
-            ),
-            const MenuItem.divider(),
-            MenuItem(
-              label: editor.auto.busy ? 'Cancel Auto Adjust' : 'Auto Adjust',
-              icon: editor.auto.busy ? 'close' : 'autoAdjust',
-              checked: editor.autoAdjust,
-              onSelected: editor.auto.available ? editor.toggleAutoAdjust : null,
-            ),
-            const MenuItem.divider(),
-            ..._editingItems(anchor),
-            const MenuItem.divider(),
-            MenuItem(
-              label: 'New Grain Pattern',
-              icon: 'refresh',
-              onSelected:
-                  doc != null && editor.edit['stock'] != null ? editor.newGrainPattern : null,
-            ),
-            const MenuItem.divider(),
-            // OptionsMenu.jsx's Tools.
-            MenuItem(
-              label: 'Crop',
-              icon: 'crop',
-              onSelected: doc != null && !editor.exporting ? () => editor.setPanel(Panel.crop) : null,
-            ),
-            MenuItem(
-              label: 'Selective',
-              icon: 'selective',
-              onSelected: doc != null ? () => editor.setPanel(Panel.selective) : null,
-            ),
-            MenuItem(
-              label: 'Inspect pipeline',
-              icon: 'pipeline',
-              onSelected: () => editor.setPanel(Panel.pipeline),
-            ),
-            const MenuItem.divider(),
-            MenuItem(
-              label: 'Settings…',
-              icon: 'adjustments',
-              onSelected: () => editor.dialogs.request(AppDialog.settings),
-            ),
-            if (editor.plugins.available)
-              MenuItem(
-                label: 'Plug-ins…',
-                icon: 'export',
-                onSelected:
-                    editor.exporting ? null : () => editor.dialogs.request(AppDialog.plugins),
-              ),
-            MenuItem(label: 'Keyboard shortcuts', icon: 'shortcuts', onSelected: onShortcuts),
-            MenuItem(
-              label: 'Browser support',
-              icon: 'help',
-              onSelected: () => editor.dialogs.request(AppDialog.support),
-            ),
-            const MenuItem.divider(),
-            ...legalMenuItems(editor.catalogue),
-          ]),
+          onPressed: () => showMoreOptions(anchor, commands),
         ),
       ),
       gap,
       QuietButton(
         icon: 'inspector',
-        tooltip: editor.inspectorOpen ? 'Hide adjustments' : 'Show adjustments',
+        tooltip: 'Toggle adjustments',
         selected: editor.inspectorOpen,
         onPressed: editor.layout.toggleInspector,
       ),
@@ -303,67 +251,6 @@ class _EditGroup extends StatelessWidget {
     );
   }
 
-  /// Edit History, Copy and Paste Settings, presets and the edit files (OptionsMenu.jsx).
-  List<MenuItem> _editingItems(BuildContext context) {
-    final photo = editor.active != null && !editor.exporting;
-    final steps = editor.history.timeline;
-    final mac = HostWindow.commandKeyIsMeta;
-    return [
-      MenuItem(
-        label: 'Edit History',
-        icon: 'undo',
-        submenu: photo
-            ? [
-                for (final (i, title) in steps.titles.indexed)
-                  MenuItem(
-                      label: title,
-                      checked: i == steps.index,
-                      onSelected: () => editor.history.goTo(i)),
-              ]
-            : const [],
-      ),
-      const MenuItem.divider(),
-      MenuItem(
-        label: 'Copy Settings…',
-        icon: 'copySettings',
-        detail: mac ? '⌥⌘C' : 'Ctrl+Alt+C',
-        onSelected: photo ? () => showCopySettingsDialog(context, editor) : null,
-      ),
-      MenuItem(
-        label: pasteTitle(editor.selection.chosen.length),
-        icon: 'pasteSettings',
-        detail: mac ? '⌥⌘V' : 'Ctrl+Alt+V',
-        onSelected: photo && editor.presets.copied != null ? editor.presets.paste : null,
-      ),
-      MenuItem(label: 'Presets', icon: 'presets', submenu: [
-        for (final preset in editor.presets.list)
-          MenuItem(
-              label: preset.name,
-              onSelected: photo ? () => editor.presets.applyPreset(preset.id) : null),
-        if (editor.presets.list.isNotEmpty) const MenuItem.divider(),
-        MenuItem(
-            label: 'Save Preset…',
-            onSelected: photo ? () => showSavePresetDialog(context, editor) : null),
-        MenuItem(
-            label: 'Manage Presets…',
-            onSelected:
-                editor.presets.list.isEmpty ? null : () => showPresetsDialog(context, editor)),
-        MenuItem(
-            label: 'Import Looks…',
-            onSelected: editor.exporting ? null : () => importLooks(context, editor)),
-      ]),
-      const MenuItem.divider(),
-      MenuItem(
-          label: 'Save edits…',
-          icon: 'saveEdits',
-          onSelected: photo ? editor.keptEdits.saveFile : null),
-      MenuItem(
-          label: 'Load edits…',
-          icon: 'loadEdits',
-          onSelected: photo ? editor.keptEdits.loadFile : null),
-    ];
-  }
-
   static Widget _touch(QuietButton b) => QuietButton(
         icon: b.icon,
         tooltip: b.tooltip,
@@ -371,6 +258,153 @@ class _EditGroup extends StatelessWidget {
         onPressed: b.onPressed,
         size: Metrics.compactTouch,
       );
+}
+
+/// The More button, for the driver to open its menu.
+final moreOptionsKey = GlobalKey(debugLabel: 'moreOptions');
+
+/// The More menu (OptionsMenu.jsx): its sections in order, each closed by a divider.
+void showMoreOptions(BuildContext anchor, EditorCommands commands) {
+  final editor = commands.editor;
+  final exporting = editor.exporting;
+  final doc = editor.active;
+  final noPhoto = doc == null || exporting;
+  final imageOnlyDisabled = noPhoto || doc.isMovie;
+  final auto = editor.auto;
+  final presets = editor.presets;
+  final steps = editor.history.timeline;
+  void open(Panel panel) => editor.layout.choosePanel(panel);
+  final sections = <List<MenuItem>>[
+    [
+      MenuItem(
+        label: 'Import Scanned Negative…',
+        icon: 'negative',
+        onSelected: editor.negatives.canImport ? editor.negatives.chooseNegatives : null,
+      ),
+      if (editor.engine?.opensPaths ?? true)
+        MenuItem(
+          label: 'Import Trichromatic Scan…',
+          icon: 'negative',
+          onSelected: editor.negatives.canMerge ? editor.negatives.chooseExposures : null,
+        ),
+      if (editor.filmPacks.available)
+        MenuItem(
+          label: 'Import Film Pack…',
+          icon: 'film',
+          onSelected: exporting ? null : () => chooseFilmPacks(editor),
+        ),
+    ],
+    // Automatic adjustments: a mode, ticked while it is on.
+    [
+      MenuItem(
+        label: auto.busy
+            ? 'Cancel Auto Adjust'
+            : editor.catalogue.control('autoAdjustment')['title'] as String,
+        icon: auto.busy ? 'close' : 'autoAdjust',
+        selection: MenuSelection.multiple,
+        checked: auto.active,
+        onSelected: auto.available ? auto.toggle : null,
+      ),
+    ],
+    // Every step of the shown photograph's history, the one standing ticked.
+    [
+      MenuItem(
+        label: 'Edit History',
+        icon: 'undo',
+        submenu: noPhoto
+            ? const []
+            : [
+                for (final (i, title) in steps.titles.indexed)
+                  MenuItem(
+                    label: title,
+                    selection: MenuSelection.single,
+                    checked: i == steps.index,
+                    onSelected: () => editor.history.goTo(i),
+                  ),
+              ],
+      ),
+    ],
+    // Paste Settings and presets go onto every photo chosen in the strip.
+    [
+      MenuItem(
+        label: 'Copy Settings…',
+        icon: 'copySettings',
+        description: shortcutLabel('⌥⌘C'),
+        onSelected: noPhoto ? null : commands.actions.copySettings,
+      ),
+      MenuItem(
+        label: pasteTitle(editor.selection.chosen.length),
+        icon: 'pasteSettings',
+        description: shortcutLabel('⌥⌘V'),
+        onSelected: noPhoto || presets.copied == null ? null : presets.paste,
+      ),
+      MenuItem(label: 'Presets', icon: 'presets', submenu: [
+        for (final preset in presets.list)
+          MenuItem(
+              label: preset.name,
+              onSelected: noPhoto ? null : () => presets.applyPreset(preset.id)),
+        if (presets.list.isNotEmpty) const MenuItem.divider(),
+        MenuItem(label: 'Save Preset…', onSelected: noPhoto ? null : commands.actions.savePreset),
+        MenuItem(
+            label: 'Manage Presets…',
+            onSelected: presets.list.isEmpty ? null : commands.actions.managePresets),
+        MenuItem(label: 'Import Looks…', onSelected: exporting ? null : commands.actions.importLooks),
+      ]),
+    ],
+    [
+      MenuItem(
+          label: 'Save edits…',
+          icon: 'saveEdits',
+          onSelected: noPhoto ? null : editor.keptEdits.saveFile),
+      MenuItem(
+          label: 'Load edits…',
+          icon: 'loadEdits',
+          onSelected: noPhoto ? null : editor.keptEdits.loadFile),
+    ],
+    [
+      MenuItem(
+        label: 'Selective',
+        icon: 'selective',
+        onSelected: imageOnlyDisabled ? null : () => open(Panel.selective),
+      ),
+      MenuItem(
+        label: 'Crop',
+        icon: 'crop',
+        onSelected: imageOnlyDisabled ? null : () => open(Panel.crop),
+      ),
+      MenuItem(label: 'Inspect pipeline', icon: 'pipeline', onSelected: () => open(Panel.pipeline)),
+    ],
+    [
+      MenuItem(
+        label: 'Settings…',
+        icon: 'adjustments',
+        onSelected: () => editor.dialogs.request(AppDialog.settings),
+      ),
+      if (editor.plugins.available)
+        MenuItem(
+          label: 'Plug-ins…',
+          icon: 'export',
+          onSelected: exporting ? null : () => editor.dialogs.request(AppDialog.plugins),
+        ),
+      MenuItem(
+        label: 'Keyboard shortcuts',
+        icon: 'shortcuts',
+        onSelected: () => editor.dialogs.request(AppDialog.shortcuts),
+      ),
+      MenuItem(
+        label: 'Browser support',
+        icon: 'help',
+        onSelected: () => editor.dialogs.request(AppDialog.support),
+      ),
+    ],
+    legalMenuItems(editor.catalogue),
+  ];
+  showMenu(anchor, alignEnd: true, width: 240, [
+    for (final (i, section) in sections.where((s) => s.isNotEmpty).indexed) ...[
+      if (i > 0) const MenuItem.divider(),
+      ...section,
+    ],
+  ]);
 }
 
 /// The app's icon and wordmark (web/src/editor/FotufilmBrand.jsx, compact).

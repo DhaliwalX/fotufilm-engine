@@ -376,7 +376,10 @@ class _VideoKeysState extends State<VideoKeys> {
 
   KeyEventResult _key(FocusNode node, KeyEvent event) {
     final video = widget.editor.video;
-    if (widget.editor.active?.isMovie != true || video.disabled) return KeyEventResult.ignored;
+    // A dialog over the window keeps the keys from the player.
+    if (widget.editor.active?.isMovie != true || video.disabled || openModals.value > 0) {
+      return KeyEventResult.ignored;
+    }
     final keys = HardwareKeyboard.instance;
     if (keys.isMetaPressed || keys.isControlPressed || keys.isAltPressed) {
       return KeyEventResult.ignored;

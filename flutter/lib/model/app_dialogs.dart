@@ -1,9 +1,10 @@
 // The app's own dialogs, which commands and the editor's services open (EditorWorkspace.jsx's
-// `dialog`): Settings, Plug-ins, a film pack's notice, an update and Browser support. The model
+// `dialog`): Settings, Plug-ins, a film pack's notice, an update, Browser support and the
+// keyboard shortcuts. The model
 // asks for one; the workspace's dialog host shows it.
 import 'package:flutter/foundation.dart';
 
-enum AppDialog { settings, plugins, filmPack, update, support }
+enum AppDialog { settings, plugins, filmPack, update, support, shortcuts }
 
 class AppDialogs extends ChangeNotifier {
   /// The dialog on show, if it is one of these.

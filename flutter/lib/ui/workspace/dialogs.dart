@@ -1,8 +1,7 @@
-// The workspace's dialogs (styles/dialogs.css): the card they share and the keyboard shortcuts.
-// Export has its own file (export_dialog.dart).
+// The workspace's dialogs (styles/dialogs.css): the card they share. Export and the keyboard
+// shortcuts have their own files (export_dialog.dart, shortcuts_dialog.dart).
 import 'package:flutter/widgets.dart';
 
-import '../kit/kit.dart';
 import '../theme/theme.dart';
 
 /// A dialog's card: its title, its body and its buttons on the right.
@@ -53,30 +52,3 @@ class DialogCard extends StatelessWidget {
     );
   }
 }
-
-// ── Keyboard shortcuts ────────────────────────────────────────────────────────────────────────
-
-/// The shortcuts the editor answers, as (what, keys).
-void showShortcutsDialog(BuildContext context, List<(String, String)> rows) => showModal(
-      context,
-      (close) => DialogCard(
-        title: 'Keyboard shortcuts',
-        width: 400,
-        actions: [PillButton('Done', variant: ButtonVariant.accent, onPressed: close)],
-        children: [
-          for (final (label, keys) in rows)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Builder(
-                builder: (context) => Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(label),
-                    Text(keys, style: editorText(context, color: Palette.of(context).muted)),
-                  ],
-                ),
-              ),
-            ),
-        ],
-      ),
-    );

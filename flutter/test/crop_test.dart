@@ -201,7 +201,7 @@ void main() {
       expect(editor.edited, isFalse);
     });
 
-    test('Done leaves for the tab the tool was opened from, and zoom waits', () {
+    test('Done leaves for the Film panel, as CropInspector.jsx does, and zoom waits', () {
       editor.setPanel(Panel.develop);
       editor.setZoom(2);
       expect(editor.zoomed, isTrue);
@@ -211,7 +211,7 @@ void main() {
       editor.setZoom(2);
       expect(editor.zoomed, isFalse);
       editor.crop.done();
-      expect(editor.panel, Panel.develop);
+      expect(editor.panel, Panel.film);
       expect(editor.crop.showing, isFalse);
     });
   });

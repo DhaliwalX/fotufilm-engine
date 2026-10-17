@@ -10,6 +10,7 @@ import '../theme/theme.dart';
 import 'film_pack_notice.dart';
 import 'plugins_dialog.dart';
 import 'settings_dialog.dart';
+import 'shortcuts_dialog.dart';
 import 'support_dialog.dart';
 import 'update_dialog.dart';
 
@@ -85,6 +86,7 @@ class _AppDialogHostState extends State<AppDialogHost> {
       AppDialog.filmPack => FilmPackNotice(editor: editor, onClose: close),
       AppDialog.update => UpdateDialog(editor: editor, onClose: close),
       AppDialog.support => SupportDialog(onClose: close),
+      AppDialog.shortcuts => ShortcutsDialog(editor: editor, onClose: close),
     };
   }
 

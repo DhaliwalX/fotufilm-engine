@@ -47,6 +47,12 @@ abstract final class HostWindow {
   /// Opens a web address in the browser.
   static Future<bool> openUrl(String url) async => await _call('openURL', url) == true;
 
+  /// File › Use Sample Photo's picture, the CEF app's generated chart in the app's resources.
+  static Future<String?> samplePhoto() async => await _call('samplePhoto') as String?;
+
+  /// Photographs opened from the Open panel join File › Open Recent, as the CEF host's do.
+  static Future<void> noteRecent(List<String> paths) => _call('noteRecent', paths);
+
   /// Moves files to the Trash; answers the paths that went.
   static Future<List<String>> trash(List<String> paths) async =>
       ((await _call('trash', paths)) as List?)?.cast<String>() ?? const [];
