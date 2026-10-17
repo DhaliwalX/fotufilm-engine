@@ -4817,11 +4817,11 @@
       "kind" : "slider",
       "omitted" : {
         "android" : "Frame finishing is offered in the iPhone, iPad and Mac photo editors.",
-        "app" : "Border Width is offered in the Mac and browser photo editors.",
         "cli" : "Frame finishing is offered in the iPhone, iPad and Mac photo editors.",
         "finalcut" : "The host owns output framing.",
         "resolve" : "The host owns output framing."
       },
+      "persistedKey" : "printFrameMargin",
       "scale" : {
         "admittedMax" : 3,
         "admittedMin" : 0,
@@ -4835,7 +4835,10 @@
       },
       "scope" : "edit",
       "section" : "printPaper",
+      "storedEncoding" : "same",
+      "storedNeutral" : 1,
       "surfaces" : [
+        "app",
         "desktop",
         "web"
       ],
