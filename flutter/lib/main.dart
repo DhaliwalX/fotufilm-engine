@@ -7,12 +7,15 @@
 //   model/    the editor's state, what the engine develops, and the control catalogue
 //   engine/   the engine connection (native and browser) and the native presenter
 //   ui/       theme (colours, sizes, type), kit (controls), workspace and inspector
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 
 import 'app/app.dart';
 import 'app/host_window.dart';
 import 'debug/debug.dart';
 import 'model/catalogue.dart';
+import 'model/cef_profile.dart';
 import 'model/editor.dart';
 import 'ui/kit/icons.dart';
 import 'ui/workspace/picture.dart';
@@ -22,10 +25,13 @@ Future<void> main(List<String> arguments) async {
   final (catalogue, _, _, settings) =
       await (Catalogue.load(), IconLibrary.load(), ColourConversion.load(), AppSettings.load())
           .wait;
+  // What the CEF app kept comes over before the features read their settings.
+  importCefProfile(settings);
   final editor = EditorModel(catalogue, settings: settings);
   final boundary = GlobalKey();
   runApp(RepaintBoundary(key: boundary, child: FotufilmApp(editor: editor)));
   await editor.start();
+  unawaited(resolveCefEdits(editor));
   // A browser engine answers in sRGB; the desktop engine's Display P3 is converted for drawing.
   ColourConversion.enabled = editor.engine?.picturesAreDisplayP3 ?? true;
   Driver.start(editor, boundary);

@@ -68,6 +68,10 @@ class AppSettings extends ChangeNotifier {
     return value as T?;
   }
 
+  /// Whether `key` holds a value of its own rather than its default.
+  bool isStored(String key) =>
+      _prefs?.containsKey('$prefix$key') ?? (_memory.containsKey(key) && _memory[key] != null);
+
   void set(String key, Object? value) {
     _memory[key] = value;
     final prefs = _prefs;
