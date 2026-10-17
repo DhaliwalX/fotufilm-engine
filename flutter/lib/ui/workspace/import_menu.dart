@@ -1,5 +1,5 @@
 // The toolbar's Add media button (web/src/editor/ImportMenu.jsx): a menu of what to import, an
-// image or a scanned negative, and exposures to merge into trichromatic scans.
+// image, a video or a scanned negative, and exposures to merge into trichromatic scans.
 import 'package:flutter/widgets.dart';
 
 import '../../model/editor.dart';
@@ -21,6 +21,9 @@ class ImportMenu extends StatelessWidget {
             ? null
             : () => showMenu(anchor, width: 200, [
                   MenuItem(label: 'Image', onSelected: editor.ready ? onImage : null),
+                  MenuItem(
+                      label: 'Video',
+                      onSelected: editor.ready ? editor.video.chooseMovies : null),
                   MenuItem(
                       label: 'Negative',
                       onSelected: scans.canImport ? scans.chooseNegatives : null),

@@ -1,3 +1,4 @@
+import AVFoundation
 import Cocoa
 import FlutterMacOS
 
@@ -20,6 +21,7 @@ class MainFlutterWindow: NSWindow {
     RegisterGeneratedPlugins(registry: flutterViewController)
     WindowChannel.register(with: flutterViewController, window: self)
     PresenterChannel.register(with: flutterViewController)
+    SoundtrackChannel.register(with: flutterViewController)
 
     super.awakeFromNib()
   }
@@ -75,6 +77,55 @@ enum WindowChannel {
       default:
         result(FlutterMethodNotImplemented)
       }
+    }
+  }
+}
+
+/// A playing movie's sound (lib/app/soundtrack.dart): the file's own audio, played by AVFoundation
+/// beside the editor's clock, which starts, moves and stops it with the transport.
+enum SoundtrackChannel {
+  private static var player: AVPlayer?
+  /// Bumped by each play and pause, so a seek that lands late does not start a stopped sound.
+  private static var generation = 0
+
+  static func register(with controller: FlutterViewController) {
+    let channel = FlutterMethodChannel(name: "fotufilm/soundtrack",
+                                       binaryMessenger: controller.engine.binaryMessenger)
+    channel.setMethodCallHandler { call, result in
+      let arguments = call.arguments as? [String: Any] ?? [:]
+      switch call.method {
+      case "load":
+        generation += 1
+        player?.pause()
+        player = nil
+        if let path = arguments["path"] as? String, FileManager.default.isReadableFile(atPath: path) {
+          let sound = AVPlayer(url: URL(fileURLWithPath: path))
+          sound.automaticallyWaitsToMinimizeStalling = false
+          player = sound
+        }
+      case "play":
+        guard let sound = player else { break }
+        generation += 1
+        let started = generation
+        let rate = Float(arguments["rate"] as? Double ?? 1)
+        sound.isMuted = arguments["muted"] as? Bool ?? false
+        sound.pause()
+        let time = CMTime(seconds: arguments["time"] as? Double ?? 0, preferredTimescale: 48_000)
+        sound.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { done in
+          DispatchQueue.main.async {
+            if done && started == generation { sound.rate = rate }
+          }
+        }
+      case "pause":
+        generation += 1
+        player?.pause()
+      case "muted":
+        player?.isMuted = arguments["muted"] as? Bool ?? false
+      default:
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      result(nil)
     }
   }
 }

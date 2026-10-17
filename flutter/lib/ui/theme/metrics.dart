@@ -74,6 +74,15 @@ abstract final class Metrics {
   static const stockThumb = Size(42, 32);
   static const stockThumbCollapsed = Size(40, 40);
 
+  // ── Video controls (styles/video.css) ─────────────────────────────────────────────────────
+  static const videoPadding = EdgeInsets.fromLTRB(18, 10, 18, 6);
+  static const videoPaddingCompact = EdgeInsets.fromLTRB(12, 8, 12, 4);
+  static const videoButton = 28.0;
+  static const videoIcon = 20.0;
+  static const videoPlayButton = 34.0;
+  static const videoSeekHeight = 20.0;
+  static const videoSettingsWidth = 310.0;
+
   // ── Viewer ─────────────────────────────────────────────────────────────────────────────────
   static const stripPadding = EdgeInsets.fromLTRB(10, 4, 10, 6);
   static const stripItem = Size(60, 44);

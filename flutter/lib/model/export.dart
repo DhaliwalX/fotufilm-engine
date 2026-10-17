@@ -1,7 +1,8 @@
 // Export and output, as the React editor does them on the desktop (web/src/editor/
 // useExportActions.js, useExportOptions.js, useOutputState.js, backend/desktop/host.js): one
 // photograph to a file, every photograph into a folder (Export All), a camera RAW as itself
-// (Export Original) and the developed picture to the clipboard (Copy Photo). The engine develops,
+// (Export Original), the developed picture to the clipboard (Copy Photo), and a movie frame by
+// frame (`exportVideo`, useExportActions.js `exportClip`). The engine develops,
 // encodes and writes; the editor chooses where, as the CEF shell's save panels do.
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -88,6 +89,9 @@ class ExportTool {
   int quality = 95;
   String metadata = 'preserveWithoutLocation';
 
+  /// A movie's format (useEditorState.js `videoFormat`), one of [videoTypes].
+  String videoFormat = 'mp4';
+
   /// The engine's answer for the shown photograph; null while unknown.
   ExportOptions? options;
 
@@ -113,8 +117,10 @@ class ExportTool {
     ];
   }
 
-  /// How many photographs Export All would write; 0 where the engine has no Export All.
-  int get batchCount => _capabilities['batchExport'] == true ? editor.documents.length : 0;
+  /// How many photographs Export All would write; 0 where the engine has no Export All. Movies
+  /// export one at a time, so it leaves them out.
+  int get batchCount =>
+      _capabilities['batchExport'] == true ? editor.documents.where((d) => !d.isMovie).length : 0;
 
   /// Whether a HEIC across photographs may carry HDR, for those whose film delivers it.
   bool get batchHDR => _capabilities['hdrExport'] == true;
@@ -122,7 +128,8 @@ class ExportTool {
   /// A camera RAW opened from a file can be exported as itself.
   bool originalAvailable(PhotoDocument doc) => doc.raw && (_engine?.opensPaths ?? false);
 
-  bool get canCopy => _capabilities['copyImage'] == true && editor.active != null;
+  bool get canCopy =>
+      _capabilities['copyImage'] == true && editor.active != null && !editor.active!.isMovie;
 
   /// HDR HEIC, kept as the app's Photo HDR setting.
   bool get hdr => _settings.get<bool>('photoHDR') == true;
@@ -133,11 +140,72 @@ class ExportTool {
 
   String get photoQuality => _settings.get<String>('photoQuality') ?? 'accurate';
 
-  /// The settings of the last photo exported, offered back (Use Last Export Settings).
-  Json? get last => _settings.get<Map>('lastPhotoExport')?.cast<String, dynamic>();
+  /// The settings of the last photo, or movie, exported, offered back (Use Last Export
+  /// Settings).
+  Json? get last =>
+      _settings.get<Map>(_movie ? 'lastVideoExport' : 'lastPhotoExport')?.cast<String, dynamic>();
 
   /// The settings the dialog shows now, as `last` keeps them.
-  Json get current => {'type': type, 'size': size, 'quality': quality, 'metadata': metadata};
+  Json get current => _movie
+      ? {
+          'format': videoFormat,
+          'quality': 'high',
+          'bitrate': videoBitrate,
+          'frameRate': videoFrameRate,
+          if (videoProcessingOffered) 'processing': videoProcessing,
+          'size': size,
+        }
+      : {'type': type, 'size': size, 'quality': quality, 'metadata': metadata};
+
+  // ── Movies (backend/desktop/host.js `videoExportTypes`, ExportDialog.jsx) ───────────────────
+
+  bool get _movie => editor.active?.isMovie == true;
+
+  /// The movie formats the engine's platform writes: `{id, label, extension, type, quality,
+  /// bits, colorSpace, hdr}`.
+  List<Json> get videoTypes => _capabilities['video'] == true
+      ? ((_capabilities['videoExportTypes'] as List?) ?? const []).cast<Json>()
+      : const [];
+
+  /// The chosen format, or the first offered when the chosen one is not.
+  Json? get videoType =>
+      videoTypes.where((t) => t['id'] == videoFormat).firstOrNull ?? videoTypes.firstOrNull;
+
+  /// Video File Size's choices, `{id, label}`, and the frame rates an export may retime to.
+  List<Json> get videoBitrates =>
+      ((_capabilities['videoBitrates'] as List?) ?? const []).cast<Json>();
+  List<int> get videoFrameRates => [
+        for (final rate in (_capabilities['videoFrameRates'] as List?) ?? const [])
+          (rate as num).toInt(),
+      ];
+
+  /// Whether Video Quality (Full or Fast) is offered.
+  bool get videoProcessingOffered => _capabilities['videoProcessing'] == true;
+
+  /// HDR movies, Video File Size and Video Quality: the app's settings.
+  bool get videoHDR => _settings.get<bool>('videoHDR') == true;
+  set videoHDR(bool value) {
+    _settings.set('videoHDR', value);
+    editor.notify();
+  }
+
+  String get videoBitrate => _settings.get<String>('videoBitrate') ?? 'automatic';
+  set videoBitrate(String value) {
+    _settings.set('videoBitrate', value);
+    editor.notify();
+  }
+
+  String get videoProcessing => _settings.get<String>('videoProcessing') ?? 'full';
+  set videoProcessing(String value) {
+    _settings.set('videoProcessing', value);
+    editor.notify();
+  }
+
+  /// The clip's cadence, kept with its edit as the Mac app keeps it: choosing a rate here sets
+  /// it (ExportDialog.jsx `setVideoFrameRate`).
+  int? get videoFrameRate => (videoSettings(editor.edit)['frameRate'] as num?)?.toInt();
+  set videoFrameRate(int? rate) =>
+      editor.change({'video': {...videoSettings(editor.edit), 'frameRate': rate}});
 
   // ── Sizes (useOutputState.js) ─────────────────────────────────────────────────────────────
 
@@ -151,12 +219,14 @@ class ExportTool {
 
   List<ExportSize> sizes({required bool batch}) {
     final doc = editor.active;
-    return batch || doc == null ? batchExportSizeOptions() : exportSizeOptions(cropSize(doc));
+    return batch || doc == null
+        ? batchExportSizeOptions()
+        : exportSizeOptions(cropSize(doc), video: doc.isMovie);
   }
 
   /// The sizes past the memory limit; Export All reduces each photograph as it needs instead.
   List<String> unavailable({required bool batch}) =>
-      batch ? const [] : options?.unavailable ?? const [];
+      batch || _movie ? const [] : options?.unavailable ?? const [];
 
   /// The size an export uses: the one chosen where it is offered, else the full picture, and
   /// the largest that fits in place of one that does not, as the Mac app selects.
@@ -172,7 +242,9 @@ class ExportTool {
   PixelSize delivered(PhotoDocument doc) {
     final crop = cropSize(doc);
     final edge = exportMaxEdge(sizeId(batch: false), crop);
-    return edge == null ? crop : exportPixels(edge, crop);
+    final pixels = edge == null ? crop : exportPixels(edge, crop);
+    // A movie in whole pairs of pixels.
+    return doc.isMovie ? evenSize(pixels) : pixels;
   }
 
   // ── Requests ──────────────────────────────────────────────────────────────────────────────
@@ -180,7 +252,8 @@ class ExportTool {
   /// A photograph's render request as an export sends it: the finished picture, framed where
   /// its print frame says (session.js `renderRequest`).
   Json _request(PhotoDocument doc, {int? maxEdge}) {
-    final frame = editor.renderOptions(doc)['printFrame'];
+    // A movie is never framed (session.js `renderRequest`).
+    final frame = doc.isMovie ? null : editor.renderOptions(doc)['printFrame'];
     return {
       ...renderRequest(
         catalogue: editor.catalogue,
@@ -196,7 +269,7 @@ class ExportTool {
   /// Asks what the engine can write for the shown photograph (useExportOptions.js).
   Future<void> loadOptions() async {
     final doc = editor.active, engine = _engine;
-    if (doc == null || engine == null || types.isEmpty) return;
+    if (doc == null || engine == null || types.isEmpty || doc.isMovie) return;
     final edit = doc.edit;
     try {
       final answer = await engine.call('exportOptions', {
@@ -272,6 +345,7 @@ class ExportTool {
   Future<SavedExport?> exportPhoto({String? path}) async {
     final doc = editor.active, engine = _engine;
     if (doc == null || engine == null || editor.exporting) return null;
+    if (doc.isMovie) return exportMovie(path: path);
     if (type == originalType) return exportOriginal(path: path);
     final filename = stillFilename(doc.name, doc.edit, type);
     path ??= await _chooseFile(filename, type);
@@ -298,7 +372,7 @@ class ExportTool {
   /// panel asks for (or `directory`). The engine numbers names past files already there.
   Future<SavedExport?> exportAll({String? directory}) async {
     final engine = _engine;
-    final docs = [...editor.documents];
+    final docs = [...editor.documents.where((d) => !d.isMovie)];
     if (engine == null || docs.isEmpty || editor.exporting) return null;
     directory ??= await _chooseFolder();
     if (directory == null) return null;
@@ -346,6 +420,46 @@ class ExportTool {
     });
   }
 
+  /// The shown movie: every frame of its trim developed with its film, crop and adjustments,
+  /// encoded where the save panel says (or to `path`), with its sound. Progress shows in the
+  /// status; Cancel stops it and leaves no file.
+  Future<SavedExport?> exportMovie({String? path}) async {
+    final doc = editor.active, engine = _engine;
+    final type = videoType;
+    if (doc == null || !doc.isMovie || engine == null || type == null || editor.exporting) {
+      return null;
+    }
+    videoFormat = type['id'] as String;
+    // A native format names its container, which is not always its id (HEVC, ProRes).
+    final stock = doc.edit['stock'] as String?;
+    final filename = '${cleanName(doc.name)}-${stock == null || stock.isEmpty ? 'normal' : stock}'
+        '.${type['extension'] ?? videoFormat}';
+    path ??= await _chooseFile(filename, '');
+    if (path == null) return null;
+    editor.video.pause();
+    return _run('Preparing export', () async {
+      final answer = await engine.callWithProgress('exportVideo', {
+        ..._request(doc, maxEdge: exportMaxEdge(sizeId(batch: false), cropSize(doc))),
+        'format': videoFormat,
+        'bitrate': videoBitrate,
+        'filename': filename,
+        'videoProcessing': videoProcessing == 'fast' ? 'fast' : 'full',
+        'type': type['type'] ?? 'video/mp4',
+        'hdr': videoHDR,
+        'path': path,
+      }, (progress) {
+        _setStatus(progress['finalizing'] == true
+            ? 'Finalizing video file'
+            : 'Exporting video · ${(((progress['progress'] as num?) ?? 0) * 100).floor()}% · '
+                '${progress['frames']} frames');
+      });
+      _settings.set('lastVideoExport', current);
+      return _show(SavedExport(
+          filename: answer.json['filename'] as String? ?? filename,
+          path: answer.json['path'] as String? ?? path!));
+    });
+  }
+
   /// Export Original: the camera RAW file itself, no edit and no size.
   Future<SavedExport?> exportOriginal({String? path}) async {
     final doc = editor.active, engine = _engine;
@@ -371,6 +485,15 @@ class ExportTool {
   void applyLast() {
     final last = this.last;
     if (last == null) return;
+    if (_movie) {
+      if (last['format'] case final String value) videoFormat = value;
+      if (last['bitrate'] case final String value) _settings.set('videoBitrate', value);
+      if (last['processing'] case final String value) _settings.set('videoProcessing', value);
+      if (last['size'] case final String value) size = value;
+      videoFrameRate = (last['frameRate'] as num?)?.toInt();
+      editor.notify();
+      return;
+    }
     if (last['type'] case final String value) type = value;
     if (last['size'] case final String value) size = value;
     if (last['quality'] case final num value) quality = value.round();

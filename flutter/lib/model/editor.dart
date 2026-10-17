@@ -40,6 +40,7 @@ import 'settings.dart';
 import 'startup.dart';
 import 'strip_selection.dart';
 import 'updates.dart';
+import 'video.dart';
 import 'view.dart';
 
 export 'catalogue.dart' show Json;
@@ -49,6 +50,7 @@ export 'photo_library.dart';
 export 'photo_strip.dart';
 export 'settings.dart';
 export 'view.dart';
+export 'video.dart';
 
 /// The inspector's panels: the four tabs, the roll's tab for scanned negatives, and the canvas
 /// tools the toolbar opens (editor-catalogue.js `inspectorPanels`, negative-document.js).
@@ -77,11 +79,14 @@ class EditorModel extends ChangeNotifier implements RenderHost {
       : settings = settings ?? AppSettings.memory() {
     // The features attach now: they add to the render options before anything develops, and
     // listen to edits before the first one.
-    [crop, selective, pipeline, negatives, printFrame, keptEdits, auto, library];
+    [crop, selective, pipeline, negatives, printFrame, keptEdits, auto, library, video];
   }
 
   /// The crop tool (crop.dart).
   late final crop = CropTool(this);
+
+  /// Movies: the playhead and the transport (video.dart).
+  late final video = VideoPlayer(this);
 
   final Catalogue catalogue;
 

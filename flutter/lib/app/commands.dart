@@ -161,6 +161,11 @@ List<CommandMenu> editorCommands(
         Command('Actual Size', when(photo, () => editor.setZoom(1)),
             key: LogicalKeyboardKey.digit1),
       ],
+      // A movie's Play, which reads Pause while it plays (useNativeCommands.js `play`).
+      [
+        Command(editor.video.playing ? 'Pause' : 'Play',
+            when(editor.video.canPlay, editor.video.toggle)),
+      ],
       [
         Command(editor.filmOpen ? 'Hide Film Library' : 'Show Film Library', editor.toggleFilm,
             key: LogicalKeyboardKey.keyL, alt: true),
