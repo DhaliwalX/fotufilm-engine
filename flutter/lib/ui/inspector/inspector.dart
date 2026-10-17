@@ -7,10 +7,7 @@ import '../../model/editor.dart';
 import '../kit/kit.dart';
 import '../theme/theme.dart';
 import 'controls.dart';
-import 'develop_panel.dart';
-import 'expose_panel.dart';
-import 'film_panel.dart';
-import 'print_panel.dart';
+import 'panels.dart';
 
 class EditorInspector extends StatefulWidget {
   const EditorInspector({super.key, required this.editor});
@@ -24,19 +21,17 @@ class _EditorInspectorState extends State<EditorInspector> {
   // Each panel keeps its own place, as InspectorPanel.jsx does.
   final _scrolls = {for (final p in Panel.values) p: ScrollController()};
 
+  // InspectorHeading.jsx `help`.
   static const _help = {
-    Panel.film: 'Choose the film’s format and condition, and how its halation spreads.',
-    Panel.light: 'Expose the scene: light, source illuminant, white balance, colour and grade.',
-    Panel.develop: 'Develop the negative: push or pull, bleach bypass, grain and colour separation.',
-    Panel.print: 'Print or scan the developed film, onto paper or for the screen.',
+    Panel.film: 'Load a stock and choose its format and character.',
+    Panel.light: 'Adjust the light and filters, then refine the colour grade.',
+    Panel.develop: 'Develop the film, then shape its grain and colour separation.',
+    Panel.print: 'Choose a print or scan, set its viewing light, and export.',
+    Panel.roll: 'Balance every frame of a roll of negatives on the roll’s colour.',
+    Panel.selective: 'Adjust a selected colour, area, or subject.',
+    Panel.crop: 'Frame and straighten the finished photograph.',
+    Panel.pipeline: 'Inspect each stage of the film development pipeline.',
   };
-
-  static List<Widget> _sections(Panel panel, InspectorControls controls) => switch (panel) {
-        Panel.film => filmPanel(controls),
-        Panel.light => exposePanel(controls),
-        Panel.develop => developPanel(controls),
-        Panel.print => printPanel(controls),
-      };
 
   @override
   void dispose() {
@@ -56,17 +51,29 @@ class _EditorInspectorState extends State<EditorInspector> {
         Padding(
           padding: Metrics.headingPadding,
           child: Row(children: [
-            Text('Darkroom',
+            Text(
+                switch (editor.panel) {
+                  Panel.crop => 'Crop',
+                  Panel.selective => 'Selective',
+                  _ => 'Darkroom',
+                },
                 style: editorText(context, size: TextSizes.heading, weight: FontWeight.w700)),
             const SizedBox(width: 2),
             HelpButton(detail: _help[editor.panel], size: 16),
+            if (editor.panel == Panel.crop || editor.panel == Panel.selective) ...[
+              const SizedBox(width: 6),
+              Text('Canvas tool',
+                  style: editorText(context,
+                      size: TextSizes.label, color: Palette.of(context).muted)),
+            ],
           ]),
         ),
         Padding(
           padding: Metrics.tabsPadding,
           child: SegmentedControl<Panel>(
-            items: [for (final p in Panel.values) (p, p.title)],
-            selected: editor.panel,
+            items: [for (final p in editor.inspectorTabs) (p, p.title)],
+            // A canvas tool takes the inspector over; no tab is chosen while it does.
+            selected: editor.inspectorTabs.contains(editor.panel) ? editor.panel : null,
             onChanged: editor.setPanel,
           ),
         ),
@@ -83,7 +90,7 @@ class _EditorInspectorState extends State<EditorInspector> {
                   // A new panel or film is a new set of controls, not the old ones updated.
                   key: ValueKey('${editor.panel}:${editor.edit['stock']}'),
                   crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: _sections(editor.panel, InspectorControls(editor)),
+                  children: panelSections(editor.panel, InspectorControls(editor)),
                 ),
               ),
             ),
@@ -104,7 +111,7 @@ class InspectorRail extends StatelessWidget {
         color: Palette.of(context).panel,
         padding: const EdgeInsets.only(top: 6),
         child: Column(children: [
-          for (final p in Panel.values)
+          for (final p in editor.inspectorTabs)
             Padding(
               padding: const EdgeInsets.only(bottom: 4),
               child: QuietButton(

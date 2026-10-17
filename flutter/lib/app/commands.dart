@@ -101,8 +101,8 @@ List<CommandMenu> editorCommands(
             key: LogicalKeyboardKey.keyH, alt: true),
       ],
       [
-        for (final p in Panel.values)
-          Command(p.title, () => editor.setPanel(p), key: digits[p.index], alt: true),
+        for (final (i, p) in Panel.tabs.indexed)
+          Command(p.title, () => editor.setPanel(p), key: digits[i], alt: true),
       ],
     ]),
     CommandMenu('Film', [

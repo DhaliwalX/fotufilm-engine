@@ -12,7 +12,7 @@ class SegmentedControl<T> extends StatelessWidget {
   });
 
   final List<(T, String)> items;
-  final T selected;
+  final T? selected;
   final ValueChanged<T> onChanged;
 
   @override

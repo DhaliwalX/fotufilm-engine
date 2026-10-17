@@ -16,25 +16,45 @@ import 'edit.dart';
 import 'film_types.dart';
 import 'histogram.dart';
 import 'renderer.dart';
+import 'settings.dart';
 import 'view.dart';
 
 export 'catalogue.dart' show Json;
 export 'document.dart';
 export 'film_types.dart';
+export 'settings.dart';
 export 'view.dart';
 
-enum Panel { film, light, develop, print }
+/// The inspector's panels: the four tabs, the roll's tab for scanned negatives, and the canvas
+/// tools the toolbar opens (editor-catalogue.js `inspectorPanels`, negative-document.js).
+enum Panel {
+  film('film', 'Film', 'film'),
+  light('light', 'Expose', 'expose'),
+  develop('develop', 'Develop', 'develop'),
+  print('print', 'Print', 'print'),
+  roll('roll', 'Roll', 'roll'),
+  crop('crop', 'Crop', 'crop'),
+  selective('selective', 'Selective', 'selective'),
+  pipeline('pipeline', 'Pipeline', 'pipeline');
 
-extension PanelInfo on Panel {
-  String get id => const ['film', 'light', 'develop', 'print'][index];
-  String get title => const ['Film', 'Expose', 'Develop', 'Print'][index];
-  String get icon => const ['film', 'expose', 'develop', 'print'][index];
+  const Panel(this.id, this.title, this.icon);
+  final String id, title, icon;
+
+  /// The inspector's tabs for every photograph.
+  static const tabs = [film, light, develop, print];
+
+  /// The canvas tools: they take the inspector over and change what the viewer shows.
+  bool get isTool => this == crop || this == selective || this == pipeline;
 }
 
 class EditorModel extends ChangeNotifier implements RenderHost {
-  EditorModel(this.catalogue);
+  EditorModel(this.catalogue, {AppSettings? settings})
+      : settings = settings ?? AppSettings.memory();
 
   final Catalogue catalogue;
+
+  /// Preferences and remembered things, kept on this device.
+  final AppSettings settings;
   EngineConnection? engine;
   NativePresenter? presenter;
   Renderer? renderer;
@@ -78,6 +98,9 @@ class EditorModel extends ChangeNotifier implements RenderHost {
   // ── Workspace ─────────────────────────────────────────────────────────────────────────────
 
   Panel panel = Panel.film;
+
+  /// The inspector's tabs for the shown photograph (negative-document.js `documentPanels`).
+  List<Panel> get inspectorTabs => Panel.tabs;
   bool filmOpen = true;
   bool inspectorOpen = true;
   @override
@@ -97,6 +120,15 @@ class EditorModel extends ChangeNotifier implements RenderHost {
 
   @override
   final ViewState view = ViewState();
+
+  /// What the foreground develops ask the engine for beyond the edit (session.js
+  /// `renderRequest`): the crop tool's uncropped frame, a pipeline stage, the selection's mask.
+  /// Features add to it through [renderOptionSources].
+  @override
+  Json renderOptions(PhotoDocument doc) => {
+        for (final source in renderOptionSources) ...source(doc),
+      };
+  final List<Json Function(PhotoDocument doc)> renderOptionSources = [];
 
   // ── RenderHost ────────────────────────────────────────────────────────────────────────────
 
@@ -347,10 +379,22 @@ class EditorModel extends ChangeNotifier implements RenderHost {
     notifyListeners();
   }
 
-  void setPanel(Panel next) => _set(() {
-        panel = next;
-        inspectorOpen = true;
-      });
+  void setPanel(Panel next) {
+    if (next == panel && inspectorOpen) return;
+    final leaving = panel;
+    _set(() {
+      if (!panel.isTool) _lastTab = panel;
+      panel = next;
+      inspectorOpen = true;
+    });
+    // A tool changes what the shown picture is developed with.
+    if (leaving.isTool || next.isTool) renderer?.schedule();
+  }
+
+  Panel _lastTab = Panel.film;
+
+  /// Opens a canvas tool, or closes it back to the tab it was opened from.
+  void toggleTool(Panel tool) => setPanel(panel == tool ? _lastTab : tool);
   void toggleFilm() => _set(() => filmOpen = !filmOpen);
   void toggleInspector() => _set(() => inspectorOpen = !inspectorOpen);
   void setPresetsTab(bool value) => _set(() => presetsTab = value);

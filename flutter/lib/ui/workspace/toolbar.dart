@@ -81,9 +81,19 @@ class _ViewGroup extends StatelessWidget {
       QuietButton(
           icon: 'fit', tooltip: 'Zoom to fit', onPressed: zoomed ? () => editor.setZoom(null) : null),
       const SizedBox(width: Metrics.toolbarGap),
-      const QuietButton(icon: 'selective', tooltip: 'Selective'),
+      QuietButton(
+        icon: 'selective',
+        tooltip: 'Selective',
+        selected: editor.panel == Panel.selective,
+        onPressed: doc != null ? () => editor.toggleTool(Panel.selective) : null,
+      ),
       const SizedBox(width: Metrics.toolbarGap),
-      const QuietButton(icon: 'crop', tooltip: 'Crop'),
+      QuietButton(
+        icon: 'crop',
+        tooltip: 'Crop',
+        selected: editor.panel == Panel.crop,
+        onPressed: doc != null ? () => editor.toggleTool(Panel.crop) : null,
+      ),
       Padding(
         padding: const EdgeInsets.only(left: 6),
         child: ConstrainedBox(

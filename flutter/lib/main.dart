@@ -19,9 +19,10 @@ import 'ui/workspace/picture.dart';
 
 Future<void> main(List<String> arguments) async {
   WidgetsFlutterBinding.ensureInitialized();
-  final (catalogue, _, _) =
-      await (Catalogue.load(), IconLibrary.load(), ColourConversion.load()).wait;
-  final editor = EditorModel(catalogue);
+  final (catalogue, _, _, settings) =
+      await (Catalogue.load(), IconLibrary.load(), ColourConversion.load(), AppSettings.load())
+          .wait;
+  final editor = EditorModel(catalogue, settings: settings);
   final boundary = GlobalKey();
   runApp(RepaintBoundary(key: boundary, child: FotufilmApp(editor: editor)));
   await editor.start();

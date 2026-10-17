@@ -38,11 +38,25 @@ abstract final class HostWindow {
     return paths;
   }
 
-  static Future<void> _call(String method) async {
+  /// Shows files in the Finder (the CEF shell's `revealLibraryFiles`).
+  static Future<void> reveal(List<String> paths) => _call('reveal', paths);
+
+  /// Opens a file in the app the system chooses for it (the CEF shell's `openExport`).
+  static Future<bool> openFile(String path) async => await _call('openFile', path) == true;
+
+  /// Opens a web address in the browser.
+  static Future<bool> openUrl(String url) async => await _call('openURL', url) == true;
+
+  /// Moves files to the Trash; answers the paths that went.
+  static Future<List<String>> trash(List<String> paths) async =>
+      ((await _call('trash', paths)) as List?)?.cast<String>() ?? const [];
+
+  static Future<Object?> _call(String method, [Object? arguments]) async {
     try {
-      await _channel.invokeMethod(method);
+      return await _channel.invokeMethod(method, arguments);
     } on MissingPluginException {
       // No native side on this platform.
+      return null;
     }
   }
 }

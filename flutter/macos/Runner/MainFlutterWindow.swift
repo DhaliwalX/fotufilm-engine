@@ -39,6 +39,32 @@ enum WindowChannel {
         result(nil)
       case "takeOpenedFiles":
         result(OpenedFiles.shared.take(listening: channel))
+      case "reveal":
+        let urls = (call.arguments as? [String] ?? []).map { URL(fileURLWithPath: $0) }
+        NSWorkspace.shared.activateFileViewerSelecting(urls)
+        result(nil)
+      case "openFile":
+        if let path = call.arguments as? String {
+          result(NSWorkspace.shared.open(URL(fileURLWithPath: path)))
+        } else {
+          result(false)
+        }
+      case "openURL":
+        if let text = call.arguments as? String, let url = URL(string: text) {
+          result(NSWorkspace.shared.open(url))
+        } else {
+          result(false)
+        }
+      case "trash":
+        // The paths that went to the Trash; a file that could not stays where it was.
+        var trashed: [String] = []
+        for path in call.arguments as? [String] ?? [] {
+          if (try? FileManager.default.trashItem(at: URL(fileURLWithPath: path),
+                                                 resultingItemURL: nil)) != nil {
+            trashed.append(path)
+          }
+        }
+        result(trashed)
       default:
         result(FlutterMethodNotImplemented)
       }

@@ -29,6 +29,10 @@ abstract interface class RenderHost {
   List<Json> get stocks;
   bool get histogramOpen;
   bool get formatDetail;
+
+  /// Options the shown picture's develops carry beyond the edit (cropMode, stage, difference,
+  /// showMask, printFrame); small pictures never carry them.
+  Json renderOptions(PhotoDocument doc);
   void rendered();
   void renderFailed(String message);
   void measured(HistogramData? histogram);
@@ -126,8 +130,17 @@ class Renderer {
         draft: draft,
       );
 
+  /// What a shown picture is developed from: the edit and the view's options.
+  String _signature(PhotoDocument doc, Json options) =>
+      options.isEmpty ? jsonEncode(doc.edit) : '${jsonEncode(doc.edit)}${jsonEncode(options)}';
+
+  /// The presenter's scope: frames for the crop tool or a stage never stand in for the photograph.
+  static String _scope(PhotoDocument doc, Json options) =>
+      'photo:${doc.handle}|${options['cropMode'] == true ? 'crop' : 'photo'}|${options['stage'] ?? ''}';
+
   Future<void> _preview(PhotoDocument doc, bool interactive) async {
-    final signature = jsonEncode(doc.edit);
+    final options = host.renderOptions(doc);
+    final signature = _signature(doc, options);
     final edge = _previewEdge(doc, interactive);
     final presenter = this.presenter;
     if (presenter != null) {
@@ -138,14 +151,16 @@ class Renderer {
       }
       final answer = await engine.call('render', {
         ..._request(doc, doc.edit, maxEdge: edge, draft: interactive),
+        ...options,
         'original': true,
-        'present': {'slot': 'preview', 'scope': 'photo:${doc.handle}'},
+        'present': {'slot': 'preview', 'scope': _scope(doc, options)},
       });
       await _place(doc, answer, 'preview', signature);
     } else {
       if (!interactive && doc.previewSignature == signature && doc.previewEdge == edge) return;
       final answer = await engine.call('render', {
         ..._request(doc, doc.edit, maxEdge: edge, draft: interactive),
+        ...options,
         'original': true,
         if (doc.originalKey != null) 'haveOriginal': doc.originalKey,
       });
@@ -174,7 +189,8 @@ class Renderer {
     final region = view.visibleRegion(photo);
     if (region.isEmpty) return;
     final dpr = view.devicePixelRatio;
-    final signature = jsonEncode(doc.edit);
+    final options = host.renderOptions(doc);
+    final signature = _signature(doc, options);
     final current = doc.detail;
     if (current != null && current.signature == signature && current.scale == scale &&
         current.region == region && shows('detail', doc)) {
@@ -183,13 +199,14 @@ class Renderer {
     final px = _PixelRect(region.left * dpr, region.top * dpr, region.width * dpr, region.height * dpr);
     final answer = await engine.call('render', {
       ..._request(doc, doc.edit),
+      ...options,
       'original': true,
       'viewport': {
         'width': (photo.width * scale * dpr).round(),
         'height': (photo.height * scale * dpr).round(),
         'region': {'x': px.x, 'y': px.y, 'width': px.width, 'height': px.height},
       },
-      'present': {'slot': 'detail', 'scope': 'detail:${doc.handle}:$region@$scale'},
+      'present': {'slot': 'detail', 'scope': '${_scope(doc, options)}|$region@$scale'},
     });
     await _place(doc, answer, 'detail', signature, region: region, scale: scale);
   }

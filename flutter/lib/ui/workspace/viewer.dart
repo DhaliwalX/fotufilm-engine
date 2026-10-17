@@ -13,6 +13,7 @@ import 'histogram_panel.dart';
 import 'overlays.dart';
 import 'photo_strip.dart';
 import 'picture.dart';
+import 'viewer_tools.dart';
 
 class EditorViewer extends StatelessWidget {
   const EditorViewer({
@@ -124,6 +125,7 @@ class _PhotoCanvasState extends State<PhotoCanvas> {
             ),
             if (detail != null)
               Positioned.fromRect(rect: detail.region!.shift(rect.topLeft), child: _layer('detail')),
+            ...viewerToolOverlays(editor, rect),
           ]),
         ),
       ),
