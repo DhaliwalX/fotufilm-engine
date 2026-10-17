@@ -10,6 +10,7 @@ import 'package:flutter/widgets.dart';
 import '../../model/editor.dart';
 import '../theme/theme.dart';
 import 'histogram_panel.dart';
+import 'library/library_handoff.dart';
 import 'overlays.dart';
 import 'photo_strip.dart';
 import 'picture.dart';
@@ -34,7 +35,7 @@ class EditorViewer extends StatelessWidget {
       color: Palette.of(context).canvas,
       child: Column(children: [
         Expanded(
-          child: LayoutBuilder(builder: (context, constraints) {
+          child: LayoutBuilder(key: libraryViewerKey, builder: (context, constraints) {
             final dpr = MediaQuery.devicePixelRatioOf(context);
             final size = constraints.biggest;
             // The view's size feeds what gets developed; layout may not notify, so after it.
@@ -58,7 +59,8 @@ class EditorViewer extends StatelessWidget {
             ]);
           }),
         ),
-        if (editor.documents.length > 1) PhotoStrip(editor: editor),
+        // Shown once it holds more than one photo.
+        PhotoStrip(editor: editor),
       ]),
     );
   }

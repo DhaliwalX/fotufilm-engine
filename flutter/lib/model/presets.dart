@@ -86,7 +86,7 @@ class Presets {
   void apply(CopiedSettings settings) {
     final shown = editor.active;
     if (shown == null || editor.exporting) return;
-    final docs = editor.strip.chosen;
+    final docs = editor.selection.chosen;
     final failed = <String>[];
     for (final doc in docs) {
       final Json after;

@@ -31,6 +31,9 @@ abstract interface class RenderHost {
   bool get histogramOpen;
   bool get formatDetail;
 
+  /// The film rows on screen ('' for Normal): only their pictures develop.
+  Set<String> get shownFilmRows;
+
   /// Options the shown picture's develops carry beyond the edit (cropMode, stage, difference,
   /// showMask, printFrame); small pictures never carry them.
   Json renderOptions(PhotoDocument doc);
@@ -69,6 +72,20 @@ class Renderer {
   final Map<String, int> _layerOwner = {};
 
   bool get busy => _running || _dirty;
+
+  /// Rows came into view while the background was past the film rows.
+  bool _moreShown = false;
+
+  /// Film rows came into view: their pictures develop once nothing else waits.
+  void developShown() {
+    if (_dirty) return;
+    if (_running) {
+      _moreShown = true;
+      return;
+    }
+    _background?.cancel();
+    _background = Timer(const Duration(milliseconds: 100), _runBackground);
+  }
 
   /// Foreground develops placed on screen so far, for timing checks.
   int developed = 0;
@@ -265,6 +282,7 @@ class Renderer {
     final doc = host.active;
     if (doc == null || _running || doc.history.group != null) return;
     _running = true;
+    _moreShown = false;
     try {
       if (host.histogramOpen) await _histogram(doc);
       await _presetThumbnails(doc);
@@ -275,7 +293,11 @@ class Renderer {
     } finally {
       _running = false;
     }
-    if (_dirty) _run();
+    if (_dirty) {
+      _run();
+    } else if (_moreShown) {
+      developShown();
+    }
   }
 
   bool _stale(PhotoDocument doc) => _dirty || host.active != doc;
@@ -292,22 +314,26 @@ class Renderer {
     if (image != null) host.measured(await HistogramData.measure(image));
   }
 
-  /// Each film row: the photograph on that film, without grain or halation.
+  /// Each film row on screen: the photograph on that film, without grain or halation. Rows out
+  /// of view wait until they scroll in; the set is read again after each picture, so rows that
+  /// came into view meanwhile are not missed.
   Future<void> _filmThumbnails(PhotoDocument doc) async {
     final set = doc.filmThumbnails;
     final base = Map<String, dynamic>.of(doc.edit)..remove('stock');
     set.renew(jsonEncode(base));
-    // A negative is read only as a film that has a negative.
+    // '' is Normal, the row without a film. A negative is read only as a film that has a
+    // negative.
     final negative = doc.edit['negative'] != null;
-    for (final id in <String?>[
-      null,
+    final keys = [
+      '',
       for (final s in host.stocks)
         if (!negative || s['readsNegative'] == true) s['id'] as String,
-    ]) {
-      if (_stale(doc)) return;
-      final key = id ?? '';
-      if (set.fresh.contains(key)) continue;
-      await _thumbnail(doc, set, key, thumbnailEdit(doc.edit, id), 160);
+    ];
+    while (!_stale(doc)) {
+      final shown = host.shownFilmRows;
+      final key = keys.where((k) => shown.contains(k) && !set.fresh.contains(k)).firstOrNull;
+      if (key == null) return;
+      await _thumbnail(doc, set, key, thumbnailEdit(doc.edit, key.isEmpty ? null : key), 160);
     }
   }
 

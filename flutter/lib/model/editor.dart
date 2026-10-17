@@ -25,6 +25,8 @@ import 'histogram.dart';
 import 'kept_edits.dart';
 import 'lens.dart';
 import 'negatives.dart';
+import 'photo_library.dart';
+import 'photo_strip.dart';
 import 'pipeline.dart';
 import 'presets.dart';
 import 'print_frame.dart';
@@ -37,6 +39,8 @@ import 'view.dart';
 export 'catalogue.dart' show Json;
 export 'document.dart';
 export 'film_types.dart';
+export 'photo_library.dart';
+export 'photo_strip.dart';
 export 'settings.dart';
 export 'view.dart';
 
@@ -67,7 +71,7 @@ class EditorModel extends ChangeNotifier implements RenderHost {
       : settings = settings ?? AppSettings.memory() {
     // The features attach now: they add to the render options before anything develops, and
     // listen to edits before the first one.
-    [crop, selective, pipeline, negatives, printFrame, keptEdits, auto];
+    [crop, selective, pipeline, negatives, printFrame, keptEdits, auto, library];
   }
 
   /// The crop tool (crop.dart).
@@ -83,7 +87,7 @@ class EditorModel extends ChangeNotifier implements RenderHost {
 
   // ── Features ──────────────────────────────────────────────────────────────────────────────
   late final history = EditHistory(this);
-  late final strip = StripSelection(this);
+  late final selection = StripSelection(this);
   late final presets = Presets(this);
   late final keptEdits = KeptEdits(this);
   late final auto = AutoAdjustment(this);
@@ -94,6 +98,10 @@ class EditorModel extends ChangeNotifier implements RenderHost {
   String? startupError;
 
   bool get ready => renderer != null && stocks.isNotEmpty;
+
+  /// The photo library, and the strip of open and waiting photos.
+  late final library = PhotoLibrary(this);
+  late final strip = PhotoStripModel(this);
 
   /// Whether the engine has work in hand or waiting.
   bool get busy => (renderer?.busy ?? false) || status != null || _viewSettle != null;
@@ -107,6 +115,25 @@ class EditorModel extends ChangeNotifier implements RenderHost {
 
   @override
   Json? stockById(String? id) => id == null ? null : _stockById[id];
+
+  /// The film rows on screen (FilmLibrary), the only ones whose pictures develop, as React's
+  /// useThumbnail.js develops a row once it scrolls into view.
+  /// Under the photo library none are on screen.
+  @override
+  Set<String> get shownFilmRows => library.open ? const {} : _shownFilmRows.keys.toSet();
+  final Map<String, int> _shownFilmRows = {};
+
+  /// Counted, since a row rebuilt for another film may let go of its old one after a new row
+  /// took it.
+  void showFilmRow(String id, bool shown) {
+    final count = (_shownFilmRows[id] ?? 0) + (shown ? 1 : -1);
+    if (count > 0) {
+      _shownFilmRows[id] = count;
+    } else {
+      _shownFilmRows.remove(id);
+    }
+    if (shown) renderer?.developShown();
+  }
 
   /// The film types the library offers, and the one it shows.
   List<FilmType> filmTypes = const [FilmType.all];
@@ -240,9 +267,10 @@ class EditorModel extends ChangeNotifier implements RenderHost {
 
   // ── Opening and closing ───────────────────────────────────────────────────────────────────
 
-  /// Opens photographs the system named by path (the Finder, the command line, the driver).
+  /// Opens photographs the system named by path (the Finder, the command line, the driver); one
+  /// brings its folder into the strip.
   Future<void> openPaths(List<String> paths) =>
-      openFiles([for (final path in paths) PhotoFile(path.split('/').last, path: path)]);
+      strip.open([for (final path in paths) PhotoFile(path.split('/').last, path: path)]);
 
   /// Opens photographs: by path where the engine reads files itself, otherwise by their bytes.
   /// `negative` opens them as scanned negatives, read as a film (negatives.dart).
@@ -253,6 +281,8 @@ class EditorModel extends ChangeNotifier implements RenderHost {
     final stock = edit['stock'] as String?;
     for (final file in files) {
       final key = file.path ?? file.name;
+      // A negatives folder's photos are negatives however they are opened.
+      final asNegative = negative || file.negative;
       final existing = documents.indexWhere((d) => d.path == key);
       if (existing >= 0) {
         _activate(existing);
@@ -262,9 +292,9 @@ class EditorModel extends ChangeNotifier implements RenderHost {
       notifyListeners();
       try {
         final answer = engine.opensPaths && file.path != null
-            ? await engine.call('importPath', {'path': file.path, 'negative': negative})
+            ? await engine.call('importPath', {'path': file.path, 'negative': asNegative})
             : await engine.call(
-                'importFile', {'name': file.name, 'negative': negative}, await file.read!());
+                'importFile', {'name': file.name, 'negative': asNegative}, await file.read!());
         final json = answer.json;
         // A photograph opened before starts from the edit it was left with.
         final start = keptEdits.startingEdit(json['identity'] as String?, stock);
@@ -277,7 +307,7 @@ class EditorModel extends ChangeNotifier implements RenderHost {
           raw: json['original'] != null,
           headroom: ((json['hdr'] as Map?)?['headroom'] as num?)?.toDouble() ?? 1,
           // A new scan starts as a negative; one opened before keeps the edit it was left with.
-          history: History(negative && !start.saved
+          history: History(asNegative && !start.saved
               ? negatives.startingEdit(start.edit, json['negative'] as Json?, scanLight)
               : start.edit),
         )..negativeScan = json['negative'] as Json?;
@@ -584,8 +614,11 @@ class EditChange {
 
 /// A photograph to open: its name, and its path where there is a file system, or its bytes.
 class PhotoFile {
-  PhotoFile(this.name, {this.path, this.read});
+  PhotoFile(this.name, {this.path, this.read, this.negative = false});
   final String name;
   final String? path;
   final Future<Uint8List> Function()? read;
+
+  /// A scanned negative, imported as one (a library negatives folder).
+  final bool negative;
 }

@@ -119,7 +119,7 @@ List<CommandMenu> editorCommands(
         [
           Command('Copy Settings…', when(photo, () => showCopySettingsDialog(context, editor)),
               key: LogicalKeyboardKey.keyC, alt: true),
-          Command(pasteTitle(editor.strip.chosen.length),
+          Command(pasteTitle(editor.selection.chosen.length),
               when(photo && editor.presets.copied != null, editor.presets.paste),
               key: LogicalKeyboardKey.keyV, alt: true),
           Command('Presets', null, submenu: [

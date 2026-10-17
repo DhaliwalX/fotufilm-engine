@@ -81,7 +81,7 @@ Future<void> runEditingCommand(
       'redo': editor.history.redo,
       'history': editor.history.timeline.titles,
       'step': editor.history.timeline.index,
-      'chosen': [for (final d in editor.strip.chosen) d.name],
+      'chosen': [for (final d in editor.selection.chosen) d.name],
       'presets': [for (final p in presets.list) '${p.name} (${presets.kind(p)})'],
       'copied': presets.copied?.sections,
       'auto': {'active': editor.auto.active, 'busy': editor.auto.busy},
@@ -91,12 +91,12 @@ Future<void> runEditingCommand(
   if (c['goTo'] case final int step) editor.history.goTo(step);
   if (c['undo'] == true) editor.undo();
   if (c['redo'] == true) editor.redo();
-  if (c['activate'] case final int index) editor.strip.press(editor.documents[index]);
+  if (c['activate'] case final int index) editor.selection.press(editor.documents[index]);
   if (c['choose'] case [final int index, final String how]) {
-    editor.strip.press(editor.documents[index], range: how == 'shift', toggle: how == 'meta');
+    editor.selection.press(editor.documents[index], range: how == 'shift', toggle: how == 'meta');
   }
-  if (c['selectAll'] == true) editor.strip.selectAll();
-  if (c['clearSelection'] == true) editor.strip.clear();
+  if (c['selectAll'] == true) editor.selection.selectAll();
+  if (c['clearSelection'] == true) editor.selection.clear();
   if (c.containsKey('copySettings')) {
     presets.copy((c['copySettings'] as List?)?.cast<String>() ?? presets.sections);
   }

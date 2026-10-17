@@ -48,7 +48,8 @@ class PhotoDocument {
     this.headroom = 1,
   });
 
-  final String path;
+  /// Where it was opened from; a rename in the library follows it.
+  String path;
   final int handle;
   final int width, height;
   final String? identity;
