@@ -30,7 +30,8 @@ void main() {
     return anchor;
   }
 
-  void open(WidgetTester tester, BuildContext anchor, double height, {bool above = false}) =>
+  AnchoredOverlay open(WidgetTester tester, BuildContext anchor, double height,
+          {bool above = false}) =>
       showAnchored(anchor, (_, _) => SizedBox(key: const Key('popover'), height: height),
           matchWidth: true, above: above);
 
@@ -38,20 +39,20 @@ void main() {
 
   testWidgets('opens under its anchor where there is room', (tester) async {
     open(tester, await window(tester, 100), 200);
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(popover(tester), const Rect.fromLTWH(600, 128, 180, 200));
   });
 
   testWidgets('a picker near the bottom of the window opens over it, inside the window',
       (tester) async {
     open(tester, await window(tester, 540), 200);
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(popover(tester), const Rect.fromLTWH(600, 336, 180, 200));
   });
 
   testWidgets('a popover taller than either side is held to the larger, to scroll', (tester) async {
     open(tester, await window(tester, 400), 1000);
-    await tester.pump();
+    await tester.pumpAndSettle();
     final rect = popover(tester);
     expect(rect.top, 8);
     expect(rect.bottom, 396);
@@ -59,7 +60,26 @@ void main() {
 
   testWidgets('one asked to open above opens under where there is no room above', (tester) async {
     open(tester, await window(tester, 40), 200, above: true);
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(popover(tester).top, 68);
+  });
+
+  testWidgets('a popover fades in, and out before it leaves', (tester) async {
+    final overlay = open(tester, await window(tester, 100), 200);
+    await tester.pump();
+    double opacity() => tester.widget<FadeTransition>(find.ancestor(
+        of: find.byKey(const Key('popover')), matching: find.byType(FadeTransition))).opacity.value;
+    expect(opacity(), lessThan(1));
+    await tester.pumpAndSettle();
+    expect(opacity(), 1);
+
+    overlay.close();
+    expect(overlay.isOpen, isFalse);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(find.byKey(const Key('popover')), findsOneWidget);
+    expect(opacity(), lessThan(1));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('popover')), findsNothing);
   });
 }

@@ -17,7 +17,11 @@ class SavedExportNotice extends StatelessWidget {
   Widget build(BuildContext context) {
     final saved = editor.exporter.saved;
     if (saved == null) return const SizedBox.shrink();
-    return Positioned(bottom: 24, left: 0, right: 0, child: _saved(context, saved));
+    return Positioned(
+        bottom: 24,
+        left: 0,
+        right: 0,
+        child: Appear(key: ValueKey(saved), rise: 8, child: _saved(context, saved)));
   }
 
   static Widget _card(Widget child) => Container(

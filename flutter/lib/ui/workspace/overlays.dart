@@ -96,20 +96,24 @@ class ErrorBanner extends StatelessWidget {
       top: 10,
       left: 10,
       right: 10,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(10, 6, 4, 6),
-        decoration: BoxDecoration(
-          color: dark ? const Color(0xFF402D2A) : const Color(0xFFFFF1ED),
-          border: Border.all(color: dark ? const Color(0xFF765045) : const Color(0xFFE7C0B4)),
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: Row(children: [
-          Expanded(
-            child: Text(text,
-                style: editorText(context, size: TextSizes.label, color: fg, height: 1.45)),
+      child: Appear(
+        key: ValueKey(text),
+        rise: -6,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(10, 6, 4, 6),
+          decoration: BoxDecoration(
+            color: dark ? const Color(0xFF402D2A) : const Color(0xFFFFF1ED),
+            border: Border.all(color: dark ? const Color(0xFF765045) : const Color(0xFFE7C0B4)),
+            borderRadius: BorderRadius.circular(6),
           ),
-          QuietButton(icon: 'close', tooltip: 'Dismiss', onPressed: onClose, iconSize: 15),
-        ]),
+          child: Row(children: [
+            Expanded(
+              child: Text(text,
+                  style: editorText(context, size: TextSizes.label, color: fg, height: 1.45)),
+            ),
+            QuietButton(icon: 'close', tooltip: 'Dismiss', onPressed: onClose, iconSize: 15),
+          ]),
+        ),
       ),
     );
   }

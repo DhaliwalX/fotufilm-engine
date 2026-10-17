@@ -10,27 +10,20 @@ import '../dialogs.dart';
 
 /// Opens a menu with its corner at `position` (window coordinates), kept inside the window.
 void showMenuAt(BuildContext context, Offset position, List<MenuItem> items, {double width = 220}) {
-  final overlay = Overlay.of(context);
-  final box = overlay.context.findRenderObject() as RenderBox;
+  final box = Overlay.of(context).context.findRenderObject() as RenderBox;
   final at = box.globalToLocal(position);
-  OverlayEntry? entry;
-  void close() {
-    entry?.remove();
-    entry = null;
-  }
-
-  entry = OverlayEntry(
-    builder: (context) => Stack(children: [
+  showOverlay(
+    context,
+    (context, shown, close) => Stack(children: [
       Positioned.fill(
         child: Listener(behavior: HitTestBehavior.opaque, onPointerDown: (_) => close()),
       ),
       CustomSingleChildLayout(
         delegate: _MenuPlacement(at, width),
-        child: MenuList(items: items, onClose: close),
+        child: PopoverTransition(shown: shown, child: MenuList(items: items, onClose: close)),
       ),
     ]),
   );
-  overlay.insert(entry!);
 }
 
 class _MenuPlacement extends SingleChildLayoutDelegate {
