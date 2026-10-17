@@ -10,6 +10,7 @@ import 'package:flutter/foundation.dart';
 
 import '../engine/engine.dart';
 import '../engine/presenter.dart';
+import 'band_sets.dart';
 import 'catalogue.dart';
 import 'crop.dart';
 import 'crop_geometry.dart';
@@ -18,8 +19,10 @@ import 'edit.dart';
 import 'export.dart';
 import 'film_types.dart';
 import 'histogram.dart';
+import 'lens.dart';
 import 'negatives.dart';
 import 'pipeline.dart';
+import 'print_frame.dart';
 import 'renderer.dart';
 import 'selective.dart';
 import 'settings.dart';
@@ -57,7 +60,7 @@ class EditorModel extends ChangeNotifier implements RenderHost {
   EditorModel(this.catalogue, {AppSettings? settings})
       : settings = settings ?? AppSettings.memory() {
     // The features attach now: they add to the render options before anything develops.
-    [crop, selective, pipeline, negatives];
+    [crop, selective, pipeline, negatives, printFrame];
   }
 
   /// The crop tool (crop.dart).
@@ -110,7 +113,7 @@ class EditorModel extends ChangeNotifier implements RenderHost {
   /// Until one is on show, the one asked for.
   ui.Size get photoSize => active == null
       ? ui.Size.zero
-      : active!.shownSize ?? developedSize(active!, renderOptions(active!));
+      : printFrame.framed(active!.shownSize ?? developedSize(active!, renderOptions(active!)));
 
   // ── Workspace ─────────────────────────────────────────────────────────────────────────────
 
@@ -137,6 +140,11 @@ class EditorModel extends ChangeNotifier implements RenderHost {
 
   @override
   final ViewState view = ViewState();
+
+  /// The Expose panel's lens correction, and the Print panel's frame and receiver band sets.
+  late final lens = LensCorrection(this);
+  late final printFrame = PrintFrame(this);
+  late final bandSets = BandSets(catalogue, settings);
 
   /// What the foreground develops ask the engine for beyond the edit (session.js
   /// `renderRequest`): the crop tool's uncropped frame, a pipeline stage, the selection's mask.
@@ -244,10 +252,12 @@ class EditorModel extends ChangeNotifier implements RenderHost {
           height: (json['naturalHeight'] as num).toInt(),
           identity: json['identity'] as String?,
           raw: json['original'] != null,
+          headroom: ((json['hdr'] as Map?)?['headroom'] as num?)?.toDouble() ?? 1,
           history: History(negative
               ? negatives.startingEdit(json['negative'] as Json?, stock, scanLight)
               : defaultEdit(catalogue, stock)),
         )..negativeScan = json['negative'] as Json?;
+        bandSets.start(doc.history.present);
         final preview = answer.bytes('preview');
         if (preview != null) doc.importPicture = await decodePng(preview);
         documents.add(doc);

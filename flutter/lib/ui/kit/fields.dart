@@ -148,9 +148,13 @@ class PickerField<T> extends StatelessWidget {
     required this.options,
     required this.onChanged,
     this.enabled = true,
+    this.placeholder,
   });
 
   final String? label, detail;
+
+  /// Shown when `value` is none of the options.
+  final String? placeholder;
   final T value;
   final List<PickerOption<T>> options;
   final ValueChanged<T> onChanged;
@@ -186,7 +190,7 @@ class PickerField<T> extends StatelessWidget {
                   color: palette.gray100, borderRadius: BorderRadius.circular(Metrics.radius)),
               child: Row(children: [
                 Expanded(
-                  child: Text(current?.label ?? '',
+                  child: Text(current?.label ?? placeholder ?? '',
                       overflow: TextOverflow.ellipsis, style: editorText(context)),
                 ),
                 AppIcon('chevronDown', size: 16),

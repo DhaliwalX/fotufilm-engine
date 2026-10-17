@@ -41,8 +41,8 @@ class EngineReply {
       : value = answer,
         json = answer is Map<String, dynamic> ? answer : const {};
 
-  /// The answer as decoded: an object for most calls, but a list or null for a few (`stages`,
-  /// `sampleScene`), which [json] reads as empty.
+  /// The answer as decoded: an object for most calls, but a bare list, number or null for a few
+  /// (`stages`, `sampleScene`, `lensCatalogue`), which [json] reads as empty.
   final Object? value;
   final Map<String, dynamic> json;
   final Uint8List? payload;

@@ -1,10 +1,13 @@
-// The Print panel (web/src/editor/PrintInspector.jsx): the output medium, the screen conversion
-// or the print's controls, and the enlarger's lamp.
+// The Print panel (web/src/editor/PrintInspector.jsx): the output medium and its receiver bands,
+// the screen conversion or the print's controls, the enlarger's lamp, the frame, and export.
 import 'package:flutter/widgets.dart';
 
 import '../../model/catalogue.dart';
 import '../kit/kit.dart';
+import '../workspace/export_dialog.dart';
 import 'controls.dart';
+import 'print_frame_section.dart';
+import 'receiver_bands.dart';
 
 const _matchFilm = 'match-film';
 const _screenCMY = ['screenCyan', 'screenMagenta', 'screenYellow'];
@@ -23,19 +26,24 @@ List<Widget> printPanel(InspectorControls c) {
   final conversion = c.catalogue.screenConversion;
   final printMedium = Catalogue.profileMedium(c.edit, stock);
   final cmyChanged = _screenCMY.any((f) => (c.profile[f] as num? ?? 0) != 0);
+  final fixed = c.fixedSettings;
   return [
     Section(title: 'Output', children: [
-      PickerField<String>(
-        label: 'Output medium',
-        enabled: c.hasFilm,
-        value: c.edit['mediumFollowsFilm'] == true && canMatchFilm ? _matchFilm : medium,
-        options: [
-          if (canMatchFilm) const PickerOption(_matchFilm, 'Match Film'),
-          for (final m in media) PickerOption(m['id'] as String, m['name'] as String),
-        ],
-        onChanged: (choice) => editor.change(choice == _matchFilm
-            ? {'medium': stock!['filmMedium'], 'mediumFollowsFilm': true}
-            : {'medium': choice, 'mediumFollowsFilm': false}),
+      MediumRow(
+        editor: editor,
+        offersBands: !fixed && printMedium?['receiverBands'] == true,
+        picker: PickerField<String>(
+          label: 'Output medium',
+          enabled: c.hasFilm,
+          value: c.edit['mediumFollowsFilm'] == true && canMatchFilm ? _matchFilm : medium,
+          options: [
+            if (canMatchFilm) const PickerOption(_matchFilm, 'Match Film'),
+            for (final m in media) PickerOption(m['id'] as String, m['name'] as String),
+          ],
+          onChanged: (choice) => editor.change(choice == _matchFilm
+              ? {'medium': stock!['filmMedium'], 'mediumFollowsFilm': true}
+              : {'medium': choice, 'mediumFollowsFilm': false}),
+        ),
       ),
       if (medium == 'screen' && screen?['screenConversions'] != null)
         PickerField<String>(
@@ -61,7 +69,7 @@ List<Widget> printPanel(InspectorControls c) {
         'labScanLook',
         'labScanDodging',
       ]),
-      if (printMedium?['screenCMY'] == true)
+      if (!fixed && printMedium?['screenCMY'] == true)
         Align(
           alignment: Alignment.centerLeft,
           child: PillButton(
@@ -73,7 +81,8 @@ List<Widget> printPanel(InspectorControls c) {
                 : null,
           ),
         ),
-      const InfoRow('Color space', 'Display P3 → sRGB'),
+      // The engine develops in Display P3, the space the web editor's canvas shows in the app.
+      const InfoRow('Color space', 'Display P3'),
     ]),
     if (printMedium?['enlarger'] == true)
       Section(
@@ -88,5 +97,14 @@ List<Widget> printPanel(InspectorControls c) {
           'printerPreflash',
         ]),
       ),
+    if (!fixed && editor.active != null) PrintFrameSection(editor: editor),
+    Section(title: 'Export', children: [
+      Builder(
+        builder: (context) => Align(
+          alignment: Alignment.centerLeft,
+          child: PillButton('Export Photo…', onPressed: () => showExportDialog(context, editor)),
+        ),
+      ),
+    ]),
   ];
 }

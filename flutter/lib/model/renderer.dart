@@ -113,13 +113,14 @@ class Renderer {
 
   // ── Foreground ────────────────────────────────────────────────────────────────────────────
 
-  int _previewEdge(PhotoDocument doc, bool interactive) {
+  int _previewEdge(PhotoDocument doc, bool interactive, {bool whole = false}) {
     // The picture delivered: cropped, or the crop tool's whole frame.
     final photo = developedSize(doc, host.renderOptions(doc));
     final long = math.max(photo.width, photo.height).round();
     final view = host.view;
-    // The preview is the fitted picture; magnified, the detail layer carries the pixels.
-    final scale = view.magnified(photo) ? view.fitScale(photo) : view.scale(photo);
+    // The preview is the fitted picture; magnified, the detail layer carries the pixels. A
+    // `whole` picture (a print frame's) has no detail layer, so its preview carries them.
+    final scale = view.magnified(photo) && !whole ? view.fitScale(photo) : view.scale(photo);
     final shown = (long * scale * view.devicePixelRatio).round();
     final settled = math.min(long, math.min(maxPreviewEdge, math.max(256, shown)));
     return interactive ? math.min(interactiveEdge, settled) : settled;
@@ -150,7 +151,7 @@ class Renderer {
   Future<void> _preview(PhotoDocument doc, bool interactive) async {
     final options = host.renderOptions(doc);
     final signature = _signature(doc, options);
-    final edge = _previewEdge(doc, interactive);
+    final edge = _previewEdge(doc, interactive, whole: options.containsKey('printFrame'));
     final shown = _Shown(developedSize(doc, options), options['cropMode'] == true);
     final presenter = this.presenter;
     if (presenter != null) {
@@ -194,7 +195,9 @@ class Renderer {
     final presenter = this.presenter;
     final view = host.view;
     final photo = developedSize(doc, host.renderOptions(doc));
-    if (presenter == null || !view.magnified(photo)) {
+    // The engine frames only a whole picture, never a region of it.
+    if (presenter == null || !view.magnified(photo) ||
+        host.renderOptions(doc).containsKey('printFrame')) {
       doc.detail = null;
       return;
     }

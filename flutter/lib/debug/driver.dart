@@ -11,6 +11,9 @@
 //   {"panel": "light"}              film, light, develop or print
 //   {"param": ["ev", 1.0]}          sets an edit parameter
 //   {"profile": ["push", 1]}        sets a film control
+//   {"change": {"filters": ["w81a"]}}  changes fields of the edit in one step
+//   {"saveBands": "Name"}           saves the photograph's receiver bands as a set
+//   {"framePlan": true}             logs the print frame's plan: what is offered and its size
 //   {"probe": "/path/x.png"}       logs the first pixel as Flutter decodes it
 //   {"export": ["/out.jpg", "image/jpeg"]}  exports the shown photograph with the dialog's settings
 //   {"exportSettings": {"type": "image/heic", "size": "0.5", "quality": 80,
@@ -57,6 +60,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import '../model/band_sets.dart';
 import '../model/editor.dart';
 import '../model/export.dart';
 import '../ui/workspace/crop_overlay.dart';
@@ -206,6 +210,15 @@ class Driver {
     }
     if (c['profile'] case [final String field, final Object? value]) {
       editor.setProfile(field, value, grouped: false);
+    }
+    if (c['change'] case final Map<String, dynamic> fields) editor.change(fields);
+    if (c['saveBands'] case final String name) {
+      editor.bandSets.save(name, editBands(editor.edit['profile'] as Map, editor.bandSets.paper));
+    }
+    if (c['framePlan'] == true) {
+      final plan = editor.printFrame.plan;
+      _log('frame ${plan?['available']} ${plan?['configuration']?['frame']} '
+          '${plan?['placement']?['size']} ${plan?['renderMedium']} ${editor.printFrame.error}');
     }
     if (c['wheel'] case [final num x, final num y, final num dy]) {
       final at = Offset(x.toDouble(), y.toDouble());
