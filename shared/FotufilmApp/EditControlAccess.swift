@@ -116,6 +116,7 @@ extension EditorControlField {
             return .bespoke { !$0.paperFollowsStock }
         case .printFrame:
             return .bespoke { $0.printFrame != .none }
+        case .printFrameMargin: return .number(\.printFrameMargin)
         case .printLight:
             return .bespoke { $0.printLightKelvin != nil }
         case .digitalReference:
