@@ -15,7 +15,9 @@ import 'document.dart';
 import 'edit.dart';
 import 'film_types.dart';
 import 'histogram.dart';
+import 'pipeline.dart';
 import 'renderer.dart';
+import 'selective.dart';
 import 'settings.dart';
 import 'view.dart';
 
@@ -129,6 +131,11 @@ class EditorModel extends ChangeNotifier implements RenderHost {
         for (final source in renderOptionSources) ...source(doc),
       };
   final List<Json Function(PhotoDocument doc)> renderOptionSources = [];
+
+  // ── Canvas tools ──────────────────────────────────────────────────────────────────────────
+
+  late final selective = SelectiveTool(this)..addListener(notifyListeners);
+  late final pipeline = PipelineTool(this)..addListener(notifyListeners);
 
   // ── RenderHost ────────────────────────────────────────────────────────────────────────────
 

@@ -23,13 +23,23 @@ abstract interface class EngineConnection {
 
   /// Whether photographs open by path (`importPath`) rather than by their bytes (`importFile`).
   bool get opensPaths;
+
+  /// What the host offers beyond developing (HostPlatform.swift `capabilities`), such as
+  /// `subjectSelection`; empty in a browser.
+  Map<String, dynamic> get capabilities;
 }
 
 /// Starts this platform's engine.
 Future<EngineConnection> connectEngine() => platform.connect();
 
 class EngineReply {
-  EngineReply(this.json, this.payload);
+  EngineReply(Object? answer, this.payload)
+      : value = answer,
+        json = answer is Map<String, dynamic> ? answer : const {};
+
+  /// The answer as decoded: an object for most calls, but a list or null for a few (`stages`,
+  /// `sampleScene`), which [json] reads as empty.
+  final Object? value;
   final Map<String, dynamic> json;
   final Uint8List? payload;
 

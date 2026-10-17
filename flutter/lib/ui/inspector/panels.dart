@@ -7,7 +7,9 @@ import 'controls.dart';
 import 'develop_panel.dart';
 import 'expose_panel.dart';
 import 'film_panel.dart';
+import 'pipeline_panel.dart';
 import 'print_panel.dart';
+import 'selective_panel.dart';
 
 List<Widget> panelSections(Panel panel, InspectorControls controls) => switch (panel) {
       Panel.film => filmPanel(controls),
@@ -16,6 +18,6 @@ List<Widget> panelSections(Panel panel, InspectorControls controls) => switch (p
       Panel.print => printPanel(controls),
       Panel.roll => const [],
       Panel.crop => const [],
-      Panel.selective => const [],
-      Panel.pipeline => const [],
+      Panel.selective => selectivePanel(controls),
+      Panel.pipeline => pipelinePanel(controls),
     };

@@ -164,6 +164,18 @@ class _EditGroup extends StatelessWidget {
                   doc != null && editor.edit['stock'] != null ? editor.newGrainPattern : null,
             ),
             const MenuItem.divider(),
+            // OptionsMenu.jsx's Tools.
+            MenuItem(
+              label: 'Selective',
+              icon: 'selective',
+              onSelected: doc != null ? () => editor.setPanel(Panel.selective) : null,
+            ),
+            MenuItem(
+              label: 'Inspect pipeline',
+              icon: 'pipeline',
+              onSelected: () => editor.setPanel(Panel.pipeline),
+            ),
+            const MenuItem.divider(),
             MenuItem(label: 'Keyboard shortcuts', icon: 'shortcuts', onSelected: onShortcuts),
           ]),
         ),

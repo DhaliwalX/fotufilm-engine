@@ -79,6 +79,10 @@ List<CommandMenu> editorCommands(
         Command('Reset All Edits', when(editor.edited, editor.resetEdit)),
         Command('Auto Adjust', when(photo, editor.runAutoAdjust),
             key: LogicalKeyboardKey.keyA, shift: true),
+        // Opens Selective and samples the next click (useNativeCommands.js `sampleSelection`).
+        Command('Sample a Selection',
+            when(editor.selective.canSample, editor.selective.startSampling),
+            key: LogicalKeyboardKey.keyS, shift: true),
       ],
     ]),
     CommandMenu('View', [
