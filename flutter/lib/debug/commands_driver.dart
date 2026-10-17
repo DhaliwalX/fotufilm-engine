@@ -3,6 +3,7 @@
 //   {"menu": true}                  logs the menu bar as it would show now: each item's command,
 //                                   title, key equivalent, whether it applies (on/off) and ticks
 //                                   (✓), the lists the editor fills expanded
+//   {"nativeMenu": true}            logs the macOS menu bar as AppKit built and validated it
 //   {"menuState": true}             logs the state sent to the native menu (useNativeCommands.js
 //                                   `menuState`) as JSON
 //   {"command": "zoomIn"}           runs a menu command as choosing it does, and logs whether it ran
@@ -14,6 +15,7 @@
 import 'dart:convert';
 
 import 'package:flutter/gestures.dart';
+import 'package:flutter/services.dart' show MethodChannel;
 import 'package:flutter/widgets.dart' show FocusManager;
 
 import '../app/commands.dart';
@@ -35,6 +37,9 @@ Future<void> runCommandsCommand(
       _logNode(menu, state, '', log);
     }
   }
+  if (c['nativeMenu'] == true) {
+    log('${await const MethodChannel('fotufilm/menu').invokeMethod<String>('describe')}');
+  }
   if (c['menuState'] == true) log('menuState ${jsonEncode(commands.state().toJson())}');
   if (c['command'] case final String id) log('command $id ran=${commands.run(id)}');
   if (c['workspace'] == true) {
@@ -47,7 +52,7 @@ Future<void> runCommandsCommand(
         'negative=${editor.negatives.showNegative} auto=${editor.auto.active} '
         'photo=${doc == null ? '-' : doc.path.split('/').last} stock=${editor.edit['stock']} '
         'undo=${doc?.history.past.length} sampling=${editor.selective.sampling} '
-        'focus=${FocusManager.instance.primaryFocus?.debugLabel ?? FocusManager.instance.primaryFocus}');
+        'focus=${_focusPath()}');
   }
   if (c['keyDown'] case final String name) await key(name, down: true);
   if (c['keyUp'] case final String name) await key(name, down: false);
@@ -101,4 +106,18 @@ void _logCommand(String id, String title, KeyEquivalent? key, CommandState state
   log('$indent${state.isChecked(id) ? '✓ ' : ''}"$title" $id'
       '${key == null ? '' : ' ${key.label()}'} ${state.isEnabled(id) ? 'on' : 'off'}'
       '${tip == null ? '' : ' tip="$tip"'}');
+}
+
+/// The focused node and the widgets above it, nearest first, to see where the keys go.
+String _focusPath() {
+  final focus = FocusManager.instance.primaryFocus;
+  final context = focus?.context;
+  if (focus == null || context == null) return '$focus';
+  final names = <String>[];
+  context.visitAncestorElements((e) {
+    final name = e.widget.runtimeType.toString();
+    if (!name.startsWith('_') && names.length < 8) names.add(name);
+    return names.length < 8;
+  });
+  return '${focus.debugLabel ?? context.widget.runtimeType} < ${names.join(' < ')}';
 }

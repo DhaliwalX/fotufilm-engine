@@ -16,12 +16,12 @@
 //   6. The menus' key equivalents (commands.dart), with Ctrl for ⌘ on Linux and Windows; one
 //      whose command does not apply now goes nowhere, as the CEF host's menus swallow it.
 //
-// While a dialog is up, or an export runs, only the menus' keys answer.
+// While a dialog is up, or an export runs, only the menus' keys answer, and Esc closes the dialog.
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../model/editor.dart';
-import '../ui/kit/popover.dart' show openModals;
+import '../ui/kit/popover.dart' show dismissTopModal, openModals;
 import 'commands.dart';
 import 'host_window.dart';
 
@@ -36,6 +36,13 @@ class EditorShortcuts {
     if (event is KeyUpEvent) {
       if (event.logicalKey == LogicalKeyboardKey.space) editor.setComparing(false);
       return KeyEventResult.ignored;
+    }
+    // Esc closes a dialog the keys reached the editor past.
+    if (event is KeyDownEvent &&
+        event.logicalKey == LogicalKeyboardKey.escape &&
+        openModals.value > 0 &&
+        dismissTopModal()) {
+      return KeyEventResult.handled;
     }
     if (!textFieldFocused() && openModals.value == 0 && !editor.exporting) {
       if (_editorKey(event) == KeyEventResult.handled) return KeyEventResult.handled;

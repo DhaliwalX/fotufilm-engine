@@ -188,8 +188,12 @@ final class MainMenu: NSObject, NSMenuDelegate, NSMenuItemValidation {
   /// The submenus filled as they open: the list, what stands in for an empty one, fixed items.
   private var filled: [ObjectIdentifier: (list: String, empty: String, fixed: [[String: Any]])] = [:]
   private var recentMenu: NSMenu?
+  /// View › Enter Full Screen, which AppKit may add a second of.
+  private var fullScreenItem: NSMenuItem?
 
   static func register(with controller: FlutterViewController) {
+    // View › Enter Full Screen is the menu's own; AppKit adds no second one (cef main.mm).
+    UserDefaults.standard.register(defaults: ["NSFullScreenMenuItemEverywhere": false])
     let channel = FlutterMethodChannel(name: "fotufilm/menu",
                                        binaryMessenger: controller.engine.binaryMessenger)
     shared.channel = channel
@@ -203,6 +207,9 @@ final class MainMenu: NSObject, NSMenuDelegate, NSMenuItemValidation {
       case "setState":
         if let state = json as? [String: Any] { shared.update(state) }
         result(nil)
+      case "describe":
+        // The menu bar as AppKit shows it, validated, for scripted checks.
+        result(NSApp.mainMenu.map { shared.describe($0, indent: "") } ?? "")
       default:
         result(FlutterMethodNotImplemented)
       }
@@ -242,6 +249,8 @@ final class MainMenu: NSObject, NSMenuDelegate, NSMenuItemValidation {
     } else {
       for child in fixed { submenu.addItem(item(child)) }
     }
+    // The menu holding Enter Full Screen drops the one AppKit adds beside it as it opens.
+    if fixed.contains(where: { $0["native"] as? String == "fullScreen" }) { submenu.delegate = self }
     switch node["role"] as? String {
     case "window": NSApp.windowsMenu = submenu
     case "help": NSApp.helpMenu = submenu
@@ -285,6 +294,8 @@ final class MainMenu: NSObject, NSMenuDelegate, NSMenuItemValidation {
       recent.delegate = self
       item.submenu = recent
       recentMenu = recent
+    case "fullScreen":
+      fullScreenItem = item
     case "help":
       item.action = #selector(openHelpPage(_:))
       item.target = self
@@ -316,6 +327,13 @@ final class MainMenu: NSObject, NSMenuDelegate, NSMenuItemValidation {
 
   func menuNeedsUpdate(_ menu: NSMenu) {
     if menu === recentMenu { return fillRecent(menu) }
+    if let ours = fullScreenItem, menu === ours.menu {
+      for item in menu.items
+      where item !== ours && item.action == #selector(NSWindow.toggleFullScreen(_:)) {
+        menu.removeItem(item)
+      }
+      return
+    }
     guard let source = filled[ObjectIdentifier(menu)] else { return }
     menu.removeAllItems()
     let items = lists[source.list] ?? []
@@ -348,6 +366,30 @@ final class MainMenu: NSObject, NSMenuDelegate, NSMenuItemValidation {
     menu.addItem(.separator())
     menu.addItem(withTitle: "Clear Menu", action: #selector(clearRecent(_:)), keyEquivalent: "")
       .target = self
+  }
+
+  /// Each item: ✓ when ticked, its title, key equivalent, and whether it is enabled.
+  fileprivate func describe(_ menu: NSMenu, indent: String) -> String {
+    menu.delegate?.menuNeedsUpdate?(menu)
+    menu.update()
+    var lines: [String] = []
+    for item in menu.items {
+      if item.isSeparatorItem { lines.append(indent + "---"); continue }
+      var keys = ""
+      if !item.keyEquivalent.isEmpty {
+        let mask = item.keyEquivalentModifierMask
+        keys = " " + (mask.contains(.control) ? "⌃" : "") + (mask.contains(.option) ? "⌥" : "")
+          + (mask.contains(.shift) ? "⇧" : "") + (mask.contains(.command) ? "⌘" : "")
+          + item.keyEquivalent.uppercased()
+      }
+      lines.append(indent + (item.state == .on ? "✓ " : "") + "\"\(item.title)\"" + keys
+        + (item.hasSubmenu ? " ▸" : item.isEnabled ? " on" : " off")
+        + (item.keyEquivalentModifierMask.contains(.function) ? " (fn)" : ""))
+      if let submenu = item.submenu, submenu !== NSApp.servicesMenu {
+        lines.append(describe(submenu, indent: indent + "  "))
+      }
+    }
+    return lines.filter { !$0.isEmpty }.joined(separator: "\n")
   }
 
   // ── Actions ──────────────────────────────────────────────────────────────────────────────

@@ -101,7 +101,9 @@ class _MenuListState extends State<MenuList> {
     final checks = items.any((i) => i.selection != null && i.submenu == null);
     return PopoverSurface(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxHeight: 420),
+        // As tall as the window allows below the toolbar, as Spectrum's popover is.
+        constraints: BoxConstraints(
+            maxHeight: (MediaQuery.sizeOf(context).height - 72).clamp(240, double.infinity)),
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [

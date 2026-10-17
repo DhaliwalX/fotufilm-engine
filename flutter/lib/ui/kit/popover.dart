@@ -43,7 +43,10 @@ class AnchoredOverlay {
     if (!_open) return;
     _open = false;
     _entry.remove();
-    if (_modal) openModals.value--;
+    if (_modal) {
+      _modals.removeWhere((m) => m.$1 == this);
+      openModals.value--;
+    }
     onClose?.call();
   }
 }
@@ -51,6 +54,18 @@ class AnchoredOverlay {
 /// How many modals are open over the window. While one is, the photograph's commands wait, as
 /// the web editor's do while it shows a dialog (useNativeCommands.js `dialog`).
 final openModals = ValueNotifier<int>(0);
+
+/// The open modals, the newest last, and whether each may be dismissed.
+final List<(AnchoredOverlay, bool)> _modals = [];
+
+/// Esc: closes the newest modal where it may be dismissed, as a Spectrum dialog closes; answers
+/// whether one was open to take the key.
+bool dismissTopModal() {
+  if (_modals.isEmpty) return false;
+  final (modal, dismissible) = _modals.last;
+  if (dismissible) modal.close();
+  return true;
+}
 
 /// Opens `builder`'s content under the widget of `anchor`, or over it with `above` (a control at
 /// the bottom of the window). A click elsewhere closes it.
@@ -108,6 +123,7 @@ AnchoredOverlay showModal(BuildContext context, Widget Function(VoidCallback clo
   );
   handle = AnchoredOverlay._(entry).._modal = true;
   Overlay.of(context).insert(entry);
+  _modals.add((handle, dismissible));
   openModals.value++;
   return handle;
 }

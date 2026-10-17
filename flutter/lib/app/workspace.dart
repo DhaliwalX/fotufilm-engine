@@ -22,6 +22,7 @@ import '../ui/workspace/library/photo_library_view.dart';
 import '../ui/workspace/panel_layout.dart';
 import '../ui/workspace/saved_export_notice.dart';
 import '../ui/workspace/toolbar.dart';
+import '../ui/workspace/video_controls.dart' show VideoKeys;
 import '../ui/workspace/viewer.dart';
 import 'commands.dart';
 import 'editor_shortcuts.dart';
@@ -131,6 +132,18 @@ class _WorkspaceState extends State<Workspace> {
     if (editor.active != null) showExportDialog(context, editor);
   }
 
+  /// A click outside the viewer gives the keys back to the editor, as a click on the page takes
+  /// them from the web editor's player (usePlayerShortcuts.js answers only inside the viewer).
+  void _pointerDown(PointerDownEvent event) {
+    final viewer = FocusManager.instance.primaryFocus?.context;
+    if (viewer == null || viewer.findAncestorWidgetOfExactType<VideoKeys>() == null) return;
+    final box = viewer.findRenderObject();
+    if (box is! RenderBox || !box.attached) return;
+    if (!(box.localToGlobal(Offset.zero) & box.size).contains(event.position)) {
+      _focus.requestFocus();
+    }
+  }
+
   void _drop(DropDoneDetails detail) {
     setState(() => _dropping = false);
     // Film packs are installed; the rest open (useFilmPacks.js `acceptWithPacks`).
@@ -151,31 +164,34 @@ class _WorkspaceState extends State<Workspace> {
         focusNode: _focus,
         autofocus: true,
         onKeyEvent: (node, event) => _shortcuts.handle(event),
-        child: DropTarget(
-          onDragEntered: (_) => setState(() => _dropping = true),
-          onDragExited: (_) => setState(() => _dropping = false),
-          onDragDone: _drop,
-          child: Material(
-            type: MaterialType.transparency,
-            child: DefaultTextStyle(
-              style: editorText(context),
-              child: ColoredBox(
-                color: Palette.of(context).page,
-                child: Stack(children: [
-                  Column(children: [
-                    AppDialogHost(editor: editor),
-                    EditorToolbar(commands: commands),
-                    // The photo library covers the panels when it is shown.
-                    Expanded(
-                      child: Stack(children: [
-                        Positioned.fill(child: LayoutBuilder(builder: _panels)),
-                        Positioned.fill(child: PhotoLibraryView(editor: editor)),
-                      ]),
-                    ),
+        child: Listener(
+          onPointerDown: _pointerDown,
+          child: DropTarget(
+            onDragEntered: (_) => setState(() => _dropping = true),
+            onDragExited: (_) => setState(() => _dropping = false),
+            onDragDone: _drop,
+            child: Material(
+              type: MaterialType.transparency,
+              child: DefaultTextStyle(
+                style: editorText(context),
+                child: ColoredBox(
+                  color: Palette.of(context).page,
+                  child: Stack(children: [
+                    Column(children: [
+                      AppDialogHost(editor: editor),
+                      EditorToolbar(commands: commands),
+                      // The photo library covers the panels when it is shown.
+                      Expanded(
+                        child: Stack(children: [
+                          Positioned.fill(child: LayoutBuilder(builder: _panels)),
+                          Positioned.fill(child: PhotoLibraryView(editor: editor)),
+                        ]),
+                      ),
+                    ]),
+                    SavedExportNotice(editor: editor),
+                    Positioned.fill(child: LibraryHandoffLayer(editor: editor)),
                   ]),
-                  SavedExportNotice(editor: editor),
-                  Positioned.fill(child: LibraryHandoffLayer(editor: editor)),
-                ]),
+                ),
               ),
             ),
           ),
