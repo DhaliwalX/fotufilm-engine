@@ -11,6 +11,7 @@ import {
   frameSamplePoint,
   frameRequest,
   parsePrintFrame,
+  parsePrintFrameMargin,
 } from "../../src/print-frame.js";
 import { frameNoise } from "../../src/frame-texture.js";
 
@@ -34,6 +35,23 @@ test("frames survive save/load/undo, old edits default to none, unknown frames a
     historyReducer(selected, { type: "undo" }).present.printFrame,
     "none",
   );
+});
+test("border width survives save/load/undo, reaches the frame plan and rejects out-of-range values", () => {
+  const edit = { ...defaultEdit(), printFrame: "mount", printFrameMargin: 2.5 };
+  const loaded = parseEdit(JSON.stringify({ version: 1, edit }), []);
+  assert.equal(loaded.printFrameMargin, 2.5);
+  assert.equal(frameRequest(loaded).margin, 2.5);
+  delete edit.printFrameMargin;
+  assert.equal(parseEdit(JSON.stringify({ version: 1, edit }), []).printFrameMargin, 1);
+  assert.equal(frameRequest(defaultEdit()).margin, 1);
+  for (const value of [-0.1, 3.1, NaN, "2"])
+    assert.throws(() => parsePrintFrameMargin(value), /Invalid print frame border width/);
+  const widened = historyReducer(initialHistory, {
+    type: "edit",
+    patch: { printFrameMargin: 0 },
+  });
+  assert.equal(widened.present.printFrameMargin, 0);
+  assert.equal(historyReducer(widened, { type: "undo" }).present.printFrameMargin, 1);
 });
 test("transmission frame follows native medium override and retains the saved edit", () => {
   const edit = {

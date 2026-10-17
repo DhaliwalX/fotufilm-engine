@@ -8,6 +8,14 @@ export function parsePrintFrame(value) {
     throw new Error("Invalid print frame.");
   return value;
 }
+// Border Width, a multiple of the frame's preset margin. Older edits have none and keep the preset.
+export function parsePrintFrameMargin(value) {
+  if (value == null) return 1;
+  const { min, max } = editorControl("printFrameMargin").scale;
+  if (!Number.isFinite(value) || value < min || value > max)
+    throw new Error("Invalid print frame border width.");
+  return value;
+}
 export function frameRequest(edit, width = 1, height = 1) {
   return {
     kind: "print-frame",
@@ -15,6 +23,7 @@ export function frameRequest(edit, width = 1, height = 1) {
     frame: edit.printFrame || "none",
     format: edit.format || null,
     medium: edit.medium || null,
+    margin: edit.printFrameMargin ?? 1,
     viewingKelvin:
       PROFILE_MENUS.printLight.find((c) => c.id === edit.profile?.printLight)
         ?.value ?? null,

@@ -1,4 +1,4 @@
-import { parsePrintFrame } from "./print-frame.js";
+import { parsePrintFrame, parsePrintFrameMargin } from "./print-frame.js";
 import { defaultLens, parseLensCorrection } from "./lens-correction.js";
 import { parseLensFilters } from "./lens-filters.js";
 import { parseProfileSettings } from "./profile-settings.js";
@@ -114,6 +114,7 @@ export const defaultEdit = (stock = null) => ({
   // Match Film: the medium follows the film, to each film's own, as the Mac app's does.
   mediumFollowsFilm: false,
   printFrame: "none",
+  printFrameMargin: 1,
   digitalReference: "auto-levels",
   // `frameRate` is the clip's cadence, the rate it exports at; null keeps the source's.
   video: { encoding: "standard", trimStart: 0, trimEnd: null, audio: true, frameRate: null },
@@ -387,6 +388,7 @@ export function parseEdit(json, stockIDs) {
     medium: edit.medium ?? null,
     mediumFollowsFilm: edit.mediumFollowsFilm === true,
     printFrame: parsePrintFrame(edit.printFrame),
+    printFrameMargin: parsePrintFrameMargin(edit.printFrameMargin),
     digitalReference: edit.digitalReference ?? "auto-levels",
     video: edit.video ? { ...base.video, ...edit.video } : base.video,
     halationModel: edit.halationModel ?? "legacy",

@@ -1572,6 +1572,18 @@ public enum EditorControlCatalogue {
             web: .runtime,
             documentation: "Choose Film Border for the selected film gauge, Slide Mount for a transparency in a 2 × 2 inch card mount, a Paper Border cut at 4 × 6, 5 × 7, 8 × 10 or 5 × 5 inches, Carrier Border for a negative's rebate printed through a filed-out carrier, Emulsion Border for the film's unexposed edge outside the camera gate — the stock's own tone, halation glow and grain — printed with the photograph inside a paper margin, a plain White or Black Mount, or a Square, Portrait or Story posting canvas with the photograph inside a white margin. Film perforations follow physical geometry; verified sheet-notch codes follow the stock. Included in saved edits and exports."),
         EditorControl(
+            .printFrameMargin, title: "Border Width",
+            detail: "Widen or narrow the margin around the photograph.",
+            section: .printPaper,
+            kind: .slider(EditorControlScale(PrintFrameConfiguration.marginRange, neutral: 1, unit: .percent)),
+            surfaces: [.app, .desktop, .web],
+            omitted: [.android: "Frame finishing is offered in the iPhone, iPad and Mac photo editors.",
+                      .resolve: "The host owns output framing.",
+                      .finalcut: "The host owns output framing.",
+                      .cli: "Frame finishing is offered in the iPhone, iPad and Mac photo editors."],
+            web: .runtime,
+            documentation: "Scales the margin of a Paper Border, Carrier Border, White or Black Mount, or posting canvas, from none at 0% to three times the preset at 300%. A paper sheet keeps its size, so a wider easel margin prints a smaller picture; a mount or canvas grows around the photograph. Film Border and Slide Mount follow physical dimensions and have no Border Width. Included in saved edits and exports."),
+        EditorControl(
             .paper, title: "Output Medium",
             detail: "Choose how the film is printed, scanned, or viewed.",
             section: .printPaper, kind: .menu(.dynamic(.papers)), availability: .printStage,

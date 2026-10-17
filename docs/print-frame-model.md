@@ -218,6 +218,18 @@ display white (1.0 display-linear) on every output, including reflection papers,
 merges with a white feed; it is not the paper's modelled base. The aspects are the platforms'
 own; the margin is a presentation choice. These are offered with every film and output medium.
 
+## Border Width
+
+Border Width multiplies the margin of every frame whose margin is a presentation or easel
+choice, from 0 to 3 times the preset above (shown as 0–300%, 100% by default). It scales the
+plain mounts' 8% margin, the posting canvases' 5% margin and Emulsion Border's paper margin
+around its band, and the easel margin of the Paper Border sizes and Carrier Border. A cut sheet
+keeps its size and its printed carrier rebate, so a wider easel margin leaves a smaller opening
+for the photograph; a mount or canvas grows around the photograph instead. At 0 a mount adds
+nothing and a paper print is borderless. Film Border and Slide Mount are physical material and
+ignore it. The setting is saved with the edit as a multiple, not in pixels, so it holds at every
+export size.
+
 ## Emulsion Border
 
 Emulsion Border prints the film just outside the camera gate around the photograph. Nothing

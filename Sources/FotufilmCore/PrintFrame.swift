@@ -64,6 +64,15 @@ public enum PrintFrame: String, CaseIterable, Codable, Sendable, Identifiable {
     /// The developed film is seen by transmission, not printed to the chosen paper.
     public var viewsTransparency: Bool { self == .film || self == .slideMount }
 
+    /// A margin that is a presentation or easel choice, which the editor lets the user widen
+    /// or narrow. Film borders and slide mounts follow physical dimensions and keep theirs.
+    public var hasAdjustableMargin: Bool {
+        switch self {
+        case .none, .film, .slideMount: return false
+        default: return true
+        }
+    }
+
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         let value = try container.decode(String.self)
@@ -261,7 +270,12 @@ public struct FilmBorderGeometry: Codable, Equatable, Sendable {
 }
 
 public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
+    /// Border Width: the frame's margin as a multiple of its preset, from none to three times.
+    public static let marginRange: ClosedRange<Double> = 0...3
+
     public let frame: PrintFrame
+    /// The margin multiple for a frame with an adjustable margin; nil for every other frame.
+    public let margin: Double?
     public let geometry: FilmBorderGeometry?
     public let sheet: PaperSheetGeometry?
     public let slideMount: SlideMountGeometry?
@@ -280,15 +294,16 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
 
     public init(frame: PrintFrame, formatID: String?, stockID: String,
                 paper: PrintPaper, viewingKelvin: Float? = nil,
-                negativeViewing: NegativeViewing = .lightBox) {
+                negativeViewing: NegativeViewing = .lightBox, margin: Double = 1) {
         self.init(frame: frame, formatID: formatID, definition: FilmStock.presetDefinitions[stockID],
-                  paper: paper, viewingKelvin: viewingKelvin, negativeViewing: negativeViewing)
+                  paper: paper, viewingKelvin: viewingKelvin, negativeViewing: negativeViewing,
+                  margin: margin)
     }
 
     /// Explicit stock metadata also supports isolated runtimes without a process-wide pack registry.
     public init(frame: PrintFrame, formatID: String?, definition: FilmStockDefinition?,
                 paper: PrintPaper, viewingKelvin: Float? = nil,
-                negativeViewing: NegativeViewing = .lightBox) {
+                negativeViewing: NegativeViewing = .lightBox, margin: Double = 1) {
         let nativeID = definition?.nativeFormatID
         let motionStock = nativeID.flatMap(FilmFormat.preset(id:))?.isMotionPicture == true
         let nativeInstant = nativeID.flatMap { FilmBorderGeometry.preset($0) }?.isInstant == true
@@ -318,10 +333,19 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
         case .paper, .paper5x7, .paper8x10, .paper5x5: available = reflective
         }
         self.frame = available ? frame : .none
+        let scale = margin.isFinite
+            ? min(max(margin, Self.marginRange.lowerBound), Self.marginRange.upperBound) : 1
+        self.margin = self.frame.hasAdjustableMargin ? scale : nil
         geometry = self.frame == .film ? film : nil
-        sheet = PaperSheetGeometry.preset(for: self.frame)
+        sheet = PaperSheetGeometry.preset(for: self.frame).map {
+            PaperSheetGeometry(widthMM: $0.widthMM, heightMM: $0.heightMM,
+                               marginMM: $0.marginMM * scale, rebateMM: $0.rebateMM)
+        }
         slideMount = self.frame == .slideMount ? mount : nil
-        canvas = SocialCanvasGeometry.preset(for: self.frame)
+        canvas = SocialCanvasGeometry.preset(for: self.frame).map {
+            SocialCanvasGeometry(aspectWidth: $0.aspectWidth, aspectHeight: $0.aspectHeight,
+                                 margin: $0.margin * scale)
+        }
         sheetNotches = geometry?.isSheet == true ? definition?.sheetNotches : nil
         edgePrinting = self.frame == .film
             ? definition?.edgePrinting?.first { $0.formatID == formatID } : nil

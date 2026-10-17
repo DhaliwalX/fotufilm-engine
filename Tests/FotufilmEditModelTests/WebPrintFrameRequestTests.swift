@@ -4,9 +4,11 @@ import FotufilmCore
 
 final class WebPrintFrameRequestTests: XCTestCase {
     private func request(_ frame: PrintFrame, stock: String? = "gold200", format: String = "35mm",
-                         medium: String = "ektacolor-edge", width: Int = 300, height: Int = 200) throws -> Data {
+                         medium: String = "ektacolor-edge", width: Int = 300, height: Int = 200,
+                         margin: Double? = nil) throws -> Data {
         var value: [String: Any] = ["kind": "print-frame", "frame": frame.rawValue,
             "format": format, "medium": medium, "width": width, "height": height]
+        if let margin { value["margin"] = margin }
         if let stock {
             value["stock"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(
                 XCTUnwrap(FilmStock.presetDefinitions[stock])))
@@ -58,6 +60,47 @@ final class WebPrintFrameRequestTests: XCTestCase {
         for format in ["35mm", "super35", "16mm", "super8", "120", "4x5"] {
             let plan = try result(request(.film, format: format))
             XCTAssertEqual(plan.configuration.geometry, FilmBorderGeometry.preset(format))
+        }
+    }
+
+    func testBorderWidthScalesPresentationMarginsAndLeavesPhysicalFramesAlone() throws {
+        let preset = try result(request(.mount))
+        XCTAssertEqual(preset.configuration.margin, 1)
+        XCTAssertEqual(preset.placement.size.width, 300 + 2 * 16)
+        let wide = try result(request(.mount, margin: 2))
+        XCTAssertEqual(wide.configuration.margin, 2)
+        XCTAssertEqual(wide.placement.size.width, 300 + 2 * 32)
+        XCTAssertEqual(wide.placement.size.height, 200 + 2 * 32)
+        XCTAssertEqual(wide.placement.image.x, 32)
+        let flush = try result(request(.darkMount, margin: 0))
+        XCTAssertEqual(flush.placement.size.width, 300)
+        XCTAssertEqual(flush.placement.size.height, 200)
+
+        // A cut sheet keeps its size, so a wider easel margin prints a smaller picture.
+        let sheet = try result(request(.paper)), wideSheet = try result(request(.paper, margin: 3))
+        XCTAssertEqual(wideSheet.configuration.sheet?.marginMM, 9)
+        XCTAssertEqual(wideSheet.materialSize, sheet.materialSize)
+        XCTAssertGreaterThan(wideSheet.placement.size.width, sheet.placement.size.width)
+        let carrier = try result(request(.carrier, margin: 0.5))
+        XCTAssertEqual(carrier.configuration.sheet?.marginMM, 6.35)
+        XCTAssertEqual(carrier.configuration.sheet?.rebateMM, 2.5)
+
+        let post = try result(request(.socialSquare)), widePost = try result(request(.socialSquare, margin: 2))
+        XCTAssertEqual(widePost.configuration.canvas?.margin ?? 0, 0.1, accuracy: 1e-12)
+        XCTAssertGreaterThan(widePost.placement.size.width, post.placement.size.width)
+        XCTAssertEqual(widePost.placement.size.width, widePost.placement.size.height)
+
+        for frame in [PrintFrame.film, .slideMount, .none] {
+            let stock = frame == .slideMount ? "ektachromee100" : "gold200"
+            let paper = frame == .slideMount ? "ilfochrome-cps-1k" : "ektacolor-edge"
+            let plain = try result(request(frame, stock: stock, medium: paper))
+            let scaled = try result(request(frame, stock: stock, medium: paper, margin: 3))
+            XCTAssertNil(scaled.configuration.margin)
+            XCTAssertEqual(scaled.configuration, plain.configuration)
+            XCTAssertEqual(scaled.placement, plain.placement)
+        }
+        for margin in [-0.1, 3.1] {
+            XCTAssertThrowsError(try result(request(.mount, margin: margin)))
         }
     }
 

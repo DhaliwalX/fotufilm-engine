@@ -382,6 +382,8 @@ struct EditState: Equatable {
     /// developed film itself as the output.
     var paper = PrintPaper.editorDefault
     var printFrame = PrintFrame.none
+    /// Border Width: the frame's margin as a multiple of its preset, for the frames that have one.
+    var printFrameMargin = 1.0
     /// How the developed negative is read when it is the output: on the light box with its
     /// orange base, or through a scanner that divides the base out.
     var negativeViewing = NegativeViewing.lightBox
@@ -587,7 +589,7 @@ struct EditState: Equatable {
         PrintFrameConfiguration(frame: printFrame, formatID: formatID,
                                 stockID: stockID, paper: resolvedPaper,
                                 viewingKelvin: printFrame.viewsTransparency ? nil : printLightKelvin.map(Float.init),
-                                negativeViewing: .lightBox)
+                                negativeViewing: .lightBox, margin: printFrameMargin)
     }
 
     /// A negative stock is seen by transmission on the same reference light box as its rebate.

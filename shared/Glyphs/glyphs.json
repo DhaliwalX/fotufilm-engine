@@ -436,6 +436,14 @@
       ],
       "rendering": "multicolor"
     },
+    "fotu.slider.printFrameMargin.high": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.printFrameMargin.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
     "fotu.slider.printerBlue.high": {
       "colours": [
         "systemBlue"
@@ -1064,6 +1072,10 @@
     "printCorrection": {
       "high": "fotu.slider.printCorrection.high",
       "low": "fotu.slider.printCorrection.low"
+    },
+    "printFrameMargin": {
+      "high": "fotu.slider.printFrameMargin.high",
+      "low": "fotu.slider.printFrameMargin.low"
     },
     "printerBlue": {
       "high": "fotu.slider.printerBlue.high",

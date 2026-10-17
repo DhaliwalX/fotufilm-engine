@@ -244,6 +244,10 @@ export default function PrintInspector() {
             setStage(null);
             setDifference(false);
           }}
+          onMarginChange={(printFrameMargin) =>
+            patch({ printFrameMargin }, "printFrameMargin")
+          }
+          onEnd={endEdit}
         />
       )}
       <Disclosure
