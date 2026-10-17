@@ -13,6 +13,7 @@ import '../engine/presenter.dart';
 import 'catalogue.dart';
 import 'document.dart';
 import 'edit.dart';
+import 'export.dart';
 import 'film_types.dart';
 import 'histogram.dart';
 import 'renderer.dart';
@@ -52,6 +53,9 @@ class EditorModel extends ChangeNotifier implements RenderHost {
       : settings = settings ?? AppSettings.memory();
 
   final Catalogue catalogue;
+
+  /// Export, Export All, Export Original and Copy Photo (export.dart).
+  late final exporter = ExportTool(this);
 
   /// Preferences and remembered things, kept on this device.
   final AppSettings settings;
@@ -402,6 +406,9 @@ class EditorModel extends ChangeNotifier implements RenderHost {
   void setFilmType(FilmType value) => _set(() => filmType = value);
   void dismissError() => _set(() => error = null);
 
+  /// A feature's model (lib/model/<area>.dart) changed what the workspace shows.
+  void notify() => notifyListeners();
+
   void setComparing(bool value) {
     if (comparing == value || active == null) return;
     _set(() => comparing = value);
@@ -481,41 +488,6 @@ class EditorModel extends ChangeNotifier implements RenderHost {
   void zoomOut() {
     final next = ViewState.steps.lastWhere((s) => s < scale * 0.999, orElse: () => fitScale);
     setZoom(next <= fitScale ? null : next);
-  }
-
-  // ── Export ────────────────────────────────────────────────────────────────────────────────
-
-  Future<String> export({
-    required String path,
-    required String type,
-    required double quality,
-    required int? maxEdge,
-    required String metadata,
-  }) async {
-    final doc = active, engine = this.engine;
-    if (doc == null || engine == null) throw StateError('No photograph is open.');
-    _set(() => exporting = true);
-    try {
-      final answer = await engine.call('export', {
-        ...renderRequest(
-          catalogue: catalogue,
-          handle: doc.handle,
-          edit: doc.edit,
-          stock: stockById(doc.edit['stock'] as String?),
-          maxEdge: maxEdge,
-        ),
-        'type': type,
-        'quality': quality,
-        'metadata': metadata,
-        'hdr': false,
-        'photoQuality': 'accurate',
-        'filename': path.split('/').last,
-        'path': path,
-      });
-      return answer.json['path'] as String? ?? path;
-    } finally {
-      _set(() => exporting = false);
-    }
   }
 }
 

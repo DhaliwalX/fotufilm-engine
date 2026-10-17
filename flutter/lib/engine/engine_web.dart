@@ -63,6 +63,15 @@ class WebEngine implements EngineConnection {
         answer.payload?.toDart);
   }
 
+  /// The bridge reports no progress; the call answers when it is done.
+  @override
+  Future<EngineReply> callWithProgress(String method, Map<String, dynamic> params,
+          void Function(Map<String, dynamic> progress) onProgress) =>
+      call(method, params);
+
+  @override
+  Map<String, dynamic> get capabilities => const {};
+
   @override
   void cancel() => _engine.cancel();
 }

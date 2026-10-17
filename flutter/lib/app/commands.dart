@@ -67,7 +67,12 @@ List<CommandMenu> editorCommands(
         Command('Close Photo', when(photo, () => editor.closeDocument(editor.activeIndex)),
             key: LogicalKeyboardKey.keyW),
       ],
-      [Command('Export…', when(photo, export), key: LogicalKeyboardKey.keyE)],
+      [
+        Command('Export…', when(photo && !editor.exporting, export), key: LogicalKeyboardKey.keyE),
+        Command('Use Last Export Settings',
+            when(photo && !editor.exporting && editor.exporter.last != null,
+                editor.exporter.exportWithLast)),
+      ],
     ]),
     CommandMenu('Edit', [
       [
@@ -79,6 +84,10 @@ List<CommandMenu> editorCommands(
         Command('Reset All Edits', when(editor.edited, editor.resetEdit)),
         Command('Auto Adjust', when(photo, editor.runAutoAdjust),
             key: LogicalKeyboardKey.keyA, shift: true),
+      ],
+      [
+        Command('Copy Photo', when(editor.exporter.canCopy && !editor.exporting,
+            editor.exporter.copyPhoto), key: LogicalKeyboardKey.keyC, shift: true),
       ],
     ]),
     CommandMenu('View', [

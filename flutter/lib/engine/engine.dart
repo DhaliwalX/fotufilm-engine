@@ -12,8 +12,16 @@ abstract interface class EngineConnection {
   Future<EngineReply> call(String method,
       [Map<String, dynamic> params = const {}, Uint8List? payload]);
 
+  /// A long host call (Export All) that reports its progress, `{progress, ...}`, as it runs.
+  Future<EngineReply> callWithProgress(String method, Map<String, dynamic> params,
+      void Function(Map<String, dynamic> progress) onProgress);
+
   /// Stops the develop in progress at its next opportunity.
   void cancel();
+
+  /// What the engine's platform services offer (`fotufilm_capabilities`): export formats, HDR,
+  /// Export All, the clipboard. Empty where the engine does not say.
+  Map<String, dynamic> get capabilities;
 
   /// The native `fotufilm_engine *`, for a platform presenter; null in a browser.
   int? get address;

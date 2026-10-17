@@ -13,7 +13,9 @@ import '../model/editor.dart';
 import '../ui/inspector/inspector.dart';
 import '../ui/theme/theme.dart';
 import '../ui/workspace/dialogs.dart';
+import '../ui/workspace/export_dialog.dart';
 import '../ui/workspace/film_library.dart';
+import '../ui/workspace/saved_export_notice.dart';
 import '../ui/workspace/toolbar.dart';
 import '../ui/workspace/viewer.dart';
 import 'commands.dart';
@@ -103,14 +105,17 @@ class _WorkspaceState extends State<Workspace> {
               style: editorText(context),
               child: ColoredBox(
                 color: Palette.of(context).page,
-                child: Column(children: [
-                  EditorToolbar(
-                    editor: editor,
-                    onOpen: _open,
-                    onExport: _export,
-                    onShortcuts: () => showShortcutsDialog(context, shortcutRows(menus)),
-                  ),
-                  Expanded(child: LayoutBuilder(builder: _panels)),
+                child: Stack(children: [
+                  Column(children: [
+                    EditorToolbar(
+                      editor: editor,
+                      onOpen: _open,
+                      onExport: _export,
+                      onShortcuts: () => showShortcutsDialog(context, shortcutRows(menus)),
+                    ),
+                    Expanded(child: LayoutBuilder(builder: _panels)),
+                  ]),
+                  SavedExportNotice(editor: editor),
                 ]),
               ),
             ),

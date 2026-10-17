@@ -29,6 +29,15 @@ typedef _HostCallC = Int32 Function(Pointer<Void>, Pointer<Utf8>, Pointer<Utf8>,
     Size, Pointer<FotufilmAnswer>, Pointer<Pointer<Utf8>>);
 typedef _HostCallDart = int Function(Pointer<Void>, Pointer<Utf8>, Pointer<Utf8>, Pointer<Void>,
     int, Pointer<FotufilmAnswer>, Pointer<Pointer<Utf8>>);
+typedef _HostCallProgressC = Int32 Function(Pointer<Void>, Pointer<Utf8>, Pointer<Utf8>,
+    Pointer<Void>, Size, Pointer<NativeFunction<ProgressCallback>>, Pointer<Void>,
+    Pointer<FotufilmAnswer>, Pointer<Pointer<Utf8>>);
+typedef _HostCallProgressDart = int Function(Pointer<Void>, Pointer<Utf8>, Pointer<Utf8>,
+    Pointer<Void>, int, Pointer<NativeFunction<ProgressCallback>>, Pointer<Void>,
+    Pointer<FotufilmAnswer>, Pointer<Pointer<Utf8>>);
+
+/// `fotufilm_progress_callback`: a long call's progress as JSON, on the calling thread.
+typedef ProgressCallback = Void Function(Pointer<Void> context, Pointer<Utf8> json);
 typedef _AnswerFreeC = Void Function(Pointer<FotufilmAnswer>);
 typedef _AnswerFreeDart = void Function(Pointer<FotufilmAnswer>);
 
@@ -42,6 +51,8 @@ class FotufilmLibrary {
         _describe = lib.lookupFunction<_DescribeC, _DescribeC>('fotufilm_engine_describe'),
         cancel = lib.lookupFunction<_CancelC, CancelFunction>('fotufilm_engine_cancel'),
         _hostCall = lib.lookupFunction<_HostCallC, _HostCallDart>('fotufilm_host_call'),
+        _hostCallProgress = lib.lookupFunction<_HostCallProgressC, _HostCallProgressDart>(
+            'fotufilm_host_call_progress'),
         _answerFree = lib.lookupFunction<_AnswerFreeC, _AnswerFreeDart>('fotufilm_answer_free');
 
   static FotufilmLibrary? _shared;
@@ -62,6 +73,7 @@ class FotufilmLibrary {
   final _DescribeC _describe;
   final CancelFunction cancel;
   final _HostCallDart _hostCall;
+  final _HostCallProgressDart _hostCallProgress;
   final _AnswerFreeDart _answerFree;
 
   String _take(Pointer<Utf8> string) {
@@ -87,8 +99,10 @@ class FotufilmLibrary {
   String describe(Pointer<Void> engine) => _take(_describe(engine));
 
   /// One host call: JSON in, JSON and an optional payload out. Runs on the calling thread
-  /// until the engine answers, so the editor makes it from the engine isolate.
-  HostAnswer call(Pointer<Void> engine, String method, String params, [List<int>? payload]) {
+  /// until the engine answers, so the editor makes it from the engine isolate. `progress`, an
+  /// isolate-local callable, hears a long call's progress on this thread while it runs.
+  HostAnswer call(Pointer<Void> engine, String method, String params, [List<int>? payload,
+      Pointer<NativeFunction<ProgressCallback>>? progress]) {
     final methodC = method.toNativeUtf8();
     final paramsC = params.toNativeUtf8();
     final answer = calloc<FotufilmAnswer>();
@@ -99,8 +113,10 @@ class FotufilmLibrary {
         bytes = malloc<Uint8>(payload.length);
         bytes.asTypedList(payload.length).setAll(0, payload);
       }
-      final status = _hostCall(engine, methodC, paramsC, bytes.cast(), payload?.length ?? 0,
-          answer, error);
+      final status = progress == null
+          ? _hostCall(engine, methodC, paramsC, bytes.cast(), payload?.length ?? 0, answer, error)
+          : _hostCallProgress(engine, methodC, paramsC, bytes.cast(), payload?.length ?? 0,
+              progress, nullptr, answer, error);
       if (status == fotufilmCancelled) throw const FotufilmCancelled();
       if (status != fotufilmOk) throw FotufilmException(_take(error.value));
       final json = answer.ref.json == nullptr ? '{}' : answer.ref.json.toDartString();
