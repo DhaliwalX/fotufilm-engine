@@ -15,9 +15,77 @@ import '../kit/kit.dart';
 import '../theme/theme.dart';
 import 'picture.dart';
 
-class PhotoStrip extends StatelessWidget {
+class PhotoStrip extends StatefulWidget {
   const PhotoStrip({super.key, required this.editor});
   final EditorModel editor;
+
+  @override
+  State<PhotoStrip> createState() => _PhotoStripState();
+}
+
+class _PhotoStripState extends State<PhotoStrip> {
+  EditorModel get editor => widget.editor;
+  final _scroll = ScrollController();
+
+  /// Each frame's slot: the frame, the room its close button takes, and the gap to the next.
+  static final _stride = Metrics.stripItem.width + 6 + 6;
+
+  /// The photo the strip last brought into view, and how many photos it held then.
+  String? _shown;
+  int _count = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    editor.addListener(_shownChanged);
+    editor.strip.addListener(_stripChanged);
+  }
+
+  @override
+  void dispose() {
+    editor.removeListener(_shownChanged);
+    editor.strip.removeListener(_stripChanged);
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  // The shown photo's frame stays in view: when another photo is shown, or the strip fills with
+  // a folder or a roll around it. The editor speaks on every edit, so only the path is compared.
+  void _shownChanged() {
+    final path = editor.active?.path;
+    if (path == _shown) return;
+    _shown = path;
+    _follow();
+  }
+
+  void _stripChanged() {
+    final count = editor.strip.items.length;
+    if (count == _count) return;
+    _count = count;
+    _follow();
+  }
+
+  void _follow() {
+    final path = _shown;
+    if (path != null) WidgetsBinding.instance.addPostFrameCallback((_) => _reveal(path));
+  }
+
+  void _reveal(String path) {
+    if (!mounted || !_scroll.hasClients) return;
+    final index = editor.strip.items.indexWhere((i) => i.path == path);
+    if (index < 0) return;
+    final position = _scroll.position;
+    final start = index * _stride, end = start + _stride;
+    final view = position.viewportDimension;
+    if (start >= position.pixels && end <= position.pixels + view) return;
+    final target = (start - (view - _stride) / 2).clamp(0.0, position.maxScrollExtent);
+    // A step to a neighbour glides; a jump across the roll goes straight there.
+    if ((target - position.pixels).abs() <= view) {
+      _scroll.animateTo(target, duration: const Duration(milliseconds: 180), curve: Curves.easeOut);
+    } else {
+      _scroll.jumpTo(target);
+    }
+  }
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -41,33 +109,37 @@ class PhotoStrip extends StatelessWidget {
         const SizedBox(height: 2),
         SizedBox(
           height: Metrics.stripItem.height + 6,
-          child: ListView.separated(
+          child: ListView.builder(
+            controller: _scroll,
             scrollDirection: Axis.horizontal,
             // Frames are built as they come into view, which is when waiting ones are drawn.
             cacheExtent: 0,
+            itemExtent: _stride,
             itemCount: items.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 6),
             itemBuilder: (context, index) {
               final item = items[index];
               final doc = item.doc;
-              return _StripItem(
-                key: ValueKey(item.path),
-                editor: editor,
-                item: item,
-                selected: doc != null && doc == active,
-                chosen: doc != null && editor.selection.isChosen(doc),
-                onTap: () {
-                  final keys = HardwareKeyboard.instance;
-                  final range = keys.isShiftPressed;
-                  final toggle = keys.isMetaPressed || keys.isControlPressed;
-                  // A modified click chooses among open photos; a waiting one opens first.
-                  if (doc != null && (range || toggle)) {
-                    editor.selection.press(doc, range: range, toggle: toggle);
-                  } else {
-                    editor.strip.choose(item);
-                  }
-                },
-                onClose: () => editor.strip.close(item),
+              return Align(
+                alignment: Alignment.centerLeft,
+                child: _StripItem(
+                  key: ValueKey(item.path),
+                  editor: editor,
+                  item: item,
+                  selected: doc != null && doc == active,
+                  chosen: doc != null && editor.selection.isChosen(doc),
+                  onTap: () {
+                    final keys = HardwareKeyboard.instance;
+                    final range = keys.isShiftPressed;
+                    final toggle = keys.isMetaPressed || keys.isControlPressed;
+                    // A modified click chooses among open photos; a waiting one opens first.
+                    if (doc != null && (range || toggle)) {
+                      editor.selection.press(doc, range: range, toggle: toggle);
+                    } else {
+                      editor.strip.choose(item);
+                    }
+                  },
+                  onClose: () => editor.strip.close(item),
+                ),
               );
             },
           ),
