@@ -12,6 +12,7 @@ import 'package:flutter/widgets.dart';
 import '../model/editor.dart';
 import '../ui/inspector/inspector.dart';
 import '../ui/theme/theme.dart';
+import '../ui/workspace/crop_overlay.dart';
 import '../ui/workspace/dialogs.dart';
 import '../ui/workspace/film_library.dart';
 import '../ui/workspace/toolbar.dart';
@@ -70,6 +71,7 @@ class _WorkspaceState extends State<Workspace> {
 
   /// Holding Space shows the original, as in the web editor.
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    if (cropKeys(editor, event) == KeyEventResult.handled) return KeyEventResult.handled;
     if (event.logicalKey != LogicalKeyboardKey.space) return KeyEventResult.ignored;
     if (event is KeyDownEvent) editor.setComparing(true);
     if (event is KeyUpEvent) editor.setComparing(false);

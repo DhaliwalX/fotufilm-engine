@@ -164,6 +164,12 @@ class _EditGroup extends StatelessWidget {
                   doc != null && editor.edit['stock'] != null ? editor.newGrainPattern : null,
             ),
             const MenuItem.divider(),
+            MenuItem(
+              label: 'Crop',
+              icon: 'crop',
+              onSelected: doc != null && !editor.exporting ? () => editor.setPanel(Panel.crop) : null,
+            ),
+            const MenuItem.divider(),
             MenuItem(label: 'Keyboard shortcuts', icon: 'shortcuts', onSelected: onShortcuts),
           ]),
         ),

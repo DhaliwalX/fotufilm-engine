@@ -103,6 +103,7 @@ List<CommandMenu> editorCommands(
       [
         for (final (i, p) in Panel.tabs.indexed)
           Command(p.title, () => editor.setPanel(p), key: digits[i], alt: true),
+        Command('Crop', when(photo, () => editor.setPanel(Panel.crop))),
       ],
     ]),
     CommandMenu('Film', [

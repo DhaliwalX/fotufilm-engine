@@ -4,7 +4,10 @@
 import 'package:flutter/widgets.dart';
 
 import '../../model/editor.dart';
+import 'crop_overlay.dart';
 
 /// The overlays for what the editor is doing now, over `photo` (the picture's rectangle in the
 /// viewer). They sit above the picture and take the pointer where they need it.
-List<Widget> viewerToolOverlays(EditorModel editor, Rect photo) => const [];
+List<Widget> viewerToolOverlays(EditorModel editor, Rect photo) => [
+      ...cropOverlays(editor, photo),
+    ];
