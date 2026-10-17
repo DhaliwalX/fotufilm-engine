@@ -6,6 +6,8 @@
 //   {"tap": [x, y]}                 a click at logical point (x, y)
 //   {"exportAll": "/dir", "background": true}  Export All, the next commands running meanwhile
 //   {"waitExports": true}           waits until no export is queued or running
+//   {"layers": true}                logs the photograph's native layers (where AppKit and
+//                                   Flutter place each, its format) and writes their frames
 //   {"rightTap": [x, y]}            a right-click there
 //   {"drag": [x0, y0, x1, y1]}      a press, a move and a release
 //   {"open": ["/path/photo.jpg"]}   opens photographs
@@ -92,6 +94,7 @@ import '../model/export.dart';
 import '../model/library_model.dart';
 import '../ui/workspace/crop_overlay.dart';
 import '../ui/workspace/histogram_panel.dart';
+import '../ui/workspace/picture.dart' show PresentedLayer;
 import '../ui/workspace/settings_dialog.dart';
 import 'commands_driver.dart';
 import 'editing_driver.dart';
@@ -152,6 +155,26 @@ class Driver {
       final image = await render.toImage(pixelRatio: dpr);
       final png = await image.toByteData(format: ui.ImageByteFormat.png);
       File('${dir.path}/$name.png').writeAsBytesSync(png!.buffer.asUint8List());
+    }
+    if (c['layers'] == true) {
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      void visit(Element element) {
+        if (element.widget case PresentedLayer(:final layer)) {
+          final box = element.findRenderObject() as RenderBox?;
+          if (box != null && box.attached) {
+            final at = box.localToGlobal(Offset.zero);
+            _log('flutter $layer [${at.dx.toStringAsFixed(1)}, ${at.dy.toStringAsFixed(1)}, '
+                '${box.size.width.toStringAsFixed(1)}, ${box.size.height.toStringAsFixed(1)}]');
+          }
+        }
+        element.visitChildren(visit);
+      }
+      boundary.currentContext!.visitChildElements(visit);
+      final native = await const MethodChannel('fotufilm/presenter')
+          .invokeMethod<List<Object?>>('describe', {'dir': dir.path});
+      for (final view in native ?? const []) {
+        _log('native ${jsonEncode(view)}');
+      }
     }
     if (c['rightTap'] case [final num x, final num y]) {
       final at = Offset(x.toDouble(), y.toDouble());

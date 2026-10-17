@@ -1,9 +1,13 @@
-// Drawing the engine's pictures. They are Display P3 and the window is sRGB, so each passes
-// through an exact conversion on the GPU (shaders/display_p3_to_srgb.frag) unless the platform's
-// presenter has already converted it.
+// Drawing the engine's pictures. The presenter's layers are the platform's own, in Display P3.
+// A decoded picture is Display P3 and the window is sRGB, so it passes through an exact
+// conversion on the GPU (shaders/display_p3_to_srgb.frag).
 import 'dart:ui' as ui;
 
+import 'package:flutter/rendering.dart' show PlatformViewHitTestBehavior;
+import 'package:flutter/services.dart' show StandardMessageCodec;
 import 'package:flutter/widgets.dart';
+
+import '../../engine/presenter.dart';
 
 abstract final class ColourConversion {
   static ui.FragmentProgram? _program;
@@ -19,13 +23,12 @@ abstract final class ColourConversion {
     }
   }
 
-  /// `child` drawn in sRGB. `swapRedBlue` for RGBA pixels in a BGRA texture.
-  static Widget apply(Widget child, {bool swapRedBlue = false}) {
+  /// `child` drawn in sRGB.
+  static Widget apply(Widget child) {
     final program = _program;
     if (!enabled || program == null || !ui.ImageFilter.isShaderFilterSupported) return child;
-    // Uniforms 0 and 1 are the size, which the filter sets; 2 is the swap.
-    final shader = program.fragmentShader()..setFloat(2, swapRedBlue ? 1 : 0);
-    return ImageFiltered(imageFilter: ui.ImageFilter.shader(shader), child: child);
+    // Its only uniform is the size, which the filter sets.
+    return ImageFiltered(imageFilter: ui.ImageFilter.shader(program.fragmentShader()), child: child);
   }
 }
 
@@ -40,21 +43,20 @@ class EnginePicture extends StatelessWidget {
       RawImage(image: image, fit: fit, filterQuality: FilterQuality.medium));
 }
 
-/// A layer of the native presenter: the engine wrote it straight into a platform texture.
+/// A layer of the native presenter, which the platform draws in the engine's Display P3, with
+/// EDR where the screen has it; the gestures over it stay the editor's.
 class PresentedLayer extends StatelessWidget {
-  const PresentedLayer({
-    super.key,
-    required this.texture,
-    required this.swapRedBlue,
-    required this.converted,
-  });
+  const PresentedLayer(this.layer, {super.key});
 
-  final int texture;
-  final bool swapRedBlue, converted;
+  final String layer;
 
   @override
-  Widget build(BuildContext context) {
-    final layer = Texture(textureId: texture, filterQuality: FilterQuality.medium);
-    return converted ? layer : ColourConversion.apply(layer, swapRedBlue: swapRedBlue);
-  }
+  Widget build(BuildContext context) => AppKitView(
+        // Comparing shows another layer: its own view.
+        key: ValueKey(layer),
+        viewType: NativePresenter.viewType,
+        creationParams: {'layer': layer},
+        creationParamsCodec: const StandardMessageCodec(),
+        hitTestBehavior: PlatformViewHitTestBehavior.transparent,
+      );
 }

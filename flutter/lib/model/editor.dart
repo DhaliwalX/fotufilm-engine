@@ -266,6 +266,8 @@ class EditorModel extends ChangeNotifier implements RenderHost {
       if (address != null) presenter = await NativePresenter.attach(address);
       this.engine = engine;
       renderer = Renderer(engine: engine, catalogue: catalogue, host: this, presenter: presenter);
+      // A screen with more or less light above white takes the photograph developed for it.
+      presenter?.onHeadroomChange = () => renderer?.schedule();
       startup.value = StartupState.ready;
     } catch (e) {
       startupError = '$e';

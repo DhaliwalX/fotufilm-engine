@@ -1,11 +1,9 @@
 // The engine's pictures are Display P3 with the sRGB transfer; Flutter draws the window in sRGB.
 // Applied as an image filter over the resampled picture: decode, convert the primaries, encode.
-// u_swap reads the picture's red and blue the other way round, for RGBA pixels in a BGRA texture.
 #version 460 core
 #include <flutter/runtime_effect.glsl>
 
 uniform vec2 u_size;
-uniform float u_swap;
 uniform sampler2D u_texture;
 
 out vec4 fragColor;
@@ -20,7 +18,6 @@ vec3 encode(vec3 c) {
 
 void main() {
   vec4 texel = texture(u_texture, FlutterFragCoord().xy / u_size);
-  if (u_swap > 0.5) texel = texel.bgra;
   if (texel.a <= 0.0) {
     fragColor = vec4(0.0);
     return;

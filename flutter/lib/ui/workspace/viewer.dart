@@ -224,11 +224,6 @@ class _PhotoCanvasState extends State<PhotoCanvas> {
 
   /// A presenter layer, or its original while comparing.
   Widget _layer(String name) {
-    final presenter = editor.presenter!;
-    return PresentedLayer(
-      texture: presenter.textures[editor.comparing ? '$name.original' : name]!,
-      swapRedBlue: presenter.swapRedBlue,
-      converted: presenter.convertsColour,
-    );
+    return PresentedLayer(editor.comparing ? '$name.original' : name);
   }
 }

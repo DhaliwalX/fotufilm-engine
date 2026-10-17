@@ -21,7 +21,7 @@
 /* End PBXAggregateTarget section */
 
 /* Begin PBXBuildFile section */
-		F07F11A12B00000000000005 /* SurfaceConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = F07F11A12B00000000000006 /* SurfaceConverter.swift */; };
+		F07F11A12B00000000000005 /* PhotoLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F07F11A12B00000000000006 /* PhotoLayer.swift */; };
 		F07F11A12B00000000000002 /* EnginePresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = F07F11A12B00000000000003 /* EnginePresenter.swift */; };
 		331C80D8294CF71000263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C80D7294CF71000263BE5 /* RunnerTests.swift */; };
 		335BBD1B22A9A15E00E9071D /* GeneratedPluginRegistrant.swift in Sources */ = {isa = PBXBuildFile; fileRef = 335BBD1A22A9A15E00E9071D /* GeneratedPluginRegistrant.swift */; };
@@ -64,7 +64,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		F07F11A12B00000000000006 /* SurfaceConverter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SurfaceConverter.swift; sourceTree = "<group>"; };
+		F07F11A12B00000000000006 /* PhotoLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoLayer.swift; sourceTree = "<group>"; };
 		F07F11A12B00000000000003 /* EnginePresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnginePresenter.swift; sourceTree = "<group>"; };
 		F07F11A12B00000000000004 /* Runner-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Runner-Bridging-Header.h"; sourceTree = "<group>"; };
 		2980610459782AD3FD4D63EB /* Pods-RunnerTests.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.profile.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.profile.xcconfig"; sourceTree = "<group>"; };
@@ -183,7 +183,7 @@
 				33CC10F02044A3C60003C045 /* AppDelegate.swift */,
 				33CC11122044BFA00003C045 /* MainFlutterWindow.swift */,
 				F07F11A12B00000000000003 /* EnginePresenter.swift */,
-				F07F11A12B00000000000006 /* SurfaceConverter.swift */,
+				F07F11A12B00000000000006 /* PhotoLayer.swift */,
 				F07F11A12B00000000000004 /* Runner-Bridging-Header.h */,
 				33E51913231747F40026EE4D /* DebugProfile.entitlements */,
 				33E51914231749380026EE4D /* Release.entitlements */,
@@ -468,7 +468,7 @@
 				33CC11132044BFA00003C045 /* MainFlutterWindow.swift in Sources */,
 				33CC10F12044A3C60003C045 /* AppDelegate.swift in Sources */,
 				F07F11A12B00000000000002 /* EnginePresenter.swift in Sources */,
-				F07F11A12B00000000000005 /* SurfaceConverter.swift in Sources */,
+				F07F11A12B00000000000005 /* PhotoLayer.swift in Sources */,
 				335BBD1B22A9A15E00E9071D /* GeneratedPluginRegistrant.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
