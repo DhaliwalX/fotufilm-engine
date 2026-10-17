@@ -461,7 +461,7 @@ class _FilmPacksSectionState extends State<_FilmPacksSection> {
   @override
   Widget build(BuildContext context) {
     final installed = packs.installed ?? const [];
-    final disabled = _busy || packs.editor.exporting;
+    final disabled = _busy || packs.editor.exporting || packs.editor.exporter.busy;
     final muted = editorText(context, size: TextSizes.label, color: Palette.of(context).muted);
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       const PaneHeading('Film Packs'),

@@ -19,6 +19,19 @@ abstract interface class EngineConnection {
   /// Stops the develop in progress at its next opportunity.
   void cancel();
 
+  /// Whether still exports run beside the editor's develops ([callInBackground]); otherwise
+  /// one holds the engine until it is done.
+  bool get exportsInBackground;
+
+  /// A still export (`export`, `exportBatch`, `exportOriginal`) run beside the editor's develops:
+  /// [cancel] leaves it going and [cancelBackground] stops it. Background calls are answered in
+  /// the order they were made; [onProgress] hears a long one's progress.
+  Future<EngineReply> callInBackground(String method, Map<String, dynamic> params,
+      [void Function(Map<String, dynamic> progress)? onProgress]);
+
+  /// Stops the background call in progress.
+  void cancelBackground();
+
   /// What the engine's platform services offer (`fotufilm_capabilities`): export formats, HDR,
   /// Export All, the clipboard, subject selection, film packs, plug-ins and updates, as
   /// web/src/backend/desktop/host.js reads them. Empty where the engine does not say.

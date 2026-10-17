@@ -155,7 +155,8 @@ public final class HostEngine {
 
     private let renderLock = NSLock()
     private let stateLock = NSLock()
-    private var generation: UInt64 = 0
+    /// Each cancel scope's count of cancels, by `CancelScope.rawValue`.
+    private var generations: [UInt64] = [0, 0]
     private var loadedStocks: [String: FilmStock] = [:]
     /// The kernel schedules warm-up has compiled, so films added later compile only new ones.
     private var warmedSchedules = Set<Int32>()
@@ -258,23 +259,61 @@ public final class HostEngine {
         return String(decoding: data, as: UTF8.self)
     }
 
-    public func cancel() {
+    /// What stops a call. The editor's develops answer `cancel`, which a host calls before each
+    /// newer edit; a call the host runs beside them (an export it lets go on while the person
+    /// keeps editing, `"background": true`) answers only `cancelBackground`. Both still develop
+    /// one at a time.
+    public enum CancelScope: Int, Sendable { case foreground, background }
+
+    /// The scope of the call running on this thread.
+    @TaskLocal public static var scope: CancelScope = .foreground
+
+    public func cancel() { cancel(.foreground) }
+
+    public func cancelBackground() { cancel(.background) }
+
+    private func cancel(_ scope: CancelScope) {
         stateLock.lock()
-        generation &+= 1
+        generations[scope.rawValue] &+= 1
         stateLock.unlock()
     }
 
-    private var currentGeneration: UInt64 {
-        stateLock.lock()
-        defer { stateLock.unlock() }
-        return generation
+    /// The editor's develops waiting for the render lock, which a background call lets go first.
+    private let turns = NSCondition()
+    private var editorWaiting = 0
+
+    /// Takes the render lock: a background call (an export) waits while the editor's develops do,
+    /// so a person editing beside a long Export All waits for one photograph's develop at most.
+    private func takeRenderLock() {
+        if Self.scope == .background {
+            turns.lock()
+            while editorWaiting > 0 { turns.wait() }
+            turns.unlock()
+            renderLock.lock()
+            return
+        }
+        turns.lock()
+        editorWaiting += 1
+        turns.unlock()
+        renderLock.lock()
+        turns.lock()
+        editorWaiting -= 1
+        turns.broadcast()
+        turns.unlock()
     }
 
-    /// True until `cancel` is next called: how a long call, a video export, sees a cancel
-    /// between its develops.
+    private func generation(_ scope: CancelScope) -> UInt64 {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return generations[scope.rawValue]
+    }
+
+    /// True until the calling thread's scope is next cancelled: how a long call (an export, a
+    /// video export) and a develop see a cancel, from whichever thread asks.
     func continuation() -> () -> Bool {
-        let started = currentGeneration
-        return { self.currentGeneration == started }
+        let scope = Self.scope
+        let started = generation(scope)
+        return { self.generation(scope) == started }
     }
 
     /// Develops `image` with a web render request into `target`; returns the delivered size.
@@ -328,10 +367,10 @@ public final class HostEngine {
         guard let film = stock(edit.edit.stock) else { return nil }
         let options = try options(edit, stock: film, contentHeadroom: contentHeadroom)
         guard options.transportConstruction(for: film) == nil else { return nil }
-        let started = currentGeneration
-        renderLock.lock()
+        let shouldContinue = continuation()
+        takeRenderLock()
         defer { renderLock.unlock() }
-        guard currentGeneration == started else {
+        guard shouldContinue() else {
             throw Failure(description: "Cancelled.", cancelled: true)
         }
         return developer.developDisplay8(codes, width: width, height: height, stock: film,
@@ -369,9 +408,8 @@ public final class HostEngine {
                         realtime: Bool = false, exactMath: Bool = false,
                         into target: Target) throws {
         let stock = film ?? .noFilm
-        let started = currentGeneration
-        let shouldContinue = { self.currentGeneration == started }
-        renderLock.lock()
+        let shouldContinue = continuation()
+        takeRenderLock()
         defer { renderLock.unlock() }
         guard shouldContinue() else { throw Failure(description: "Cancelled.", cancelled: true) }
 
@@ -421,9 +459,8 @@ public final class HostEngine {
                    calibration: ApproximateNegativeScan,
                    readScan: (Range<Int>, UnsafeMutableBufferPointer<Float>) -> Void,
                    writeRows: (Range<Int>, UnsafeBufferPointer<Float>) -> Void) throws {
-        let started = currentGeneration
-        let shouldContinue = { self.currentGeneration == started }
-        renderLock.lock()
+        let shouldContinue = continuation()
+        takeRenderLock()
         defer { renderLock.unlock() }
         guard shouldContinue() else { throw Failure(description: "Cancelled.", cancelled: true) }
         try developer.printScan(width: width, height: height, stock: stock, options: options,

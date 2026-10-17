@@ -37,9 +37,17 @@ class _ExportDialogState extends State<ExportDialog> {
     exporter.loadOptions();
   }
 
+  /// The dialog closes once the export is under way in the background, or when it is saved
+  /// where the editor waits for it.
   Future<void> _export(bool batch) async {
-    final saved = batch ? await exporter.exportAll() : await exporter.exportPhoto();
-    if (saved != null && mounted) widget.onClose();
+    final saved = batch
+        ? await exporter.exportAll(onStarted: _close)
+        : await exporter.exportPhoto(onStarted: _close);
+    if (saved != null) _close();
+  }
+
+  void _close() {
+    if (mounted) widget.onClose();
   }
 
   @override

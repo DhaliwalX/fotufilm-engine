@@ -1,6 +1,7 @@
 // The desktop engine: libfotufilm through dart:ffi. One isolate owns the engine and answers the
 // editor's host calls in order, as the CEF host's engine thread does, so the UI isolate never
-// waits for a develop.
+// waits for a develop. A second isolate, started at the first export, makes the background calls
+// on the same engine, so an export runs beside the editor's develops.
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ffi';
@@ -18,6 +19,9 @@ class NativeEngine implements EngineConnection {
   NativeEngine._(this._commands, this._address, this.capabilities, this.description);
 
   final SendPort _commands;
+
+  /// The background calls' isolate, once an export has started it.
+  Future<SendPort>? _lane;
   final int _address;
   @override
   final Map<String, dynamic> capabilities;
@@ -46,27 +50,30 @@ class NativeEngine implements EngineConnection {
         hello as (SendPort, int, String, String);
     final engine = NativeEngine._(commands, address, jsonDecode(caps) as Map<String, dynamic>,
         jsonDecode(describe) as Map<String, dynamic>);
-    () async {
-      while (await events.moveNext()) {
-        final (int id, Object? result, TransferableTypedData? bytes) =
-            events.current as (int, Object?, TransferableTypedData?);
-        // A long call's progress, while it runs.
-        if (result is (String,)) {
-          engine._progress[id]?.call(jsonDecode(result.$1) as Map<String, dynamic>);
-          continue;
-        }
-        engine._progress.remove(id);
-        final completer = engine._pending.remove(id);
-        if (completer == null) continue;
-        if (result is String) {
-          completer.complete(EngineReply(jsonDecode(result), bytes?.materialize().asUint8List()));
-        } else if (result is (bool, String)) {
-          completer.completeError(
-              result.$1 ? const FotufilmCancelled() : FotufilmException(result.$2));
-        }
-      }
-    }();
+    engine._answer(events);
     return engine;
+  }
+
+  /// Settles the calls an isolate answers, and passes on their progress.
+  void _answer(StreamIterator<dynamic> events) async {
+    while (await events.moveNext()) {
+      final (int id, Object? result, TransferableTypedData? bytes) =
+          events.current as (int, Object?, TransferableTypedData?);
+      // A long call's progress, while it runs.
+      if (result is (String,)) {
+        _progress[id]?.call(jsonDecode(result.$1) as Map<String, dynamic>);
+        continue;
+      }
+      _progress.remove(id);
+      final completer = _pending.remove(id);
+      if (completer == null) continue;
+      if (result is String) {
+        completer.complete(EngineReply(jsonDecode(result), bytes?.materialize().asUint8List()));
+      } else if (result is (bool, String)) {
+        completer.completeError(
+            result.$1 ? const FotufilmCancelled() : FotufilmException(result.$2));
+      }
+    }
   }
 
   @override
@@ -97,6 +104,43 @@ class NativeEngine implements EngineConnection {
   /// Safe from any thread.
   @override
   void cancel() => FotufilmLibrary.open().cancel(Pointer<Void>.fromAddress(_address));
+
+  @override
+  bool get exportsInBackground => true;
+
+  @override
+  Future<EngineReply> callInBackground(String method, Map<String, dynamic> params,
+      [void Function(Map<String, dynamic> progress)? onProgress]) async {
+    final lane = await (_lane ??= _startLane());
+    final id = _next++;
+    final completer = _pending[id] = Completer<EngineReply>();
+    if (onProgress != null) _progress[id] = onProgress;
+    lane.send((id, method, jsonEncode({...params, 'background': true}), null, onProgress != null));
+    return completer.future;
+  }
+
+  Future<SendPort> _startLane() async {
+    final replies = ReceivePort();
+    await Isolate.spawn(_serveLane, (replies.sendPort, _address), debugName: 'fotufilm-exports');
+    final events = StreamIterator(replies);
+    await events.moveNext();
+    final lane = events.current as SendPort;
+    _answer(events);
+    return lane;
+  }
+
+  /// A host call from the UI isolate: it only counts the cancel, so it never waits.
+  @override
+  void cancelBackground() =>
+      FotufilmLibrary.open().call(Pointer<Void>.fromAddress(_address), 'cancelBackground', '{}');
+}
+
+/// The background calls' isolate: the same engine, called from its own thread.
+void _serveLane((SendPort, int) start) {
+  final (replies, address) = start;
+  final commands = ReceivePort();
+  replies.send(commands.sendPort);
+  _answerCalls(FotufilmLibrary.open(), Pointer<Void>.fromAddress(address), commands, replies);
 }
 
 void _serve(SendPort replies) {
@@ -112,6 +156,12 @@ void _serve(SendPort replies) {
   final commands = ReceivePort();
   replies.send((commands.sendPort, engine.address, library.capabilities(),
       library.describe(engine)));
+  _answerCalls(library, engine, commands, replies);
+}
+
+/// Makes each call that arrives on `commands`, in order, and sends back its answer.
+void _answerCalls(
+    FotufilmLibrary library, Pointer<Void> engine, ReceivePort commands, SendPort replies) {
   commands.listen((message) {
     final (int id, String method, String params, TransferableTypedData? bytes, bool reports) =
         message as (int, String, String, TransferableTypedData?, bool);

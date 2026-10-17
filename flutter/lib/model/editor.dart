@@ -391,7 +391,12 @@ class EditorModel extends ChangeNotifier implements RenderHost {
     if (index < activeIndex || activeIndex >= documents.length) activeIndex--;
     if (activeIndex < 0 && documents.isNotEmpty) activeIndex = 0;
     notifyListeners();
-    await engine?.call('release', {'handle': doc.handle});
+    // A photograph an export still develops stays loaded until it is done.
+    if (exporter.needs(doc.handle)) {
+      exporter.releaseAfter(doc.handle);
+    } else {
+      await engine?.call('release', {'handle': doc.handle});
+    }
     renderer?.schedule();
   }
 

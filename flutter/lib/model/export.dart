@@ -4,6 +4,13 @@
 // (Export Original), the developed picture to the clipboard (Copy Photo), and a movie frame by
 // frame (`exportVideo`, useExportActions.js `exportClip`). The engine develops,
 // encodes and writes; the editor chooses where, as the CEF shell's save panels do.
+//
+// Where the engine runs exports beside its develops (the desktop), still exports wait in a
+// queue and run one after another while the person keeps editing: each takes its photographs'
+// edits as they were when it was asked for, and a photograph closed meanwhile stays loaded until
+// its export is done. A movie, and every export in a browser, holds the editor until it is done.
+import 'dart:async';
+
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
@@ -71,6 +78,25 @@ class ExportOptions {
   final List<String> unavailable;
 }
 
+/// A still export queued or running in the background.
+class ExportJob {
+  ExportJob._(this.title, this.handles, this._work);
+
+  /// What it writes: a file's name, or how many photos.
+  final String title;
+
+  /// The photographs it develops, kept loaded until it is done.
+  final List<int> handles;
+  final Future<SavedExport?> Function(EngineConnection engine, ExportJob job) _work;
+  final _done = Completer<SavedExport?>();
+
+  bool running = false;
+
+  /// What it is doing now, and how far it is (0 to 1; null while unknown).
+  String? detail;
+  double? progress;
+}
+
 /// What an export just saved, for the notice: one file, or `count` files in `directory`.
 class SavedExport {
   const SavedExport({required this.filename, required this.path, this.count, this.directory});
@@ -97,6 +123,19 @@ class ExportTool {
 
   /// The last export saved, until it is dismissed (SavedExportNotice.jsx).
   SavedExport? saved;
+
+  /// The still exports in the background, the running one first.
+  final List<ExportJob> jobs = [];
+
+  /// Whether a background export is queued or running.
+  bool get busy => jobs.isNotEmpty;
+
+  /// How many queued or running exports need each photograph, by handle.
+  final Map<int, int> _needed = {};
+
+  /// Photographs closed while an export still needed them, let go when it is done.
+  final Set<int> _closed = {};
+  bool _pumping = false;
 
   /// A folder every export goes to without asking, as the CEF shell's --export-dir: for
   /// scripted checks.
@@ -332,6 +371,92 @@ class ExportTool {
     editor.notify();
   }
 
+  /// Runs a still export: in the background where the engine allows it, `onStarted` hearing
+  /// once it is queued; otherwise as [_run] does, the editor waiting.
+  Future<SavedExport?> _queue(String title, List<int> handles,
+      Future<SavedExport?> Function(EngineConnection engine, ExportJob job) work,
+      {void Function()? onStarted}) async {
+    final engine = _engine;
+    if (engine == null) return null;
+    final job = ExportJob._(title, handles, work);
+    if (!engine.exportsInBackground) {
+      return _run<SavedExport?>(title, () async {
+        final saved = await work(engine, job);
+        return saved == null ? null : _show(saved);
+      });
+    }
+    for (final handle in handles) {
+      _needed[handle] = (_needed[handle] ?? 0) + 1;
+    }
+    jobs.add(job);
+    editor.notify();
+    onStarted?.call();
+    unawaited(_pump());
+    return job._done.future;
+  }
+
+  Future<void> _pump() async {
+    if (_pumping) return;
+    _pumping = true;
+    while (jobs.isNotEmpty) {
+      final job = jobs.first..running = true;
+      editor.notify();
+      SavedExport? saved;
+      try {
+        saved = await job._work(_engine!, job);
+        if (saved != null) _show(saved);
+      } on FotufilmCancelled {
+        // Stopped by Cancel; what Export All already wrote stays.
+      } catch (e) {
+        editor.showError('$e');
+      }
+      jobs.remove(job);
+      _letGo(job);
+      job._done.complete(saved);
+      editor.notify();
+    }
+    _pumping = false;
+  }
+
+  /// A queued or running export's progress, in the editor's status where it waits.
+  void _report(ExportJob job, String detail, [double? progress]) {
+    job
+      ..detail = detail
+      ..progress = progress;
+    if (!(_engine?.exportsInBackground ?? false)) editor.status = detail;
+    editor.notify();
+  }
+
+  /// Stops a background export: the running one at its next develop, a waiting one before it
+  /// starts.
+  void cancelJob(ExportJob job) {
+    if (job.running) {
+      _engine?.cancelBackground();
+    } else if (jobs.remove(job)) {
+      _letGo(job);
+      job._done.complete(null);
+      editor.notify();
+    }
+  }
+
+  /// Whether an export still needs the photograph of `handle`.
+  bool needs(int handle) => _needed.containsKey(handle);
+
+  /// A photograph closed while an export needs it: let go when that export is done.
+  void releaseAfter(int handle) => _closed.add(handle);
+
+  void _letGo(ExportJob job) {
+    for (final handle in job.handles) {
+      final left = (_needed[handle] ?? 1) - 1;
+      if (left > 0) {
+        _needed[handle] = left;
+        continue;
+      }
+      _needed.remove(handle);
+      if (_closed.remove(handle)) _engine?.call('release', {'handle': handle});
+    }
+  }
+
   void _remember({required bool batch}) => _settings.set('lastPhotoExport', {
         'type': type,
         'size': sizeId(batch: batch),
@@ -352,65 +477,73 @@ class ExportTool {
 
   /// The shown photograph, at the chosen size and format, where the save panel says (or to
   /// `path`). Answers what was saved, or null when nothing was.
-  Future<SavedExport?> exportPhoto({String? path}) async {
+  Future<SavedExport?> exportPhoto({String? path, void Function()? onStarted}) async {
     final doc = editor.active, engine = _engine;
     if (doc == null || engine == null || editor.exporting) return null;
     if (doc.isMovie) return exportMovie(path: path);
-    if (type == originalType) return exportOriginal(path: path);
+    if (type == originalType) return exportOriginal(path: path, onStarted: onStarted);
     final filename = stillFilename(doc.name, doc.edit, type);
     path ??= await _chooseFile(filename, type);
     if (path == null) return null;
-    return _run('Rendering native export', () async {
-      final answer = await engine.call('export', {
-        ..._request(doc, maxEdge: exportMaxEdge(sizeId(batch: false), cropSize(doc))),
-        'type': type,
-        'quality': quality / 100,
-        'metadata': metadata,
-        'hdr': hdr,
-        'photoQuality': photoQuality,
-        'filename': filename,
-        'path': path,
-      });
-      _remember(batch: false);
-      return _show(SavedExport(
+    final destination = path;
+    final request = {
+      ..._request(doc, maxEdge: exportMaxEdge(sizeId(batch: false), cropSize(doc))),
+      'type': type,
+      'quality': quality / 100,
+      'metadata': metadata,
+      'hdr': hdr,
+      'photoQuality': photoQuality,
+      'filename': filename,
+      'path': destination,
+    };
+    _remember(batch: false);
+    return _queue(filename, [doc.handle], (engine, job) async {
+      _report(job, 'Exporting $filename');
+      final answer = await engine.callInBackground('export', request);
+      return SavedExport(
           filename: answer.json['filename'] as String? ?? filename,
-          path: answer.json['path'] as String? ?? path!));
-    });
+          path: answer.json['path'] as String? ?? destination);
+    }, onStarted: onStarted);
   }
 
   /// Export All: the photographs chosen in the strip, or all it shows, each with its own edit,
   /// into one folder the panel asks for (or `directory`). The engine numbers names past files
   /// already there.
-  Future<SavedExport?> exportAll({String? directory}) async {
+  Future<SavedExport?> exportAll({String? directory, void Function()? onStarted}) async {
     final engine = _engine;
     final docs = _batch;
     if (engine == null || docs.isEmpty || editor.exporting) return null;
     directory ??= await _chooseFolder();
     if (directory == null) return null;
-    return _run<SavedExport?>('Preparing export', () async {
-      final answer = await engine.callWithProgress('exportBatch', {
-        'items': [
-          for (final doc in docs)
-            {
-              ..._request(doc),
-              'name': doc.name,
-              'filename': stillFilename(doc.name, doc.edit, type),
-            },
-        ],
-        'size': sizeId(batch: true),
-        'type': type,
-        'quality': quality / 100,
-        'metadata': metadata,
-        'hdr': hdr,
-        'photoQuality': photoQuality,
-        'directory': directory,
-      }, (progress) {
+    final request = {
+      'items': [
+        for (final doc in docs)
+          {
+            ..._request(doc),
+            'name': doc.name,
+            'filename': stillFilename(doc.name, doc.edit, type),
+          },
+      ],
+      'size': sizeId(batch: true),
+      'type': type,
+      'quality': quality / 100,
+      'metadata': metadata,
+      'hdr': hdr,
+      'photoQuality': photoQuality,
+      'directory': directory,
+    };
+    _remember(batch: true);
+    return _queue('${docs.length} photos', [for (final d in docs) d.handle], (engine, job) async {
+      _report(job, 'Preparing export', 0);
+      final answer = await engine.callInBackground('exportBatch', request, (progress) {
         final total = progress['total'], name = progress['name'];
-        _setStatus(name is String
-            ? 'Exporting $name · ${progress['current']} of $total'
-            : 'Exported ${progress['done']} of $total');
+        _report(
+            job,
+            name is String
+                ? 'Exporting $name · ${progress['current']} of $total'
+                : 'Exported ${progress['done']} of $total',
+            (progress['progress'] as num?)?.toDouble());
       });
-      _remember(batch: true);
       final written = ((answer.json['written'] as List?) ?? const []).cast<Json>();
       final failed = ((answer.json['failed'] as List?) ?? const []).cast<Json>();
       final reduced = ((answer.json['reduced'] as List?) ?? const []).cast<String>();
@@ -420,15 +553,15 @@ class ExportTool {
           'Exported smaller to stay within this device’s safe memory limit: '
               '${reduced.join(', ')}.',
       ];
-      if (problems.isNotEmpty) editor.error = problems.join(' ');
+      if (problems.isNotEmpty) editor.showError(problems.join(' '));
       if (written.isEmpty) return null;
-      return _show(SavedExport(
+      return SavedExport(
         filename: '${written.length} photos',
         path: written.first['path'] as String,
         count: written.length,
         directory: answer.json['directory'] as String? ?? directory,
-      ));
-    });
+      );
+    }, onStarted: onStarted);
   }
 
   /// The shown movie: every frame of its trim developed with its film, crop and adjustments,
@@ -472,18 +605,20 @@ class ExportTool {
   }
 
   /// Export Original: the camera RAW file itself, no edit and no size.
-  Future<SavedExport?> exportOriginal({String? path}) async {
+  Future<SavedExport?> exportOriginal({String? path, void Function()? onStarted}) async {
     final doc = editor.active, engine = _engine;
     if (doc == null || engine == null || !originalAvailable(doc) || editor.exporting) return null;
     path ??= await _chooseFile(doc.name, '');
     if (path == null) return null;
-    return _run('Copying the original', () async {
-      final answer = await engine.call('exportOriginal',
-          {'handle': doc.handle, 'filename': doc.name, 'type': '', 'path': path});
-      return _show(SavedExport(
-          filename: answer.json['filename'] as String? ?? doc.name,
-          path: answer.json['path'] as String? ?? path!));
-    });
+    final destination = path, name = doc.name, handle = doc.handle;
+    return _queue(name, [handle], (engine, job) async {
+      _report(job, 'Copying the original');
+      final answer = await engine.callInBackground(
+          'exportOriginal', {'handle': handle, 'filename': name, 'type': '', 'path': destination});
+      return SavedExport(
+          filename: answer.json['filename'] as String? ?? name,
+          path: answer.json['path'] as String? ?? destination);
+    }, onStarted: onStarted);
   }
 
   /// Use Last Export Settings: the last photo export's settings, exported again.

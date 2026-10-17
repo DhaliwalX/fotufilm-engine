@@ -103,9 +103,9 @@ class FilmPacks extends ChangeNotifier {
   }
 
   /// Removes a pack with its films. A photo on one of them goes back to no film rather than to a
-  /// film that is gone.
+  /// film that is gone. Not while an export may still develop with them.
   Future<void> remove(String packID) async {
-    if (!available || editor.exporting) return;
+    if (!available || editor.exporting || editor.exporter.busy) return;
     final removed = installed?.where((p) => p['packID'] == packID).firstOrNull;
     final answer = await _call('removeFilmPack', {'packID': packID});
     if (((removed?['stocks'] as List?) ?? const []).contains(editor.edit['stock'])) {

@@ -74,4 +74,16 @@ class WebEngine implements EngineConnection {
 
   @override
   void cancel() => _engine.cancel();
+
+  /// The browser's engine runs one call at a time, so an export holds it.
+  @override
+  bool get exportsInBackground => false;
+
+  @override
+  Future<EngineReply> callInBackground(String method, Map<String, dynamic> params,
+          [void Function(Map<String, dynamic> progress)? onProgress]) =>
+      call(method, params);
+
+  @override
+  void cancelBackground() => _engine.cancel();
 }

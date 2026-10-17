@@ -4,6 +4,8 @@
 //
 //   {"snapshot": "name"}            the window's pixels to <dir>/name.png
 //   {"tap": [x, y]}                 a click at logical point (x, y)
+//   {"exportAll": "/dir", "background": true}  Export All, the next commands running meanwhile
+//   {"waitExports": true}           waits until no export is queued or running
 //   {"rightTap": [x, y]}            a right-click there
 //   {"drag": [x0, y0, x1, y1]}      a press, a move and a release
 //   {"open": ["/path/photo.jpg"]}   opens photographs
@@ -211,19 +213,39 @@ class Driver {
       _logSaved(await exporter.exportPhoto(path: path));
     }
     if (c['exportAll'] case final String dir) {
-      if (c['cancelAfter'] case final int ms) {
-        Timer(Duration(milliseconds: ms), exporter.cancel);
+      void cancel() {
+        exporter.cancel();
+        for (final job in [...exporter.jobs]) {
+          exporter.cancelJob(job);
+        }
       }
+
+      if (c['cancelAfter'] case final int ms) Timer(Duration(milliseconds: ms), cancel);
       final clock = Stopwatch()..start();
       // The statuses its progress showed.
       final shown = <String>[];
       final watch = Timer.periodic(const Duration(milliseconds: 10), (_) {
-        final status = editor.status;
+        final status = exporter.jobs.firstOrNull?.detail ?? editor.status;
         if (status != null && (shown.isEmpty || shown.last != status)) shown.add(status);
       });
-      _logSaved(await exporter.exportAll(directory: dir));
-      watch.cancel();
-      _log('exportAll ${clock.elapsedMilliseconds}ms statuses=$shown');
+      final export = exporter.exportAll(directory: dir).then((saved) {
+        watch.cancel();
+        _logSaved(saved);
+        _log('exportAll ${clock.elapsedMilliseconds}ms statuses=$shown');
+      });
+      // In the background, the next commands run while it exports.
+      if (c['background'] == true) {
+        _log('exportAll started');
+      } else {
+        await export;
+      }
+    }
+    if (c['waitExports'] == true) {
+      while (exporter.busy) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      _log('exports done');
     }
     if (c['exportOriginal'] case final String path) {
       _logSaved(await exporter.exportOriginal(path: path));

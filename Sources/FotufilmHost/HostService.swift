@@ -119,6 +119,9 @@ public final class HostService {
             return opened
         case "exportOriginal":
             return try answer(exportOriginal(parameters))
+        case "cancelBackground":
+            engine.cancelBackground()
+            return try answer([:])
         case "thumbnail":
             return try thumbnail(parameters, payload: payload)
         case "release":

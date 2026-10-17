@@ -6,7 +6,10 @@
  * The request is translated through the same edit model the plug-ins and the apps use.
  *
  * Every function is thread-safe. Renders on one engine run one at a time; a host that wants
- * the newest edit only calls fotufilm_engine_cancel before starting the next render.
+ * the newest edit only calls fotufilm_engine_cancel before starting the next render. A still
+ * export ("export", "exportBatch", "exportOriginal") whose params say "background": true may run
+ * on another thread beside them: fotufilm_engine_cancel leaves it going, and the host call
+ * "cancelBackground" stops it.
  * Strings returned through `char **error` or by value belong to the caller: fotufilm_free.
  */
 #ifndef FOTUFILM_H
