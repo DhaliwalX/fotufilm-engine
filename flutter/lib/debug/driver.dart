@@ -26,6 +26,12 @@
 //   {"benchDrag": ["ev", 2000]}     moves a slider every 16 ms for 2 s, as a hand does, and logs
 //                                   how many develops reached the screen, then the settle
 //   {"wait": "idle"}                answers once nothing is rendering
+//   {"sample": [0.5, 0.5]}          samples the selection at a point of the shown picture
+//   {"selection": {"range": 0.4}}   changes the selection
+//   {"mask": true}                  shows the selection's mask
+//   {"stage": 3}                    shows a pipeline stage (null the finished print)
+//   {"difference": true}            shows the stage as its change from the one before
+//   {"tools": true}                 logs the selection, the subjects and the pipeline's stages
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -170,6 +176,21 @@ class Driver {
     }
     if (c['benchFilm'] case final String id) await _timed('film $id', () async => editor.chooseStock(id));
     if (c['benchDrag'] case [final String key, final int ms]) await _benchDrag(key, ms);
+    if (c['sample'] case [final num x, final num y]) {
+      editor.selective.startSampling();
+      await editor.selective.sample([x.toDouble(), y.toDouble()]);
+    }
+    if (c['selection'] case final Map changes) editor.selective.change(changes.cast());
+    if (c['mask'] case final bool on) editor.selective.setShowMask(on);
+    if (c.containsKey('stage')) editor.pipeline.setStage((c['stage'] as num?)?.toInt());
+    if (c['difference'] case final bool on) editor.pipeline.setDifference(on);
+    if (c['tools'] == true) {
+      final pipeline = editor.pipeline;
+      _log('selective ${jsonEncode(editor.edit['selective'])} sampling=${editor.selective.sampling} '
+          'mask=${editor.selective.showMask} subjects=${editor.selective.subjects}');
+      _log('pipeline stage=${pipeline.stage} difference=${pipeline.difference} stages='
+          '${[for (var i = 0; i < pipeline.stages.length; i++) pipeline.stageName(i)].join(', ')}');
+    }
     if (c['wait'] == 'idle') {
       final deadline = DateTime.now().add(const Duration(seconds: 120));
       await Future<void>.delayed(const Duration(milliseconds: 400));

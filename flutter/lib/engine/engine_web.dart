@@ -49,6 +49,9 @@ class WebEngine implements EngineConnection {
   bool get opensPaths => false;
 
   @override
+  Map<String, dynamic> get capabilities => const {};
+
+  @override
   Future<EngineReply> call(String method,
       [Map<String, dynamic> params = const {}, Uint8List? payload]) async {
     final answer =
@@ -59,8 +62,7 @@ class WebEngine implements EngineConnection {
           ? const FotufilmCancelled()
           : FotufilmException(error);
     }
-    return EngineReply(jsonDecode(answer.json!.toDart) as Map<String, dynamic>,
-        answer.payload?.toDart);
+    return EngineReply(jsonDecode(answer.json!.toDart), answer.payload?.toDart);
   }
 
   @override

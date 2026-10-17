@@ -149,21 +149,25 @@ class Renderer {
           math.max(current.width, current.height) == edge && shows('preview', doc)) {
         return;
       }
+      final shown = {..._request(doc, doc.edit, maxEdge: edge, draft: interactive), ...options};
       final answer = await engine.call('render', {
         ..._request(doc, doc.edit, maxEdge: edge, draft: interactive),
         ...options,
         'original': true,
         'present': {'slot': 'preview', 'scope': _scope(doc, options)},
       });
+      doc..shownRequest = shown..shownAnswer = answer.json;
       await _place(doc, answer, 'preview', signature);
     } else {
       if (!interactive && doc.previewSignature == signature && doc.previewEdge == edge) return;
+      final shown = {..._request(doc, doc.edit, maxEdge: edge, draft: interactive), ...options};
       final answer = await engine.call('render', {
         ..._request(doc, doc.edit, maxEdge: edge, draft: interactive),
         ...options,
         'original': true,
         if (doc.originalKey != null) 'haveOriginal': doc.originalKey,
       });
+      doc..shownRequest = shown..shownAnswer = answer.json;
       final preview = answer.bytes('preview');
       if (preview != null) doc.previewImage = await decodePng(preview);
       final original = answer.bytes('original');

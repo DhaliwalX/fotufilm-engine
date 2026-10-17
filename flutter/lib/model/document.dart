@@ -61,6 +61,12 @@ class PhotoDocument {
   /// strip's picture.
   ui.Image? importPicture;
 
+  /// The shown picture's last preview develop: what it asked the engine (sampling reads the scene
+  /// through it, as useSceneSampling.js does `sceneRequest`) and the answer (a subject
+  /// selection's `subjects`, a print frame's `framePlan`).
+  Json? shownRequest;
+  Json? shownAnswer;
+
   // ── Native layers ──────────────────────────────────────────────────────────────────────────
   PresentedFrame? preview;
   PresentedFrame? detail;
