@@ -33,7 +33,7 @@ tool_dir="$PWD/flutter"
 stage="$(mktemp -d /tmp/fotufilm.XXXXXX)"
 trap 'rm -rf "$stage"' EXIT
 rsync -a --exclude /build --exclude /.dart_tool --exclude /macos/Pods \
-  --exclude /macos/Flutter/ephemeral --exclude /macos/Runner/Configs/Identity.xcconfig \
+  --exclude /macos/Flutter/ephemeral --exclude /macos/Runner/Configs/Build.xcconfig \
   "$tool_dir/" "$stage/flutter/"
 # What the Xcode project reads from beside it: the engine's C header and the app icon.
 for shared in Sources/CFotufilmHost/include cef/mac/compile-icon.sh cef/mac/AppIcon.icon; do
@@ -41,20 +41,23 @@ for shared in Sources/CFotufilmHost/include cef/mac/compile-icon.sh cef/mac/AppI
   cp -R "$shared" "$stage/$shared"
 done
 
-# xcconfig reads `//` as a comment, so the URLs' slashes are kept apart by an empty $().
+version="$(sed -n 's/^MARKETING_VERSION=//p' version.env)"
+build="$(sed -n 's/^CURRENT_PROJECT_VERSION=//p' version.env)"
+# The bundle states version.env's version as written: Flutter's build name pads "1.13" to
+# "1.13.0", which would name the release and its feed differently. An official build also takes
+# the Mac app's identity and feed. xcconfig reads `//` as a comment, so the URLs' slashes are
+# kept apart by an empty $().
 xcconfig_url() { printf '%s' "$1" | sed 's#//#/$()/#g'; }
-if [[ "${FOTUFILM_SOURCE_BUILD:-1}" == 0 && "${FOTUFILM_USE_SOURCE_IDENTITY:-0}" != 1 ]]; then
-  feed="${FOTUFILM_UPDATE_FEED_URL:-https://github.com/DhaliwalX/fotufilm-engine/releases/latest/download/Fotufilm-macOS-update.json}"
-  list="${FOTUFILM_RELEASE_LIST_URL:-https://api.github.com/repos/DhaliwalX/fotufilm-engine/releases?per_page=100}"
-  {
+{
+  echo "FOTUFILM_MARKETING_VERSION = $version"
+  if [[ "${FOTUFILM_SOURCE_BUILD:-1}" == 0 && "${FOTUFILM_USE_SOURCE_IDENTITY:-0}" != 1 ]]; then
+    feed="${FOTUFILM_UPDATE_FEED_URL:-https://github.com/DhaliwalX/fotufilm-engine/releases/latest/download/Fotufilm-macOS-update.json}"
+    list="${FOTUFILM_RELEASE_LIST_URL:-https://api.github.com/repos/DhaliwalX/fotufilm-engine/releases?per_page=100}"
     echo "FOTUFILM_BUNDLE_ID = com.muastudio.fotufilm"
     echo "FOTUFILM_UPDATE_FEED = $(xcconfig_url "$feed")"
     echo "FOTUFILM_RELEASE_LIST = $(xcconfig_url "$list")"
-  } > "$stage/flutter/macos/Runner/Configs/Identity.xcconfig"
-fi
-
-version="$(sed -n 's/^MARKETING_VERSION=//p' version.env)"
-build="$(sed -n 's/^CURRENT_PROJECT_VERSION=//p' version.env)"
+  fi
+} > "$stage/flutter/macos/Runner/Configs/Build.xcconfig"
 (
   cd "$stage/flutter"
   "$flutter_tool" --suppress-analytics build macos --release \
