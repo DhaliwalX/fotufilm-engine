@@ -108,6 +108,7 @@ extension HostService {
         guard let path = parameters["path"] as? String else {
             throw HostEngine.Failure(description: "No destination was chosen.")
         }
+        try refuseOriginal(URL(fileURLWithPath: path))
         let formatID = parameters["format"] as? String ?? "mp4"
         guard let writers = HostPlatform.current.videoWriter,
               let format = writers.formats.first(where: { $0.id == formatID }) else {
