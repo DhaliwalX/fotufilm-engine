@@ -68,7 +68,9 @@ bool dismissTopModal() {
 }
 
 /// Opens `builder`'s content under the widget of `anchor`, or over it with `above` (a control at
-/// the bottom of the window). A click elsewhere closes it.
+/// the bottom of the window). Where that side has too little room it opens on the other, as
+/// Spectrum's popovers flip, and it is never taller than the window allows. A click elsewhere
+/// closes it.
 AnchoredOverlay showAnchored(
   BuildContext anchor,
   Widget Function(BuildContext context, VoidCallback close) builder, {
@@ -90,19 +92,77 @@ AnchoredOverlay showAnchored(
       Positioned.fill(
         child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => handle.close()),
       ),
-      Positioned(
-        top: above ? null : origin.dy + box.size.height + gap,
-        bottom: above ? overlayBox.size.height - origin.dy + gap : null,
-        left: alignEnd ? null : origin.dx,
-        right: alignEnd ? overlayBox.size.width - origin.dx - box.size.width : null,
-        width: matchWidth ? box.size.width : width,
-        child: Builder(builder: (context) => builder(context, () => handle.close())),
+      Positioned.fill(
+        child: CustomSingleChildLayout(
+          delegate: _AnchoredLayout(
+            anchor: origin & box.size,
+            gap: gap,
+            width: matchWidth ? box.size.width : width,
+            alignEnd: alignEnd,
+            above: above,
+          ),
+          child: Builder(builder: (context) => builder(context, () => handle.close())),
+        ),
       ),
     ])),
   );
   handle = AnchoredOverlay._(entry);
   overlay.insert(entry);
   return handle;
+}
+
+/// Places a popover by its anchor: on the side asked for when it fits there, else on the side
+/// with more room, kept inside the window with a margin.
+class _AnchoredLayout extends SingleChildLayoutDelegate {
+  _AnchoredLayout({
+    required this.anchor,
+    required this.gap,
+    required this.width,
+    required this.alignEnd,
+    required this.above,
+  });
+
+  final Rect anchor;
+  final double gap;
+  final double? width;
+  final bool alignEnd, above;
+
+  static const _margin = 8.0;
+
+  double _below(Size size) => size.height - anchor.bottom - gap - _margin;
+  double _over() => anchor.top - gap - _margin;
+
+  @override
+  BoxConstraints getConstraintsForChild(BoxConstraints constraints) {
+    final size = constraints.biggest;
+    final room = _below(size) > _over() ? _below(size) : _over();
+    final across = size.width - 2 * _margin;
+    final w = width?.clamp(0.0, across);
+    return BoxConstraints(
+      minWidth: w ?? 0,
+      maxWidth: w ?? across,
+      maxHeight: room.clamp(0.0, size.height),
+    );
+  }
+
+  @override
+  Offset getPositionForChild(Size size, Size child) {
+    final below = _below(size), over = _over();
+    final fitsPreferred = above ? child.height <= over : child.height <= below;
+    final up = fitsPreferred ? above : over > below;
+    final x = (alignEnd ? anchor.right - child.width : anchor.left)
+        .clamp(_margin, (size.width - child.width - _margin).clamp(_margin, double.infinity));
+    final y = up ? anchor.top - gap - child.height : anchor.bottom + gap;
+    return Offset(x, y);
+  }
+
+  @override
+  bool shouldRelayout(_AnchoredLayout old) =>
+      anchor != old.anchor ||
+      gap != old.gap ||
+      width != old.width ||
+      alignEnd != old.alignEnd ||
+      above != old.above;
 }
 
 /// A modal over the whole window: a dimmed backdrop and `child` centred on it.
