@@ -69,6 +69,7 @@
 //                                   Escape, Tab, Backspace, an arrow, space, =, +, -, \ or ,),
 //                                   with "meta", "shift", "alt" and "ctrl" held
 //   {"focus": true}                 logs the control the keys are at (its KeyTarget's name)
+//   {"focusOn": "Move crop"}        gives the keys to the control of that name
 //   and the menus' and keyboard's commands (commands_driver.dart)
 //   {"dialog": "settings"}          opens an app dialog (settings, plugins, support, update)
 //   {"settingsPane": "filmModel"}   shows a Settings pane (general, output, filmModel)
@@ -401,7 +402,35 @@ class Driver {
     if (c['focus'] == true) {
       final node = FocusManager.instance.primaryFocus;
       final target = node?.context?.findAncestorWidgetOfExactType<KeyTarget>();
-      _log('focus ${node.runtimeType} ${target?.label ?? target?.value ?? '-'}');
+      // Unnamed, a control is read by its own text.
+      String? text;
+      void find(Element e) {
+        if (text != null) return;
+        if (e.widget case Text(:final data?)) text = data;
+        e.visitChildren(find);
+      }
+      if (target?.label == null) node?.context?.visitChildElements(find);
+      _log('focus ${target?.label ?? target?.value ?? text ?? '- ${node?.context?.widget.runtimeType} ${node?.context?.findAncestorWidgetOfExactType<StatefulWidget>().runtimeType} ${[node?.rect.left, node?.rect.top, node?.rect.width, node?.rect.height].map((v) => v?.round()).join(',')}'}');
+    }
+    if (c['focusOn'] case final String label) {
+      // The keys go to the control of that name, as Tab would take them there.
+      FocusNode? found;
+      void visit(Element e) {
+        if (found != null) return;
+        if (e.widget case KeyTarget(label: final l) when l == label) {
+          void inner(Element f) {
+            if (found != null) return;
+            // Inside the detector, its own node is the nearest.
+            if (f.widget is ExcludeSemantics) found = Focus.maybeOf(f);
+            f.visitChildren(inner);
+          }
+          e.visitChildren(inner);
+        }
+        e.visitChildren(visit);
+      }
+      boundary.currentContext!.visitChildElements(visit);
+      found?.requestFocus();
+      await Future<void>.delayed(const Duration(milliseconds: 50));
     }
     if (c['key'] case final String name) {
       await _key(name,

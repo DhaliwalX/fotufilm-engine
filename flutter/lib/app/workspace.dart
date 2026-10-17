@@ -12,6 +12,7 @@ import '../model/editor.dart';
 import '../model/film_packs.dart';
 import '../model/panel_layout.dart';
 import '../ui/inspector/inspector.dart';
+import '../ui/kit/focus.dart' show KeyTarget;
 import '../ui/kit/popover.dart' show OverlayFocusScope;
 import '../ui/theme/theme.dart';
 import '../ui/workspace/app_dialogs.dart';
@@ -256,6 +257,7 @@ class _WorkspaceState extends State<Workspace> {
           bottom: 0,
           width: hit,
           child: _Resizer(
+            label: 'Resize film list',
             onDrag: (dx) => layout.setWidth(PanelSide.film, layout.widths.film + dx),
             onEnd: layout.keepWidths,
             onReset: () => layout.setWidth(PanelSide.film, Metrics.filmWidth, keep: true),
@@ -268,6 +270,7 @@ class _WorkspaceState extends State<Workspace> {
           bottom: 0,
           width: hit,
           child: _Resizer(
+            label: 'Resize darkroom panel',
             onDrag: (dx) =>
                 layout.setWidth(PanelSide.inspector, layout.widths.inspector - dx),
             onEnd: layout.keepWidths,
@@ -314,7 +317,9 @@ class _WorkspaceState extends State<Workspace> {
 
 /// The strip on a panel's edge that resizes it, with the accent line while hovered.
 class _Resizer extends StatefulWidget {
-  const _Resizer({required this.onDrag, required this.onEnd, required this.onReset});
+  const _Resizer(
+      {required this.label, required this.onDrag, required this.onEnd, required this.onReset});
+  final String label;
   final ValueChanged<double> onDrag;
   final VoidCallback onEnd, onReset;
 
@@ -326,7 +331,15 @@ class _ResizerState extends State<_Resizer> {
   bool _active = false;
 
   @override
-  Widget build(BuildContext context) => MouseRegion(
+  // The arrow keys move the edge 16 points, 64 with Shift (PanelResizer.jsx).
+  Widget build(BuildContext context) => KeyTarget(
+        label: widget.label,
+        onNudge: (direction, shift) {
+          widget.onDrag(direction.dx * (shift ? 64 : 16));
+          widget.onEnd();
+        },
+        radius: 1,
+        child: MouseRegion(
         cursor: SystemMouseCursors.resizeColumn,
         onEnter: (_) => setState(() => _active = true),
         onExit: (_) => setState(() => _active = false),
@@ -344,6 +357,7 @@ class _ResizerState extends State<_Resizer> {
               ),
             ),
           ),
+        ),
         ),
       );
 }

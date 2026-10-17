@@ -210,6 +210,8 @@ class _FilmTypePickerState extends State<_FilmTypePicker> with PointerTint {
       child: Builder(
         builder: (anchor) => tinted(
           opensMenu: true,
+          label: 'Film type',
+          value: widget.selected.title,
           onTap: () => showMenu(anchor, alignEnd: true, width: 170, [
             for (final type in widget.types)
               MenuItem(
@@ -284,6 +286,7 @@ class _StockRowState extends State<StockRow> with PointerTint {
     final thumb = widget.compact ? Metrics.stockThumbCollapsed : Metrics.stockThumb;
     final row = tinted(
       onTap: widget.onPressed,
+      selected: widget.selected,
       child: Container(
         constraints: const BoxConstraints(minHeight: Metrics.stockRowMinHeight),
         padding: widget.compact ? const EdgeInsets.all(3) : Metrics.stockRowPadding,

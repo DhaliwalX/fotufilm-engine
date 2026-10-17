@@ -307,6 +307,8 @@ class _PlayButtonState extends State<_PlayButton> with PointerTint {
       message: widget.tooltip,
       child: tinted(
         onTap: widget.onPressed,
+        label: widget.tooltip,
+        radius: Metrics.videoPlayButton / 2,
         child: Container(
           key: const ValueKey('video-play'),
           width: Metrics.videoPlayButton,

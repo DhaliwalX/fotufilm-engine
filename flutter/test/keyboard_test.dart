@@ -131,6 +131,24 @@ void main() {
     expect(chosen, 'Second');
   });
 
+  testWidgets('the arrow keys nudge a handle both ways, and Shift says so', (tester) async {
+    final nudges = <(Offset, bool)>[];
+    await show(
+        tester,
+        KeyTarget(
+          label: 'Top left crop corner',
+          onNudge: (direction, shift) => nudges.add((direction, shift)),
+          child: const SizedBox(width: 13, height: 13),
+        ));
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    expect(nudges, [(const Offset(0, -1), false), (const Offset(-1, 0), true)]);
+  });
+
   testWidgets('VoiceOver reads each control with its role and state', (tester) async {
     final semantics = tester.ensureSemantics();
     await show(

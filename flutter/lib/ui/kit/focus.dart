@@ -22,6 +22,7 @@ class KeyTarget extends StatefulWidget {
     this.onDecrease,
     this.increasedValue,
     this.decreasedValue,
+    this.onNudge,
     this.radius = Metrics.radius,
     this.ringInset = 0,
   });
@@ -42,6 +43,10 @@ class KeyTarget extends StatefulWidget {
   final void Function(int steps)? onIncrease, onDecrease;
   final String? increasedValue, decreasedValue;
 
+  /// A handle moved in two dimensions (a crop corner, the grade pad, a panel's edge): an arrow
+  /// key's direction, right and down positive, and whether Shift is held.
+  final void Function(Offset direction, bool shift)? onNudge;
+
   final double radius;
 
   /// How far inside the control's edge the ring sits (negative: outside).
@@ -56,10 +61,17 @@ class _StepIntent extends Intent {
   final int steps;
 }
 
+class _NudgeIntent extends Intent {
+  const _NudgeIntent(this.direction, this.shift);
+  final Offset direction;
+  final bool shift;
+}
+
 class _KeyTargetState extends State<KeyTarget> {
   bool _ring = false;
 
   bool get _slider => widget.onIncrease != null || widget.onDecrease != null;
+  bool get _nudges => widget.onNudge != null;
 
   void _step(int steps) {
     if (steps > 0) widget.onIncrease?.call(steps);
@@ -85,10 +97,19 @@ class _KeyTargetState extends State<KeyTarget> {
     SingleActivator(LogicalKeyboardKey.pageDown): _StepIntent(-10),
   };
 
+  static final _nudgeKeys = <ShortcutActivator, Intent>{
+    for (final shift in [false, true]) ...{
+      SingleActivator(LogicalKeyboardKey.arrowRight, shift: shift): _NudgeIntent(const Offset(1, 0), shift),
+      SingleActivator(LogicalKeyboardKey.arrowLeft, shift: shift): _NudgeIntent(const Offset(-1, 0), shift),
+      SingleActivator(LogicalKeyboardKey.arrowDown, shift: shift): _NudgeIntent(const Offset(0, 1), shift),
+      SingleActivator(LogicalKeyboardKey.arrowUp, shift: shift): _NudgeIntent(const Offset(0, -1), shift),
+    },
+  };
+
   @override
   Widget build(BuildContext context) {
     final activate = widget.onActivate;
-    final enabled = activate != null || _slider;
+    final enabled = activate != null || _slider || _nudges;
     final palette = Palette.of(context);
     return Semantics(
       container: true,
@@ -107,10 +128,16 @@ class _KeyTargetState extends State<KeyTarget> {
       onDecrease: widget.onDecrease == null ? null : () => _step(-1),
       child: FocusableActionDetector(
         enabled: enabled,
-        shortcuts: {if (activate != null) ..._activate, if (_slider) ..._steps},
+        shortcuts: {
+          if (activate != null) ..._activate,
+          if (_slider) ..._steps,
+          if (_nudges) ..._nudgeKeys,
+        },
         actions: {
           ActivateIntent: CallbackAction<ActivateIntent>(onInvoke: (_) => activate?.call()),
           _StepIntent: CallbackAction<_StepIntent>(onInvoke: (intent) => _step(intent.steps)),
+          _NudgeIntent: CallbackAction<_NudgeIntent>(
+              onInvoke: (intent) => widget.onNudge?.call(intent.direction, intent.shift)),
         },
         onShowFocusHighlight: (show) => setState(() => _ring = show),
         child: Stack(clipBehavior: Clip.none, fit: StackFit.passthrough, children: [

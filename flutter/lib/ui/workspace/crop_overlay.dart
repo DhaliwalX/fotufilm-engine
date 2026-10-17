@@ -10,6 +10,7 @@ import 'package:flutter/widgets.dart';
 
 import '../../model/crop_geometry.dart';
 import '../../model/editor.dart';
+import '../kit/focus.dart';
 import '../theme/theme.dart';
 
 /// The crop overlay over `photo`, the frame's rectangle in the viewer, when the frame on show is
@@ -150,6 +151,53 @@ class CropOverlayState extends State<CropOverlay> {
         _draft = null;
       });
 
+  /// An arrow key on a handle: half a percent of the frame, five with Shift (CropOverlay.jsx
+  /// `keyboard`), each one step of the history.
+  void _nudge(CropGrip grip, Offset direction, bool shift) {
+    final delta = direction * (shift ? .05 : .005);
+    final points = editor.crop.points;
+    final crop = editor.crop;
+    final at = {for (final (g, centre) in _handles(points)) g: _toCrop(centre)};
+    editor.crop.setCrop(grip == CropGrip.move
+        ? moveCrop(points, delta.dx, delta.dy)
+        : resizeCrop(points, grip, at[grip]! + delta,
+            shape: crop.shape,
+            locked: crop.ratio != 'free',
+            minimum: Size((44 / widget.photo.width).clamp(0, .25),
+                (44 / widget.photo.height).clamp(0, .25))));
+  }
+
+  static String _gripName(CropGrip grip) => switch (grip) {
+        CropGrip.move => 'Move crop',
+        CropGrip.top || CropGrip.right || CropGrip.bottom || CropGrip.left =>
+          '${grip.name[0].toUpperCase()}${grip.name.substring(1)} crop edge',
+        _ => '${const ['Top left', 'Top right', 'Bottom right', 'Bottom left'][grip.index]} crop corner',
+      };
+
+  /// The keyboard's stops on the crop, which the pointer passes through: the crop, then its
+  /// corners clockwise from the top left, then its edges.
+  List<Widget> _keyTargets(List<Offset> points) {
+    final quad = [for (final p in points) _toView(p)];
+    final xs = quad.map((p) => p.dx), ys = quad.map((p) => p.dy);
+    final bounds = Rect.fromLTRB(xs.reduce((a, b) => a < b ? a : b), ys.reduce((a, b) => a < b ? a : b),
+        xs.reduce((a, b) => a > b ? a : b), ys.reduce((a, b) => a > b ? a : b));
+    Widget stop(CropGrip grip, Rect rect) => Positioned.fromRect(
+          rect: rect,
+          child: KeyTarget(
+            label: _gripName(grip),
+            onNudge: (direction, shift) => _nudge(grip, direction, shift),
+            radius: grip == CropGrip.move ? 0 : 2,
+            child: const SizedBox.expand(),
+          ),
+        );
+    return [
+      stop(CropGrip.move, bounds),
+      for (final (grip, centre) in _handles(points))
+        stop(grip, Rect.fromCenter(
+            center: centre, width: _handleSize(grip).width, height: _handleSize(grip).height)),
+    ];
+  }
+
   MouseCursor get _cursor => switch (_drag?.grip ?? _hover) {
         CropGrip.top || CropGrip.bottom => SystemMouseCursors.resizeUpDown,
         CropGrip.left || CropGrip.right => SystemMouseCursors.resizeLeftRight,
@@ -181,7 +229,8 @@ class CropOverlayState extends State<CropOverlay> {
           duration: MediaQuery.disableAnimationsOf(context)
               ? Duration.zero
               : const Duration(milliseconds: 160),
-          builder: (context, thirds, _) => CustomPaint(
+          builder: (context, thirds, _) => Stack(fit: StackFit.expand, children: [
+            CustomPaint(
             size: Size.infinite,
             painter: _CropPainter(
               frame: Rect.fromLTWH(
@@ -199,6 +248,8 @@ class CropOverlayState extends State<CropOverlay> {
               accent: palette.accent,
             ),
           ),
+            ..._keyTargets(points),
+          ]),
         ),
       ),
     );

@@ -203,7 +203,13 @@ class _FolderRowState extends State<_FolderRow> {
     final indent = widget.depth * 14.0;
     // With subfolders, every row leaves room for the disclosure so the icons line up.
     final left = widget.nested ? 30 + indent : 10.0;
-    final row = GestureDetector(
+    final row = KeyTarget(
+      onActivate: widget.onTap,
+      label: widget.name,
+      selected: widget.current,
+      expanded: widget.expanded,
+      radius: 6,
+      child: GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: widget.onTap,
       child: AnimatedContainer(
@@ -233,6 +239,7 @@ class _FolderRowState extends State<_FolderRow> {
           ),
         ]),
       ),
+      ),
     );
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
@@ -243,7 +250,10 @@ class _FolderRowState extends State<_FolderRow> {
           Positioned(
             left: 6 + indent,
             top: 7,
-            child: GestureDetector(
+            child: KeyTarget(
+              onActivate: widget.onToggle,
+              label: widget.expanded! ? 'Hide subfolders' : 'Show subfolders',
+              child: GestureDetector(
               onTap: widget.onToggle,
               child: AnimatedRotation(
                 turns: widget.expanded! ? .25 : 0,
@@ -255,6 +265,7 @@ class _FolderRowState extends State<_FolderRow> {
                   child: Center(child: AppIcon('chevronRight', size: 16, color: palette.muted)),
                 ),
               ),
+            ),
             ),
           ),
         if (widget.menu != null && _hovered)

@@ -70,6 +70,44 @@ class _SpectrumCurveState extends State<SpectrumCurve> {
     widget.onEnd();
   }
 
+  double _stepped(int index, int steps) =>
+      ((widget.values[index] * 10).round() + steps).clamp(_min * 10, _max * 10) / 10;
+
+  /// An arrow key on a point: a tenth of a stop (SpectrumCurve.jsx), a whole stop with Shift.
+  void _nudge(int index, int steps) {
+    final next = [...widget.values];
+    next[index] = _stepped(index, steps);
+    widget.onChanged(next);
+    widget.onEnd();
+  }
+
+  static String _ev(double value) => '${formatNumber(value, decimals: 1)} EV';
+
+  /// The keyboard's stop on each point, a slider of its own, over the drawn curve.
+  List<Widget> _points(double width) {
+    final scale = width / _plane.width;
+    final handles = _handles;
+    return [
+      for (var i = 0; i < handles.length; i++)
+        Positioned(
+          left: _x(handles[i]) * scale - 8,
+          top: (8 + (_max - widget.values[i]) / (_max - _min) * 76) * scale - 8,
+          width: 16,
+          height: 16,
+          child: KeyTarget(
+            label: '${widget.title} ${formatNumber(handles[i])} nm',
+            value: _ev(widget.values[i]),
+            increasedValue: _ev(_stepped(i, 1)),
+            decreasedValue: _ev(_stepped(i, -1)),
+            onIncrease: widget.enabled ? (steps) => _nudge(i, steps) : null,
+            onDecrease: widget.enabled ? (steps) => _nudge(i, -steps) : null,
+            radius: 8,
+            child: const SizedBox.expand(),
+          ),
+        ),
+    ];
+  }
+
   double _x(double nm) {
     final lo = (widget.curve['domainMin'] as num).toDouble();
     final hi = (widget.curve['domainMax'] as num).toDouble();
@@ -108,7 +146,8 @@ class _SpectrumCurveState extends State<SpectrumCurve> {
               cursor: enabled ? SystemMouseCursors.resizeUpDown : MouseCursor.defer,
               child: AspectRatio(
                 aspectRatio: _plane.width / _plane.height,
-                child: CustomPaint(
+                child: Stack(clipBehavior: Clip.none, fit: StackFit.expand, children: [
+                  CustomPaint(
                   painter: _CurvePainter(
                     handles: _handles,
                     values: widget.values,
@@ -119,6 +158,8 @@ class _SpectrumCurveState extends State<SpectrumCurve> {
                     labelStyle: editorText(context, size: 8, color: palette.muted),
                   ),
                 ),
+                  ..._points(width),
+                ]),
               ),
             ),
           );

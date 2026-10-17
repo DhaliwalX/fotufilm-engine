@@ -90,6 +90,7 @@ class _StageButtonState extends State<_StageButton> with PointerTint {
       opacity: enabled ? 1 : .45,
       child: tinted(
         onTap: widget.onPressed,
+        selected: widget.selected,
         child: Container(
           padding: const EdgeInsets.all(9),
           decoration: BoxDecoration(color: fill, borderRadius: BorderRadius.circular(5)),

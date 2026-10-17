@@ -249,7 +249,13 @@ class _StripItemState extends State<_StripItem> with PointerTint {
   Widget build(BuildContext context) {
     final palette = Palette.of(context);
     final image = widget.item.doc?.importPicture ?? _thumbnail;
-    return tinted(
+    // The keyboard shows it with Return; VoiceOver reads its name and whether it is the one shown.
+    return KeyTarget(
+      onActivate: widget.onTap,
+      label: widget.item.name,
+      selected: widget.selected,
+      radius: 4,
+      child: tinted(
       child: Listener(
         onPointerDown: (event) {
           final keys = HardwareKeyboard.instance;
@@ -312,6 +318,7 @@ class _StripItemState extends State<_StripItem> with PointerTint {
               ),
           ]),
         ),
+      ),
       ),
     );
   }

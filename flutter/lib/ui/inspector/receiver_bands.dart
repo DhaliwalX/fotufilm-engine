@@ -35,6 +35,8 @@ class _MediumRowState extends State<MediumRow> {
           HoverTip(
             message: 'Receiver bands',
             child: _GlyphButton(
+              label: 'Receiver bands',
+              expanded: _open,
               glyph: 'fotu.ui.settings',
               color: _open ? palette.accent : palette.muted,
               onPressed: () => setState(() => _open = !_open),
@@ -51,7 +53,10 @@ class _MediumRowState extends State<MediumRow> {
 }
 
 class _GlyphButton extends StatefulWidget {
-  const _GlyphButton({required this.glyph, required this.color, required this.onPressed});
+  const _GlyphButton(
+      {required this.label, this.expanded, required this.glyph, required this.color, required this.onPressed});
+  final String label;
+  final bool? expanded;
   final String glyph;
   final Color color;
   final VoidCallback onPressed;
@@ -66,6 +71,8 @@ class _GlyphButtonState extends State<_GlyphButton> with PointerTint {
     final palette = Palette.of(context);
     return tinted(
       onTap: widget.onPressed,
+      label: widget.label,
+      expanded: widget.expanded,
       child: Container(
         width: Metrics.control,
         height: Metrics.control,

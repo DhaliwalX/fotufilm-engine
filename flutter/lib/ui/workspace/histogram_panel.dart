@@ -60,6 +60,9 @@ class _HistogramPanelState extends State<HistogramPanel> {
 
   void _move(Offset delta) => setState(() => _rect = _rect.shift(delta));
 
+  /// The arrow keys move or resize it 8 points, 32 with Shift (use-floating-panel.js).
+  static Offset _keyed(Offset direction, bool shift) => direction * (shift ? 32 : 8);
+
   void _resize(Offset delta) => setState(() => _rect = Rect.fromLTWH(
         _rect.left,
         _rect.top,
@@ -99,9 +102,16 @@ class _HistogramPanelState extends State<HistogramPanel> {
                     padding: const EdgeInsets.fromLTRB(12, 6, 8, 4),
                     child: Row(children: [
                       Expanded(
-                        child: Text(labels['title'] as String? ?? 'Histogram',
-                            overflow: TextOverflow.ellipsis,
-                            style: editorText(context, weight: FontWeight.w700)),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: KeyTarget(
+                            label: labels['move'] as String? ?? 'Move histogram',
+                            onNudge: (direction, shift) => _move(_keyed(direction, shift)),
+                            child: Text(labels['title'] as String? ?? 'Histogram',
+                                overflow: TextOverflow.ellipsis,
+                                style: editorText(context, weight: FontWeight.w700)),
+                          ),
+                        ),
                       ),
                       SizedBox(
                         width: 104,
@@ -151,7 +161,10 @@ class _HistogramPanelState extends State<HistogramPanel> {
             bottom: 2,
             child: MouseRegion(
               cursor: SystemMouseCursors.resizeUpLeftDownRight,
-              child: GestureDetector(
+              child: KeyTarget(
+                label: labels['resize'] as String? ?? 'Resize histogram',
+                onNudge: (direction, shift) => _resize(_keyed(direction, shift)),
+                child: GestureDetector(
                 onPanUpdate: (d) => _resize(d.delta),
                 child: SizedBox(
                   width: 28,
@@ -159,6 +172,7 @@ class _HistogramPanelState extends State<HistogramPanel> {
                   // A graph-only panel keeps an invisible corner, so it can always be enlarged.
                   child: _small ? null : CustomPaint(painter: _ResizeGrip(palette.muted)),
                 ),
+              ),
               ),
             ),
           ),

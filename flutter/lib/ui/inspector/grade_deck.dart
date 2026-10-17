@@ -61,6 +61,18 @@ class _GradeDeckState extends State<GradeDeck> {
     _set({'Level': level});
   }
 
+  /// Arrow keys move the pad and the level by this much, Shift by a tenth of it (GradeDeck.jsx),
+  /// each one step of the history.
+  static const _step = .05;
+
+  void _nudge(Map<String, double> changes) {
+    _set({
+      for (final MapEntry(:key, :value) in changes.entries)
+        key: (_get(key) + value).clamp(-1.0, 1.0).toDouble(),
+    });
+    widget.editor.endEdit();
+  }
+
   static String _cast(double x, double y) {
     final h = x > 0 ? 'Warm' : 'Cool', v = y > 0 ? 'Green' : 'Magenta';
     if (x != 0 && y != 0) {
@@ -107,7 +119,16 @@ class _GradeDeckState extends State<GradeDeck> {
     final (ground, wash) = _ground[_band]!;
     final knob = Offset(size.width / 2 + _get('Warmth') * (size.width / 2 - _padInset),
         size.height / 2 - _get('Tint') * (size.height / 2 - _padInset));
-    return GestureDetector(
+    final warmth = _get('Warmth'), tint = _get('Tint');
+    return KeyTarget(
+      label: 'Color balance pad',
+      value: warmth == 0 && tint == 0 ? 'Neutral' : _cast(warmth, tint),
+      onNudge: (direction, shift) {
+        final step = shift ? _step / 10 : _step;
+        _nudge({'Warmth': direction.dx * step, 'Tint': -direction.dy * step});
+      },
+      radius: Metrics.gradePadRadius,
+      child: GestureDetector(
       onPanDown: (d) => _pad(d.localPosition, size),
       onPanUpdate: (d) => _pad(d.localPosition, size),
       onPanEnd: (_) => widget.editor.endEdit(),
@@ -119,6 +140,7 @@ class _GradeDeckState extends State<GradeDeck> {
           painter: _PadPainter(ground: ground, wash: wash, knob: knob),
         ),
       ),
+      ),
     );
   }
 
@@ -126,7 +148,22 @@ class _GradeDeckState extends State<GradeDeck> {
     final size = Size(width, _capsuleHeight);
     final usable = math.max(size.width - size.height, 1.0);
     final x = size.height / 2 + (_get('Level') + 1) / 2 * usable;
-    return GestureDetector(
+    String reading(double value) {
+      final level = (value.clamp(-1.0, 1.0) * 100).round();
+      return level == 0 ? '0' : '${level < 0 ? '-' : '+'}${level.abs()}';
+    }
+    return KeyTarget(
+      label: 'Level',
+      value: reading(_get('Level')),
+      increasedValue: reading(_get('Level') + _step),
+      decreasedValue: reading(_get('Level') - _step),
+      onIncrease: (_) => _nudge({'Level': _step}),
+      onDecrease: (_) => _nudge({'Level': -_step}),
+      // Right and up raise it.
+      onNudge: (direction, shift) =>
+          _nudge({'Level': (direction.dx - direction.dy) * (shift ? _step / 10 : _step)}),
+      radius: size.height / 2,
+      child: GestureDetector(
       onPanDown: (d) => _level(d.localPosition, size),
       onPanUpdate: (d) => _level(d.localPosition, size),
       onPanEnd: (_) => widget.editor.endEdit(),
@@ -161,6 +198,7 @@ class _GradeDeckState extends State<GradeDeck> {
             ),
           ),
         ]),
+      ),
       ),
     );
   }

@@ -107,6 +107,8 @@ class _RailButtonState extends State<_RailButton> with PointerTint {
       message: widget.panel.title,
       child: tinted(
         onTap: widget.onPressed,
+        label: widget.panel.title,
+        selected: widget.selected,
         child: Container(
           height: Metrics.compactRailButton,
           decoration: BoxDecoration(

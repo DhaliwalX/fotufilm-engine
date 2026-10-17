@@ -125,6 +125,7 @@ class _ToggleButtonState extends State<_ToggleButton> with PointerTint {
     final bg = widget.selected ? palette.gray800 : palette.gray100;
     return tinted(
       onTap: widget.onPressed,
+      selected: widget.selected,
       child: Container(
         height: Metrics.control,
         alignment: Alignment.center,

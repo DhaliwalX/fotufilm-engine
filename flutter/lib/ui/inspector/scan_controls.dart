@@ -37,6 +37,7 @@ class _ScanButtonState extends State<ScanButton> with PointerTint {
                 : rest;
     return tinted(
       onTap: widget.onPressed,
+      selected: widget.selected ? true : null,
       child: Opacity(
         opacity: enabled ? 1 : .45,
         child: Container(
