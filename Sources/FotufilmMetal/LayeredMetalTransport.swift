@@ -89,7 +89,13 @@ public enum LayeredMetalTransport {
             }
             continuation = exposed.continuation
         }
-        if let transform = outputTransform, encodes(continuation.featureMask) {
+        // The kernel would premultiply by the records' alpha — opaque, or a donor's fourth
+        // record — so it encodes straight and the scene's alpha premultiplies below, on the
+        // kernel's rule.
+        var premultiplies = false
+        if var transform = outputTransform, encodes(continuation.featureMask) {
+            premultiplies = transform.premultiplied
+            transform.premultiplied = false
             continuation.featureMask |= FilmEngineFeature.encodeOut
             continuation.setOutputTransform(transform)
         } else {
@@ -100,7 +106,11 @@ public enum LayeredMetalTransport {
             output.withUnsafeMutableBufferPointer { output in
                 rows(height) { range in
                     for i in range.lowerBound * width..<range.upperBound * width {
-                        output[4 * i + 3] = source[4 * i + 3]
+                        let alpha = source[4 * i + 3]
+                        if premultiplies && alpha != 1 {
+                            for c in 0..<3 { output[4 * i + c] *= alpha }
+                        }
+                        output[4 * i + 3] = alpha
                     }
                 }
             }
