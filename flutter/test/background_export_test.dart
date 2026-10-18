@@ -41,6 +41,9 @@ class _Engine implements EngineConnection {
     cancelledBackground++;
     background.last.$3.completeError(const FotufilmCancelled());
   }
+  @override
+  Future<EngineReply> callAside(String method, Map<String, dynamic> params) =>
+      call(method, params);
 
   @override
   bool get exportsInBackground => true;

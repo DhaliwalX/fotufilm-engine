@@ -25,6 +25,11 @@ extension HostService {
         } else {
             throw HostEngine.Failure(description: "No file was named.")
         }
+        // Pixels as they are for a caller that draws them itself (the Flutter editor), else a PNG.
+        if parameters["pixels"] as? Bool == true {
+            return try answer(["width": picture.width, "height": picture.height, "format": "rgba"],
+                              images: ["thumbnail": picture.pixels])
+        }
         let png = picture.pixels.withUnsafeBytes {
             StoredPNG.encode($0.baseAddress!, width: picture.width, height: picture.height,
                              rowBytes: picture.width * 4)

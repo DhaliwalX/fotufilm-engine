@@ -20,8 +20,6 @@
 namespace ffc {
 namespace {
 
-enum class Kind { Unknown, JPEG, PNG, TIFF, EXR, HEIF, RAW };
-
 std::string extension(const std::string &path) {
     size_t dot = path.find_last_of('.'), slash = path.find_last_of("/\\");
     if (dot == std::string::npos || (slash != std::string::npos && dot < slash)) return {};
@@ -57,6 +55,8 @@ bool hasDNGVersion(const std::vector<uint8_t> &head) {
     return false;
 }
 
+} // namespace
+
 Kind sniff(const std::string &path) {
     std::unique_ptr<FILE, int (*)(FILE *)> file(std::fopen(path.c_str(), "rb"), std::fclose);
     if (!file) throw Failure("Could not open " + path);
@@ -81,6 +81,8 @@ Kind sniff(const std::string &path) {
     if (raw->open_file(path.c_str()) == LIBRAW_SUCCESS) return Kind::RAW;
     return Kind::Unknown;
 }
+
+namespace {
 
 void fail(char *error, size_t size, const std::string &message) {
     if (error && size) copyString(error, size, message);

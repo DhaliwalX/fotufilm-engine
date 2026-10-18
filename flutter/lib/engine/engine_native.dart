@@ -1,11 +1,14 @@
 // The desktop engine: libfotufilm through dart:ffi. One isolate owns the engine and answers the
 // editor's host calls in order, as the CEF host's engine thread does, so the UI isolate never
 // waits for a develop. A second isolate, started at the first export, makes the background calls
-// on the same engine, so an export runs beside the editor's develops.
+// on the same engine, so an export runs beside the editor's develops; a few more, started at the
+// first thumbnail, draw thumbnails side by side.
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ffi';
+import 'dart:io' show Platform;
 import 'dart:isolate';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
@@ -22,6 +25,10 @@ class NativeEngine implements EngineConnection {
 
   /// The background calls' isolate, once an export has started it.
   Future<SendPort>? _lane;
+
+  /// The isolates [callAside] spreads its calls over, with the calls each has in hand.
+  Future<List<SendPort>>? _aside;
+  late final List<int> _asideBusy;
   final int _address;
   @override
   final Map<String, dynamic> capabilities;
@@ -119,9 +126,35 @@ class NativeEngine implements EngineConnection {
     return completer.future;
   }
 
-  Future<SendPort> _startLane() async {
+  @override
+  Future<EngineReply> callAside(String method, Map<String, dynamic> params) async {
+    final lanes = await (_aside ??= _startAside());
+    // The isolate with the fewest calls in hand.
+    var lane = 0;
+    for (var i = 1; i < lanes.length; i++) {
+      if (_asideBusy[i] < _asideBusy[lane]) lane = i;
+    }
+    _asideBusy[lane]++;
+    final id = _next++;
+    final completer = _pending[id] = Completer<EngineReply>();
+    lanes[lane].send((id, method, jsonEncode(params), null, false));
+    try {
+      return await completer.future;
+    } finally {
+      _asideBusy[lane]--;
+    }
+  }
+
+  /// Half the cores, two to four: each thumbnail also spreads its own decode over the cores.
+  Future<List<SendPort>> _startAside() async {
+    final count = math.min(4, math.max(2, Platform.numberOfProcessors ~/ 2));
+    _asideBusy = List.filled(count, 0);
+    return Future.wait([for (var i = 0; i < count; i++) _startLane('fotufilm-thumbnails-$i')]);
+  }
+
+  Future<SendPort> _startLane([String name = 'fotufilm-exports']) async {
     final replies = ReceivePort();
-    await Isolate.spawn(_serveLane, (replies.sendPort, _address), debugName: 'fotufilm-exports');
+    await Isolate.spawn(_serveLane, (replies.sendPort, _address), debugName: name);
     final events = StreamIterator(replies);
     await events.moveNext();
     final lane = events.current as SendPort;
@@ -135,7 +168,7 @@ class NativeEngine implements EngineConnection {
       FotufilmLibrary.open().call(Pointer<Void>.fromAddress(_address), 'cancelBackground', '{}');
 }
 
-/// The background calls' isolate: the same engine, called from its own thread.
+/// A background or thumbnail isolate: the same engine, called from its own thread.
 void _serveLane((SendPort, int) start) {
   final (replies, address) = start;
   final commands = ReceivePort();

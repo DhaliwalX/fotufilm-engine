@@ -42,6 +42,9 @@ class _Engine implements EngineConnection {
   @override
   void cancelBackground() {}
   @override
+  Future<EngineReply> callAside(String method, Map<String, dynamic> params) =>
+      call(method, params);
+  @override
   bool get exportsInBackground => false;
   @override
   Map<String, dynamic> get capabilities => const {};

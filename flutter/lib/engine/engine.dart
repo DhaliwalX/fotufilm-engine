@@ -32,6 +32,10 @@ abstract interface class EngineConnection {
   /// Stops the background call in progress.
   void cancelBackground();
 
+  /// A short call that keeps no state (`thumbnail`), made beside the editor's develops and
+  /// exports, several at once; answers come as each is done.
+  Future<EngineReply> callAside(String method, Map<String, dynamic> params);
+
   /// What the engine's platform services offer (`fotufilm_capabilities`): export formats, HDR,
   /// Export All, the clipboard, subject selection, film packs, plug-ins and updates, as
   /// web/src/backend/desktop/host.js reads them. Empty where the engine does not say.

@@ -90,4 +90,8 @@ class WebEngine implements EngineConnection {
 
   @override
   void cancelBackground() => _engine.cancel();
+
+  /// One engine answers everything in a browser.
+  @override
+  Future<EngineReply> callAside(String method, Map<String, dynamic> params) => call(method, params);
 }

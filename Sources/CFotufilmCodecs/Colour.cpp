@@ -308,6 +308,44 @@ void orient(std::vector<float> &rgba, uint32_t &width, uint32_t &height, int ori
     height = oh;
 }
 
+std::vector<uint8_t> displayP3Codes(const Raster &raster) {
+    if (raster.samples != Samples::U8 || raster.cmyk || (raster.channels != 1 && raster.channels != 3))
+        throw Failure("Thumbnail pixels must be 8-bit grey or RGB.");
+    const bool grey = raster.channels == 1;
+    // Unstated samples are sRGB; their two transforms are built once and shared (lcms2 runs a
+    // transform from many threads when it keeps no cache).
+    auto build = [](cmsHPROFILE source, bool grey) {
+        Profile from(source);
+        cmsToneCurve *curve = srgbCurve();
+        Profile to(rgbProfile(displayP3, curve));
+        cmsFreeToneCurve(curve);
+        if (!from.handle || !to.handle) throw Failure("The colour profile could not be read.");
+        cmsHTRANSFORM transform = cmsCreateTransform(from.handle, grey ? TYPE_GRAY_8 : TYPE_RGB_8, to.handle,
+            TYPE_RGBA_8, INTENT_RELATIVE_COLORIMETRIC, cmsFLAGS_NOCACHE);
+        if (!transform) throw Failure("The colour profile could not be applied.");
+        return transform;
+    };
+    std::unique_ptr<void, void (*)(void *)> own(nullptr, cmsDeleteTransform);
+    cmsHTRANSFORM transform;
+    if (raster.encoding.kind == Encoding::Unstated) {
+        static const cmsHTRANSFORM greySRGB = build(inputProfile(Raster{0, 0, 1}), true);
+        static const cmsHTRANSFORM rgbSRGB = build(inputProfile(Raster{}), false);
+        transform = grey ? greySRGB : rgbSRGB;
+    } else {
+        own.reset(build(inputProfile(raster), grey));
+        transform = own.get();
+    }
+    // The transform leaves the alpha it has no source for as filled.
+    std::vector<uint8_t> rgba(size_t(raster.width) * raster.height * 4, 255);
+    const size_t rowBytes = size_t(raster.width) * raster.channels;
+    parallelRows(raster.height, [&](uint32_t begin, uint32_t end) {
+        cmsDoTransformLineStride(transform, raster.data.data() + begin * rowBytes,
+                                 rgba.data() + size_t(begin) * raster.width * 4, raster.width, end - begin,
+                                 cmsUInt32Number(rowBytes), raster.width * 4, 0, 0);
+    });
+    return rgba;
+}
+
 const std::vector<uint8_t> &displayP3Profile() {
     static const std::vector<uint8_t> bytes = [] {
         cmsToneCurve *curve = srgbCurve();

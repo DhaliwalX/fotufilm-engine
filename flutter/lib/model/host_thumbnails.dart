@@ -1,13 +1,14 @@
 // Small pictures of files that are not open, drawn by the engine's `thumbnail` call from the file
 // in place (Sources/FotufilmHost/HostService+Thumbnails.swift): a still's embedded or reduced
 // preview, a movie's first frame. The library's tiles and the strip's waiting photos show them.
-// One is drawn at a time, the newest request first, as the library's thumbnail queue does
-// (web/src/photo-library/thumbnails.js), and only while someone still wants it.
+// A few are drawn at once beside the editor's develops (`callAside`), the newest request first,
+// as the library's thumbnail queue does (web/src/photo-library/thumbnails.js), and only while
+// someone still wants them. They arrive as pixels, so nothing is encoded or decoded twice.
 import 'dart:async';
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import '../engine/engine.dart';
-import 'renderer.dart' show decodePng;
 
 class HostThumbnails {
   HostThumbnails(this._engine);
@@ -20,7 +21,10 @@ class HostThumbnails {
   final Set<String> _none = {};
   final List<_Job> _queue = [];
   final Map<String, _Job> _waiting = {};
-  bool _running = false;
+
+  /// Thumbnails drawn at once: enough to keep every thumbnail isolate busy.
+  static const parallel = 6;
+  int _running = 0;
 
   /// What a file's picture is kept under: its path, size and date, so a replaced file is drawn
   /// again.
@@ -67,28 +71,16 @@ class HostThumbnails {
     _none.removeWhere((key) => key.startsWith('$path|'));
   }
 
-  Future<void> _pump() async {
-    if (_running) return;
-    _running = true;
-    try {
-      while (_queue.isNotEmpty) {
-        final job = _queue.removeLast();
-        _waiting.remove(job.key);
-        if (!job.wanted.any((wanted) => wanted())) {
-          job.done.complete(null);
-          continue;
-        }
-        ui.Image? image;
-        try {
-          final engine = _engine();
-          if (engine == null) throw StateError('No engine.');
-          final answer =
-              await engine.call('thumbnail', {'path': job.path, 'maxEdge': job.maxEdge});
-          final bytes = answer.bytes('thumbnail');
-          if (bytes != null) image = await decodePng(bytes);
-        } catch (_) {
-          image = null;
-        }
+  void _pump() {
+    while (_running < parallel && _queue.isNotEmpty) {
+      final job = _queue.removeLast();
+      _waiting.remove(job.key);
+      if (!job.wanted.any((wanted) => wanted())) {
+        job.done.complete(null);
+        continue;
+      }
+      _running++;
+      _draw(job).then((image) {
         if (image == null) {
           _none.add(job.key);
         } else {
@@ -98,10 +90,39 @@ class HostThumbnails {
           }
         }
         job.done.complete(image);
-      }
-    } finally {
-      _running = false;
+      }).whenComplete(() {
+        _running--;
+        _pump();
+      });
     }
+  }
+
+  Future<ui.Image?> _draw(_Job job) async {
+    try {
+      final engine = _engine();
+      if (engine == null) return null;
+      final answer = await engine
+          .callAside('thumbnail', {'path': job.path, 'maxEdge': job.maxEdge, 'pixels': true});
+      final pixels = answer.bytes('thumbnail');
+      final width = (answer.json['width'] as num?)?.toInt() ?? 0;
+      final height = (answer.json['height'] as num?)?.toInt() ?? 0;
+      if (pixels == null || width <= 0 || height <= 0) return null;
+      return await _image(pixels, width, height);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<ui.Image> _image(Uint8List rgba, int width, int height) async {
+    final buffer = await ui.ImmutableBuffer.fromUint8List(rgba);
+    final descriptor = ui.ImageDescriptor.raw(buffer,
+        width: width, height: height, pixelFormat: ui.PixelFormat.rgba8888);
+    final codec = await descriptor.instantiateCodec();
+    final frame = await codec.getNextFrame();
+    codec.dispose();
+    descriptor.dispose();
+    buffer.dispose();
+    return frame.image;
   }
 }
 

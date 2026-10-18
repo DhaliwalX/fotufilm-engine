@@ -105,6 +105,20 @@ int32_t ffc_decode_tiff(const char *path, uint32_t options, uint32_t long_edge,
                        uint32_t *source_width, uint32_t *source_height,
                        char *error, size_t error_size);
 
+/* A thumbnail as the Mac's ImageIO draws one: a RAW's embedded preview, a JPEG decoded at a
+ * reduced scale or a HEIF's stored thumbnail where one is large enough, else the image decoded and
+ * reduced. Display P3 RGBA, 8 bits, sRGB transfer, alpha 255, upright, its long edge no more than
+ * `max_edge` (never enlarged). Returns 0 and fills `out` (release with ffc_picture_free), or
+ * nonzero with a message in `error`. Safe to call from many threads at once. */
+typedef struct ffc_picture {
+    uint8_t *rgba;
+    uint32_t width;
+    uint32_t height;
+} ffc_picture;
+int32_t ffc_thumbnail(const char *path, uint32_t max_edge, ffc_picture *out, char *error,
+                      size_t error_size);
+void ffc_picture_free(ffc_picture *picture);
+
 /* Whether this build writes `mime` ("image/png", "image/jpeg", "image/tiff", "image/heic"). */
 int32_t ffc_can_encode(const char *mime);
 
