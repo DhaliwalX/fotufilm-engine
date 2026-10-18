@@ -3,11 +3,19 @@
 import 'dart:io';
 import 'dart:isolate';
 
+import 'package:file_selector/file_selector.dart';
+
 import 'library_model.dart';
 
 /// Android hands out a picked folder as a content URI, not a path dart:io can list, so the library
 /// is the desktop's alone for now.
 final libraryFilesAvailable = !Platform.isAndroid;
+
+/// A folder chosen in the system's folder panel, or null when it was dismissed.
+Future<String?> chooseFolder() => getDirectoryPath(confirmButtonText: 'Add Folder');
+
+/// Nothing is held for a folder on the desktop.
+Future<void> forgetFolder(String folder) async {}
 
 /// Every file under `folder` the library shows, depth first, as [FileRow]s relative to it.
 /// Hidden files and folders are left out, and an entry that vanishes or cannot be read is
@@ -74,3 +82,8 @@ bool isFile(String path) => FileSystemEntity.isFileSync(path);
 
 /// What went wrong with a file, in words for the library's notice.
 String fileProblem(Object error) => error is FileSystemException ? error.message : '$error';
+
+/// Why a folder could not be listed.
+String folderProblem(String folder, Object error) => isFolder(folder)
+    ? 'This folder could not be read.'
+    : 'This folder has moved or been deleted.';

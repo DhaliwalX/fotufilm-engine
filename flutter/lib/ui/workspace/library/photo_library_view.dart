@@ -1,12 +1,12 @@
 // The photo library over the editor's panels: the folders on the left, and the bar and grid of the
 // folder chosen. The grid's scope, filters, tile size, selection and keyboard focus are kept here;
 // the folders, photos and ratings are the model's (PhotoLibrary).
-import 'package:file_selector/file_selector.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../../../app/host_window.dart';
 import '../../../model/editor.dart';
+import '../../../model/library_files.dart';
 import '../../../model/library_model.dart';
 import '../../kit/kit.dart';
 import '../../theme/theme.dart';
@@ -90,7 +90,13 @@ class _PhotoLibraryViewState extends State<PhotoLibraryView> {
   // ── Actions ───────────────────────────────────────────────────────────────────────────────
 
   Future<void> _addFolder({required bool negative}) async {
-    final path = await getDirectoryPath(confirmButtonText: 'Add Folder');
+    final String? path;
+    try {
+      path = await chooseFolder();
+    } catch (e) {
+      library.showError(fileProblem(e));
+      return;
+    }
     if (path == null) return;
     final id = library.addFolder(path, negative: negative);
     if (id != null) _select((folderId: id, path: ''));
@@ -163,20 +169,24 @@ class _PhotoLibraryViewState extends State<PhotoLibraryView> {
     final single = targets.length == 1;
     showMenuAt(context, position, width: 200, [
       MenuItem(label: single ? 'Open' : 'Open ${targets.length} Photos', onSelected: () => _open(targets)),
-      MenuItem(label: HostWindow.revealLabel, onSelected: () => library.reveal(targets)),
-      const MenuItem.divider(),
+      if (HostWindow.showsFiles) ...[
+        MenuItem(label: HostWindow.revealLabel, onSelected: () => library.reveal(targets)),
+        const MenuItem.divider(),
+      ],
       MenuItem(
         label: _selection.selected.contains(key) ? 'Deselect' : 'Select',
         onSelected: () =>
             setState(() => _selection = nextSelection(photos, _selection, key, toggle: true)),
       ),
-      const MenuItem.divider(),
-      if (single)
-        MenuItem(
-          label: 'Rename…',
-          onSelected: () => showRenameDialog(context, targets.single.name, (name) => _rename(targets.single, name)),
-        ),
-      MenuItem(label: 'Move to Trash…', onSelected: () => _confirmTrash(targets)),
+      if (HostWindow.showsFiles) ...[
+        const MenuItem.divider(),
+        if (single)
+          MenuItem(
+            label: 'Rename…',
+            onSelected: () => showRenameDialog(context, targets.single.name, (name) => _rename(targets.single, name)),
+          ),
+        MenuItem(label: 'Move to Trash…', onSelected: () => _confirmTrash(targets)),
+      ],
     ]);
   }
 
@@ -218,7 +228,7 @@ class _PhotoLibraryViewState extends State<PhotoLibraryView> {
       _open(selected);
       return KeyEventResult.handled;
     }
-    if (command && key == LogicalKeyboardKey.backspace) {
+    if (command && key == LogicalKeyboardKey.backspace && HostWindow.showsFiles) {
       _confirmTrash(selected);
       return KeyEventResult.handled;
     }

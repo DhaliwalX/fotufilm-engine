@@ -87,6 +87,7 @@ class PhotoLibrary extends ChangeNotifier {
 
   void toggle() => setOpen(!open);
   void dismissError() => _set(() => error = null);
+  void showError(String problem) => _set(() => error = problem);
 
   void _set(VoidCallback change) {
     change();
@@ -198,14 +199,12 @@ class PhotoLibrary extends ChangeNotifier {
       folder
         ..status = 'error'
         ..photos = const []
-        ..error = isFolder(folder.path)
-            ? 'This folder could not be read.'
-            : 'This folder has moved or been deleted.';
+        ..error = folderProblem(folder.path, e);
     }
     if (folders.contains(folder)) notifyListeners();
   }
 
-  /// Adds the folder at `path` (chosen in the system's folder panel) and answers its id. A folder
+  /// Adds the folder at `path` (`chooseFolder`) and answers its id. A folder
   /// already in the library is read again, or becomes a negatives folder when added as one.
   String? addFolder(String path, {bool negative = false}) {
     final normal = path.length > 1 && path.endsWith('/') ? path.substring(0, path.length - 1) : path;
@@ -249,6 +248,8 @@ class PhotoLibrary extends ChangeNotifier {
 
   /// Forgets a folder with its ratings; its files are not changed.
   void removeFolder(String id) {
+    final folder = folderById(id);
+    if (folder != null) forgetFolder(folder.path);
     folders.removeWhere((f) => f.id == id);
     records.removeWhere((key, _) => key.startsWith('$id/'));
     _saveFolders();

@@ -9,6 +9,13 @@ import { defaultEdit } from "./editor-state.js";
 import { loadFilmProfile } from "./film-profile.js";
 import { download } from "./editor/file-download.js";
 import { VIDEO_LABELS } from "./generated/controls.js";
+import {
+  chooseFolder,
+  folderFile,
+  forgetFolder,
+  listFolder,
+} from "./photo-library/browser-folders.js";
+import { libraryThumbnail } from "./photo-library/library-thumbnails.js";
 
 const backend = createBrowserBackend();
 const session = backend.createSession();
@@ -46,8 +53,9 @@ function capabilities() {
   };
 }
 
-async function importFile({ name, type, negative = false }, bytes) {
-  const file = new File([bytes], name, { type: type || "" });
+// A photo of a library folder comes by its path, the others as their bytes.
+async function importFile({ name, type, path, negative = false }, bytes) {
+  const file = bytes ? new File([bytes], name, { type: type || "" }) : await folderFile(path);
   const { image } = await backend.importMedia(file, { negative });
   const video = image.video ? await movieDescriptor(image.video) : null;
   const handle = nextHandle++;
@@ -74,6 +82,23 @@ async function importFile({ name, type, negative = false }, bytes) {
     },
     { preview },
   );
+}
+
+/// The library's folders (photo-library/browser-folders.js): `path` is the folder's library name.
+const libraryFolders = {
+  chooseFolder: async () => ({ json: { path: await chooseFolder() } }),
+  listFolder: async ({ path }) => ({ json: { rows: await listFolder(path) } }),
+  forgetFolder: async ({ path }) => {
+    await forgetFolder(path);
+    return { json: {} };
+  },
+};
+
+/// A library tile's picture of the file at `path`, as RGBA pixels (`thumbnail`).
+async function thumbnail({ path, maxEdge = 480 }) {
+  const drawn = await libraryThumbnail(await folderFile(path), maxEdge);
+  if (!drawn) return { json: {} };
+  return answer({ width: drawn.width, height: drawn.height }, { thumbnail: new Blob([drawn.pixels]) });
 }
 
 /// The app's edit over the browser's defaults: the native host defaults what an edit leaves out
@@ -297,6 +322,8 @@ const methods = {
   capabilities,
   prepare,
   importFile,
+  ...libraryFolders,
+  thumbnail,
   render,
   autoAdjust,
   sampleScene,
