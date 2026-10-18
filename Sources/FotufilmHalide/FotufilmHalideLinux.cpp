@@ -255,14 +255,26 @@ bool valid_flare_mean(const float *configuration, int32_t feature_mask) {
     return true;
 }
 
+/// What a develop delivers of the frame it reads: the columns [x, x + columns) and rows
+/// [y, y + rows), packed, `channels` floats a pixel (three for a light grid). Bounds inference
+/// then takes each pixel outside the window only through the stages a delivered pixel reads it
+/// from, and the delivered pixels are the same expressions over the same frame coordinates as a
+/// whole frame's.
+struct Window {
+    int32_t x, columns, y, rows, channels;
+};
+
 template <typename Element>
 int32_t develop(const Element *input, Element *output, int32_t width, int32_t height,
                 int32_t origin_x, int32_t origin_y, const float *configuration,
                 const float *exposure_lut, const float *film_output_lut,
                 const float *paper_output_lut, int32_t lut_dimension,
-                uint64_t spectral_cache_id, int32_t feature_mask, uint32_t seed) {
+                uint64_t spectral_cache_id, int32_t feature_mask, uint32_t seed,
+                Window window) {
     const Device device = chosen_device();
     if (device == kNone || !input || !output || !configuration || width <= 0 || height <= 0 ||
+        window.x < 0 || window.columns <= 0 || window.x + window.columns > width ||
+        window.y < 0 || window.rows <= 0 || window.y + window.rows > height ||
         !valid_flare_mean(configuration, feature_mask))
         return -1;
     const FrameFunction pipeline = device == kCuda
@@ -284,7 +296,10 @@ int32_t develop(const Element *input, Element *output, int32_t width, int32_t he
         bool film_on = false;
         Buffer<float> film_tiles = film_tile_store().tiles_for(configuration, film_on);
         auto in = Buffer<Element>::make_interleaved(const_cast<Element *>(input), width, height, 4);
-        auto out = Buffer<Element>::make_interleaved(output, width, height, 4);
+        auto out = Buffer<Element>::make_interleaved(output, window.columns, window.rows,
+                                                     window.channels);
+        if (window.x != 0) out.translate(0, window.x);
+        if (window.y != 0) out.translate(1, window.y);
         in.set_host_dirty();
         auto *cfg = cache.configuration.raw_buffer();
         auto *exposure = cache.exposure.raw_buffer();
@@ -339,7 +354,8 @@ extern "C" int32_t fotufilm_halide_cuda_process_srgb8(
     int32_t feature_mask, uint32_t seed) {
     return develop(input, output, width, height, 0, 0, configuration, exposure_lut,
                    film_output_lut, paper_output_lut, lut_dimension, spectral_cache_id,
-                   feature_mask & ~FOTUFILM_FRAME_FLOAT_IO, seed);
+                   feature_mask & ~FOTUFILM_FRAME_FLOAT_IO, seed,
+                   Window{0, width, 0, height, 4});
 }
 
 extern "C" int32_t fotufilm_halide_cuda_process_linear_float(
@@ -350,7 +366,42 @@ extern "C" int32_t fotufilm_halide_cuda_process_linear_float(
     uint64_t spectral_cache_id, int32_t feature_mask, uint32_t seed) {
     return develop(input, output, width, height, origin_x, origin_y, configuration,
                    exposure_lut, film_output_lut, paper_output_lut, lut_dimension,
-                   spectral_cache_id, feature_mask | FOTUFILM_FRAME_FLOAT_IO, seed);
+                   spectral_cache_id, feature_mask | FOTUFILM_FRAME_FLOAT_IO, seed,
+                   Window{0, width, 0, height, 4});
+}
+
+extern "C" int32_t fotufilm_halide_cuda_process_linear_float_tile(
+    const float *input, float *output, int32_t width, int32_t height,
+    int32_t out_x, int32_t out_columns, int32_t out_y, int32_t out_rows,
+    int32_t origin_x, int32_t origin_y, const float *configuration,
+    const float *exposure_lut, const float *film_output_lut,
+    const float *paper_output_lut, int32_t lut_dimension,
+    uint64_t spectral_cache_id, int32_t feature_mask, uint32_t seed) {
+    return develop(input, output, width, height, origin_x, origin_y, configuration,
+                   exposure_lut, film_output_lut, paper_output_lut, lut_dimension,
+                   spectral_cache_id, feature_mask | FOTUFILM_FRAME_FLOAT_IO, seed,
+                   Window{out_x, out_columns, out_y, out_rows, 4});
+}
+
+extern "C" int32_t fotufilm_halide_cuda_process_light_grid(
+    const float *input, float *grid_out, int32_t width, int32_t height,
+    int32_t out_x, int32_t out_columns, int32_t out_y, int32_t out_rows,
+    int32_t origin_x, int32_t origin_y, const float *configuration,
+    const float *exposure_lut, const float *film_output_lut,
+    const float *paper_output_lut, int32_t lut_dimension,
+    uint64_t spectral_cache_id, int32_t feature_mask, uint32_t seed) {
+    // Unit stride only, a cell a pixel, as Layered Transport's heads leave it: a coarser grid's
+    // cells would not fall on the window's pixels.
+    if (!configuration
+        || fotufilm_halation_stride(
+               std::max(0, int32_t(configuration[FOTUFILM_CONFIG_HALATION_RADIUS]))) != 1)
+        return -1;
+    return develop(input, grid_out, width, height, origin_x, origin_y, configuration,
+                   exposure_lut, film_output_lut, paper_output_lut, lut_dimension,
+                   spectral_cache_id,
+                   (feature_mask | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_LIGHT_OUT)
+                       & ~FOTUFILM_FRAME_FIELDS_IN,
+                   seed, Window{out_x, out_columns, out_y, out_rows, 3});
 }
 
 // Device pointers stay a JIT feature: the desktop hands frames over in host memory.

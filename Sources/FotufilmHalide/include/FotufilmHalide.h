@@ -361,6 +361,32 @@ int32_t fotufilm_halide_cuda_process_linear_float(
     const float *paper_output_lut, int32_t lut_dimension,
     uint64_t spectral_cache_id, int32_t feature_mask, uint32_t seed);
 
+/// Linux's ahead-of-time build only: `fotufilm_halide_cuda_process_linear_float` delivering just
+/// the columns [out_x, out_x + out_columns) and rows [out_y, out_y + out_rows) of the frame it
+/// reads, packed, as `fotufilm_halide_metal_process_linear_float_tile` does without fields. A
+/// tile read with the film's whole reach around it delivers what the whole frame would.
+int32_t fotufilm_halide_cuda_process_linear_float_tile(
+    const float *input, float *output, int32_t width, int32_t height,
+    int32_t out_x, int32_t out_columns, int32_t out_y, int32_t out_rows,
+    int32_t origin_x, int32_t origin_y,
+    const float *configuration,
+    const float *exposure_lut, const float *film_output_lut,
+    const float *paper_output_lut, int32_t lut_dimension,
+    uint64_t spectral_cache_id, int32_t feature_mask, uint32_t seed);
+
+/// Linux's ahead-of-time build only: the light of the same window as three floats a pixel, as
+/// `fotufilm_halide_metal_process_light_grid` delivers it at unit stride: the grid Layered
+/// Transport's heads take, whose invocations clear the halation radii. A configuration whose
+/// grid would be coarser is refused.
+int32_t fotufilm_halide_cuda_process_light_grid(
+    const float *input, float *grid_out, int32_t width, int32_t height,
+    int32_t out_x, int32_t out_columns, int32_t out_y, int32_t out_rows,
+    int32_t origin_x, int32_t origin_y,
+    const float *configuration,
+    const float *exposure_lut, const float *film_output_lut,
+    const float *paper_output_lut, int32_t lut_dimension,
+    uint64_t spectral_cache_id, int32_t feature_mask, uint32_t seed);
+
 /// Develops tightly packed RGBA from caller-owned CUdeviceptr buffers without device-host copies.
 /// Both buffers must belong to the CUDA context current on the engine's first driver call; the
 /// caller retains allocation ownership.
