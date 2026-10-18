@@ -15,7 +15,7 @@ export function importMedia(file, options) {
   if (
     decode === importPhoto &&
     !file.type.startsWith("image/") &&
-    !/\.(png|jpe?g|webp|avif|gif|bmp|tiff?)$/i.test(file.name)
+    !/\.(png|jpe?g|webp|avif|heic|heif|gif|bmp|tiff?)$/i.test(file.name)
   )
     return Promise.reject(
       new Error("Choose a photo, camera RAW file, or video."),

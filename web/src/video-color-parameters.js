@@ -34,7 +34,7 @@ export function videoColorParameters(frame, encoding) {
   words[35] =
     encoding !== "standard"
       ? 0
-      : ({ "arib-std-b67": 1, smpte2084: 2, linear: 3, "iec61966-2-1": 4 }[
+      : ({ hlg: 1, pq: 2, linear: 3, "iec61966-2-1": 4 }[
           frame.colorSpace?.transfer
         ] ?? 5);
   return words;

@@ -1,5 +1,7 @@
 // Read only capture/lens tags. Pixel strips, thumbnails, maker-note blobs and GPS
 // directories are never copied to the profile worker or persisted with a lens catalogue.
+import { isHEIF, parseHEIFMeta, heifExifRange } from "./heif.js";
+
 const sizes = {
   1: 1,
   2: 1,
@@ -74,11 +76,12 @@ export async function readPhotoMetadata(file, { signal } = {}) {
     return new Uint8Array(await file.slice(at, at + length).arrayBuffer());
   }
   try {
-    const header = await read(0, Math.min(file.size, 12));
+    const header = await read(0, Math.min(file.size, 64));
     if (header.length < 8) return {};
     const text = (bytes) => new TextDecoder().decode(bytes);
     let base = 0,
-      end = file.size;
+      end = file.size,
+      heif = false;
     if (header[0] === 0xff && header[1] === 0xd8) {
       base = null;
       for (let at = 2, count = 0; count < 512 && at + 4 <= file.size; count++) {
@@ -121,6 +124,26 @@ export async function readPhotoMetadata(file, { signal } = {}) {
         }
         if (kind === "IEND") break;
         at += length + 12;
+      }
+    } else if (isHEIF(header)) {
+      // HEIF displays through its own rotation and mirroring; the Exif orientation repeats them.
+      base = null;
+      heif = true;
+      for (let at = 0, count = 0; count < 64 && at + 8 <= file.size; count++) {
+        const box = await read(at, 8),
+          size = new DataView(box.buffer).getUint32(0);
+        if (size < 8 || at + size > file.size) break;
+        if (text(box.subarray(4)) === "meta") {
+          const meta = parseHEIFMeta(await read(at, size), { body: 8, end: size });
+          const exif = heifExifRange(meta, file.size);
+          if (exif) {
+            const skip = new DataView((await read(exif.offset, 4)).buffer).getUint32(0);
+            base = exif.offset + 4 + skip;
+            end = exif.offset + exif.length;
+          }
+          break;
+        }
+        at += size;
       }
     } else if (
       text(header.subarray(0, 4)) === "RIFF" &&
@@ -234,7 +257,7 @@ export async function readPhotoMetadata(file, { signal } = {}) {
       carrying[0];
     return {
       shot,
-      orientation: numbers(root.get(274))[0] || 1,
+      orientation: heif ? 1 : numbers(root.get(274))[0] || 1,
       embeddedTIFF: selected ? compactTIFF(selected, little) : null,
     };
   } catch (error) {

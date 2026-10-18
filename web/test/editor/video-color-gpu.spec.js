@@ -103,8 +103,8 @@ test("GPU video decode matches CPU across curves, planes, ranges and orientation
         displayHeight: 2,
       };
       for (const transfer of [
-        "arib-std-b67",
-        "smpte2084",
+        "hlg",
+        "pq",
         "linear",
         "iec61966-2-1",
         "bt709",
