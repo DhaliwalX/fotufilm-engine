@@ -451,7 +451,9 @@ bool open_encoder(ffv_writer &w, const ffv_writer_config &config) {
         c->framerate = f.av_d2q(config.frame_rate, 100000);
         c->pix_fmt = encoder_format(name, config.prores_profile);
         c->gop_size = std::max(1, static_cast<int>(std::lround(config.frame_rate)) * 2);
-        c->thread_count = threads();
+        // libx265 takes the count as its frame threads, which must stay under 16
+        // (X265_MAX_FRAME_THREADS); its own pool still uses every core.
+        c->thread_count = name == "libx265" ? std::min(threads(), 15) : threads();
         c->color_range = AVCOL_RANGE_MPEG;
         if (config.hdr) {
             // The Mac app's HDR colorimetry: BT.2020 primaries, HLG, the BT.2020 matrix.
