@@ -43,7 +43,7 @@ This copies the app to `/Applications`, registers the plugin, and installs its
 Motion effect template in your Movies folder. Restart Final Cut Pro, then find
 **Fotufilm** under **Effects**.
 
-Fotufilm Desktop can also install the plugin. `cef/build.sh` includes it when
+Fotufilm Desktop can also install the plugin. `flutter/build.sh` includes it when
 the FxPlug SDK is available. Without the SDK, the app builds without this plugin.
 
 ## Test without Final Cut or the SDK

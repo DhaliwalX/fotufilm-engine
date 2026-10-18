@@ -1,6 +1,5 @@
-// The inspector (web/src/editor/EditorInspector.jsx), compact: "Darkroom" and its help, the four
-// panels as a segmented control, and the chosen panel's sections. Collapsed, it is a rail of the
-// panels' buttons.
+// The inspector, compact: "Darkroom" and its help, the four panels as a segmented control, and the
+// chosen panel's sections. Collapsed, it is a rail of the panels' buttons.
 import 'package:flutter/widgets.dart';
 
 import '../../model/editor.dart';
@@ -20,10 +19,9 @@ class EditorInspector extends StatefulWidget {
 }
 
 class _EditorInspectorState extends State<EditorInspector> {
-  // Each panel keeps its own place, as InspectorPanel.jsx does.
+  // Each panel keeps its own place.
   final _scrolls = {for (final p in Panel.values) p: ScrollController()};
 
-  // InspectorHeading.jsx `help`.
   static const _help = {
     Panel.film: 'Load a stock and choose its format and character.',
     Panel.light: 'Adjust the light and filters, then refine the colour grade.',
@@ -105,7 +103,7 @@ class _EditorInspectorState extends State<EditorInspector> {
   }
 }
 
-/// The collapsed inspector's rail of panel buttons (InspectorRail.jsx).
+/// The collapsed inspector's rail of panel buttons.
 class InspectorRail extends StatelessWidget {
   const InspectorRail({super.key, required this.editor});
   final EditorModel editor;

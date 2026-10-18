@@ -1,11 +1,11 @@
-// The open photographs (web/src/editor/PhotoStrip.jsx), compact: the shown one's path, then a
-// row of frames, the shown one ringed in the accent, each closed by the button on its corner.
-// Photos that came with one (its folder, its roll) wait in the strip undecoded, showing the
-// engine's picture of the file, drawn once their frame is on screen; one is imported when chosen.
-// Shift-click and ⌘-click choose more open photos for Paste Settings and presets
-// (strip_selection.dart); those chosen with the shown one are ringed in a fainter accent.
-// The strip holds the shown photo's folder; scrolled away from its frame, a button at its top
-// right brings the frame back. A right-click (or Control-click) opens its menu (strip_menu.dart).
+// The open photographs, compact: the shown one's path, then a row of frames, the shown one ringed
+// in the accent, each closed by the button on its corner. Photos that came with one (its folder,
+// its roll) wait in the strip undecoded, showing the engine's picture of the file, drawn once their
+// frame is on screen; one is imported when chosen. Shift-click and ⌘-click choose more open photos
+// for Paste Settings and presets (strip_selection.dart); those chosen with the shown one are ringed
+// in a fainter accent. The strip holds the shown photo's folder; scrolled away from its frame, a
+// button at its top right brings the frame back. A right-click (or Control-click) opens its menu
+// (strip_menu.dart).
 import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart' show kPrimaryButton, kSecondaryButton;

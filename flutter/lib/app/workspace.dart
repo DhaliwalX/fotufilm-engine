@@ -71,7 +71,7 @@ class _WorkspaceState extends State<Workspace> {
     editor.addListener(_changed);
     editor.library.addListener(_libraryChanged);
     editor.layout.addListener(_changed);
-    // The window put behind ends the comparison and a slider's drag (useEditorShortcuts.js).
+    // The window put behind ends the comparison and a slider's drag.
     _lifecycle = AppLifecycleListener(onInactive: () {
       editor.setComparing(false);
       editor.endEdit();
@@ -151,8 +151,7 @@ class _WorkspaceState extends State<Workspace> {
     if (editor.active != null) showExportDialog(context, editor);
   }
 
-  /// A click outside the viewer gives the keys back to the editor, as a click on the page takes
-  /// them from the web editor's player (usePlayerShortcuts.js answers only inside the viewer).
+  /// A click outside the viewer gives the keys back to the editor.
   void _pointerDown(PointerDownEvent event) {
     final viewer = FocusManager.instance.primaryFocus?.context;
     if (viewer == null || viewer.findAncestorWidgetOfExactType<VideoKeys>() == null) return;
@@ -165,14 +164,14 @@ class _WorkspaceState extends State<Workspace> {
 
   void _drop(DropDoneDetails detail) {
     setState(() => _dropping = false);
-    // Film packs are installed; the rest open (useFilmPacks.js `acceptWithPacks`).
+    // Film packs are installed; the rest open.
     final packs = [for (final f in detail.files) if (isFilmPack(f.name)) f.path];
     if (packs.isNotEmpty) editor.filmPacks.importPaths(packs);
     final photos = [
       for (final f in detail.files)
         if (imageExtensions.contains(f.name.split('.').last.toLowerCase()) || isVideoName(f.name)) f,
     ];
-    // Dropped photographs join Open Recent too, as the CEF host's do.
+    // Dropped photographs join Open Recent too.
     if (!kIsWeb && photos.isNotEmpty) HostWindow.noteRecent([for (final f in photos) f.path]);
     editor.openFiles([for (final f in photos) _photo(f)]);
   }
@@ -222,7 +221,7 @@ class _WorkspaceState extends State<Workspace> {
   }
 
   /// The panels, the inspector giving way first and then the film library, so the picture keeps
-  /// its minimum width (web/src/editor/usePanelWidths.js).
+  /// its minimum width.
   Widget _panels(BuildContext context, BoxConstraints constraints) {
     final total = constraints.maxWidth;
     final layout = editor.layout;
@@ -240,7 +239,7 @@ class _WorkspaceState extends State<Workspace> {
     }
     final still = film + inspector + Metrics.pictureMin - total;
     if (still > 0 && editor.filmOpen) film = math.max(Metrics.filmMin, film - still);
-    // The resizers straddle the panels' edges, over the panels (PanelResizer.jsx).
+    // The resizers straddle the panels' edges, over the panels.
     const hit = Metrics.resizerHit;
     return Stack(children: [
       Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -284,8 +283,8 @@ class _WorkspaceState extends State<Workspace> {
     ]);
   }
 
-  /// The phone's stacked layout (phone-layout.css): the picture, the film list's dock when it is
-  /// open, and the inspector's dock over the rail of panels.
+  /// The phone's stacked layout: the picture, the film list's dock when it is open, and the
+  /// inspector's dock over the rail of panels.
   Widget _compactPanels(BuildContext context, BoxConstraints constraints) {
     final height = MediaQuery.sizeOf(context).height;
     final short = height <= 500;
@@ -334,7 +333,7 @@ class _ResizerState extends State<_Resizer> {
   bool _active = false;
 
   @override
-  // The arrow keys move the edge 16 points, 64 with Shift (PanelResizer.jsx).
+  // The arrow keys move the edge 16 points, 64 with Shift.
   Widget build(BuildContext context) => KeyTarget(
         label: widget.label,
         onNudge: (direction, shift) {

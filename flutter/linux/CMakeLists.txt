@@ -121,17 +121,17 @@ install(CODE "
 install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
   DESTINATION "${INSTALL_BUNDLE_DATA_DIR}" COMPONENT Runtime)
 
-# The engine (cef/build-engine-linux.sh): libfotufilm.so beside Flutter's libraries, and the films
+# The engine (tools/build-desktop-engine-linux.sh): libfotufilm.so beside Flutter's libraries, and the films
 # and camera profiles it reads in resources/ (main.cc points the engine there).
 # FOTUFILM_ENGINE_DIR in the environment names another (an engine built elsewhere).
-set(FOTUFILM_ENGINE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../build/cef-engine" CACHE PATH
+set(FOTUFILM_ENGINE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../build/engine" CACHE PATH
     "The directory holding libfotufilm.so and its Resources")
 if(DEFINED ENV{FOTUFILM_ENGINE_DIR})
   set(FOTUFILM_ENGINE_DIR "$ENV{FOTUFILM_ENGINE_DIR}" CACHE PATH
       "The directory holding libfotufilm.so and its Resources" FORCE)
 endif()
 if(NOT EXISTS "${FOTUFILM_ENGINE_DIR}/libfotufilm.so")
-  message(FATAL_ERROR "No engine at ${FOTUFILM_ENGINE_DIR}: build it with cef/build-engine-linux.sh")
+  message(FATAL_ERROR "No engine at ${FOTUFILM_ENGINE_DIR}: build it with tools/build-desktop-engine-linux.sh")
 endif()
 install(FILES "${FOTUFILM_ENGINE_DIR}/libfotufilm.so" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
   COMPONENT Runtime)

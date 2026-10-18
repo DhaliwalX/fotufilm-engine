@@ -1,5 +1,5 @@
-// Library folders through dart:io (cef/src/app/library_folders.cc): a folder's photos listed in
-// one call off the UI isolate, and a photo renamed in its folder.
+// Library folders through dart:io: a folder's photos listed in one call off the UI isolate, and a
+// photo renamed in its folder.
 import 'dart:io';
 import 'dart:isolate';
 

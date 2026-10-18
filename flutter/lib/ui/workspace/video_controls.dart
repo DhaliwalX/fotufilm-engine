@@ -1,8 +1,7 @@
-// A movie's controls under the viewer (web/src/VideoControls.jsx, video-player/VideoTimeline.jsx,
-// VideoTransport.jsx, PlayerButton.jsx, styles/video.css): the time and the seek bar with the
-// trim under it, back and forward five seconds round Play, then loop, mute, speed, Playback
-// Quality and the video settings, and the clip at a glance. The keys the player takes while the
-// viewer has the keyboard are in `VideoKeys`.
+// A movie's controls under the viewer: the time and the seek bar with the trim under it, back and
+// forward five seconds round Play, then loop, mute, speed, Playback Quality and the video settings,
+// and the clip at a glance. The keys the player takes while the viewer has the keyboard are in
+// `VideoKeys`.
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -11,7 +10,7 @@ import '../kit/kit.dart';
 import '../theme/theme.dart';
 import 'video_settings.dart';
 
-/// The labels the React player uses (generated/controls.js `VIDEO_LABELS`).
+/// The player's labels (generated/controls.js `VIDEO_LABELS`).
 String videoLabel(EditorModel editor, String key) =>
     ((editor.catalogue.module['VIDEO_LABELS'] as Map?)?[key] as String?) ?? key;
 
@@ -356,9 +355,9 @@ class _MenuButton extends StatelessWidget {
       );
 }
 
-/// The player's keys while the viewer has the keyboard (usePlayerShortcuts.js): Space and K play
-/// and pause, J and ← go back five seconds, L and → forward, M mutes. Elsewhere Space still shows
-/// the original. A click in the viewer gives it the keyboard while a movie is shown.
+/// The player's keys while the viewer has the keyboard: Space and K play and pause, J and ← go back
+/// five seconds, L and → forward, M mutes. Elsewhere Space still shows the original. A click in the
+/// viewer gives it the keyboard while a movie is shown.
 class VideoKeys extends StatefulWidget {
   const VideoKeys({super.key, required this.editor, required this.child});
   final EditorModel editor;

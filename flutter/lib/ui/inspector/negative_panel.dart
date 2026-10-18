@@ -1,7 +1,7 @@
-// A scanned negative's Film panel (web/src/editor/NegativeInspector.jsx): what the scan is read
-// as. The film is chosen in the film library; here are the films its base looks like, the clear
-// film it is measured against, how far its dyes' crosstalk is undone, the light it was scanned
-// under and the light frame that evens it out. The print is the Print panel's.
+// A scanned negative's Film panel: what the scan is read as. The film is chosen in the film
+// library; here are the films its base looks like, the clear film it is measured against, how far
+// its dyes' crosstalk is undone, the light it was scanned under and the light frame that evens it
+// out. The print is the Print panel's.
 import 'package:flutter/widgets.dart';
 
 import '../../model/negatives.dart';

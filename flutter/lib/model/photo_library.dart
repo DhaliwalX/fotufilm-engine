@@ -1,8 +1,7 @@
-// The photo library (web/src/photo-library/usePhotoLibrary.js, the CEF host's library methods in
-// cef/src/app/library_methods.cc): the folders the person chose, read in place, their photos and
-// per-photo ratings, and the file actions (rename, show in the Finder, move to the Trash). The
-// grid's own state (scope, filters, selection) is the view's, as in PhotoLibrary.jsx. Opening a
-// photo hands it to the editor with its roll (useLibraryDocuments.js).
+// The photo library: the folders the person chose, read in place, their photos and per-photo
+// ratings, and the file actions (rename, show in the Finder, move to the Trash). The grid's own
+// state (scope, filters, selection) is the view's. Opening a photo hands it to the editor
+// with its roll.
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
@@ -45,7 +44,7 @@ class LibraryFolder {
   Json toJson() => {'id': id, 'path': path, 'name': name, 'added': added, 'negative': negative};
 }
 
-/// The opened photo's picture flying from its tile to the viewer (LibraryHandoff.jsx).
+/// The opened photo's picture flying from its tile to the viewer.
 class LibraryHandoff {
   const LibraryHandoff({required this.image, required this.rect, required this.path});
   final ui.Image image;
@@ -64,7 +63,7 @@ class PhotoLibrary extends ChangeNotifier {
   /// The tiles' and the strip's pictures of files, drawn by the engine.
   late final thumbnails = HostThumbnails(() => editor.engine);
 
-  /// The tiles' picture edge: tiles are at most ~280 px, sharp at 2x (thumbnails.js).
+  /// The tiles' picture edge: tiles are at most ~280 px, sharp at 2x.
   static const thumbnailEdge = 480;
 
   static const _foldersKey = 'library.folders', _recordsKey = 'library.records';
@@ -358,9 +357,8 @@ class PhotoLibrary extends ChangeNotifier {
   Future<void> reveal(List<LibraryPhoto> photos) =>
       HostWindow.reveal([for (final p in photos) p.file]);
 
-  /// Opens photos in the editor: one photo with its roll, the photos of its directory, shown
-  /// first; several as chosen (PhotoLibrary.jsx `openPhotos`, useLibraryDocuments.js). A photo
-  /// of a negatives folder opens as a negative.
+  /// Opens photos in the editor: one photo with its roll, the photos of its directory, shown first;
+  /// several as chosen. A photo of a negatives folder opens as a negative.
   Future<void> openPhotos(List<LibraryPhoto> list,
       {String sort = 'name', LibraryHandoff? handoff}) async {
     if (list.isEmpty || editor.exporting) return;

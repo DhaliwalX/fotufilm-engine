@@ -1,7 +1,7 @@
-// The panels either side of the picture (web/src/editor/usePanelWidths.js): each as wide as it
-// was left, kept between launches, and given back to the picture as the window narrows. Below
-// 834 points the editor takes the phone's stacked layout (useCompactLayout.js): the film list
-// and the inspector become docks under the picture, opened one at a time from the rail.
+// The panels either side of the picture: each as wide as it was left, kept between launches, and
+// given back to the picture as the window narrows. Below 834 points the editor takes the phone's
+// stacked layout: the film list and the inspector become docks under the picture, opened one at a
+// time from the rail.
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -104,8 +104,8 @@ class PanelLayout extends ChangeNotifier {
   void keepWidths() =>
       editor.settings.set(key, {'film': preferred.film, 'inspector': preferred.inspector});
 
-  /// A panel chosen from the rail (useEditingActions.js `setInspector`): in the compact layout
-  /// the Film panel is the film list's dock, and the other panels the inspector's.
+  /// A panel chosen from the rail: in the compact layout the Film panel is the film list's dock,
+  /// and the other panels the inspector's.
   void choosePanel(Panel panel) {
     editor.endEdit();
     if (!compact) return editor.setPanel(panel);
@@ -124,7 +124,7 @@ class PanelLayout extends ChangeNotifier {
     }
   }
 
-  /// A dock's close button (PanelDismissButton.jsx).
+  /// A dock's close button.
   void dismiss(PanelSide side) {
     editor.endEdit();
     if (side == PanelSide.film && editor.filmOpen) editor.toggleFilm();

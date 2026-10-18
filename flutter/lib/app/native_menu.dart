@@ -1,8 +1,7 @@
-// The macOS menu bar, kept as the CEF editor keeps its host's (useNativeCommands.js): the menus'
-// items go to the native side when they change (a plug-in list arriving), and with every change
-// of the editor what applies, what is ticked and what the changing items are called. The native
-// side (MainFlutterWindow.swift `MainMenu`) builds NSMenus from them, ticks and greys their items
-// as they validate, and sends back the command chosen.
+// The macOS menu bar: the menus' items go to the native side when they change (a plug-in list
+// arriving), and with every change of the editor what applies, what is ticked and what the changing
+// items are called. The native side (MainFlutterWindow.swift `MainMenu`) builds NSMenus from them,
+// ticks and greys their items as they validate, and sends back the command chosen.
 import 'dart:convert';
 
 import 'package:flutter/services.dart';

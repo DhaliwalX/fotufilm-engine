@@ -1,6 +1,5 @@
-// The library's grid (web/src/photo-library/PhotoGrid.jsx, PhotoTile.jsx, photo-library.css):
-// square tiles that stretch to fill the width, built only near the view, each with the file's
-// picture, its name and stars, and badges for RAW, video and edited photos.
+// The library's grid: square tiles that stretch to fill the width, built only near the view, each
+// with the file's picture, its name and stars, and badges for RAW, video and edited photos.
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -15,7 +14,7 @@ import '../../kit/kit.dart';
 import '../../theme/theme.dart';
 import '../picture.dart';
 
-/// Rows of square cells that stretch to fill the width (PhotoGrid.jsx `gridLayout`).
+/// Rows of square cells that stretch to fill the width.
 class GridLayout {
   GridLayout(double width, this.count, double tileSize) {
     final inner = math.max(0.0, width - padding * 2);

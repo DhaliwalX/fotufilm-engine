@@ -6,8 +6,7 @@
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
 	<string>Fotufilm Desktop</string>
-	<!-- Offered in Open With and accepted on the Dock icon, without claiming any type, as the CEF
-	     app's are (cef/mac/Info.plist.in). -->
+	<!-- Offered in Open With and accepted on the Dock icon, without claiming any type. -->
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>

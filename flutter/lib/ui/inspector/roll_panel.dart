@@ -1,6 +1,6 @@
-// A scanned negative's Roll panel (web/src/editor/RollInspector.jsx): what the frames of its roll
-// share. The roll is the strip's negatives from the frame's folder; its colour balance is measured
-// on all of them and kept with each, every frame still timed on its own highlights.
+// A scanned negative's Roll panel: what the frames of its roll share. The roll is the strip's
+// negatives from the frame's folder; its colour balance is measured on all of them and kept with
+// each, every frame still timed on its own highlights.
 import 'package:flutter/widgets.dart';
 
 import '../kit/kit.dart';

@@ -7,7 +7,7 @@ import FotufilmPlugins
 /// The Mac app's plug-ins, installed by the Mac app's own installers (`Sources/FotufilmPlugins`):
 /// the DaVinci Resolve OFX bundle into `/Library/OFX/Plugins`, the Final Cut Pro FxPlug wrapper
 /// into `/Applications` with its Motion template. Fotufilm Desktop carries both in its bundle's
-/// resources, as the Mac app does (`cef/CMakeLists.txt`).
+/// resources, as the Mac app does (`flutter/tool/bundle-engine.sh`).
 struct MacPluginInstaller: HostPluginInstaller {
     /// Where the plug-ins come from and go; a check points them at a temporary directory.
     var locations = PluginLocations.standard

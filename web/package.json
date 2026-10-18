@@ -4,8 +4,6 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
-    "serve": "node server.js",
     "test": "node --test test/editor/*.test.js",
     "test:browser": "playwright test",
     "check:engine": "python3 ../tools/export-web-constants.py --check",
@@ -14,18 +12,11 @@
   "dependencies": {
     "@bjorn3/browser_wasi_shim": "0.4.2",
     "@hevcjs/core": "1.4.5",
-    "@react-spectrum/s2": "1.7.1",
-    "express": "^5.2.1",
     "mediabunny": "1.56.1",
-    "motion": "13.4.0",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
     "three": "0.186.0"
   },
   "devDependencies": {
     "@playwright/test": "1.62.1",
-    "@vitejs/plugin-react": "^6.1.1",
-    "prettier": "3.6.2",
     "vite": "^8.2.2"
   }
 }

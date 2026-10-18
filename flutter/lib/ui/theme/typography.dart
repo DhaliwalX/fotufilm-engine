@@ -1,5 +1,5 @@
-// The editor's type: Satoshi, as web/src/typography.css sets it on every element, with tabular
-// figures so values do not shift as they change.
+// The editor's type: Satoshi on every element, with tabular figures so values do not shift as
+// they change.
 import 'package:flutter/widgets.dart';
 
 import 'palette.dart';

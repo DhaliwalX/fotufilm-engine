@@ -1,6 +1,5 @@
-// The Pipeline tool's panel (web/src/editor/PipelineInspector.jsx, styles/inspector.css
-// `.pipeline-list`): the finished print, then each stage of the film's development, numbered, and
-// whether a stage shows as its change from the one before.
+// The Pipeline tool's panel: the finished print, then each stage of the film's development,
+// numbered, and whether a stage shows as its change from the one before.
 import 'package:flutter/widgets.dart';
 
 import '../kit/kit.dart';

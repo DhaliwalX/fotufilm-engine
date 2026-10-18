@@ -6,9 +6,9 @@ import { rawSource, scaledLinearImage } from "../raw-source.js";
 import { loadStockIndex } from "../stock-index.js";
 import { importMedia } from "./browser-import.js";
 
-// Scanned negatives in the browser (backend/README.md, Negative scans): a scan opens as a
-// document, and every render of it reads the framed scan as the edit's film and prints it
-// (RenderSession.negativeReading). Light frames are kept by the desktop host only.
+// Scanned negatives in the browser: a scan opens as a document, and every render of it reads the
+// framed scan as the edit's film and prints it (RenderSession.negativeReading). Light frames are
+// kept by the desktop host only.
 
 // A scan opened with `negative` carries the films its clear base looks like.
 export async function importNegativeMedia(file, options) {

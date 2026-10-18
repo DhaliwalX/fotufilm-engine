@@ -1,5 +1,4 @@
-// Keyboard shortcuts (web/src/editor/ShortcutsDialog.jsx and `.shortcuts` in styles/dialogs.css):
-// the dialog's fixed rows, each action with its keys on the right, muted.
+// Keyboard shortcuts: the dialog's fixed rows, each action with its keys on the right, muted.
 import 'package:flutter/widgets.dart';
 
 import '../../app/editor_shortcuts.dart';

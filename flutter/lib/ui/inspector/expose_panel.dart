@@ -1,7 +1,6 @@
-// The Expose panel (web/src/editor/LightInspector.jsx, and what EditorInspector.jsx adds under
-// it): light, the source illuminant, white balance, colour, the grade deck, then the film's long
-// exposure, the filters on the lens, the lens, and an HDR photograph's highlights
-// (SourceInspector.jsx). A scanned negative printed on its film keeps only what acts on its print.
+// The Expose panel: light, the source illuminant, white balance, colour, the grade deck, then the
+// film's long exposure, the filters on the lens, the lens, and an HDR photograph's highlights. A
+// scanned negative printed on its film keeps only what acts on its print.
 import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';

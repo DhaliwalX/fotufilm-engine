@@ -1,8 +1,6 @@
-// The editor's toolbar (web/src/editor/EditorToolbar.jsx), compact: 40 px in the panels' colour.
-// The brand, the library and Add media on the left (FileToolbar.jsx), zoom and the canvas tools in
-// the middle (ViewToolbar.jsx), the histogram, history, export, More and the inspector on the
-// right (EditToolbar.jsx, OptionsMenu.jsx). On macOS it is the titlebar: its empty space drags
-// the window.
+// The editor's toolbar, compact: 40 px in the panels' colour. The brand, the library and Add media
+// on the left, zoom and the canvas tools in the middle, the histogram, history, export, More and
+// the inspector on the right. On macOS it is the titlebar: its empty space drags the window.
 import 'package:flutter/widgets.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -41,7 +39,7 @@ class EditorToolbar extends StatelessWidget {
         ConstrainedBox(
           constraints: const BoxConstraints(minWidth: Metrics.toolbarLeadingWidth),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
-            // The traffic lights sit in the toolbar's leading inset, as in the CEF app.
+            // The traffic lights sit in the toolbar's leading inset.
             if (titlebar) const SizedBox(width: Metrics.trafficLightInset),
             const SizedBox(width: 7),
             const FotufilmBrand(),
@@ -50,7 +48,7 @@ class EditorToolbar extends StatelessWidget {
             ImportMenu(editor: editor, onImage: commands.actions.open),
           ]),
         ),
-        // The library hides the photograph's controls (photo-library.css).
+        // The library hides the photograph's controls.
         Expanded(child: _whileEditing(_ViewGroup(editor: editor))),
         _whileEditing(_EditGroup(commands: commands)),
       ]),
@@ -80,8 +78,8 @@ class EditorToolbar extends StatelessWidget {
       child: child);
 }
 
-/// The compact layout's toolbar (phone-layout.css): the brand, the library and Add media on one
-/// row, and the edit buttons spread across the next; zoom gives way.
+/// The compact layout's toolbar: the brand, the library and Add media on one row, and the edit
+/// buttons spread across the next; zoom gives way.
 extension on EditorToolbar {
   Widget _compact(Color? colour, bool titlebar) => Container(
         color: colour,
@@ -106,7 +104,7 @@ extension on EditorToolbar {
       );
 }
 
-/// The library's toggle (FileToolbar.jsx).
+/// The library's toggle.
 class _LibraryButton extends StatelessWidget {
   const _LibraryButton({required this.editor, this.size = Metrics.control});
   final EditorModel editor;
@@ -122,7 +120,7 @@ class _LibraryButton extends StatelessWidget {
       );
 }
 
-/// Zoom, the canvas tools and the photograph's size (ViewToolbar.jsx).
+/// Zoom, the canvas tools and the photograph's size.
 class _ViewGroup extends StatelessWidget {
   const _ViewGroup({required this.editor});
   final EditorModel editor;
@@ -132,11 +130,11 @@ class _ViewGroup extends StatelessWidget {
     final palette = Palette.of(context);
     final doc = editor.active;
     final photo = doc != null;
-    // Where the view stands between fit and the largest zoom (photo-view.js `zoomReach`).
+    // Where the view stands between fit and the largest zoom.
     final fit = !editor.zoomed;
     final max = editor.zoomed && editor.scale >= ViewState.maxZoom * .999;
     final cropMode = editor.crop.showing;
-    // Each tool opens in the inspector (useEditingActions.js `setInspector`).
+    // Each tool opens in the inspector.
     void open(Panel panel) => editor.layout.choosePanel(panel);
     return Row(mainAxisAlignment: MainAxisAlignment.center, children: [
       QuietButton(
@@ -173,7 +171,7 @@ class _ViewGroup extends StatelessWidget {
         selected: editor.panel == Panel.crop && editor.inspectorOpen,
         onPressed: !photo || editor.exporting ? null : () => open(Panel.crop),
       ),
-      // A middling window gives the readout's room to the tools (responsive.css).
+      // A middling window gives the readout's room to the tools.
       if (!_crowded(editor.layout.window)) PixelReadout(doc: doc),
     ]);
   }
@@ -181,7 +179,7 @@ class _ViewGroup extends StatelessWidget {
 
 bool _crowded(double? window) => window != null && window > 833 && window < 1010;
 
-/// The histogram, history, reset, export, More and the inspector (EditToolbar.jsx).
+/// The histogram, history, reset, export, More and the inspector.
 class _EditGroup extends StatelessWidget {
   const _EditGroup({required this.commands, this.compact = false});
   final EditorCommands commands;
@@ -280,7 +278,7 @@ class _EditGroup extends StatelessWidget {
 /// The More button, for the driver to open its menu.
 final moreOptionsKey = GlobalKey(debugLabel: 'moreOptions');
 
-/// The More menu (OptionsMenu.jsx): its sections in order, each closed by a divider.
+/// The More menu: its sections in order, each closed by a divider.
 void showMoreOptions(BuildContext anchor, EditorCommands commands) {
   final editor = commands.editor;
   final exporting = editor.exporting;
@@ -424,7 +422,7 @@ void showMoreOptions(BuildContext anchor, EditorCommands commands) {
   ]);
 }
 
-/// The app's icon and wordmark (web/src/editor/FotufilmBrand.jsx, compact).
+/// The app's icon and wordmark, compact.
 class FotufilmBrand extends StatelessWidget {
   const FotufilmBrand({super.key});
 

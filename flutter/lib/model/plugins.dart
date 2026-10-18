@@ -1,8 +1,7 @@
 // The plug-ins for other editors the engine's platform installs (DaVinci Resolve and Final Cut Pro
-// on the Mac), as the Mac app's Plugins menu and launch offer handle them
-// (web/src/editor/usePlugins.js, PluginsDialog.jsx). The state is read when the editor opens,
-// when its window comes back to the front and after every install, since a plug-in can be
-// installed or removed behind the editor's back.
+// on the Mac), as the Mac app's Plugins menu and launch offer handle them. The state is read when
+// the editor opens, when its window comes back to the front and after every install, since a
+// plug-in can be installed or removed behind the editor's back.
 import 'package:flutter/foundation.dart';
 
 import 'app_dialogs.dart';

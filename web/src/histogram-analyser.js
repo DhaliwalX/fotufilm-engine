@@ -1,4 +1,4 @@
-// One worker per visible histogram; request ownership and cancellation stay below React.
+// One worker per visible histogram; request ownership and cancellation stay below the editor.
 export function createHistogram() {
   const worker = new Worker(new URL("./histogram.worker.js", import.meta.url), {
     type: "module",

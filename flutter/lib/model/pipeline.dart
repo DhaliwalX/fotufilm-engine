@@ -1,7 +1,6 @@
-// The pipeline tool (web/src/editor/PipelineInspector.jsx, usePipelineStages.js): the film's
-// development walked a stage at a time. The shown picture develops at the chosen stage (the
-// render's `stage`), or as its change from the stage before (`difference`); leaving the tool, or
-// changing what the walk depends on, goes back to the finished print.
+// The pipeline tool: the film's development walked a stage at a time. The shown picture develops at
+// the chosen stage (the render's `stage`), or as its change from the stage before (`difference`);
+// leaving the tool, or changing what the walk depends on, goes back to the finished print.
 import 'dart:async';
 import 'dart:convert';
 
@@ -70,13 +69,13 @@ class PipelineTool extends ChangeNotifier {
   bool get customised => hasProfileSettings(editor.catalogue, editor.edit);
 
   Json _options(PhotoDocument doc) => open && stage != null
-      // A stage is the bare develop, never framed (session.js `renderRequest`).
+      // A stage is the bare develop, never framed.
       ? {'stage': stage, 'difference': difference, 'printFrame': null}
       : const {};
 
   /// Follows the editor: asks for the stages while the tool is open, again when the film or its
-  /// settings change (usePipelineStages.js), and drops the stage when anything it was walked for
-  /// changes. The develop the change schedules then reads the finished print.
+  /// settings change, and drops the stage when anything it was walked for changes. The develop the
+  /// change schedules then reads the finished print.
   void _follow() {
     final edit = editor.edit, doc = editor.active;
     final stock = edit['stock'] ?? (editor.stocks.isEmpty ? null : editor.stocks.first['id']);

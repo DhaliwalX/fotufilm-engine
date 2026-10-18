@@ -1,6 +1,5 @@
-// The viewer (web/src/editor/EditorViewer.jsx, ImageCanvas.jsx, styles/viewer.css): the
-// photograph on the canvas colour, fitted or magnified, the original while Space or a press on it
-// is held, and the viewer's overlays, with the photo strip under it.
+// The viewer: the photograph on the canvas colour, fitted or magnified, the original while Space or
+// a press on it is held, and the viewer's overlays, with the photo strip under it.
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -55,7 +54,7 @@ class EditorViewer extends StatelessWidget {
               if (editor.status != null)
                 StatusPill(
                     text: editor.status!, onCancel: editor.importing ? editor.cancelImport : null),
-              // What Auto Adjust is doing (ViewerStatus.jsx).
+              // What Auto Adjust is doing.
               if (editor.status == null && editor.auto.status != null)
                 StatusPill(text: editor.auto.status!),
               if (editor.error != null)
@@ -79,7 +78,7 @@ class EditorViewer extends StatelessWidget {
             ]);
           }),
         ),
-        // A movie's transport (VideoControls.jsx).
+        // A movie's transport.
         if (doc != null && doc.isMovie) VideoControls(editor: editor, doc: doc),
         // Shown once it holds more than one photo.
         PhotoStrip(editor: editor),
@@ -104,7 +103,7 @@ class _PhotoCanvasState extends State<PhotoCanvas> {
 
   EditorModel get editor => widget.editor;
 
-  // ── Press to compare (usePhotoNavigation.js) ──────────────────────────────────────────────
+  // ── Press to compare ──────────────────────────────────────────────────────────────────────
 
   /// Where each pointer on the photograph went down.
   final Map<int, Offset> _pressed = {};

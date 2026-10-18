@@ -1,6 +1,6 @@
-// The transport's video settings (web/src/video-player/VideoSettings.jsx): how the movie's codes
-// are read, the trim, the export cadence the native exporter retimes to, and whether the sound
-// goes with an export. They are the edit's (`edit.video`), so they undo and are kept with it.
+// The transport's video settings: how the movie's codes are read, the trim, the export cadence the
+// native exporter retimes to, and whether the sound goes with an export. They are the edit's
+// (`edit.video`), so they undo and are kept with it.
 import 'package:flutter/widgets.dart';
 
 import '../../model/editor.dart';
@@ -26,7 +26,7 @@ class VideoSettingsButton extends StatelessWidget {
       );
 }
 
-/// Opens the settings over `anchor`, as React's popover opens above its button.
+/// Opens the settings over `anchor`.
 AnchoredOverlay showVideoSettings(BuildContext anchor, EditorModel editor) => showAnchored(
       anchor,
       (context, close) => PopoverSurface(
@@ -144,8 +144,7 @@ class VideoSettingsPanel extends StatelessWidget {
   }
 }
 
-/// A number of seconds to three places, labelled above, committed on Enter or leaving it
-/// (React's NumberField with `maximumFractionDigits: 3`).
+/// A number of seconds to three places, labelled above, committed on Enter or leaving it.
 class _SecondsField extends StatefulWidget {
   const _SecondsField(
       {required this.label, required this.value, required this.enabled, required this.onSubmitted});

@@ -1,9 +1,9 @@
-// Check for Updates, as the Mac app's UpdateCheck runs it (web/src/editor/useUpdates.js): the
-// menu command always answers; the automatic check runs shortly after launch and then daily, and
-// says something only when there is a release this person has not skipped. The engine reads the
-// feed and downloads, verifies and opens the installer (`updateCheck`, `updateStatus`,
-// `updateInstall`, `updateCancel`, `updateNotes`); this paces it and says what happened.
-// Include Pre-releases widens every check to releases published before they are final.
+// Check for Updates, as the Mac app's UpdateCheck runs it: the menu command always answers; the
+// automatic check runs shortly after launch and then daily, and says something only when there is a
+// release this person has not skipped. The engine reads the feed and downloads, verifies and opens
+// the installer (`updateCheck`, `updateStatus`, `updateInstall`, `updateCancel`, `updateNotes`);
+// this paces it and says what happened. Include Pre-releases widens every check to releases
+// published before they are final.
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';

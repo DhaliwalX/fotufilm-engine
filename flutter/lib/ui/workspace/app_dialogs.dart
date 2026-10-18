@@ -1,6 +1,6 @@
-// The app's own dialogs (EditorWorkspace.jsx's DialogContainer): the host that shows the one the
-// editor asks for (Settings, Plug-ins, a film pack's notice, an update, Browser support), and
-// the card and alert they are drawn in (Spectrum's Dialog and AlertDialog).
+// The app's own dialogs: the host that shows the one the editor asks for (Settings, Plug-ins, a
+// film pack's notice, an update, Browser support), and the card and alert they are drawn in
+// (Spectrum's Dialog and AlertDialog).
 import 'package:flutter/widgets.dart';
 
 import '../../model/app_dialogs.dart';

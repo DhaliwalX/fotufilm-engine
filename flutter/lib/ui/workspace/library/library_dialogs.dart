@@ -1,5 +1,5 @@
-// The library's menus and dialogs: a photo's context menu at the pointer (PhotoMenu.jsx), Rename
-// (RenameDialog.jsx), and the confirmations to move photos to the Trash and to remove a folder.
+// The library's menus and dialogs: a photo's context menu at the pointer, Rename, and the
+// confirmations to move photos to the Trash and to remove a folder.
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 

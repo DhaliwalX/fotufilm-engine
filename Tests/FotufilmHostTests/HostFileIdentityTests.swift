@@ -12,7 +12,7 @@ final class HostFileIdentityTests: XCTestCase {
         return url
     }
 
-    /// The same forms the editor gives a file it was handed (web/src/saved-edits.js).
+    /// The same forms the editor gives a file it was handed.
     func testStillsAreKnownByContentsAndMoviesByNameSizeAndDate() throws {
         let still = try temporaryFile("a.jpg", "abc")
         let copy = try temporaryFile("renamed.jpg", "abc")

@@ -1,7 +1,6 @@
-// The panels' controls that change with the window (web/src/editor/InspectorRail.jsx,
-// PanelDismissButton.jsx, FilmSidebarToggle.jsx, styles/phone-layout.css): the film library's
-// sidebar toggle, the compact layout's rail of labelled panel buttons along the bottom, and the
-// close button on each of its docks.
+// The panels' controls that change with the window: the film library's sidebar toggle, the compact
+// layout's rail of labelled panel buttons along the bottom, and the close button on each
+// of its docks.
 import 'package:flutter/widgets.dart';
 
 import '../../model/editor.dart';

@@ -1,12 +1,11 @@
-// What the React editor kept in the CEF app's profile, as this app keeps it: its localStorage
-// items (app-settings.js, edit-settings.js, band-sets.js, usePanelWidths.js, PhotoLibrary.jsx)
-// and its photo library's IndexedDB records (photo-library/library-store.js). Folder ids and
-// photo keys carry over unchanged. An edit React kept under a library key is kept here under
-// the file's identity (kept_edits.dart), which only the engine can answer, so it waits as
-// `pendingEdits` until the file can be read.
+// What the previous desktop app kept in its profile, as this app keeps it: its localStorage items
+// and its photo library's IndexedDB records. Folder ids and photo keys carry over unchanged. An
+// edit the previous desktop app kept under a library key is kept here under the file's identity
+// (kept_edits.dart), which only the engine can answer, so it waits as `pendingEdits` until the file
+// can be read.
 import 'dart:convert';
 
-/// The origin the CEF host serves the editor from (cef/src/app/scheme.h).
+/// The origin the previous desktop app served the editor from.
 const cefOrigin = 'fotufilm://app';
 
 /// The photo library's IndexedDB database.

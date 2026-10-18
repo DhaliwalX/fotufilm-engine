@@ -9,9 +9,9 @@ import FotufilmEditModel
 import FotufilmImaging
 #endif
 
-/// The web editor's native backend (`web/src/backend/macos/host.js`) answered in Swift: every
-/// call is a method name, JSON parameters and optional bytes, and every answer JSON plus named
-/// byte ranges of one payload. A host only moves messages; what they mean lives here.
+/// The editor's native backend answered in Swift: every call is a method name, JSON parameters and
+/// optional bytes, and every answer JSON plus named byte ranges of one payload. A host only moves
+/// messages; what they mean lives here.
 public final class HostService {
     public struct Answer {
         public var json: Data

@@ -1,5 +1,5 @@
-// The opened photo's picture flies from its library tile to where the viewer will fit it, and
-// stays there until the developed photograph is on screen (web/src/editor/LibraryHandoff.jsx).
+// The opened photo's picture flies from its library tile to where the viewer will fit it, and stays
+// there until the developed photograph is on screen.
 import 'dart:async';
 import 'dart:math' as math;
 

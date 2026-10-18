@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fotufilm_flutter/model/export.dart';
 
 void main() {
-  group('export sizes (export-sizes.js)', () {
+  group('export sizes', () {
     test('a 6000 x 4000 picture offers the Mac app sizes', () {
       final sizes = exportSizeOptions((width: 6000, height: 4000));
       expect(sizes.map((s) => s.id),
@@ -58,7 +58,7 @@ void main() {
     });
   });
 
-  group('file names (useExportActions.js)', () {
+  group('file names', () {
     test('a still is named for its photograph, film and medium', () {
       expect(stillFilename('IMG 0001.ARW', {'stock': 'gold200', 'medium': null}, 'image/jpeg'),
           'IMG-0001-gold200.jpg');

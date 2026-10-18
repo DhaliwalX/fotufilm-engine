@@ -1,7 +1,6 @@
-// The Expose panel's Lens (web/src/LensControls.jsx, LensControls.css, LensProfileLibrary.jsx):
-// lens correction on or off, the profile it reads (matched from the photograph's lens, or one
-// chosen), the engine's note on what it found, the amount and the manual corrections, and the
-// imported lens-profile catalogue.
+// The Expose panel's Lens: lens correction on or off, the profile it reads (matched from the
+// photograph's lens, or one chosen), the engine's note on what it found, the amount and the manual
+// corrections, and the imported lens-profile catalogue.
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/widgets.dart';
 

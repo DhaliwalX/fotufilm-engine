@@ -1,7 +1,6 @@
-// The floating histogram (web/src/HistogramPanel.jsx, HistogramPlot.jsx, histogram.css): at the
-// viewer's top left, moved by its header and resized from its corner. RGB, Luma, Chroma, OKLab L
-// or OKLab a/b, on a log or linear count axis. Made small, it is the graph alone, moved by
-// dragging the graph.
+// The floating histogram: at the viewer's top left, moved by its header and resized from its
+// corner. RGB, Luma, Chroma, OKLab L or OKLab a/b, on a log or linear count axis. Made small, it is
+// the graph alone, moved by dragging the graph.
 import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
@@ -60,7 +59,7 @@ class _HistogramPanelState extends State<HistogramPanel> {
 
   void _move(Offset delta) => setState(() => _rect = _rect.shift(delta));
 
-  /// The arrow keys move or resize it 8 points, 32 with Shift (use-floating-panel.js).
+  /// The arrow keys move or resize it 8 points, 32 with Shift.
   static Offset _keyed(Offset direction, bool shift) => direction * (shift ? 32 : 8);
 
   void _resize(Offset delta) => setState(() => _rect = Rect.fromLTWH(
@@ -245,7 +244,7 @@ class _HistogramPanelState extends State<HistogramPanel> {
   }
 }
 
-/// The histogram's colours by name (histogram.css `--histogram-*`).
+/// The histogram's colours by name.
 Map<String, Color> histogramColors(bool dark) => dark
     ? const {
         'red': Color(0xFFF08791),
@@ -337,8 +336,7 @@ class _HistogramPainter extends CustomPainter {
     }
   }
 
-  /// Quadratic midpoints stay inside adjacent values, so smoothing cannot overshoot
-  /// (histogram-curves.js `traceHistogram`).
+  /// Quadratic midpoints stay inside adjacent values, so smoothing cannot overshoot.
   static Path _trace(List<double> values, double Function(double) x, double Function(double) y) {
     final path = Path()..moveTo(x(0), y(values[0]));
     for (var i = 1; i < values.length; i++) {

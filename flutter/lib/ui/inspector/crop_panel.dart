@@ -1,5 +1,5 @@
-// The Crop tool's panel (web/src/CropControls.jsx, editor/CropInspector.jsx): orientation, the
-// crop's shape, aspect and straightening with its size, perspective, and Reset and Done.
+// The Crop tool's panel: orientation, the crop's shape, aspect and straightening with its size,
+// perspective, and Reset and Done.
 import 'package:flutter/widgets.dart';
 
 import '../kit/kit.dart';
@@ -63,8 +63,7 @@ Widget _geometry(InspectorControls c, String field, [String? key]) {
   );
 }
 
-/// Spectrum's secondary Button at size S with an icon, as the orientation row has them
-/// (inspector.css `.crop-actions button`).
+/// Spectrum's secondary Button at size S with an icon, as the orientation row has them.
 class _ActionButton extends StatefulWidget {
   const _ActionButton({required this.icon, required this.label, required this.onPressed});
   final String icon, label;

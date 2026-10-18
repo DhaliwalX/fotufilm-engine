@@ -1,14 +1,12 @@
-// The editor's commands, listed once, as the CEF app has them: the commands by the ids
-// web/src/editor/useNativeCommands.js gives them, which apply now and which are ticked
-// (`menuState`), and the menu bar that holds them (cef/src/platform/mac/main_menu.mm), with its
-// order, separators and key equivalents.
+// The editor's commands, listed once: the commands by their ids, which apply now and which are
+// ticked, and the menu bar that holds them, with its order, separators and key equivalents.
 //
 // On macOS the menu bar is the system's, built natively from `mainMenu` (native_menu.dart and
 // MainFlutterWindow.swift's MainMenu) rather than with Flutter's PlatformMenuBar: Flutter's menu
 // items carry no checked state, and a ✓ in the title would shift the titles and say nothing to
-// VoiceOver. The native menu ticks items with NSMenuItem.state, words them (Undo Light, Install
-// as Reinstall) and greys them, as the CEF host's validateMenuItem does. On Linux and Windows,
-// which have no menu bar here, the same key equivalents answer with Ctrl in place of ⌘.
+// VoiceOver. The native menu ticks items with NSMenuItem.state, words them (Undo Light, Install as
+// Reinstall) and greys them. On Linux and Windows, which have no menu bar here, the same key
+// equivalents answer with Ctrl in place of ⌘.
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -35,8 +33,7 @@ class KeyEquivalent {
   /// ⌃⌘ shortcuts have no Ctrl form: Ctrl is already ⌘ there.
   bool get offeredWithCtrl => !control;
 
-  /// The shortcut as the platform writes it: ⌥⇧⌘Z on a Mac, Ctrl+Alt+Shift+Z elsewhere
-  /// (shortcut-label.js).
+  /// The shortcut as the platform writes it: ⌥⇧⌘Z on a Mac, Ctrl+Alt+Shift+Z elsewhere.
   String label({bool? mac}) {
     final shown = key.length == 1 ? key.toUpperCase() : key;
     if (mac ?? HostWindow.commandKeyIsMeta) {
@@ -46,8 +43,7 @@ class KeyEquivalent {
   }
 
   /// Whether `event` types this shortcut with the modifiers `keys` holds. A character that takes
-  /// Shift to type (⌘+, ⌘?) matches with or without it, as the CEF host's menus do
-  /// (`FotufilmMenuHasKeyEquivalent`).
+  /// Shift to type (⌘+, ⌘?) matches with or without it.
   bool matches(KeyEvent event, HardwareKeyboard keys, {bool? mac}) {
     final isMac = mac ?? HostWindow.commandKeyIsMeta;
     if (!isMac && control) return false;
@@ -126,7 +122,7 @@ class SubmenuNode extends MenuNode {
 }
 
 /// An item the system answers (About, Hide, Quit, Minimize, Open Recent, the Help pages…);
-/// macOS only, as the CEF host's.
+/// macOS only.
 class NativeNode extends MenuNode {
   const NativeNode(this.role, this.title, {this.key, this.page});
   final String role, title;
@@ -277,7 +273,7 @@ Iterable<CommandNode> commandNodes(List<MenuNode> menus) sync* {
   }
 }
 
-// ── What applies now (useNativeCommands.js `menuState`) ─────────────────────────────────────
+// ── What applies now ────────────────────────────────────────────────────────────────────────
 
 /// Which commands apply and which are ticked, what the changing ones are called, the Edit
 /// History's steps and the lists the editor fills (films, presets), with whether a text field
@@ -382,7 +378,7 @@ class EditorCommands {
       ? ((editor.edit['profile'] as Map?)?['estimatedHalation']) == true
       : editor.settings.get<bool>('estimatedHalation') == true;
 
-  /// The view's zoom against fit and the largest (photo-view.js `zoomReach`).
+  /// The view's zoom against fit and the largest.
   String get _reach => !editor.zoomed
       ? 'fit'
       : editor.scale >= ViewState.maxZoom * .999
@@ -534,7 +530,7 @@ class EditorCommands {
     }
   }
 
-  // ── Running (useNativeCommands.js `runCommand`) ─────────────────────────────────────────
+  // ── Running ─────────────────────────────────────────────────────────────────────────────
 
   /// Runs a command if it applies now; the menu's copy of the state may be a frame old.
   bool run(String id) {
@@ -618,7 +614,7 @@ class EditorCommands {
     'showOriginal': (c) => c.editor.setComparing(!c.editor.comparing),
     'histogram': (c) => c.editor.toggleHistogram(),
     'showNegative': (c) => c.editor.negatives.toggleShowNegative(),
-    // The same toggle as the player's Space (usePlayerShortcuts.js `PLAYBACK_TOGGLE`).
+    // The same toggle as the player's Space.
     'play': (c) {
       if (!c.editor.video.disabled) c.editor.video.toggle();
     },
@@ -667,8 +663,8 @@ class EditorCommands {
     return null;
   }
 
-  /// A key equivalent pressed: its command runs if it applies; one that does not goes nowhere,
-  /// as the CEF host's menus swallow it. A focused text field keeps its own editing keys.
+  /// A key equivalent pressed: its command runs if it applies; one that does not goes nowhere. A
+  /// focused text field keeps its own editing keys.
   KeyEventResult handleKey(KeyEvent event) {
     if (event is KeyUpEvent) return KeyEventResult.ignored;
     final node = commandForKey(event);

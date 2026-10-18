@@ -168,8 +168,8 @@ export function historyReducer(state, action) {
       group: null,
     };
   }
-  // A step of the Edit History (web/src/edit-history.js): the timeline stays whole, as a run of
-  // undos or redos would leave it.
+  // A step of the Edit History: the timeline stays whole, as a run of undos or redos would
+  // leave it.
   if (action.type === "goTo") {
     const states = [...state.past, state.present, ...state.future];
     const index = action.index;

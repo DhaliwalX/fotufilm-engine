@@ -1,8 +1,8 @@
-// Copy Settings, Paste Settings and presets (web/src/editor/useSettingsActions.js). A paste or a
-// preset goes onto every photo chosen in the strip: the one shown as one step Undo reverses, each
-// of the others as a step of its own history, kept as its edit is. Presets and the sections last
-// ticked are kept on this device under their own key, apart from the app settings so resetting
-// those leaves them; what was copied lasts for the session, as a clipboard does.
+// Copy Settings, Paste Settings and presets. A paste or a preset goes onto every photo chosen in
+// the strip: the one shown as one step Undo reverses, each of the others as a step of its own
+// history, kept as its edit is. Presets and the sections last ticked are kept on this device under
+// their own key, apart from the app settings so resetting those leaves them; what was copied lasts
+// for the session, as a clipboard does.
 import 'dart:io';
 import 'dart:math' as math;
 

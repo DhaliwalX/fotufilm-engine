@@ -1,5 +1,5 @@
 // A photograph's edit, in the web editor's JSON shape (web/src/editor-state.js `defaultEdit`), so
-// it goes to the engine as the React editor sends it (web/src/backend/desktop/session.js).
+// it goes to the engine as it is.
 import 'dart:convert';
 
 import 'catalogue.dart';
@@ -49,8 +49,7 @@ Json defaultEdit(Catalogue catalogue, [String? stock]) => {
 /// A deep copy, so a step of the history never shares a map with the next.
 Json copyEdit(Json edit) => jsonDecode(jsonEncode(edit)) as Json;
 
-/// What a film-row thumbnail develops: the edit on another film, without grain or halation
-/// (web/src/editor/useThumbnail.js `thumbnailEdit`).
+/// What a film-row thumbnail develops: the edit on another film, without grain or halation.
 Json thumbnailEdit(Json edit, String? stock) {
   final next = copyEdit(edit);
   next['stock'] = stock;
@@ -60,7 +59,7 @@ Json thumbnailEdit(Json edit, String? stock) {
   return next;
 }
 
-/// The render request the web editor's native backend sends (session.js `renderRequest`).
+/// The render request the editor sends the engine.
 Json renderRequest({
   required Catalogue catalogue,
   required int handle,

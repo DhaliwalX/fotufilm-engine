@@ -1,7 +1,7 @@
 // The crop's geometry, as the web editor keeps it: a quadrilateral in unit coordinates of the
 // oriented frame (web/src/editor-state.js `fullCrop`, `validCrop`, `rotatedCrop`, `flippedCrop`,
-// `cropForRatio`), how the overlay moves and resizes it (web/src/crop-interaction.js), and the
-// size the engine delivers for it (Sources/FotufilmHost/SceneGeometry.swift `snapped`, `sizes`).
+// `cropForRatio`), how the overlay moves and resizes it, and the size the engine delivers for it
+// (Sources/FotufilmHost/SceneGeometry.swift `snapped`, `sizes`).
 import 'dart:math' as math;
 import 'dart:ui';
 
@@ -68,7 +68,7 @@ List<Offset> flippedCrop(List<Offset> c) =>
     [for (final p in [c[1], c[0], c[3], c[2]]) Offset(1 - p.dx, p.dy)];
 
 /// A named aspect turned to the frame: 3:2 on a portrait frame is 2:3. Free and Original, and
-/// ratios saved by older editors, stay as they are (CropControls.jsx `aspect`).
+/// ratios saved by older editors, stay as they are.
 String orientedRatio(String ratio, double width, double height) {
   if (!const ['4:5', '3:2', '16:9'].contains(ratio)) return ratio;
   final [a, b] = ratio.split(':').map(int.parse).toList();
@@ -85,7 +85,7 @@ List<Offset> cropForRatio(String ratio, double width, double height) {
   return rectangleCrop((1 - w) / 2, (1 - h) / 2, (1 + w) / 2, (1 + h) / 2);
 }
 
-// ── The overlay's moves (web/src/crop-interaction.js) ─────────────────────────────────────────
+// ── The overlay's moves ───────────────────────────────────────────────────────────────────────
 
 /// What a pointer holds of the crop: a corner, an edge, or the whole of it.
 enum CropGrip {

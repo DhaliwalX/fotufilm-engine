@@ -1,20 +1,19 @@
-// The keyboard (web/src/editor/useEditorShortcuts.js), and the one order a key goes through:
+// The keyboard, and the one order a key goes through:
 //
 //   1. A focused text field types, and keeps its own editing keys (⌘Z, ⌘X, ⌘C, ⌘V, ⌘A); the
 //      editor's single keys and Esc leave it alone.
 //   2. The photo library, while it is shown, takes its keys first: its grid has the focus
 //      (photo_library_view.dart). Of the editor's keys only L, which hides it, still answers.
 //   3. The viewer, while it has the keyboard (a click on a movie gives it) and shows a movie:
-//      the player's Space, K, J, L, ←, → and M (video_controls.dart `VideoKeys`, after
-//      usePlayerShortcuts.js, which stops them reaching the editor). There Space plays rather
-//      than compares and L skips forward rather than showing the library, as in React; with the
-//      keyboard anywhere else they are the editor's.
+//      the player's Space, K, J, L, ←, → and M (video_controls.dart `VideoKeys`, which stops
+//      them reaching the editor). There Space plays rather than compares and L skips forward
+//      rather than showing the library; with the keyboard anywhere else they are the editor's.
 //   4. The canvas tools: Return applies the crop, and Esc leaves it.
 //   5. The editor's keys: L, H, C, 0, + and − alone; Space held compares; Esc chooses the shown
 //      photo alone, ends the comparison and fits the photograph; ⌘A chooses every open photo and
-//      ⌘S exports, as in the web editor.
+//      ⌘S exports.
 //   6. The menus' key equivalents (commands.dart), with Ctrl for ⌘ on Linux and Windows; one
-//      whose command does not apply now goes nowhere, as the CEF host's menus swallow it.
+//      whose command does not apply now goes nowhere.
 //
 // While a dialog is up, or an export runs, only the menus' keys answer, and Esc closes the dialog.
 import 'package:flutter/services.dart';
@@ -102,7 +101,7 @@ class EditorShortcuts {
 }
 
 /// A shortcut written the Mac way (⇧⌘Z) as the platform writes it: unchanged on a Mac, and
-/// Ctrl+Shift+Z on Linux and Windows (shortcut-label.js `shortcutLabel`).
+/// Ctrl+Shift+Z on Linux and Windows.
 String shortcutLabel(String keys, {bool? mac}) {
   if (mac ?? HostWindow.commandKeyIsMeta) return keys;
   const modifiers = [('⌃', 'Ctrl'), ('⌘', 'Ctrl'), ('⌥', 'Alt'), ('⇧', 'Shift')];
@@ -111,8 +110,7 @@ String shortcutLabel(String keys, {bool? mac}) {
   return [...held, key].join('+');
 }
 
-/// The Keyboard shortcuts dialog's rows, as ShortcutsDialog.jsx words them. Export's is the
-/// File menu's ⌘E, as on the desktop (shortcut-label.js `exportShortcut`).
+/// The Keyboard shortcuts dialog's rows. Export's is the File menu's ⌘E, as on the desktop.
 List<(String, String)> shortcutRows(EditorModel editor, {bool? mac}) {
   final apple = mac ?? HostWindow.commandKeyIsMeta;
   String label(String keys) => shortcutLabel(keys, mac: apple);

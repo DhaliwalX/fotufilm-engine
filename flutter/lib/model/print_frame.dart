@@ -1,6 +1,6 @@
-// Print frames (web/src/PrintFrameControls.jsx, usePrintFrame.js, print-frame.js): the frames the
-// film and medium offer, the engine's plan for the chosen one, and the frame the finished picture
-// develops in (backend/desktop/session.js `renderRequest`). The engine draws the frame itself.
+// Print frames (web/src/print-frame.js): the frames the film and medium offer, the engine's plan
+// for the chosen one, and the frame the finished picture develops in. The engine draws
+// the frame itself.
 import 'dart:convert';
 import 'dart:ui' as ui;
 
@@ -67,7 +67,7 @@ class PrintFrame extends ChangeNotifier {
   bool get _current => _key != null && _key == _requestKey;
 
   /// The request the shown photograph's frame is planned with, at the finished picture's size, so
-  /// the plan's placement is the framed picture's (usePrintFrame.js).
+  /// the plan's placement is the framed picture's.
   String? get _requestKey {
     final doc = editor.active;
     if (doc == null) return null;

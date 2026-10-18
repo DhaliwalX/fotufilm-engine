@@ -1,7 +1,6 @@
-// The photos chosen in the strip below the canvas, which Paste Settings and presets apply to
-// (web/src/editor/strip-selection.js, useStripSelection.js). A click shows a photo and chooses it
-// alone; Shift-click and ⌘-click choose more without changing the one shown, as the library
-// grid's clicks do. The shown photo is always among them.
+// The photos chosen in the strip below the canvas, which Paste Settings and presets apply to. A
+// click shows a photo and chooses it alone; Shift-click and ⌘-click choose more without changing
+// the one shown, as the library grid's clicks do. The shown photo is always among them.
 import 'editor.dart';
 
 /// Chosen keys and the one a Shift-click spans from.
@@ -12,8 +11,7 @@ class Selection<T> {
   final T? anchor;
 }
 
-/// The selection after pressing `key` among `keys`, with `range` (Shift) or `toggle` (⌘)
-/// (photo-library/library-model.js `nextSelection`).
+/// The selection after pressing `key` among `keys`, with `range` (Shift) or `toggle` (⌘).
 Selection<T> nextSelection<T>(List<T> keys, Selection<T> current, T key,
     {bool range = false, bool toggle = false}) {
   final anchor = current.anchor;

@@ -1,5 +1,5 @@
-// The Print panel's Frame (web/src/PrintFrameControls.jsx): the frames this film and medium
-// offer around the finished picture, and how a transparency's frame is viewed.
+// The Print panel's Frame: the frames this film and medium offer around the finished picture, and
+// how a transparency's frame is viewed.
 import 'package:flutter/widgets.dart';
 
 import '../../model/editor.dart';

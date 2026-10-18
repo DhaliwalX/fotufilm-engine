@@ -1,5 +1,5 @@
-// The grade deck (web/src/editor/GradeDeck.jsx, grade-deck.js, styles/inspector.css), compact: a
-// band switch, the band's colour pad (warm across, green up) over a wash, and its level capsule.
+// The grade deck, compact: a band switch, the band's colour pad (warm across, green up) over a
+// wash, and its level capsule.
 import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
@@ -61,8 +61,8 @@ class _GradeDeckState extends State<GradeDeck> {
     _set({'Level': level});
   }
 
-  /// Arrow keys move the pad and the level by this much, Shift by a tenth of it (GradeDeck.jsx),
-  /// each one step of the history.
+  /// Arrow keys move the pad and the level by this much, Shift by a tenth of it, each one step of
+  /// the history.
   static const _step = .05;
 
   void _nudge(Map<String, double> changes) {

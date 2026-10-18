@@ -1,7 +1,6 @@
-// What an export just saved (web/src/editor/SavedExportNotice.jsx, styles/video.css
-// `.saved-export`): a dark card at the window's foot with Open (the system's viewer for it), Show
-// in Finder and Dismiss. Export All saved many files, so only Show in Finder is offered for it.
-// In a browser the export is a download, so only Dismiss is.
+// What an export just saved: a dark card at the window's foot with Open (the system's viewer for
+// it), Show in Finder and Dismiss. Export All saved many files, so only Show in Finder is offered
+// for it. In a browser the export is a download, so only Dismiss is.
 import 'package:flutter/widgets.dart';
 
 import '../../app/host_window.dart';

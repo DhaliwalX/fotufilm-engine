@@ -1,6 +1,6 @@
-// The plug-ins for other editors the engine installs (web/src/editor/PluginsDialog.jsx): what is
-// installed, from which build, and the Mac app's Plugins menu actions for each. Opened from the
-// More menu, the Plugins menu, or at launch when this build's plug-ins are not in place.
+// The plug-ins for other editors the engine installs: what is installed, from which build, and the
+// Mac app's Plugins menu actions for each. Opened from the More menu, the Plugins menu, or at
+// launch when this build's plug-ins are not in place.
 import 'package:flutter/widgets.dart';
 
 import '../../model/editor.dart';

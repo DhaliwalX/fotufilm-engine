@@ -3,14 +3,13 @@ import { assetUrl } from "../engine.js";
 import { decodeRaw } from "../raw-import.js";
 import { decodeTIFF } from "../tiff-import.js";
 
-// Trichromatic scans in the browser (backend/README.md, `mergeTrichromatic`): exposures of
-// negatives under red, green and blue light, merged frame by frame into scans as the desktop
-// host's TrichromaticRoll merges them, with the engine's measuring and kernels
-// (FotufilmTrichromatic.h, built into negative/prepare.mjs), all in workers so the editor stays
-// responsive. Each scan is offered as a download and opened. Exposures are camera RAW files or
-// TIFFs, each decoded once, a few at a time: measured, then its layer kept as a Blob (which the
-// browser may hold on disk) until the roll is grouped, since a roll scanned a pass at a time
-// completes no frame before its last pass.
+// Trichromatic scans in the browser (`mergeTrichromatic`): exposures of negatives under red, green
+// and blue light, merged frame by frame into scans as the desktop host's TrichromaticRoll merges
+// them, with the engine's measuring and kernels (FotufilmTrichromatic.h, built into
+// negative/prepare.mjs), all in workers so the editor stays responsive. Each scan is offered as a
+// download and opened. Exposures are camera RAW files or TIFFs, each decoded once, a few at a time:
+// measured, then its layer kept as a Blob (which the browser may hold on disk) until the roll is
+// grouped, since a roll scanned a pass at a time completes no frame before its last pass.
 
 const BLANK = 3;
 

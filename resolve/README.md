@@ -45,7 +45,7 @@ NVIDIA GPUs through CUDA and on other GPUs through Vulkan. Resolve decodes and e
 timeline's colour on the CPU. The Halation Model control has no effect on Linux yet.
 
 To build it from source instead, you need the same Halide build and packages as the Linux app
-(`cef/README.md`):
+(`flutter/README.md`):
 
 ```sh
 HALIDE_ROOT=… resolve/build-linux.sh --test --install

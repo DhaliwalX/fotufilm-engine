@@ -1,6 +1,4 @@
-// Movies: what the engine said of an open one (its clip), the playhead and the transport, as the
-// React editor's player keeps them (web/src/VideoControls.jsx, video-player/playback.js,
-// useVideoPlayback.js, playback-quality.js) on the desktop backend (backend/desktop/session.js).
+// Movies: what the engine said of an open one (its clip), the playhead and the transport.
 //
 // The engine decodes and develops every frame; the editor only says which (`videoTime`). While a
 // movie plays, each new frame develops at the Playback Quality's long edge as a `playback`
@@ -69,7 +67,7 @@ Json videoSettings(Json edit) =>
     {...defaultVideoSettings, ...?(edit['video'] as Map?)?.cast<String, dynamic>()};
 
 /// The trim within the clip: from trim in, or the first frame, to trim out, or the end
-/// (VideoControls.jsx, video-settings.js `videoRange`).
+/// (video-settings.js `videoRange`).
 ({double start, double end}) videoRange(VideoClip clip, Json settings) => (
       start: math.max(clip.start, (settings['trimStart'] as num?)?.toDouble() ?? 0),
       end: math.min((settings['trimEnd'] as num?)?.toDouble() ?? clip.duration, clip.duration),
@@ -90,8 +88,7 @@ const videoEncodings = [
   ('slog3Cine', 'S-Log3 · S-Gamut3.Cine'),
 ];
 
-/// The Mac app's Cadence choices, by their VIDEO_LABELS keys; Native keeps the source's rate
-/// (VideoSettings.jsx `CADENCES`).
+/// The Mac app's Cadence choices, by their VIDEO_LABELS keys; Native keeps the source's rate.
 const videoCadences = [
   (null, 'cadenceNative'),
   (16, 'cadence16'),
@@ -99,7 +96,7 @@ const videoCadences = [
   (24, 'cadence24'),
 ];
 
-// ── Playback Quality and the clip summary (playback-quality.js) ─────────────────────────────
+// ── Playback Quality and the clip summary ───────────────────────────────────────────────────
 
 const playbackQualities = [
   ('draft', 'Draft', 640),
@@ -131,7 +128,7 @@ String clipSummary(int width, int height, VideoClip clip) => [
       if (clip.audio) 'audio',
     ].join('   ');
 
-/// 01:02.34, or 1:01:02.34 past an hour (time.js `videoTimeLabel`).
+/// 01:02.34, or 1:01:02.34 past an hour.
 String videoTimeLabel(double time) {
   final hundredths = (math.max(0, time.isFinite ? time : 0) * 100).round();
   final seconds = hundredths ~/ 100, hours = seconds ~/ 3600, minutes = (seconds ~/ 60) % 60;
@@ -140,7 +137,7 @@ String videoTimeLabel(double time) {
   return hours > 0 ? '$hours:${two(minutes)}:$tail' : '${two(minutes)}:$tail';
 }
 
-/// A playhead inside the trim, a hair before its end (time.js `clampPlayhead`).
+/// A playhead inside the trim, a hair before its end.
 double clampPlayhead(double value, double start, double end) => math.max(
     start, math.min(end - math.min(0.001, (end - start) / 2), value.isFinite ? value : start));
 
@@ -199,7 +196,7 @@ class VideoPlayer extends ChangeNotifier {
     return clip == null ? (start: 0, end: 0) : videoRange(clip, settings);
   }
 
-  /// While an export runs or the crop tool is open the transport rests (EditorViewer.jsx).
+  /// While an export runs or the crop tool is open the transport rests.
   bool get disabled => editor.exporting || editor.crop.showing;
   bool get canPlay => _movie != null && !disabled;
 
@@ -211,7 +208,7 @@ class VideoPlayer extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── What the shown movie's develops ask for (session.js `renderRequest`) ────────────────────
+  // ── What the shown movie's develops ask for ─────────────────────────────────────────────────
 
   Json _options(PhotoDocument doc) {
     if (!doc.isMovie) return const {};
@@ -228,9 +225,8 @@ class VideoPlayer extends ChangeNotifier {
     };
   }
 
-  /// Follows the editor: another photograph shown starts its movie at the first frame (as
-  /// useDocumentActions.js resets `videoTime`), and the transport rests while it is disabled.
-  /// While playing, it notes each frame put on screen.
+  /// Follows the editor: another photograph shown starts its movie at the first frame, and the
+  /// transport rests while it is disabled. While playing, it notes each frame put on screen.
   void _follow() {
     final doc = editor.active;
     if (doc != _shown) {
@@ -238,7 +234,7 @@ class VideoPlayer extends ChangeNotifier {
       if (playing) _stop();
       scrubbing = false;
       error = null;
-      // Each movie's player starts afresh, as React keys VideoControls by the document.
+      // Each movie's player starts afresh.
       loop = muted = false;
       rate = 1;
       final clip = doc?.clip;
@@ -345,7 +341,7 @@ class VideoPlayer extends ChangeNotifier {
     if (clip.frameNumber(time) != before) editor.renderer?.schedule(interactive: interactive);
   }
 
-  /// Shows the frame at `value`, pausing first (playback.js `seek`).
+  /// Shows the frame at `value`, pausing first.
   void seek(double value) {
     if (disabled || clip == null) return;
     if (playing) {
@@ -400,8 +396,7 @@ class VideoPlayer extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Changes the edit's video settings; a playhead the new trim leaves out goes to its start
-  /// (playback.js `configure`).
+  /// Changes the edit's video settings; a playhead the new trim leaves out goes to its start.
   void changeSettings(Json changes) {
     editor.change({'video': {...settings, ...changes}});
     final (:start, :end) = range;
@@ -414,7 +409,7 @@ class VideoPlayer extends ChangeNotifier {
     editor.notify();
   }
 
-  // ── Opening movies (ImportMenu.jsx Video) ──────────────────────────────────────────────────
+  // ── Opening movies ─────────────────────────────────────────────────────────────────────────
 
   /// Chooses movies to open; one brings its folder into the strip, as Open… does.
   Future<void> chooseMovies() async {

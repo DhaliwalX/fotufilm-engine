@@ -1,5 +1,5 @@
-// Browser support (web/src/editor/SupportDialog.jsx), as the More menu opens it, and the menu's
-// Legal links (OptionsMenu.jsx, the catalogue's LEGAL_MENU), which open in the browser.
+// Browser support, as the More menu opens it, and the menu's Legal links (the catalogue's
+// LEGAL_MENU), which open in the browser.
 import 'package:flutter/widgets.dart';
 
 import '../../app/host_window.dart';

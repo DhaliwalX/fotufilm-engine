@@ -1,5 +1,5 @@
-// The web editor's colours (web/src/styles/base.css, responsive.css) and the Spectrum 2 greys its
-// components draw with, for the light and dark appearances.
+// The editor's colours and the Spectrum 2 greys its components draw with, for the light and dark
+// appearances.
 import 'package:flutter/widgets.dart';
 
 class Palette {

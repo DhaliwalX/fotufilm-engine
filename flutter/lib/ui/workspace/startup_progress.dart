@@ -1,6 +1,5 @@
-// The card over the empty viewer while the engine starts (web/src/editor/StartupProgress.jsx,
-// startup-progress.css): the brand over a small progress bar and what is loading. It fades in,
-// and fades away once the bar has reached its end.
+// The card over the empty viewer while the engine starts: the brand over a small progress bar and
+// what is loading. It fades in, and fades away once the bar has reached its end.
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';

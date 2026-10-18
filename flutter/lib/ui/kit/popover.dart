@@ -63,8 +63,7 @@ class AnchoredOverlay {
   }
 }
 
-/// How many modals are open over the window. While one is, the photograph's commands wait, as
-/// the web editor's do while it shows a dialog (useNativeCommands.js `dialog`).
+/// How many modals are open over the window. While one is, the photograph's commands wait.
 final openModals = ValueNotifier<int>(0);
 
 /// The open modals, the newest last, and whether each may be dismissed.

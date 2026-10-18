@@ -253,10 +253,9 @@ extension HostService {
             description: "The photograph exceeds this device’s safe memory limit at every export size.")
     }
 
-    /// The long edges to try for an export size id — "full", a fraction ("0.75") or a long edge
-    /// in pixels ("2048") of the cropped picture, as `web/src/export-sizes.js` names them — the
-    /// size asked for first (nil: the whole picture), then the smaller sizes the export sheet
-    /// offers, largest first.
+    /// The long edges to try for an export size id — "full", a fraction ("0.75") or a long edge in
+    /// pixels ("2048") of the cropped picture — the size asked for first (nil: the whole picture),
+    /// then the smaller sizes the export sheet offers, largest first.
     static func batchEdges(_ size: String, longEdge: Int) -> [Int?] {
         let value = Double(size) ?? 0
         let asked: Int? = size == "full" || value <= 0

@@ -3,8 +3,8 @@ import Foundation
 import FotufilmCore
 #endif
 
-/// What the web editor asks a native host to develop (`web/src/backend/macos/session.js`): the
-/// saved edit, and the film settings the editor has already resolved against the stock.
+/// What the web editor asks a native host to develop: the saved edit, and the film settings the
+/// editor has already resolved against the stock.
 ///
 /// The film settings are read exactly as a browser profile request reads them. The light and
 /// colour sliders, which the browser engine writes into its own configuration, become the catalogue

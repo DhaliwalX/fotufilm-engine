@@ -1,8 +1,8 @@
 // The desktop engine: libfotufilm through dart:ffi. One isolate owns the engine and answers the
-// editor's host calls in order, as the CEF host's engine thread does, so the UI isolate never
-// waits for a develop. A second isolate, started at the first export, makes the background calls
-// on the same engine, so an export runs beside the editor's develops; a few more, started at the
-// first thumbnail, draw thumbnails side by side.
+// editor's host calls in order, so the UI isolate never waits for a develop. A second isolate,
+// started at the first export, makes the background calls on the same engine, so an export runs
+// beside the editor's develops; a few more, started at the first thumbnail, draw thumbnails
+// side by side.
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ffi';

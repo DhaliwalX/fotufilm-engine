@@ -350,8 +350,7 @@ class Renderer {
     }
   }
 
-  /// Each preset row: the photograph with the preset pasted on, without grain or halation
-  /// (PresetRow.jsx).
+  /// Each preset row: the photograph with the preset pasted on, without grain or halation.
   Future<void> _presetThumbnails(PhotoDocument doc) async {
     final edits = host.presetEdits(doc);
     if (edits.isEmpty) return;
@@ -364,7 +363,7 @@ class Renderer {
     }
   }
 
-  // A quarter of the frame each way, from the middle (FormatPicker.jsx DETAIL).
+  // A quarter of the frame each way, from the middle.
   static const _detailCrop = [
     [0.375, 0.375],
     [0.625, 0.375],

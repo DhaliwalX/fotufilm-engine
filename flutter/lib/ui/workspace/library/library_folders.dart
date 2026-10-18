@@ -1,6 +1,6 @@
-// The library's folders (web/src/photo-library/LibraryFolders.jsx, photo-library.css): All
-// Photos, each folder with its count or its state, and its subfolders under a disclosure. A
-// folder's menu rescans it, opens it as negatives or photos, or removes it from the library.
+// The library's folders: All Photos, each folder with its count or its state, and its subfolders
+// under a disclosure. A folder's menu rescans it, opens it as negatives or photos, or removes it
+// from the library.
 import 'package:flutter/widgets.dart';
 
 import '../../../model/editor.dart';

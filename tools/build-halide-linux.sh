@@ -56,4 +56,4 @@ cmake --build "$BUILD" --parallel "${FOTUFILM_BUILD_JOBS:-$(nproc)}"
 cmake --install "$BUILD" --prefix "$PREFIX" >/dev/null
 
 echo
-echo "Installed to $PREFIX. Build the desktop with HALIDE_ROOT=$PWD/$PREFIX cef/build.sh"
+echo "Installed to $PREFIX. Build the desktop engine with HALIDE_ROOT=$PWD/$PREFIX tools/build-desktop-engine-linux.sh"

@@ -1,6 +1,6 @@
-// The Edit History, named as the Mac app names it (web/src/edit-history.js): each step is called
-// after what it changed, so Undo and Redo say what they will undo, and the history can be read
-// and jumped through (the More menu's Edit History, the Edit menu's).
+// The Edit History, named as the Mac app names it: each step is called after what it changed, so
+// Undo and Redo say what they will undo, and the history can be read and jumped through (the More
+// menu's Edit History, the Edit menu's).
 import 'dart:convert';
 
 import 'editor.dart';

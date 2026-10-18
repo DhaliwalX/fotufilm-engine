@@ -1,6 +1,5 @@
-// The selective tool's sampling over the viewer (ImageCanvas.jsx `.sampling`, usePhotoNavigation.js
-// `onPointerDown`): a crosshair over the canvas, and a press on the photograph samples it there.
-// A press beside the photograph does nothing, as in the web editor.
+// The selective tool's sampling over the viewer: a crosshair over the canvas, and a press on the
+// photograph samples it there. A press beside the photograph does nothing.
 import 'package:flutter/gestures.dart';
 import 'package:flutter/widgets.dart';
 

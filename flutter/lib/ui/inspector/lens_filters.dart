@@ -1,6 +1,6 @@
-// The Expose panel's Filters (web/src/LensFilters.jsx, LensFilters.css, FilterSwatch.jsx): the
-// filters on the lens, nearest first, each with its swatch, its menu and its buttons to move it
-// or take it off; the menu to add one; how the exposure is metered through them.
+// The Expose panel's Filters: the filters on the lens, nearest first, each with its swatch, its
+// menu and its buttons to move it or take it off; the menu to add one; how the exposure is metered
+// through them.
 import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
@@ -122,8 +122,8 @@ class _FittedFilter extends StatelessWidget {
       ]);
 }
 
-/// A filter's swatch (FilterSwatch.jsx): the colours an absorbing filter passes across the
-/// spectrum, or for a diffusion filter, three points of light through its halo on this film.
+/// A filter's swatch: the colours an absorbing filter passes across the spectrum, or for a
+/// diffusion filter, three points of light through its halo on this film.
 class FilterSwatch extends StatelessWidget {
   const FilterSwatch({super.key, required this.id, required this.catalogue, this.stock});
   final String id;

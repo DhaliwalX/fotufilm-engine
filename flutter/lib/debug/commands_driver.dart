@@ -4,8 +4,7 @@
 //                                   title, key equivalent, whether it applies (on/off) and ticks
 //                                   (✓), the lists the editor fills expanded
 //   {"nativeMenu": true}            logs the macOS menu bar as AppKit built and validated it
-//   {"menuState": true}             logs the state sent to the native menu (useNativeCommands.js
-//                                   `menuState`) as JSON
+//   {"menuState": true}             logs the state sent to the native menu as JSON
 //   {"command": "zoomIn"}           runs a menu command as choosing it does, and logs whether it ran
 //   {"workspace": true}             logs the panels, the histogram, the comparison, the zoom, the
 //                                   library, the chosen photos, the crop and open dialogs

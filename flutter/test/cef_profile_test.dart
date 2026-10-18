@@ -174,7 +174,7 @@ void main() {
     });
   });
 
-  test("the CEF app's profile is planned in this app's keys and never replaces what is kept", () {
+  test("the previous app's profile is planned in this app's keys and never replaces what is kept", () {
     final plan = planProfileImport({
       'fotufilm.setting.halationModel': '"layered"',
       'fotufilm.editPresets': '{"presets":[],"sections":["filmStock"]}',

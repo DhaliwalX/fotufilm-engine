@@ -3,7 +3,7 @@ import 'package:fotufilm_flutter/model/export.dart';
 import 'package:fotufilm_flutter/model/video.dart';
 
 void main() {
-  group('video player (video-player/time.js, playback-quality.js)', () {
+  group('video player', () {
     test('time labels', () {
       expect(videoTimeLabel(0), '00:00.00');
       expect(videoTimeLabel(65.239), '01:05.24');
@@ -67,7 +67,7 @@ void main() {
     });
   });
 
-  group('movie export sizes (export-sizes.js VIDEO_EDGES)', () {
+  group('movie export sizes', () {
     test('a 4K movie offers its source, then the video sizes below it', () {
       final sizes = exportSizeOptions((width: 3840, height: 2160), video: true);
       expect(sizes.map((s) => s.id), ['full', '2560', '1920', '1280']);

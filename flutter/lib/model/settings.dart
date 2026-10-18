@@ -1,6 +1,6 @@
-// App-wide preferences kept on this device (web/src/app-settings.js), and the editor's other
-// remembered things (presets, band sets, kept edits, panel widths) under their own keys. Values
-// are JSON; each setting has its default here and the stored value wins when there is one.
+// App-wide preferences kept on this device, and the editor's other remembered things (presets, band
+// sets, kept edits, panel widths) under their own keys. Values are JSON; each setting has its
+// default here and the stored value wins when there is one.
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -26,7 +26,6 @@ class AppSettings extends ChangeNotifier {
 
   static const prefix = 'fotufilm.setting.';
 
-  /// app-settings.js `APP_SETTINGS`.
   static const defaults = <String, Object?>{
     'autoFilm': false,
     'startingFilm': null,

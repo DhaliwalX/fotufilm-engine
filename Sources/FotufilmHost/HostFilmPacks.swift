@@ -28,8 +28,8 @@ enum HostFilmPacks {
     }
 }
 
-/// The editor's film-pack calls (`web/src/backend/macos/host.js`): list the installed community
-/// packs, add one from a file or its bytes, remove one. Each change reloads the engine's films.
+/// The editor's film-pack calls: list the installed community packs, add one from a file or its
+/// bytes, remove one. Each change reloads the engine's films.
 extension HostService {
     func filmPacks(_ method: String, parameters: [String: Any],
                    payload: UnsafeRawBufferPointer?) throws -> Answer {

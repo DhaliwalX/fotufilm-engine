@@ -18,7 +18,7 @@ struct HostDevelopPace {
 protocol HostDeveloper {
     /// "metal", "cpu", …: what `fotufilm_engine_describe` reports.
     var kind: String { get }
-    /// The name the editor shows (`web/src/editor/ViewerStatus.jsx`).
+    /// The name the editor shows.
     var name: String { get }
 
     /// Builds what a film's first develop would otherwise build (kernel schedules, tables), so

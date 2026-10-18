@@ -1,7 +1,6 @@
-// The photo library's photos and the rules over them, without state or files: which files a
-// folder shows, their order, the filters, the subfolder tree, selection and keyboard steps, and
-// what opening a photo brings into the strip (web/src/photo-library/library-model.js,
-// library-scan.js, media-types.js, web/src/editor/opened-folder.js).
+// The photo library's photos and the rules over them, without state or files: which files a folder
+// shows, their order, the filters, the subfolder tree, selection and keyboard steps, and what
+// opening a photo brings into the strip (web/src/media-types.js).
 import 'catalogue.dart';
 
 /// Camera RAW extensions (media-types.js `RAW_EXTENSIONS`).
@@ -28,10 +27,10 @@ String? libraryMediaKind(String name) {
 }
 
 /// A file as a folder lists it: its path inside the folder, size in bytes and modification time
-/// in milliseconds (the CEF host's `listLibraryFolder` rows).
+/// in milliseconds.
 typedef FileRow = (String path, int size, int modified);
 
-/// A photo in a library folder (library-scan.js `photoEntry`).
+/// A photo in a library folder.
 class LibraryPhoto {
   LibraryPhoto({
     required this.folderId,
@@ -228,7 +227,7 @@ List<LibraryPhoto> menuTargets(List<LibraryPhoto> photos, Set<String> selected, 
   return (sortedPhotos([roll], records, sort), photo.key);
 }
 
-/// A name the folder can hold and the library will list (RenameDialog.jsx `nameProblem`).
+/// A name the folder can hold and the library will list.
 String? nameProblem(String name) {
   if (name.isEmpty) return 'Enter a name.';
   if (RegExp(r'[/\\:]').hasMatch(name)) return 'A name can’t contain “/” or “:”.';
@@ -236,8 +235,8 @@ String? nameProblem(String name) {
   return null;
 }
 
-/// The strip's files for `path` among `rows`, its folder's files, in the library's name order
-/// (opened-folder.js `folderItems`): the folder's paths, or `path` alone when it is not among them.
+/// The strip's files for `path` among `rows`, its folder's files, in the library's name order: the
+/// folder's paths, or `path` alone when it is not among them.
 List<String> folderItems(String path, List<FileRow> rows) {
   final slash = path.lastIndexOf('/');
   final folder = path.substring(0, slash), name = path.substring(slash + 1);
@@ -249,6 +248,5 @@ List<String> folderItems(String path, List<FileRow> rows) {
   return [for (final e in sortedPhotos([entries], const {}, 'name')) e.file];
 }
 
-/// Where a photo came from, for the strip's caption, with a home folder written as "~"
-/// (opened-folder.js `stripPath`).
+/// Where a photo came from, for the strip's caption, with a home folder written as "~".
 String stripPath(String path) => path.replaceFirst(RegExp(r'^/(?:Users|home)/[^/]+(?=/)'), '~');

@@ -1,7 +1,7 @@
-// Import Film Pack, as the Mac app's File menu has it (web/src/editor/useFilmPacks.js): a
-// community pack goes into the library this person's films live in, the engine reloads its films
-// and the film list follows. Each result reads as the Mac app's alert does ("Pack added",
-// "Test Pack v1 — 3 films"). A host without `filmPacks` offers none of it.
+// Import Film Pack, as the Mac app's File menu has it: a community pack goes into the library this
+// person's films live in, the engine reloads its films and the film list follows. Each result reads
+// as the Mac app's alert does ("Pack added", "Test Pack v1 — 3 films"). A host without `filmPacks`
+// offers none of it.
 import 'package:flutter/foundation.dart';
 
 import 'app_dialogs.dart';

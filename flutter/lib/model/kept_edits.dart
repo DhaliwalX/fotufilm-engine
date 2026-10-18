@@ -1,8 +1,7 @@
-// Every photograph keeps its last edit, as the Mac app's shelf does (web/src/editor/
-// useSavedEdits.js, saved-edits.js): a file opened again starts where it was left. An edit is
-// kept as text under the identity the engine answers for the file (`importPath`'s `identity`,
-// the contents' digest, so a renamed or moved copy keeps it), in the app's settings. Save Edits…
-// and Load Edits… write and read the same text as a file (useFilmActions.js).
+// Every photograph keeps its last edit, as the Mac app's shelf does: a file opened again starts
+// where it was left. An edit is kept as text under the identity the engine answers for the file
+// (`importPath`'s `identity`, the contents' digest, so a renamed or moved copy keeps it), in the
+// app's settings. Save Edits… and Load Edits… write and read the same text as a file.
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui' show AppExitResponse;

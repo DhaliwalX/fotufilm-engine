@@ -1,19 +1,18 @@
 #!/bin/sh
-# Xcode build phase: carries the engine into the app as the CEF host does (cef/CMakeLists.txt),
-# libfotufilm.dylib in Contents/Frameworks, its resources and the editor plug-ins in
-# Contents/Resources. FOTUFILM_ENGINE_BUILD names a cef/build-engine.sh output; the default is
-# this checkout's build/cef-engine.
+# Xcode build phase: carries the engine into the app, libfotufilm.dylib in Contents/Frameworks,
+# its resources and the editor plug-ins in Contents/Resources. FOTUFILM_ENGINE_BUILD names a
+# tools/build-desktop-engine.sh output; the default is this checkout's build/engine.
 set -eu
-engine="${FOTUFILM_ENGINE_BUILD:-$SRCROOT/../../build/cef-engine}"
+engine="${FOTUFILM_ENGINE_BUILD:-$SRCROOT/../../build/engine}"
 app="$TARGET_BUILD_DIR/$WRAPPER_NAME"
 if [ ! -f "$engine/libfotufilm.dylib" ]; then
-  echo "error: No engine at $engine. Run cef/build-engine.sh or set FOTUFILM_ENGINE_BUILD." >&2
+  echo "error: No engine at $engine. Run tools/build-desktop-engine.sh or set FOTUFILM_ENGINE_BUILD." >&2
   exit 1
 fi
 mkdir -p "$app/Contents/Frameworks" "$app/Contents/Resources"
 rsync -a "$engine/libfotufilm.dylib" "$app/Contents/Frameworks/"
 # Everything the engine carries (films, camera profiles, notices, File › Use Sample Photo's chart),
-# as the CEF host copies it, but its benchmark tool.
+# but its benchmark tool.
 rsync -a --exclude fotufilm-bench "$engine/Resources/" "$app/Contents/Resources/"
 for directory in Stocks CameraProfiles; do
   rsync -a --delete "$engine/Resources/$directory" "$app/Contents/Resources/"
@@ -33,8 +32,7 @@ for plugin in "resolve/Fotufilm.ofx.bundle" "finalcut/Fotufilm for Final Cut Pro
 done
 codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY:--}" "$app/Contents/Frameworks/libfotufilm.dylib"
 
-# The CEF app's icon (cef/mac/AppIcon.icon), compiled as cef/mac/compile-icon.sh does, in place
-# of the template's.
+# The app's icon, from its Icon Composer layers.
 partial="$TARGET_TEMP_DIR/fotufilm-icon.plist"
-"$SRCROOT/../../cef/mac/compile-icon.sh" "$SRCROOT/../../cef/mac/AppIcon.icon" \
+"$SRCROOT/compile-icon.sh" "$SRCROOT/AppIcon.icon" \
   "$app/Contents/Resources" "$partial"

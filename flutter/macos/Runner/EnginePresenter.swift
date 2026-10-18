@@ -3,8 +3,7 @@ import CoreVideo
 import FlutterMacOS
 import Foundation
 
-/// The editor's image layer on macOS, as the CEF host's (cef/src/platform/mac/image_presenter.mm):
-/// the engine develops straight into IOSurface-backed pixel buffers this presenter lends
+/// The editor's image layer on macOS: the engine develops straight into IOSurface-backed pixel buffers this presenter lends
 /// (`fotufilm_engine_set_presenter`), and each layer's view draws them in Display P3, or in
 /// extended range on a screen with EDR (PhotoLayer.swift). Nothing is encoded and nothing
 /// crosses to Dart but frame ids.
@@ -51,8 +50,8 @@ final class EnginePresenter: NSObject {
     }
   }
 
-  /// The potential headroom of the editor's screen, which the system grants once a layer asks
-  /// for EDR, as the CEF host reads it (host_window.mm `screenChanged`).
+  /// The potential headroom of the editor's screen, which the system grants once a layer
+  /// asks for EDR.
   @discardableResult
   private func updateHeadroom() -> Bool {
     let screen = NSApp.mainWindow?.screen ?? NSApp.windows.first?.screen ?? NSScreen.main

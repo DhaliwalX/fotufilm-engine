@@ -1,6 +1,5 @@
-// A curve over wavelength (web/src/SpectrumCurve.jsx, styles/inspector.css `.spectrum-control`):
-// a handle at each of the control's wavelengths, dragged up or down in tenths of a stop, drawn on
-// the web editor's 280 × 108 plane. Halation's Return Spectrum is one.
+// A curve over wavelength: a handle at each of the control's wavelengths, dragged up or down in
+// tenths of a stop, drawn on a 280 × 108 plane. Halation's Return Spectrum is one.
 import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
@@ -73,7 +72,7 @@ class _SpectrumCurveState extends State<SpectrumCurve> {
   double _stepped(int index, int steps) =>
       ((widget.values[index] * 10).round() + steps).clamp(_min * 10, _max * 10) / 10;
 
-  /// An arrow key on a point: a tenth of a stop (SpectrumCurve.jsx), a whole stop with Shift.
+  /// An arrow key on a point: a tenth of a stop, a whole stop with Shift.
   void _nudge(int index, int steps) {
     final next = [...widget.values];
     next[index] = _stepped(index, steps);
