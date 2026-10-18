@@ -46,6 +46,9 @@ using fotufilm::aot::FrameFunction;
 FOTUFILM_AOT_VARIANTS(FOTUFILM_AOT_DECLARE)
 #undef FOTUFILM_AOT_DECLARE
 
+// Halide's Vulkan runtime defines this, as its CUDA one does; only the CUDA header declares it.
+extern "C" int halide_vulkan_release_unused_device_allocations(void *user_context);
+
 namespace {
 
 constexpr int kLutDimension = 33;
@@ -202,6 +205,13 @@ struct State {
         identifier = error ? 0 : cache_id;
         return error;
     }
+
+    /// Frees the device copies; the next ensure uploads the tables again.
+    void device_free() {
+        for (Buffer<float> *buffer : {&exposure, &film, &paper, &configuration})
+            buffer->device_free();
+        identifier = 0;
+    }
 };
 
 /// Never destroyed: a develop on another thread may still hold it while the process exits.
@@ -228,9 +238,7 @@ void release_device() {
     {
         State &cache = state();
         std::lock_guard<std::mutex> lock(cache.mutex);
-        for (Buffer<float> *buffer : {&cache.exposure, &cache.film, &cache.paper, &cache.configuration})
-            buffer->device_free();
-        cache.identifier = 0;
+        cache.device_free();
         cache.released = true;
     }
     film_tile_store().device_free();
@@ -263,29 +271,47 @@ int32_t develop(const Element *input, Element *output, int32_t width, int32_t he
     if (!pipeline) return -3;
     State &cache = state();
     std::lock_guard<std::mutex> lock(cache.mutex);
-    int error = cache.ensure(device, exposure_lut, film_output_lut, paper_output_lut,
-                             lut_dimension, spectral_cache_id);
-    if (error) return error;
-    std::memcpy(cache.configuration.data(), configuration,
-                FOTUFILM_FRAME_CONFIGURATION_COUNT * sizeof(float));
-    cache.configuration.set_host_dirty();
     const fotufilm::ResolvedFrameParams frame(configuration, width, height, seed,
         (feature_mask & FOTUFILM_FRAME_REVERSAL) != 0, origin_x, origin_y);
-    bool film_on = false;
-    Buffer<float> film_tiles = film_tile_store().tiles_for(configuration, film_on);
-    auto in = Buffer<Element>::make_interleaved(const_cast<Element *>(input), width, height, 4);
-    auto out = Buffer<Element>::make_interleaved(output, width, height, 4);
-    in.set_host_dirty();
-    auto *cfg = cache.configuration.raw_buffer();
-    auto *exposure = cache.exposure.raw_buffer();
-    auto *film = cache.film.raw_buffer();
-    auto *paper = cache.paper.raw_buffer();
-    error = pipeline(FOTUFILM_AOT_FRAME_ARGUMENTS(in.raw_buffer(), cfg, exposure, film, paper,
-                                                  width, height, frame, seed, origin_x, origin_y,
-                                                  feature_mask, configuration,
-                                                  film_tiles.raw_buffer(), film_on ? 1 : 0),
-                     out.raw_buffer());
-    if (!error) error = out.copy_to_host();
+    // The frame's buffers live only for one attempt, so a retry starts with none on the device.
+    const auto attempt = [&]() -> int {
+        int error = cache.ensure(device, exposure_lut, film_output_lut, paper_output_lut,
+                                 lut_dimension, spectral_cache_id);
+        if (error) return error;
+        std::memcpy(cache.configuration.data(), configuration,
+                    FOTUFILM_FRAME_CONFIGURATION_COUNT * sizeof(float));
+        cache.configuration.set_host_dirty();
+        bool film_on = false;
+        Buffer<float> film_tiles = film_tile_store().tiles_for(configuration, film_on);
+        auto in = Buffer<Element>::make_interleaved(const_cast<Element *>(input), width, height, 4);
+        auto out = Buffer<Element>::make_interleaved(output, width, height, 4);
+        in.set_host_dirty();
+        auto *cfg = cache.configuration.raw_buffer();
+        auto *exposure = cache.exposure.raw_buffer();
+        auto *film = cache.film.raw_buffer();
+        auto *paper = cache.paper.raw_buffer();
+        error = pipeline(FOTUFILM_AOT_FRAME_ARGUMENTS(in.raw_buffer(), cfg, exposure, film, paper,
+                                                      width, height, frame, seed, origin_x,
+                                                      origin_y, feature_mask, configuration,
+                                                      film_tiles.raw_buffer(), film_on ? 1 : 0),
+                         out.raw_buffer());
+        if (!error) error = out.copy_to_host();
+        return error;
+    };
+    int error = attempt();
+    if (error == halide_error_code_device_malloc_failed
+        || error == halide_error_code_out_of_memory) {
+        // Vulkan's allocator keeps blocks for every frame size it has seen, and the long-lived
+        // tables and tiles pin blocks among them, so a large frame (an export beside the editor)
+        // can find no room: free every device copy and try the frame once more. Each device
+        // releases its own: the generic call also opens a Vulkan instance on a CUDA run, which
+        // NVIDIA's driver crashes tearing down at exit.
+        cache.device_free();
+        film_tile_store().device_free();
+        if (device == kCuda) halide_cuda_release_unused_device_allocations(nullptr);
+        else halide_vulkan_release_unused_device_allocations(nullptr);
+        error = attempt();
+    }
     return error;
 }
 
