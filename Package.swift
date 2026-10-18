@@ -161,8 +161,10 @@ let package = Package(
                                                  condition: .when(platforms: [.macOS]))]),
         .testTarget(
             name: "FotufilmCoreTests",
-            dependencies: ["FotufilmCore", "FotufilmMetal", "FotufilmImaging",
-                           "FotufilmStockMatch"],
+            dependencies: ["FotufilmCore",
+                           .target(name: "FotufilmMetal",
+                                   condition: .when(platforms: [.macOS, .iOS])),
+                           "FotufilmImaging", "FotufilmStockMatch"],
             exclude: appleOnlyTests
         ),
         .testTarget(

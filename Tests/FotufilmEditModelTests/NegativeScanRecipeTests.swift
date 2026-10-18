@@ -1,4 +1,7 @@
+#if canImport(CoreGraphics)
 import CoreGraphics
+#endif
+import Foundation
 import XCTest
 @testable import FotufilmCore
 @testable import FotufilmEditModel
