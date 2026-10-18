@@ -5,6 +5,12 @@
 #if !defined(__APPLE__)
 #include "Codecs.hpp"
 
+#if __has_include(<libraw/libraw.h>)
+#include <libraw/libraw.h>
+#else
+#include <libraw.h>
+#endif
+
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -120,6 +126,57 @@ std::vector<uint8_t> fromScene(const float *rgba, uint32_t sw, uint32_t sh, uint
         }
     }
     return out;
+}
+
+/// A camera RAW's embedded preview, decoded no smaller than needed for `minEdge`, with the
+/// orientation the file states; false when it has none this can read.
+bool rawPreview(const std::string &path, uint32_t minEdge, Raster &raster) {
+    auto raw = std::make_unique<LibRaw>(0);
+    if (raw->open_file(path.c_str()) != LIBRAW_SUCCESS) return false;
+    auto &data = raw->imgdata;
+    // The previews the file lists: the smallest that reaches minEdge, else the largest. A preview
+    // of unknown size counts as large.
+    int chosen = -1;
+    uint32_t chosenEdge = 0;
+    const auto &list = data.thumbs_list;
+    for (int i = 0; i < std::min(list.thumbcount, LIBRAW_THUMBNAIL_MAXCOUNT); ++i) {
+        const auto &item = list.thumblist[i];
+        if (item.tformat != LIBRAW_INTERNAL_THUMBNAIL_JPEG && item.tformat != LIBRAW_INTERNAL_THUMBNAIL_PPM)
+            continue;
+        const uint32_t edge = std::max<uint32_t>(item.twidth, item.theight) ?: UINT16_MAX;
+        const bool reaches = edge >= minEdge, chosenReaches = chosenEdge >= minEdge;
+        if (chosen < 0 || (reaches && (!chosenReaches || edge < chosenEdge))
+            || (!reaches && !chosenReaches && edge > chosenEdge)) {
+            chosen = i;
+            chosenEdge = edge;
+        }
+    }
+    if ((chosen >= 0 ? raw->unpack_thumb_ex(chosen) : raw->unpack_thumb()) != LIBRAW_SUCCESS)
+        return false;
+    const libraw_thumbnail_t &thumb = data.thumbnail;
+    if (!thumb.thumb || !thumb.tlength) return false;
+    if (thumb.tformat == LIBRAW_THUMBNAIL_JPEG) {
+        raster = decodeJPEGReduced(reinterpret_cast<const uint8_t *>(thumb.thumb), thumb.tlength,
+                                   minEdge);
+    } else if (thumb.tformat == LIBRAW_THUMBNAIL_BITMAP && (thumb.tcolors == 1 || thumb.tcolors == 3)
+               && size_t(thumb.twidth) * thumb.theight * thumb.tcolors <= thumb.tlength) {
+        raster.width = thumb.twidth;
+        raster.height = thumb.theight;
+        raster.channels = thumb.tcolors;
+        raster.samples = Samples::U8;
+        raster.data.assign(thumb.thumb, thumb.thumb + size_t(thumb.twidth) * thumb.theight * thumb.tcolors);
+    } else {
+        return false;
+    }
+    if (!raster.width || !raster.height) return false;
+    // A preview is stored as the sensor reads, turned as the file says (LibRaw's flip: 3 half a
+    // turn, 5 a quarter anticlockwise, 6 a quarter clockwise), unless its own Exif turns it.
+    if (raster.orientation == 1) {
+        const int flip = chosen >= 0 && list.thumblist[chosen].tflip != 0xFFFF
+            ? list.thumblist[chosen].tflip : data.sizes.flip;
+        raster.orientation = flip == 3 ? 3 : flip == 5 ? 8 : flip == 6 ? 6 : 1;
+    }
+    return true;
 }
 
 bool codes(const Raster &raster) {

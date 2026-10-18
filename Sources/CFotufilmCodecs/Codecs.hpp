@@ -91,9 +91,6 @@ bool heifEncodes();
 /// JPEG bytes decoded at the coarsest DCT scale that keeps the long edge at least `minEdge`, with
 /// the stream's ICC profile and the Exif orientation still to apply.
 Raster decodeJPEGReduced(const uint8_t *bytes, size_t length, uint32_t minEdge);
-/// A camera RAW's embedded preview: the smallest whose long edge reaches `minEdge`, else the
-/// largest, with the turn still to apply. False when the file has none this can read.
-bool rawPreview(const std::string &path, uint32_t minEdge, Raster &raster);
 /// A HEIF's stored thumbnail whose long edge reaches `minEdge`, else its primary image, upright.
 Raster decodeHEIFReduced(const std::string &path, uint32_t minEdge);
 /// An 8-bit grey or RGB raster as RGBA8 Display P3 codes (sRGB curve, opaque), through the colour
