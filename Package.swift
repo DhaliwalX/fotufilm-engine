@@ -54,12 +54,14 @@ let halideGPUCXXSettings: [CXXSetting] = halideRoot != nil
 
 // SwiftPM builds every test file before applying filters; exclude Apple-only fixtures on Linux.
 let appleOnlyTests = [
-    // Unguarded CoreGraphics/CoreImage/ImageIO: these five reach Apple's frameworks directly.
+    // Unguarded CoreGraphics/CoreImage/ImageIO: these seven reach Apple's frameworks directly.
     "RGBAImage.swift",
     "GamutShowcaseTool.swift",
     "LensCorpusHarness.swift",
     "LensCorrectionFilterTests.swift",
     "UnitCropCoordinatesTests.swift",
+    "GrainABTool.swift",
+    "NegativeScanFramingTests.swift",
     // Image comparisons use ImageIO through RGBAImage.
     "PrintDifference.swift",
     "CatalogueStocks.swift",
