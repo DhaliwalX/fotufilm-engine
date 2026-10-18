@@ -22,8 +22,7 @@ class AppDelegate: FlutterAppDelegate {
     OpenedFiles.shared.add(urls.filter(\.isFileURL).map(\.path))
   }
 
-  /// Finder › Services › Open in Fotufilm (NSServices in Info.plist), as the CEF host answers it
-  /// (cef/src/platform/mac/main.mm): several files open together.
+  /// Finder › Services › Open in Fotufilm (NSServices in Info.plist): several files open together.
   @objc func openInFotufilm(_ pasteboard: NSPasteboard, userData: String?,
                             error: AutoreleasingUnsafeMutablePointer<NSString?>) {
     let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: [
@@ -41,8 +40,7 @@ class AppDelegate: FlutterAppDelegate {
   }
 }
 
-/// Files the app was asked to open, held until the editor listens (as the CEF host holds
-/// `fotufilm-native-open`), then sent as they arrive.
+/// Files the app was asked to open, held until the editor listens, then sent as they arrive.
 final class OpenedFiles {
   static let shared = OpenedFiles()
   private var pending: [String] = []

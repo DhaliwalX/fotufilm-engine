@@ -1,7 +1,6 @@
 // The dialogs of Copy Settings and presets: Copy Settings… and Save Preset… choose the sections
-// that travel (web/src/editor/SettingsSectionsDialog.jsx), Manage Presets… applies, renames,
-// exports and deletes presets and imports look files (PresetsDialog.jsx). Each follows the editor
-// while it is open.
+// that travel, Manage Presets… applies, renames, exports and deletes presets and imports look
+// files. Each follows the editor while it is open.
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 

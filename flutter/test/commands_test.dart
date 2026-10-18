@@ -227,7 +227,7 @@ void main() {
     });
   });
 
-  test('the shortcuts dialog lists ShortcutsDialog.jsx’s rows', () {
+  test('the shortcuts dialog lists its rows', () {
     final rows = shortcutRows(editor, mac: false);
     expect(rows.first, ('Open images', 'Ctrl+O'));
     expect(rows[1], ('Export', 'Ctrl+E'));

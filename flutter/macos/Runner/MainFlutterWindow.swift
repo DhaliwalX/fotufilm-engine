@@ -6,8 +6,8 @@ class MainFlutterWindow: NSWindow {
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
     self.contentViewController = flutterViewController
-    // The editor's toolbar is the title bar, as in the CEF app: the traffic lights sit over its
-    // leading inset and the empty toolbar drags the window.
+    // The editor's toolbar is the title bar: the traffic lights sit over its leading inset and
+    // the empty toolbar drags the window.
     // The title still names the window in the Window menu, Mission Control and the Dock: the
     // open photograph's name, or the app's (setTitle).
     self.title = "Fotufilm"
@@ -15,13 +15,13 @@ class MainFlutterWindow: NSWindow {
     self.titlebarAppearsTransparent = true
     self.styleMask.insert(.fullSizeContentView)
     self.isMovableByWindowBackground = false
-    // The CEF app's least size, narrow enough for the compact layout (below 834 points).
+    // The least size, narrow enough for the compact layout (below 834 points).
     self.minSize = NSSize(width: 720, height: 520)
     self.tabbingMode = .disallowed
     self.collectionBehavior.insert(.fullScreenPrimary)
     self.setContentSize(NSSize(width: 1440, height: 900))
     self.center()
-    // The CEF window's name, so the window opens where it was before the update.
+    // The previous desktop app's window name, so the window opens where it was before the update.
     self.setFrameAutosaveName("FotufilmDesktopWindow")
 
     RegisterGeneratedPlugins(registry: flutterViewController)
@@ -34,7 +34,7 @@ class MainFlutterWindow: NSWindow {
   }
 }
 
-/// Lets the toolbar's empty space drag the window, as the CEF host's window chrome does.
+/// Lets the toolbar's empty space drag the window.
 enum WindowChannel {
   static func register(with controller: FlutterViewController, window: NSWindow) {
     let channel = FlutterMethodChannel(name: "fotufilm/window",
@@ -59,7 +59,7 @@ enum WindowChannel {
       case "takeOpenedFiles":
         result(OpenedFiles.shared.take(listening: channel))
       case "samplePhoto":
-        // File › Use Sample Photo: the CEF app's generated chart (cef/build-engine.sh).
+        // File › Use Sample Photo: the generated chart (tools/build-desktop-engine.sh).
         result(Bundle.main.path(forResource: "sample", ofType: "png"))
       case "noteRecent":
         RecentFiles.note(call.arguments as? [String] ?? [])
@@ -146,8 +146,8 @@ enum SoundtrackChannel {
   }
 }
 
-/// File › Open Recent's files, kept as the CEF host keeps them (main_menu.mm
-/// `FotufilmRecentFiles`): the newest first, ten at most, those gone filtered out as they are read.
+/// File › Open Recent's files: the newest first, ten at most, those gone filtered out as
+/// they are read.
 enum RecentFiles {
   private static let key = "RecentDocuments"
   private static let limit = 10
@@ -178,12 +178,11 @@ final class CommandMenuItem: NSMenuItem {
   var baseTitle = ""
 }
 
-/// The menu bar, built as the CEF host builds it (cef/src/platform/mac/main_menu.mm) from the
-/// items the editor sends (lib/app/commands.dart `mainMenu`). The editor reports which commands
-/// apply, which are ticked and what the changing ones are called (`setState`, as
-/// useNativeCommands.js reports `menuState`); items validate against it as they are shown or
-/// their key is pressed, and the chosen command goes back to the editor. Choose Film, Presets,
-/// Edit History and Open Recent are filled as they are pulled down.
+/// The menu bar, built from the items the editor sends (lib/app/commands.dart `mainMenu`). The
+/// editor reports which commands apply, which are ticked and what the changing ones are called
+/// (`setState`); items validate against it as they are shown or their key is pressed, and the
+/// chosen command goes back to the editor. Choose Film, Presets, Edit History and Open Recent are
+/// filled as they are pulled down.
 final class MainMenu: NSObject, NSMenuDelegate, NSMenuItemValidation {
   static let shared = MainMenu()
 
@@ -201,7 +200,7 @@ final class MainMenu: NSObject, NSMenuDelegate, NSMenuItemValidation {
   private var fullScreenItem: NSMenuItem?
 
   static func register(with controller: FlutterViewController) {
-    // View › Enter Full Screen is the menu's own; AppKit adds no second one (cef main.mm).
+    // View › Enter Full Screen is the menu's own; AppKit adds no second one.
     UserDefaults.standard.register(defaults: ["NSFullScreenMenuItemEverywhere": false])
     let channel = FlutterMethodChannel(name: "fotufilm/menu",
                                        binaryMessenger: controller.engine.binaryMessenger)
@@ -278,7 +277,7 @@ final class MainMenu: NSObject, NSMenuDelegate, NSMenuItemValidation {
     return item
   }
 
-  /// The system's own items, as the CEF host adds them.
+  /// The system's own items.
   private func nativeItem(_ role: String, _ title: String, _ node: [String: Any]) -> NSMenuItem {
     let actions: [String: Selector] = [
       "about": #selector(NSApplication.orderFrontStandardAboutPanel(_:)),

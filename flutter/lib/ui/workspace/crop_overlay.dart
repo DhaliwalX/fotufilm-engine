@@ -1,8 +1,8 @@
-// The crop over the whole frame while the Crop tool is open (web/src/CropOverlay.jsx and .css):
-// the frame outside the crop darkened, the crop's outline, its corner and edge handles, and the
-// rule of thirds while it moves. Dragging a handle resizes the crop, held to its ratio when one is
-// chosen; dragging inside moves it. A drag is one step of the history, made when it is let go.
-// Return applies the tool and Escape leaves it (app/editor_shortcuts.dart).
+// The crop over the whole frame while the Crop tool is open: the frame outside the crop darkened,
+// the crop's outline, its corner and edge handles, and the rule of thirds while it moves. Dragging
+// a handle resizes the crop, held to its ratio when one is chosen; dragging inside moves it. A drag
+// is one step of the history, made when it is let go. Return applies the tool and Escape leaves it
+// (app/editor_shortcuts.dart).
 import 'dart:convert';
 
 import 'package:flutter/gestures.dart' show kPrimaryMouseButton;
@@ -44,8 +44,8 @@ class CropOverlay extends StatefulWidget {
 }
 
 class CropOverlayState extends State<CropOverlay> {
-  // CropOverlay.css and viewer.css `.crop-handle`: a 13 px square, and 10 px around it that
-  // still takes the pointer; the edges' handles are 26 by 6.
+  // A 13 px square, and 10 px around it that still takes the pointer; the edges' handles
+  // are 26 by 6.
   static const _corner = 13.0, _edgeLong = 26.0, _edgeShort = 6.0, _reach = 10.0;
 
   /// The crop while a drag moves it, before the edit has it.
@@ -151,8 +151,8 @@ class CropOverlayState extends State<CropOverlay> {
         _draft = null;
       });
 
-  /// An arrow key on a handle: half a percent of the frame, five with Shift (CropOverlay.jsx
-  /// `keyboard`), each one step of the history.
+  /// An arrow key on a handle: half a percent of the frame, five with Shift, each one step of
+  /// the history.
   void _nudge(CropGrip grip, Offset direction, bool shift) {
     final delta = direction * (shift ? .05 : .005);
     final points = editor.crop.points;
@@ -224,7 +224,7 @@ class CropOverlayState extends State<CropOverlay> {
         onPointerUp: _up,
         onPointerCancel: _cancel,
         child: TweenAnimationBuilder<double>(
-          // The thirds show while the crop moves (CropOverlay.css `.crop-thirds`).
+          // The thirds show while the crop moves.
           tween: Tween(end: _drag != null ? 1 : 0),
           duration: MediaQuery.disableAnimationsOf(context)
               ? Duration.zero

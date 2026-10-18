@@ -1,8 +1,7 @@
-// The photo strip's photos (web/src/editor/useDocumentActions.js `acceptFiles`, opened-folder.js):
-// the open photographs, and beside them the photos that came with one but wait, undecoded, until
-// they are chosen. Opening one file brings its folder; opening a library photo brings its roll.
-// Waiting photos show the engine's `thumbnail` picture of the file, drawn only once their place in
-// the strip is on screen; only the photo chosen is imported.
+// The photo strip's photos: the open photographs, and beside them the photos that came with one but
+// wait, undecoded, until they are chosen. Opening one file brings its folder; opening a library
+// photo brings its roll. Waiting photos show the engine's `thumbnail` picture of the file, drawn
+// only once their place in the strip is on screen; only the photo chosen is imported.
 //
 // The open photographs stay the editor's `documents`; the strip only orders them among the
 // waiting ones.
@@ -41,7 +40,7 @@ class PhotoStripModel extends ChangeNotifier {
   /// The strip's photos in the order they came, opened or waiting.
   final List<_Entry> _entries = [];
 
-  /// The edge of a waiting photo's picture (useDocumentActions.js `drawThumbnails`).
+  /// The edge of a waiting photo's picture.
   static const thumbnailEdge = 256;
 
   /// The strip's photos in the shown photo's folder: each open photograph and the waiting ones,

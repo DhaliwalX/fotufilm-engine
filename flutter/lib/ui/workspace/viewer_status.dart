@@ -1,7 +1,6 @@
-// What the viewer is doing (web/src/editor/ViewerStatus.jsx): the photograph's name, the shown
-// develop's size and time, and the backend that developed it, announced to assistive technology
-// rather than drawn. And the toolbar's pixel readout (ViewToolbar.jsx): the photograph's kind and
-// megapixels, with the camera profile a RAW was read with.
+// What the viewer is doing: the photograph's name, the shown develop's size and time, and the
+// backend that developed it, announced to assistive technology rather than drawn. And the toolbar's
+// pixel readout: the photograph's kind and megapixels, with the camera profile a RAW was read with.
 import 'package:flutter/widgets.dart';
 
 import '../../model/editor.dart';

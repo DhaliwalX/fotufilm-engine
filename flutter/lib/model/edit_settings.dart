@@ -1,6 +1,6 @@
-// Copy Settings, Paste Settings, presets and look files (web/src/edit-settings.js,
-// look-files.js). An edit travels by inspector section, the same sections the Mac and iOS apps
-// copy (EditorControlSection.transferable in the catalogue's SETTINGS_SECTIONS).
+// Copy Settings, Paste Settings, presets and look files. An edit travels by inspector section, the
+// same sections the Mac and iOS apps copy (EditorControlSection.transferable in the catalogue's
+// SETTINGS_SECTIONS).
 import 'dart:convert';
 
 import 'catalogue.dart';
@@ -164,9 +164,9 @@ String _canonical(Object? value) {
   return jsonEncode(sorted(value));
 }
 
-/// `presets` with `incoming` added (edit-settings.js `importPresets`). One the same as a preset
-/// already here is left as it is; one whose name is taken by a different preset is added as
-/// "Name 2", never replacing it. Answers the list and how many were added.
+/// `presets` with `incoming` added. One the same as a preset already here is left as it is; one
+/// whose name is taken by a different preset is added as "Name 2", never replacing it. Answers the
+/// list and how many were added.
 (List<Preset>, int) mergePresets(
     List<Preset> presets, List<(String, CopiedSettings)> incoming, String Function() newId) {
   final next = [...presets];
@@ -238,10 +238,9 @@ String lookFileName(List<Preset> presets) {
   return '${name.isEmpty ? 'Fotufilm Presets' : name}.$lookExtension';
 }
 
-/// The presets a look file holds, each checked as a kept edit is (look-files.js `readLooks`). A
-/// look on a film that is not installed is kept, to apply once the film is, and named in
-/// `missing` as (name, film). Sections a later version adds are left out. Throws an
-/// [EditProblem] when the file is not a look.
+/// The presets a look file holds, each checked as a kept edit is. A look on a film that is not
+/// installed is kept, to apply once the film is, and named in `missing` as (name, film). Sections a
+/// later version adds are left out. Throws an [EditProblem] when the file is not a look.
 ({List<(String, CopiedSettings)> presets, List<(String, String)> missing}) readLooks(
     String text, Catalogue catalogue, List<Json> stocks) {
   Object? file;

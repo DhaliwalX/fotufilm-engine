@@ -1,8 +1,8 @@
-// Settings › Film Model: the settings a newly opened photograph's film model starts from
-// (SettingsDialog.jsx). The new photograph's edit itself is saved_edits.dart `newPhotoEdit`.
+// Settings › Film Model: the settings a newly opened photograph's film model starts from. The new
+// photograph's edit itself is saved_edits.dart `newPhotoEdit`.
 import 'editor.dart';
 
-/// Settings › Film Model's settings (SettingsDialog.jsx `FILM_MODEL`).
+/// Settings › Film Model's settings.
 const filmModelSettings = [
   'grainModel',
   'halationModel',

@@ -3,8 +3,7 @@ import FlutterMacOS
 import Metal
 import QuartzCore
 
-/// One of the presenter's layers on screen, as the CEF host's compositor draws the photograph
-/// (cef/src/platform/mac/compositor.mm): its own Metal layer, placed by Flutter as a platform
+/// One of the presenter's layers on screen: its own Metal layer, placed by Flutter as a platform
 /// view, so the picture keeps the engine's Display P3 and, on a screen with EDR, the light above
 /// SDR white that an extended-range frame carries. Flutter's own window is sRGB and standard range.
 /// It takes no clicks: the editor's gestures over the photograph stay Flutter's.

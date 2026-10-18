@@ -1,7 +1,6 @@
-// Lens correction (web/src/LensControls.jsx, LensProfileLibrary.jsx, lens-correction.js and
-// backend/desktop/lenses.js): the lens profiles imported on this device, and the plan the engine
-// makes for a photograph's lens setting, whose note the Lens section shows. The correction itself
-// develops from the edit's `lens`.
+// Lens correction (web/src/lens-correction.js): the lens profiles imported on this device, and the
+// plan the engine makes for a photograph's lens setting, whose note the Lens section shows. The
+// correction itself develops from the edit's `lens`.
 import 'dart:convert';
 
 import 'package:file_selector/file_selector.dart' show XFile;
@@ -100,7 +99,7 @@ class LensCorrection extends ChangeNotifier {
   String? planError;
 
   /// Asks for the plan of `lens` on `doc` when its switch or profile changed (the sliders do not
-  /// change the plan's note), as LensControls.jsx does.
+  /// change the plan's note).
   void follow(PhotoDocument doc, Map lens) {
     final engine = editor.engine;
     final key = '${doc.handle}|${lens['enabled']}|${lens['profileID']}|$_revision';

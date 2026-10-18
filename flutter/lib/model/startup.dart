@@ -1,5 +1,5 @@
-// How far the engine has come at launch (web/src/editor/useRendererLifecycle.js, the native
-// backend's `prepare` reports), for the startup progress card over the empty viewer.
+// How far the engine has come at launch (what `prepare` reports), for the startup progress card
+// over the empty viewer.
 
 class StartupState {
   const StartupState(this.value, this.label, {this.done = false});

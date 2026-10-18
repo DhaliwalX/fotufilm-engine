@@ -1,6 +1,5 @@
-// The Selective tool's panel (web/src/editor/SelectiveInspector.jsx, SelectiveControls.jsx): what
-// the selection is, how far it reaches and whether its mask shows, then the light and colour the
-// selected part develops with.
+// The Selective tool's panel: what the selection is, how far it reaches and whether its mask shows,
+// then the light and colour the selected part develops with.
 import 'package:flutter/widgets.dart';
 
 import '../../model/catalogue.dart';

@@ -247,23 +247,23 @@
     "provenance": "Project-authored Motion effect template, regenerated from EditorControlCatalogue with positive print media; no photography or manufacturer artwork.",
     "sha256": "02c3c5f42a00f9ada93adba5e6ec9fbb4cc4456179ef59f291ba939d1f238f13"
   },
-  "cef/mac/AppIcon.icon/Assets/Cyan.svg": {
+  "flutter/macos/AppIcon.icon/Assets/Cyan.svg": {
     "provenance": "Project-authored branding or Motion effect template; no photography or manufacturer artwork.",
     "sha256": "560b433e7336324e1d70722641e1f5a4cf98898a11511d138a2912cbf1c7e91e"
   },
-  "cef/mac/AppIcon.icon/Assets/FOTUFILM.svg": {
+  "flutter/macos/AppIcon.icon/Assets/FOTUFILM.svg": {
     "provenance": "Project-authored branding or Motion effect template; no photography or manufacturer artwork.",
     "sha256": "6ef69c56958f3718a6eb5c5940826902e34e8f0697de3c4830dfecd95d944fe2"
   },
-  "cef/mac/AppIcon.icon/Assets/Lime.svg": {
+  "flutter/macos/AppIcon.icon/Assets/Lime.svg": {
     "provenance": "Project-authored branding or Motion effect template; no photography or manufacturer artwork.",
     "sha256": "9b054350d082a4db5cd1542e1d41787e2ef5da397532992e0b5e4d015bedd12b"
   },
-  "cef/mac/AppIcon.icon/Assets/Red.svg": {
+  "flutter/macos/AppIcon.icon/Assets/Red.svg": {
     "provenance": "Project-authored branding or Motion effect template; no photography or manufacturer artwork.",
     "sha256": "338d8dffb9669a99eeaf19adb9876e20846c52718f831fd78095928de8e35188"
   },
-  "cef/mac/AppIcon.icon/Assets/Violet.svg": {
+  "flutter/macos/AppIcon.icon/Assets/Violet.svg": {
     "provenance": "Project-authored branding or Motion effect template; no photography or manufacturer artwork.",
     "sha256": "9407bfe0a57eed7c37398f1bb2c02f870aefbb77d94a29b74d8bb3fbaecdbe2b"
   },
@@ -314,10 +314,6 @@
   "web/public/fotufilm_tagline.png": {
     "provenance": "Project-authored branding or Motion effect template; no photography or manufacturer artwork.",
     "sha256": "a6167773418f304d1ba22b050096b565eaa3ac7c55e37bd7ab983fea857003e7"
-  },
-  "web/src/assets/app-icon.png": {
-    "provenance": "Project-authored branding or Motion effect template; no photography or manufacturer artwork.",
-    "sha256": "1bf1b4ef994da2b9f93cbeae7da8e60f58feb232d85a827e082344fb25942d7d"
   },
   "Sources/FotufilmCore/Stocks/acros100.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-0258E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",

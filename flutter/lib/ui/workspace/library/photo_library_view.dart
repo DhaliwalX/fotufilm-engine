@@ -1,7 +1,6 @@
-// The photo library over the editor's panels (web/src/photo-library/PhotoLibrary.jsx,
-// photo-library.css): the folders on the left, and the bar and grid of the folder chosen. The
-// grid's scope, filters, tile size, selection and keyboard focus are kept here, as the React view
-// keeps them; the folders, photos and ratings are the model's (PhotoLibrary).
+// The photo library over the editor's panels: the folders on the left, and the bar and grid of the
+// folder chosen. The grid's scope, filters, tile size, selection and keyboard focus are kept here;
+// the folders, photos and ratings are the model's (PhotoLibrary).
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -181,7 +180,7 @@ class _PhotoLibraryViewState extends State<PhotoLibraryView> {
     ]);
   }
 
-  // ── Keyboard (PhotoLibrary.jsx `keyDown`) ─────────────────────────────────────────────────
+  // ── Keyboard ──────────────────────────────────────────────────────────────────────────────
 
   KeyEventResult _key(List<LibraryPhoto> photos, KeyEvent event, GridLayout layout, double viewport) {
     if (event is KeyUpEvent) return KeyEventResult.ignored;

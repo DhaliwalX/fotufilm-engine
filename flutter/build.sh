@@ -16,14 +16,14 @@ if [[ "$(uname -s)" != Darwin ]]; then
 fi
 # Host links fail against some Command Line Tools SDKs; use Xcode's.
 export SDKROOT="${SDKROOT:-$(xcrun --sdk macosx --show-sdk-path)}"
-cef/build-engine.sh
+tools/build-desktop-engine.sh
 if [[ " $* " == *" --no-plugins "* ]]; then
   export FOTUFILM_PLUGINS_DIR=
 else
   tools/build-editor-plugins.sh
   export FOTUFILM_PLUGINS_DIR="$PWD/build"
 fi
-export FOTUFILM_ENGINE_BUILD="$PWD/build/cef-engine"
+export FOTUFILM_ENGINE_BUILD="$PWD/build/engine"
 
 tool_dir="$PWD/flutter"
 (cd flutter && tool/prepare.sh)
@@ -35,11 +35,9 @@ trap 'rm -rf "$stage"' EXIT
 rsync -a --exclude /build --exclude /.dart_tool --exclude /macos/Pods \
   --exclude /macos/Flutter/ephemeral --exclude /macos/Runner/Configs/Build.xcconfig \
   "$tool_dir/" "$stage/flutter/"
-# What the Xcode project reads from beside it: the engine's C header and the app icon.
-for shared in Sources/CFotufilmHost/include cef/mac/compile-icon.sh cef/mac/AppIcon.icon; do
-  mkdir -p "$stage/$(dirname "$shared")"
-  cp -R "$shared" "$stage/$shared"
-done
+# What the Xcode project reads from beside it: the engine's C header.
+mkdir -p "$stage/Sources/CFotufilmHost"
+cp -R Sources/CFotufilmHost/include "$stage/Sources/CFotufilmHost/include"
 
 version="$(sed -n 's/^MARKETING_VERSION=//p' version.env)"
 build="$(sed -n 's/^CURRENT_PROJECT_VERSION=//p' version.env)"

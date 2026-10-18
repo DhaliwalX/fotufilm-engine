@@ -1,6 +1,6 @@
-// Filters on the lens (web/src/lens-filters.js, LensFilters.jsx): the catalogue's filters, which
-// of them scatter light rather than absorb it, and the edits that fit, swap, reorder and take
-// them off. The first filter in the list sits nearest the lens.
+// Filters on the lens (web/src/lens-filters.js): the catalogue's filters, which of them scatter
+// light rather than absorb it, and the edits that fit, swap, reorder and take them off. The first
+// filter in the list sits nearest the lens.
 import 'catalogue.dart';
 
 class LensFilterCatalogue {

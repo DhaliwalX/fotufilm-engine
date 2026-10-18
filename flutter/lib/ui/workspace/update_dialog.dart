@@ -1,5 +1,5 @@
-// Check for Updates' answers, as the Mac app's alerts give them (web/src/editor/UpdateDialog.jsx):
-// a notice, a release on offer, or its download with progress.
+// Check for Updates' answers, as the Mac app's alerts give them: a notice, a release on offer, or
+// its download with progress.
 import 'package:flutter/widgets.dart';
 
 import '../../model/editor.dart';

@@ -61,7 +61,7 @@ class OriginalBadge extends StatelessWidget {
 class StatusPill extends StatelessWidget {
   const StatusPill({super.key, required this.text, this.onCancel});
   final String text;
-  /// Shows Cancel (the import pill's, EditorViewer.jsx).
+  /// Shows Cancel (the import pill's).
   final VoidCallback? onCancel;
 
   @override

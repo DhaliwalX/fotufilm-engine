@@ -22,7 +22,7 @@ abstract final class HostWindow {
   static Future<void> startDrag() => _call('startDrag');
   static Future<void> zoom() => _call('zoom');
 
-  /// Names the window (Window menu, Mission Control, the Dock), as useDocumentTitle.js does.
+  /// Names the window (Window menu, Mission Control, the Dock).
   static Future<void> setTitle(String title) => _call('setTitle', title);
 
   /// Photographs the system asked the app to open, and from then on calls `open` as more come.
@@ -44,7 +44,7 @@ abstract final class HostWindow {
   /// Files are on a disk the system can open and show; in a browser an export is a download.
   static bool get showsFiles => !kIsWeb;
 
-  /// What showing a file in the system's file manager is called (the CEF hosts' `reveal`).
+  /// What showing a file in the system's file manager is called.
   static String get revealLabel =>
       defaultTargetPlatform == TargetPlatform.macOS ? 'Show in Finder' : 'Show in Folder';
 
@@ -52,19 +52,19 @@ abstract final class HostWindow {
   static String get fileManager =>
       defaultTargetPlatform == TargetPlatform.macOS ? 'in Finder' : 'in Folder';
 
-  /// Shows files in the Finder (the CEF shell's `revealLibraryFiles`).
+  /// Shows files in the Finder.
   static Future<void> reveal(List<String> paths) => _call('reveal', paths);
 
-  /// Opens a file in the app the system chooses for it (the CEF shell's `openExport`).
+  /// Opens a file in the app the system chooses for it.
   static Future<bool> openFile(String path) async => await _call('openFile', path) == true;
 
   /// Opens a web address in the browser.
   static Future<bool> openUrl(String url) async => await _call('openURL', url) == true;
 
-  /// File › Use Sample Photo's picture, the CEF app's generated chart in the app's resources.
+  /// File › Use Sample Photo's picture, the generated chart in the app's resources.
   static Future<String?> samplePhoto() async => await _call('samplePhoto') as String?;
 
-  /// Photographs opened from the Open panel join File › Open Recent, as the CEF host's do.
+  /// Photographs opened from the Open panel join File › Open Recent.
   static Future<void> noteRecent(List<String> paths) => _call('noteRecent', paths);
 
   /// Moves files to the Trash; answers the paths that went.

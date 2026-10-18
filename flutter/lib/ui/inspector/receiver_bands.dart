@@ -1,7 +1,6 @@
-// The Print panel's receiver bands (web/src/editor/ReceiverBands.jsx, BandSetDialog.jsx,
-// styles/inspector.css `.medium-row`, `.receiver-bands`): beside the output medium, a button that
-// opens the peaks of the three bands Digital Reference reads a colour film through, typed in nm,
-// with the sets saved on this device and the bands new photographs start on.
+// The Print panel's receiver bands: beside the output medium, a button that opens the peaks of the
+// three bands Digital Reference reads a colour film through, typed in nm, with the sets saved on
+// this device and the bands new photographs start on.
 import 'package:flutter/widgets.dart';
 
 import '../../model/band_sets.dart';

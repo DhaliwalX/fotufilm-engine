@@ -212,7 +212,7 @@ class Catalogue {
     return value == null || value == 0 ? null : value;
   }
 
-  // ── Slider glyphs (web/src/glyph-names.js) ──────────────────────────────────────────────
+  // ── Slider glyphs ───────────────────────────────────────────────────────────────────────
 
   static const _sliderFields = {'ev': 'exposure', 'temperature': 'warmth'};
   static final _withoutEnds = RegExp(

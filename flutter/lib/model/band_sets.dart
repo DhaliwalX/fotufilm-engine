@@ -1,7 +1,6 @@
-// Receiver bands (web/src/band-sets.js, editor/ReceiverBands.jsx): the peaks of the three bands
-// Digital Reference reads a colour film through, the sets saved under a name on this device, and
-// the bands new photographs start on (the `receiverBands` setting). Bands are `{red, green, blue}`
-// in nm; a saved set adds its `name`.
+// Receiver bands: the peaks of the three bands Digital Reference reads a colour film through, the
+// sets saved under a name on this device, and the bands new photographs start on (the
+// `receiverBands` setting). Bands are `{red, green, blue}` in nm; a saved set adds its `name`.
 import 'catalogue.dart';
 import 'settings.dart';
 
@@ -73,7 +72,7 @@ class BandSets {
   set starting(Map? bands) =>
       settings.set('receiverBands', bands == null ? null : {for (final k in bandKeys) k: bands[k]});
 
-  /// A new photograph's edit on the starting bands (app-settings.js `newPhotoEdit`).
+  /// A new photograph's edit on the starting bands.
   void start(Json edit) {
     final bands = starting;
     if (bands != null) edit['profile'] = withBands(edit['profile'] as Map, bands);

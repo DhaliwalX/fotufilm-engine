@@ -1,7 +1,5 @@
-// Scanned negatives in the editor, as the React desktop editor has them: importing scans and
-// trichromatic exposures (useDocumentActions.js, backend/desktop/negative-scans.js), a negative's
-// reading (NegativeInspector.jsx), clear-film sampling (useSceneSampling.js), its roll
-// (useRollActions.js) and View › Show Negative (negative-view.js). The rules are in
+// Scanned negatives in the editor: importing scans and trichromatic exposures, a negative's
+// reading, clear-film sampling, its roll and View › Show Negative. The rules are in
 // negative_document.dart; the host's side is Sources/FotufilmHost/HostService+NegativeScan.swift.
 import 'dart:ui' show Offset;
 
@@ -89,8 +87,8 @@ class NegativeScans {
         'negative': newNegative(scanLight ?? 'white'),
       };
 
-  /// Import Trichromatic Scan…: each frame's exposures under red, green and blue light, chosen as
-  /// the CEF shell's panel asks for them, merged into scans beside the red ones.
+  /// Import Trichromatic Scan…: each frame's exposures under red, green and blue light, merged
+  /// into scans beside the red ones.
   Future<void> chooseExposures() async {
     if (!canMerge) return;
     final chosen = await files.openFiles(
@@ -132,7 +130,7 @@ class NegativeScans {
     editor.notify();
   }
 
-  // ── The reading (NegativeInspector.jsx) ─────────────────────────────────────────────────
+  // ── The reading ─────────────────────────────────────────────────────────────────────────
 
   /// Changes how the scan is read, as one step.
   void read(Json change) {
@@ -160,7 +158,7 @@ class NegativeScans {
     ].take(3).toList();
   }
 
-  // ── Clear film (useSceneSampling.js) ────────────────────────────────────────────────────
+  // ── Clear film ──────────────────────────────────────────────────────────────────────────
 
   /// Whether a click on the photograph picks the clear film.
   bool sampling = false;
@@ -182,7 +180,7 @@ class NegativeScans {
     final edge = preview != null
         ? (preview.width > preview.height ? preview.width : preview.height)
         : (doc.previewEdge > 0 ? doc.previewEdge : 1600);
-    // The shown develop's request, as the scene it samples (session.js `sceneRequest`).
+    // The shown develop's request, as the scene it samples.
     final request = {
       ...renderRequest(
         catalogue: editor.catalogue,
@@ -276,7 +274,7 @@ class NegativeScans {
     read({'lightFrame': null});
   }
 
-  // ── The roll (useRollActions.js) ────────────────────────────────────────────────────────
+  // ── The roll ────────────────────────────────────────────────────────────────────────────
 
   /// The strip's negatives on the shown frame's roll (its folder), the shown one among them.
   List<PhotoDocument> get rollFrames {
@@ -293,7 +291,7 @@ class NegativeScans {
   RollProgress? measuring;
   bool _cancelMeasure = false;
 
-  /// The edge each frame develops at to be measured (photo-library/thumbnails.js).
+  /// The edge each frame develops at to be measured.
   static const _measureEdge = 480;
 
   /// Develops each frame small for its densest end, and keeps the roll's colour with every
@@ -393,7 +391,7 @@ class NegativeScans {
     if (negative?['roll'] != null) read({'roll': null});
   }
 
-  // ── Show Negative (negative-view.js) ────────────────────────────────────────────────────
+  // ── Show Negative ───────────────────────────────────────────────────────────────────────
 
   /// Whether the canvas develops the film's negative in place of the edit's output: a way of
   /// looking, not part of the edit.

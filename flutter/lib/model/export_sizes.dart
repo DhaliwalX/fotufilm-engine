@@ -1,8 +1,8 @@
-// Export sizes, as the Mac app offers them (web/src/export-sizes.js): the full picture, then
-// Large, Medium and Small at 75, 50 and 25 per cent of it where that is still a useful picture,
-// then the long edges the web editor has always offered. An id is "full", a fraction ("0.75") or
-// a long edge in pixels ("3840"). The desktop engine measures a size's long edge on the cropped
-// picture and rounds outward (`longEdgeOfCrop`), so these do too.
+// Export sizes, as the Mac app offers them: the full picture, then Large, Medium and Small at 75,
+// 50 and 25 per cent of it where that is still a useful picture, then the long edges the web editor
+// has always offered. An id is "full", a fraction ("0.75") or a long edge in pixels ("3840"). The
+// desktop engine measures a size's long edge on the cropped picture and rounds outward
+// (`longEdgeOfCrop`), so these do too.
 import 'dart:math' as math;
 
 typedef PixelSize = ({int width, int height});
@@ -19,7 +19,7 @@ class ExportSize {
 const _fractions = [('Large', .75), ('Medium', .5), ('Small', .25)];
 const _stillEdges = [3840, 2048, 1600];
 
-/// A movie's sizes after its source (export-sizes.js `VIDEO_EDGES`).
+/// A movie's sizes after its source.
 const _videoEdges = [('4K', 3840), ('1440p', 2560), ('1080p', 1920), ('720p', 1280)];
 
 /// The size of the picture a crop (four corners in unit coordinates) cuts from a `width` x

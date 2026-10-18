@@ -1,6 +1,6 @@
 #!/bin/bash
 # Packs the Linux build of Fotufilm (flutter/build/linux/x64/release/bundle, from
-# `flutter build linux --release` over cef/build-engine-linux.sh's engine) into one AppImage. The
+# `flutter build linux --release` over tools/build-desktop-engine-linux.sh's engine) into one AppImage. The
 # engine picks its GPU when the app starts: CUDA on NVIDIA, Vulkan on any other GPU (AMD, Intel);
 # FOTUFILM_GPU_DEVICE=cuda or vulkan chooses instead.
 #   flutter/tool/package-appimage.sh [output-directory]      default build/appimage
@@ -20,11 +20,11 @@ APP="$APPDIR/usr/lib/fotufilm"
 LIB="$APP/lib"
 source version.env
 [[ -x "$BUILD/fotufilm" && -f "$BUILD/lib/libfotufilm.so" ]] || {
-  echo "error: build the Linux app first (cef/build-engine-linux.sh, then flutter build linux)" >&2
+  echo "error: build the Linux app first (tools/build-desktop-engine-linux.sh, then flutter build linux)" >&2
   exit 1
 }
 readelf -d "$BUILD/lib/libfotufilm.so" | grep -q 'R.*PATH.*\[\$ORIGIN\]' || {
-  echo "error: the engine does not look beside itself for its libraries (cef/build-engine-linux.sh)" >&2
+  echo "error: the engine does not look beside itself for its libraries (tools/build-desktop-engine-linux.sh)" >&2
   exit 1
 }
 
@@ -46,7 +46,7 @@ fi
 # carried: HEIC export appears where the system has libheif's x265 plug-in, and libtiff (whose
 # Debian build links GPL JBIG-KIT) is the system's, as GTK already requires it. libjpeg is
 # libjpeg-turbo 3 rather than the build host's, since the system's libtiff binds to the carried
-# copy (cef/build-libjpeg-turbo-linux.sh).
+# copy (tools/build-libjpeg-turbo-linux.sh).
 bundled='^lib(raw(_r)?|png16|lcms2|OpenEXR[A-Za-z]*|Imath|Iex|IlmThread|heif|de265|aom|dav1d|gomp)[-._0-9]*\.so'
 bundle() {
   ldd "$1" | awk '$2 == "=>" && $3 ~ /^\// {print $1, $3}' | while read -r name path; do
@@ -59,14 +59,14 @@ bundle() {
 bundle "$LIB/libfotufilm.so" > "$OUT/bundled.txt"
 if ldd "$LIB/libfotufilm.so" | awk '$1 ~ /^libswiftCore\.so/ {found = 1} END {exit !found}'; then
   echo "error: the engine links the system's Swift runtime; build it with a toolchain that has" >&2
-  echo "a static one (FOTUFILM_SWIFT_STDLIB, cef/README.md)" >&2
+  echo "a static one (FOTUFILM_SWIFT_STDLIB, flutter/README.md)" >&2
   exit 1
 fi
 ldd "$LIB/libfotufilm.so" | grep -q '^\s*libjpeg\.so\.8 ' || {
   echo "error: the engine does not link libjpeg.so.8, the libjpeg the image carries" >&2
   exit 1
 }
-JPEG="$(cef/build-libjpeg-turbo-linux.sh)"
+JPEG="$(tools/build-libjpeg-turbo-linux.sh)"
 cp -L "$JPEG" "$LIB/libjpeg.so.8"
 # libheif's plug-in folder, beside its library.
 plugins="$(dirname "$(ldd "$LIB/libfotufilm.so" | awk '$1 ~ /^libheif\.so/ {print $3}')")/libheif/plugins"

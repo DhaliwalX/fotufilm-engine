@@ -1,7 +1,5 @@
-// A playing movie's sound. The React editor plays the WAV the engine makes of it as its media
-// element's clock (backend/desktop/video-import.js `nativePlayback`); here the platform plays the
-// movie file's own sound (MainFlutterWindow.swift `SoundtrackChannel`) beside the editor's clock,
-// started, moved and stopped with the transport. Where there is no native side it is silent.
+// A playing movie's sound: the platform plays the movie file's own sound (MainFlutterWindow.swift
+// `SoundtrackChannel`) beside the editor's clock, started, moved and stopped with the transport. Where there is no native side it is silent.
 import 'package:flutter/services.dart';
 
 class Soundtrack {

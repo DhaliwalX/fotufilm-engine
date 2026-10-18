@@ -1,7 +1,6 @@
-// The CEF app's profile (cef/src/platform/mac/main.mm, linux/main.cc `ProfilePath`), read the
-// first time this app runs where it was: its settings, presets, saved band sets, panel widths
-// and photo library come over before the editor reads its own, and nothing this app has kept
-// already is replaced. The profile itself is left as it was.
+// The previous desktop app's profile, read the first time this app runs where it was: its settings,
+// presets, saved band sets, panel widths and photo library come over before the editor reads its
+// own, and nothing this app has kept already is replaced. The profile itself is left as it was.
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -26,7 +25,8 @@ Directory? _profile() {
   return null;
 }
 
-/// Brings the CEF app's profile over, once, before the editor's features read their settings.
+/// Brings the previous desktop app's profile over, once, before the editor's features read
+/// their settings.
 void importCefProfile(AppSettings settings, {Directory? profile}) {
   if (settings.isStored(_imported)) return;
   final directory = profile ?? _profile();

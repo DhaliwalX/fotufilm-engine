@@ -2,8 +2,8 @@
 // in place (Sources/FotufilmHost/HostService+Thumbnails.swift): a still's embedded or reduced
 // preview, a movie's first frame. The library's tiles and the strip's waiting photos show them.
 // A few are drawn at once beside the editor's develops (`callAside`), the newest request first,
-// as the library's thumbnail queue does (web/src/photo-library/thumbnails.js), and only while
-// someone still wants them. They arrive as pixels, so nothing is encoded or decoded twice.
+// and only while someone still wants them. They arrive as pixels, so nothing is encoded or
+// decoded twice.
 import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;

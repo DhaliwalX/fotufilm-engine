@@ -1,7 +1,7 @@
 #include "../../Flutter/Flutter-Release.xcconfig"
 #include "Warnings.xcconfig"
 
-// No local path reaches the shipped app (tools/audit-apple-bundle.sh), as the CEF host links:
+// No local path reaches the shipped app (tools/audit-apple-bundle.sh):
 // the linker drops the debug map and local symbols, and Swift names its sources from here.
 OTHER_LDFLAGS = $(inherited) -Wl,-S -Wl,-x
 OTHER_SWIFT_FLAGS = $(inherited) -file-prefix-map $(PROJECT_DIR)/..=Fotufilm

@@ -183,21 +183,22 @@ swift run fotufilm input.jpg output.jpg --stock gold200
 
 ## Build Fotufilm Desktop and plugins
 
-Fotufilm Desktop targets Apple silicon and macOS 14 or newer.
+Fotufilm Desktop targets Apple silicon and macOS 14 or newer, and x86-64 Linux.
 
 ```sh
-cef/build.sh
+flutter/build.sh
 ```
 
-Open `build/cef-host/Release/Fotufilm.app`. The build also includes the Resolve plugin.
+Open `build/flutter-host/Fotufilm.app`. The build also includes the Resolve plugin.
 To include the Final Cut plugin, install Apple's FxPlug SDK first. See the
 [Resolve guide](resolve/README.md) and [Final Cut guide](finalcut/README.md)
-for separate builds and installation steps.
+for separate builds and installation steps, and the [editor guide](flutter/README.md) for
+Linux.
 
 Desktop, Resolve, and Final Cut rebuilds reuse compiled objects after checking source
 and header contents, compiler, flags, and SDK dependencies. Linking, bundle assembly,
 signing, audits, and requested tests still run. Set `FOTUFILM_BUILD_CACHE=0` to
-force recompilation, or remove `build/cef-engine/obj`, `build/resolve/obj-*`, and
+force recompilation, or remove `build/engine/obj`, `build/resolve/obj-*`, and
 `build/finalcut/obj-*`.
 
 ## Build the browser editor
@@ -207,13 +208,13 @@ SDK folder, or install it at `build/emsdk`. Then run:
 
 ```sh
 tools/build-wasm.sh
-cd web
-npm ci
-npm run build
+(cd web && npm ci)
+cd flutter
+tool/build-web.sh --assets ../web/public
 ```
 
-The output is in `web/dist`. Set `FOTUFILM_BASE=/demo/` when running `npm run build`
-to host the demo at [fotufilm.com/demo](https://fotufilm.com/demo/).
+The output is in `flutter/build/web`. Set `FOTUFILM_BASE=/demo/` when running
+`tool/build-web.sh` to host the demo at [fotufilm.com/demo](https://fotufilm.com/demo/).
 Video supports the Mac app’s camera log inputs, frame previews, trimming, audio,
 and MP4 / H.264 or WebM / VP9 export. It reads files in bounded slices and streams
 exports to disk. HEVC Main / Main10 has a worker-based software decoder when

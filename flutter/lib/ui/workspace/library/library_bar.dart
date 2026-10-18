@@ -1,5 +1,5 @@
-// The bar over the grid (web/src/photo-library/LibraryBar.jsx): what is shown and how many, then
-// the search, the order, the least rating, Edited only, the tile size and Open.
+// The bar over the grid: what is shown and how many, then the search, the order, the least rating,
+// Edited only, the tile size and Open.
 import 'package:flutter/widgets.dart';
 
 import '../../../model/library_model.dart';
@@ -7,7 +7,7 @@ import '../../kit/kit.dart';
 import '../../theme/theme.dart';
 import 'library_folders.dart' show formatCount;
 
-/// The grid's filters (PhotoLibrary.jsx `noFilters`).
+/// The grid's filters.
 typedef LibraryFilters = ({String search, String sort, int minRating, bool editedOnly});
 
 const noFilters = (search: '', sort: 'name', minRating: 0, editedOnly: false);

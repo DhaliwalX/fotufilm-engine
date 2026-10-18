@@ -1,7 +1,7 @@
-// A scanned negative opened as a document (web/src/negative-document.js, negative-view.js): its
-// edit is any photograph's with `negative` set, read as the edit's film and printed through the
-// edit's own print by the host (Sources/FotufilmHost/HostService+NegativeScan.swift). With no film
-// (Normal) the scan reads as a plain positive. These are the rules, without state.
+// A scanned negative opened as a document (web/src/negative-document.js): its edit is any
+// photograph's with `negative` set, read as the edit's film and printed through the edit's own
+// print by the host (Sources/FotufilmHost/HostService+NegativeScan.swift). With no film (Normal)
+// the scan reads as a plain positive. These are the rules, without state.
 import 'catalogue.dart';
 
 /// How the scan is read: the clear film it is measured against (null to estimate it), the light
@@ -114,7 +114,7 @@ Json? rollBalance(List<List?> denseEnds) {
   };
 }
 
-// ── Show Negative (negative-view.js) ────────────────────────────────────────────────────────
+// ── Show Negative ───────────────────────────────────────────────────────────────────────────
 
 const negativeMedium = 'negative';
 
@@ -130,7 +130,7 @@ bool canShowNegative(Json edit, Json? stock) {
 Json negativeViewEdit(Json edit, Json? stock, bool shown) =>
     shown && canShowNegative(edit, stock) ? {...edit, 'medium': negativeMedium} : edit;
 
-// ── Trichromatic merges (useDocumentActions.js) ─────────────────────────────────────────────
+// ── Trichromatic merges ─────────────────────────────────────────────────────────────────────
 
 /// What a trichromatic merge left out, a sentence each: frames it could not merge, blank
 /// exposures, exposures under white light, repeats and loosely lined-up frames.

@@ -103,9 +103,8 @@ final class HostNegativeLightFrames {
     }
 }
 
-/// Scanned negatives in the editor (`web/src/backend/desktop/negative-scans.js`): a scan opens as
-/// a document, its film is the edit's, and every develop of it prints the framed scan through the
-/// edit's own print (`HostEngine.printNegative`).
+/// Scanned negatives in the editor: a scan opens as a document, its film is the edit's, and every
+/// develop of it prints the framed scan through the edit's own print (`HostEngine.printNegative`).
 extension HostService {
     static let negativeScanMethods: Set<String> = [
         "negativeSampleFilmBase", "negativeLightFrames", "negativeAddLightFrame",

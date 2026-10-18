@@ -55,7 +55,7 @@ struct HostPlugin {
 }
 
 extension HostService {
-    /// `plugins`, `installPlugin` and `revealPlugin` (web/src/backend/macos/host.js).
+    /// `plugins`, `installPlugin` and `revealPlugin`.
     func plugin(_ method: String, _ parameters: [String: Any]) throws -> Answer {
         guard let plugins else {
             throw HostEngine.Failure(description: "This host installs no plug-ins.")

@@ -1,6 +1,5 @@
-// The film library (web/src/editor/FilmLibrary.jsx, StockButton.jsx, styles/library.css),
-// compact: Films and Presets, a search field and the film type, and a row for each film with the
-// photograph developed on it. Collapsed, it is a column of pictures.
+// The film library, compact: Films and Presets, a search field and the film type, and a row for
+// each film with the photograph developed on it. Collapsed, it is a column of pictures.
 import 'dart:ui' as ui;
 
 import 'package:flutter/widgets.dart';
@@ -41,7 +40,7 @@ class _FilmLibraryState extends State<FilmLibrary> {
         editor.filmType.holds(stock) &&
         (query.isEmpty ||
             (stock?['name'] as String? ?? 'normal').toLowerCase().contains(query));
-    // A negative is read only as a film that has a negative (useOutputState.js).
+    // A negative is read only as a film that has a negative.
     final negative = isNegative(editor.edit);
     return [
       if (matches(null)) null,
@@ -332,8 +331,7 @@ class _StockRowState extends State<StockRow> with PointerTint {
   }
 }
 
-/// Tells the editor while a film row is on screen, so only shown rows develop their pictures
-/// (useThumbnail.js's IntersectionObserver).
+/// Tells the editor while a film row is on screen, so only shown rows develop their pictures.
 class _ShownRow extends StatefulWidget {
   const _ShownRow({required this.editor, required this.id, required this.child});
   final EditorModel editor;

@@ -1,7 +1,7 @@
-// An edit kept as text (web/src/saved-edits.js, editor-state.js `parseEdit`): what Save Edits
-// writes, what every photograph is kept with between sessions, and what a look file carries. A
-// kept edit is checked before it is used, so a damaged file or a film since removed is reported
-// rather than sent to the engine.
+// An edit kept as text (web/src/editor-state.js `parseEdit`): what Save Edits writes, what every
+// photograph is kept with between sessions, and what a look file carries. A kept edit is checked
+// before it is used, so a damaged file or a film since removed is reported rather than sent
+// to the engine.
 import 'dart:convert';
 
 import 'catalogue.dart';
@@ -201,8 +201,7 @@ Json restoreEdit(String text, Catalogue catalogue, List<Json> stocks) {
 }
 
 /// A newly opened photograph's edit: the default edit on `currentFilm`, with the starting film,
-/// format and film model the settings choose (app-settings.js `newPhotoEdit`). Films the
-/// library lacks are ignored.
+/// format and film model the settings choose. Films the library lacks are ignored.
 Json newPhotoEdit(Catalogue catalogue, AppSettings settings, String? currentFilm,
     Iterable<String> stockIds) {
   final edit = defaultEdit(catalogue, currentFilm);

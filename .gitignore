@@ -3,7 +3,6 @@
 DerivedData/
 .DS_Store
 node_modules/
-web/dist/
 build/
 __pycache__/
 .cache/

@@ -1,6 +1,5 @@
-// What every inspector panel builds with: the edit it shows, and rows for the catalogue's
-// controls (Adjustment.jsx `Adjustments` and ProfileControls.jsx), so a panel only says which
-// controls go in which section.
+// What every inspector panel builds with: the edit it shows, and rows for the catalogue's controls,
+// so a panel only says which controls go in which section.
 import 'package:flutter/widgets.dart';
 
 import '../../model/catalogue.dart';
@@ -58,7 +57,7 @@ class InspectorControls {
       (field == 'printCorrection' && profile['printerEnabled'] == true);
 
   /// The film's profile controls among `fields`, those this film and medium have. A fixed
-  /// profile has none (ProfileFields.jsx).
+  /// profile has none.
   List<Widget> profileControls(List<String> fields) => [
         if (!fixedSettings)
           for (final c in catalogue.profileFields(fields, edit, stock)) _profileControl(c),

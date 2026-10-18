@@ -1,6 +1,5 @@
-// One adjustment, as web/src/Adjustment.jsx lays it out on the compact desktop: the control's
-// name and help, then the slider between its low and high glyphs with the value at its end.
-// Double-click the slider to reset it.
+// One adjustment, as laid out on the compact desktop: the control's name and help, then the slider
+// between its low and high glyphs with the value at its end. Double-click the slider to reset it.
 import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';

@@ -1,7 +1,7 @@
-// The film library's Presets tab (web/src/editor/FilmLibrary.jsx, PresetRow.jsx): a row for each
-// preset whose name matches the search, with the photograph developed as the preset would leave
-// it, as a film's row is with only the film swapped. A row reads chosen while applying it again
-// would change nothing; a click applies it to the photos chosen in the strip.
+// The film library's Presets tab: a row for each preset whose name matches the search, with the
+// photograph developed as the preset would leave it, as a film's row is with only the film swapped.
+// A row reads chosen while applying it again would change nothing; a click applies it to the photos
+// chosen in the strip.
 import 'package:flutter/widgets.dart';
 
 import '../../model/editor.dart';

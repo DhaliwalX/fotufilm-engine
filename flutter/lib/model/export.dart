@@ -1,9 +1,7 @@
-// Export and output, as the React editor does them on the desktop (web/src/editor/
-// useExportActions.js, useExportOptions.js, useOutputState.js, backend/desktop/host.js): one
-// photograph to a file, every photograph into a folder (Export All), a camera RAW as itself
-// (Export Original), the developed picture to the clipboard (Copy Photo), and a movie frame by
-// frame (`exportVideo`, useExportActions.js `exportClip`). The engine develops,
-// encodes and writes; the editor chooses where, as the CEF shell's save panels do.
+// Export and output on the desktop: one photograph to a file, every photograph into a folder
+// (Export All), a camera RAW as itself (Export Original), the developed picture to the clipboard
+// (Copy Photo), and a movie frame by frame (`exportVideo`). The engine develops, encodes and
+// writes; the editor chooses where.
 //
 // Where the engine runs exports beside its develops (the desktop), still exports wait in a
 // queue and run one after another while the person keeps editing: each takes its photographs'
@@ -22,8 +20,7 @@ import 'export_sizes.dart';
 
 export 'export_sizes.dart';
 
-/// The still formats the desktop engine may write, in the order the dialog lists them
-/// (backend/desktop/host.js `EXPORT_LABELS`).
+/// The still formats the desktop engine may write, in the order the dialog lists them.
 const exportTypeLabels = {
   'image/png': 'PNG',
   'image/tiff': 'TIFF · 16-bit',
@@ -35,7 +32,7 @@ const exportTypeLabels = {
 /// Export Original's format: the camera RAW file itself.
 const originalType = 'original';
 
-/// The export sheet's names for each metadata policy (useExportOptions.js `METADATA_LABELS`).
+/// The export sheet's names for each metadata policy.
 const metadataLabels = {
   'preserve': 'Include Location',
   'preserveWithoutLocation': 'Capture Details',
@@ -53,7 +50,7 @@ String cleanName(String name) {
   return cut.isEmpty ? 'photo' : cut;
 }
 
-/// A still's file name: the photograph's, its film and its print medium (useExportActions.js).
+/// A still's file name: the photograph's, its film and its print medium.
 String stillFilename(String name, Json edit, String type) {
   final stock = edit['stock'] as String?;
   final medium = edit['medium'] as String?;
@@ -110,19 +107,19 @@ class ExportTool {
   ExportTool(this.editor);
   final EditorModel editor;
 
-  // The dialog's choices, kept while the editor is open (useEditorState.js).
+  // The dialog's choices, kept while the editor is open.
   String type = 'image/png';
   String size = 'full';
   int quality = 95;
   String metadata = 'preserveWithoutLocation';
 
-  /// A movie's format (useEditorState.js `videoFormat`), one of [videoTypes].
+  /// A movie's format, one of [videoTypes].
   String videoFormat = 'mp4';
 
   /// The engine's answer for the shown photograph; null while unknown.
   ExportOptions? options;
 
-  /// The last export saved, until it is dismissed (SavedExportNotice.jsx).
+  /// The last export saved, until it is dismissed.
   SavedExport? saved;
 
   /// The still exports in the background, the running one first.
@@ -138,8 +135,7 @@ class ExportTool {
   final Set<int> _closed = {};
   bool _pumping = false;
 
-  /// A folder every export goes to without asking, as the CEF shell's --export-dir: for
-  /// scripted checks.
+  /// A folder every export goes to without asking: for scripted checks.
   String? fixedDirectory = environment('FOTUFILM_EXPORT_DIR');
 
   EngineConnection? get _engine => editor.engine;
@@ -207,7 +203,7 @@ class ExportTool {
         }
       : {'type': type, 'size': size, 'quality': quality, 'metadata': metadata};
 
-  // ── Movies (backend/desktop/host.js `videoExportTypes`, ExportDialog.jsx) ───────────────────
+  // ── Movies ────────────────────────────────────────────────────────────────────────────────
 
   bool get _movie => editor.active?.isMovie == true;
 
@@ -251,13 +247,12 @@ class ExportTool {
     editor.notify();
   }
 
-  /// The clip's cadence, kept with its edit as the Mac app keeps it: choosing a rate here sets
-  /// it (ExportDialog.jsx `setVideoFrameRate`).
+  /// The clip's cadence, kept with its edit as the Mac app keeps it: choosing a rate here sets it.
   int? get videoFrameRate => (videoSettings(editor.edit)['frameRate'] as num?)?.toInt();
   set videoFrameRate(int? rate) =>
       editor.change({'video': {...videoSettings(editor.edit), 'frameRate': rate}});
 
-  // ── Sizes (useOutputState.js) ─────────────────────────────────────────────────────────────
+  // ── Sizes ─────────────────────────────────────────────────────────────────────────────────
 
   /// The cropped picture of `doc`, upright, which export sizes are measured on.
   PixelSize cropSize(PhotoDocument doc) {
@@ -299,10 +294,10 @@ class ExportTool {
 
   // ── Requests ──────────────────────────────────────────────────────────────────────────────
 
-  /// A photograph's render request as an export sends it: the finished picture, framed where
-  /// its print frame says (session.js `renderRequest`).
+  /// A photograph's render request as an export sends it: the finished picture, framed where its
+  /// print frame says.
   Json _request(PhotoDocument doc, {int? maxEdge}) {
-    // A movie is never framed (session.js `renderRequest`).
+    // A movie is never framed.
     final frame = doc.isMovie ? null : editor.renderOptions(doc)['printFrame'];
     return {
       ...renderRequest(
@@ -316,7 +311,7 @@ class ExportTool {
     };
   }
 
-  /// Asks what the engine can write for the shown photograph (useExportOptions.js).
+  /// Asks what the engine can write for the shown photograph.
   Future<void> loadOptions() async {
     final doc = editor.active, engine = _engine;
     if (doc == null || engine == null || types.isEmpty || doc.isMovie) return;
@@ -681,7 +676,7 @@ class ExportTool {
     }
   }
 
-  // ── Destinations (the CEF shell's export panels) ──────────────────────────────────────────
+  // ── Destinations ──────────────────────────────────────────────────────────────────────────
 
   Future<String?> _chooseFile(String filename, String type) async {
     if (fixedDirectory case final dir? when dir.isNotEmpty) return '$dir/$filename';

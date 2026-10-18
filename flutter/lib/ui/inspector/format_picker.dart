@@ -1,5 +1,5 @@
-// The film format, chosen by eye (web/src/editor/FormatPicker.jsx): a tile for each gauge with
-// the photograph developed on it, whole or as a magnified detail.
+// The film format, chosen by eye: a tile for each gauge with the photograph developed on it, whole
+// or as a magnified detail.
 import 'dart:ui' as ui;
 
 import 'package:flutter/widgets.dart';

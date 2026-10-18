@@ -1,7 +1,7 @@
-// The Export dialog (web/src/editor/ExportDialog.jsx, styles/dialogs.css): this photograph or
-// all of them, the format (or the original RAW), the size the engine can develop, quality,
-// metadata and HDR, what the file will be, and Cancel that stops an export in flight. A movie
-// offers its formats, sizes, HDR, frame rate, processing and file size instead.
+// The Export dialog: this photograph or all of them, the format (or the original RAW), the size the
+// engine can develop, quality, metadata and HDR, what the file will be, and Cancel that stops an
+// export in flight. A movie offers its formats, sizes, HDR, frame rate, processing and file
+// size instead.
 import 'package:flutter/widgets.dart';
 
 import '../../model/editor.dart';
@@ -27,8 +27,8 @@ class _ExportDialogState extends State<ExportDialog> {
   EditorModel get editor => widget.editor;
   ExportTool get exporter => editor.exporter;
 
-  /// This Photo or All N Photos; each opening starts on the photo, as React's does, or on the
-  /// photos chosen in the strip when there are several.
+  /// This Photo or All N Photos; each opening starts on the photo, or on the photos chosen in the
+  /// strip when there are several.
   late String _scope = exporter.batchChosen ? 'all' : 'photo';
 
   @override
@@ -170,8 +170,7 @@ class _ExportDialogState extends State<ExportDialog> {
                     padding: const EdgeInsets.symmetric(vertical: 6),
                     child: SwitchRow(label: 'HDR', value: x.hdr, onChanged: (v) => x.hdr = v),
                   ),
-                // The desktop engine writes Display P3 (backend/desktop/host.js
-                // `outputColorSpace`).
+                // The desktop engine writes Display P3.
                 _Detail('${batch ? '$count photos' : '${delivered.width} × ${delivered.height} '
                     'pixels'} · Display P3 · '
                     '${x.type == 'image/tiff' ? '16-bit' : hdr ? 'HDR' : '8-bit'}'),
@@ -193,7 +192,7 @@ class _ExportDialogState extends State<ExportDialog> {
     );
   }
 
-  /// A movie's export (ExportDialog.jsx with `image.video`).
+  /// A movie's export.
   Widget _buildMovie(BuildContext context, PhotoDocument doc) {
     final x = exporter;
     final exporting = editor.exporting;
@@ -295,7 +294,7 @@ class _ExportDialogState extends State<ExportDialog> {
     );
   }
 
-  /// The last settings equal the dialog's, as React compares them.
+  /// The last settings equal the dialog's.
   static bool _same(Json a, Json b) =>
       a.length == b.length && a.entries.every((e) => b[e.key] == e.value);
 }

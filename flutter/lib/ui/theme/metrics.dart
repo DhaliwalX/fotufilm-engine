@@ -11,7 +11,7 @@ abstract final class Metrics {
   /// Room left of the brand for the macOS traffic lights, which sit in the toolbar.
   static const trafficLightInset = 74.0;
 
-  /// The leading toolbar group's least width (toolbar.css `.toolbar-leading`).
+  /// The leading toolbar group's least width.
   static const toolbarLeadingWidth = 224.0;
   static const toolbarGap = 2.0;
 
@@ -22,7 +22,7 @@ abstract final class Metrics {
   static const pictureMin = 420.0;
   static const resizerHit = 8.0;
 
-  // ── Compact layout (styles/phone-layout.css, phone-controls.css) ────────────────────────────
+  // ── Compact layout ─────────────────────────────────────────────────────────────────────────
   static const compactToolbarRow = 48.0;
   static const compactTouch = 44.0;
   static const compactRail = 60.0;
@@ -74,7 +74,7 @@ abstract final class Metrics {
   static const stockThumb = Size(42, 32);
   static const stockThumbCollapsed = Size(40, 40);
 
-  // ── Video controls (styles/video.css) ─────────────────────────────────────────────────────
+  // ── Video controls ─────────────────────────────────────────────────────────────────────────
   static const videoPadding = EdgeInsets.fromLTRB(18, 10, 18, 6);
   static const videoPaddingCompact = EdgeInsets.fromLTRB(12, 8, 12, 4);
   static const videoButton = 28.0;

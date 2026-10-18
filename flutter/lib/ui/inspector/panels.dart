@@ -1,5 +1,5 @@
-// Which sections each inspector panel shows (EditorInspector.jsx). Each panel lives in its own
-// file; this is the one place that names them all.
+// Which sections each inspector panel shows. Each panel lives in its own file; this is the one
+// place that names them all.
 import 'package:flutter/widgets.dart';
 
 import '../../model/editor.dart';
@@ -15,7 +15,7 @@ import 'roll_panel.dart';
 import 'selective_panel.dart';
 
 List<Widget> panelSections(Panel panel, InspectorControls controls) => switch (panel) {
-      // A scanned negative's Film panel is its reading (EditorInspector.jsx).
+      // A scanned negative's Film panel is its reading.
       Panel.film when controls.edit['negative'] != null => negativePanel(controls),
       Panel.film => filmPanel(controls),
       Panel.light => exposePanel(controls),

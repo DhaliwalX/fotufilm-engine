@@ -1,6 +1,6 @@
-// The editor's icons as web/src/icons.jsx draws them: Fotufilm's own glyphs where the set has
-// one (glyph-names.js ICON_GLYPHS), Material Symbols Rounded otherwise. Glyphs colour their
-// primary layer with the text colour and their coloured parts with the system colours.
+// The editor's icons: Fotufilm's own glyphs where the set has one, Material Symbols Rounded
+// otherwise. Glyphs colour their primary layer with the text colour and their coloured parts with
+// the system colours.
 import 'dart:convert';
 
 import 'package:flutter/services.dart';

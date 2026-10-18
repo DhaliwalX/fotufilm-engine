@@ -1,7 +1,6 @@
 // The editor's state and actions: the engine and its films, the open photographs and their edit
-// histories, and the workspace (panels, zoom, histogram). It follows the React editor's model
-// (web/src/editor/useEditorModel.js); what the engine develops and when is the Renderer's
-// business (renderer.dart).
+// histories, and the workspace (panels, zoom, histogram). What the engine develops and when is the
+// Renderer's business (renderer.dart).
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -135,8 +134,8 @@ class EditorModel extends ChangeNotifier implements RenderHost {
   @override
   Json? stockById(String? id) => id == null ? null : _stockById[id];
 
-  /// The film rows on screen (FilmLibrary), the only ones whose pictures develop, as React's
-  /// useThumbnail.js develops a row once it scrolls into view.
+  /// The film rows on screen (FilmLibrary), the only ones whose pictures develop: a row develops
+  /// once it scrolls into view.
   /// Under the photo library none are on screen.
   @override
   Set<String> get shownFilmRows => library.open ? const {} : _shownFilmRows.keys.toSet();
@@ -206,8 +205,8 @@ class EditorModel extends ChangeNotifier implements RenderHost {
   }
   String? _error;
 
-  /// What the banner's Retry does again (EditorViewer.jsx's `setRetry`): opening the files that
-  /// failed, or developing the photograph again. Null offers no Retry.
+  /// What the banner's Retry does again: opening the files that failed, or developing the
+  /// photograph again. Null offers no Retry.
   Future<void> Function()? _retry;
   bool get canRetry => _retry != null;
 
@@ -237,9 +236,9 @@ class EditorModel extends ChangeNotifier implements RenderHost {
   late final printFrame = PrintFrame(this);
   late final bandSets = BandSets(catalogue, settings);
 
-  /// What the foreground develops ask the engine for beyond the edit (session.js
-  /// `renderRequest`): the crop tool's uncropped frame, a pipeline stage, the selection's mask.
-  /// Features add to it through [renderOptionSources].
+  /// What the foreground develops ask the engine for beyond the edit: the crop tool's uncropped
+  /// frame, a pipeline stage, the selection's mask. Features add to it through
+  /// [renderOptionSources].
   @override
   Json renderOptions(PhotoDocument doc) => {
         for (final source in renderOptionSources) ...source(doc),
@@ -339,8 +338,7 @@ class EditorModel extends ChangeNotifier implements RenderHost {
   // ── Opening and closing ───────────────────────────────────────────────────────────────────
 
   /// Opens photographs the system named by path (the Finder, the command line, the driver); one
-  /// brings its folder into the strip. Film packs among them are installed instead
-  /// (useFilmPacks.js `acceptWithPacks`).
+  /// brings its folder into the strip. Film packs among them are installed instead.
   Future<void> openPaths(List<String> paths) async {
     final packs = paths.where(isFilmPack).toList();
     if (packs.isNotEmpty) await filmPacks.importPaths(packs);

@@ -1,5 +1,5 @@
-// The toolbar's Add media button (web/src/editor/ImportMenu.jsx): a menu of what to import, an
-// image, a video or a scanned negative, and exposures to merge into trichromatic scans.
+// The toolbar's Add media button: a menu of what to import, an image, a video or a scanned
+// negative, and exposures to merge into trichromatic scans.
 import 'package:flutter/widgets.dart';
 
 import '../../model/editor.dart';

@@ -6,9 +6,9 @@ import FotufilmCore
 import FotufilmEditModel
 #endif
 
-/// The editor's video calls (`web/src/backend/macos/video-import.js` and `host.js`): a movie
-/// arrives in chunks, becomes an image whose pixels are the frame each render selects, and
-/// exports frame by frame through the same geometry and develop as its previews.
+/// The editor's video calls: a movie arrives in chunks, becomes an image whose pixels are the frame
+/// each render selects, and exports frame by frame through the same geometry and develop as
+/// its previews.
 extension HostService {
     /// `call` for hosts that show progress: a movie export reports `{progress, frames,
     /// finalizing}`, Export All `{progress, done, total, name?, current?}`, Merge Trichromatic

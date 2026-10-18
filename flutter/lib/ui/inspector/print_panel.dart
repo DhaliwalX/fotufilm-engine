@@ -1,5 +1,5 @@
-// The Print panel (web/src/editor/PrintInspector.jsx): the output medium and its receiver bands,
-// the screen conversion or the print's controls, the enlarger's lamp, the frame, and export.
+// The Print panel: the output medium and its receiver bands, the screen conversion or the print's
+// controls, the enlarger's lamp, the frame, and export.
 import 'package:flutter/widgets.dart';
 
 import '../../model/catalogue.dart';

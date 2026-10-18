@@ -2,8 +2,8 @@ import { attachLinearPreview } from './linear-preview.js'
 import { readPhotoMetadata } from './photo-metadata.js'
 import { assetUrl } from './engine.js'
 
-// Treat a decoded RAW like an image resource. Pixel buffers must stay opaque to
-// React/devtools state inspection, which can otherwise enumerate millions of samples.
+// Treat a decoded RAW like an image resource. Pixel buffers must stay opaque to state
+// inspection, which can otherwise enumerate millions of samples.
 class RawImage {
   #pixels
   constructor(width, height, data, colors, sceneScale, profile, sceneKelvin, lensShot) {

@@ -43,7 +43,7 @@ public final class HostImage {
     /// edit's drafts and the film strip's thumbnails. A draft was made from another reduction.
     private var reductions: [(width: Int, height: Int, rgba: [Float], draft: Bool)] = []
 
-    /// What the editor's image descriptor says about the source (`web/src/backend/README.md`).
+    /// What the editor's image descriptor says about the source.
     var descriptor: [String: Any] {
         var descriptor: [String: Any] = ["naturalWidth": width, "naturalHeight": height]
         if contentHeadroom > 1 { descriptor["hdr"] = ["headroom": contentHeadroom] }
@@ -238,7 +238,7 @@ public final class HostEngine {
     private static let warmHeight = 128
 
     public var backend: String { developer.kind }
-    /// The name the editor shows (`web/src/editor/ViewerStatus.jsx`).
+    /// The name the editor shows.
     public var backendName: String { developer.name }
     public var stockIDs: [String] {
         let stocks = self.stocks

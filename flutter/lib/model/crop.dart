@@ -1,7 +1,6 @@
-// The crop tool's state and actions (web/src/CropControls.jsx, editor/CropInspector.jsx and
-// editor/usePreviewState.js). While it is open the viewer shows the whole oriented frame, developed
-// with `cropMode` and the crop left out, with the crop drawn over it; Done shows the cropped
-// photograph again.
+// The crop tool's state and actions. While it is open the viewer shows the whole oriented frame,
+// developed with `cropMode` and the crop left out, with the crop drawn over it; Done shows the
+// cropped photograph again.
 import 'dart:ui';
 
 import 'crop_geometry.dart';
@@ -16,11 +15,11 @@ class CropTool {
 
   final EditorModel editor;
 
-  /// The aspect picker's choices (CropControls.jsx `aspects`).
+  /// The aspect picker's choices.
   static const aspects = ['free', 'original', '1:1', '4:5', '3:2', '16:9'];
 
-  /// Whether the tool is open, so the viewer shows the uncropped frame (usePreviewState.js
-  /// `cropMode`): the crop panel, with the inspector showing it.
+  /// Whether the tool is open, so the viewer shows the uncropped frame (`cropMode`): the crop
+  /// panel, with the inspector showing it.
   bool get showing => editor.panel == Panel.crop && editor.inspectorOpen;
 
   Json get _edit => editor.edit;
@@ -55,7 +54,7 @@ class CropTool {
             ..['ratio'] = 'free',
         };
 
-  /// Opening the tool fits the frame: it is cropped at the size it fits (ImageCanvas.jsx).
+  /// Opening the tool fits the frame: it is cropped at the size it fits.
   bool _wasShowing = false;
   void _follow() {
     if (showing == _wasShowing) return;
@@ -69,7 +68,7 @@ class CropTool {
     if (editor.active != null) editor.toggleTool(Panel.crop);
   }
 
-  /// Leaves the tool for the Film panel, as Done and Esc do (CropInspector.jsx).
+  /// Leaves the tool for the Film panel, as Done and Esc do.
   void leave() {
     if (editor.panel == Panel.crop) editor.setPanel(Panel.film);
   }

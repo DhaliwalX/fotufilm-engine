@@ -1,7 +1,7 @@
-// The selective tool (web/src/selective.js, SelectiveControls.jsx, editor/useSceneSampling.js): a
-// selection by a colour or a light sampled from the photograph, or by its subjects, developed with
-// its own light and colour. The selection is the edit's `selective`; sampling and the mask are the
-// tool's, and end when it closes or another photograph is shown.
+// The selective tool (web/src/selective.js): a selection by a colour or a light sampled from the
+// photograph, or by its subjects, developed with its own light and colour. The selection is the
+// edit's `selective`; sampling and the mask are the tool's, and end when it closes or another
+// photograph is shown.
 import 'package:flutter/foundation.dart';
 
 import '../engine/engine.dart';
@@ -53,7 +53,7 @@ List<double>? frameSamplePoint(List<double> point, Map? plan) {
 }
 
 /// What the inspector says of a subject selection's subjects: still looking, none, one or many
-/// (SelectiveControls.jsx `found`, from the catalogue's `subjectsFound`).
+/// (from the catalogue's `subjectsFound`).
 String subjectsFound(List<String> texts, int? count) => switch (count) {
       null => texts[0],
       0 => texts[1],
@@ -105,7 +105,7 @@ class SelectiveTool extends ChangeNotifier {
 
   Json _options(PhotoDocument doc) => open && showMask ? const {'showMask': true} : const {};
 
-  /// Another tool or photograph ends sampling and the mask (useEditingActions.js `setInspector`).
+  /// Another tool or photograph ends sampling and the mask.
   /// The editor is notifying already, and the mask's option reads `open` besides.
   void _follow() {
     final doc = editor.active;

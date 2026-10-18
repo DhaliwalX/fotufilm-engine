@@ -1,5 +1,5 @@
-// The Film panel (web/src/editor/FilmInspector.jsx): the loaded film, its format chosen by eye,
-// its condition and its halation. A film with a fixed profile has none of its settings.
+// The Film panel: the loaded film, its format chosen by eye, its condition and its halation. A film
+// with a fixed profile has none of its settings.
 import 'package:flutter/widgets.dart';
 
 import '../../model/editor.dart';

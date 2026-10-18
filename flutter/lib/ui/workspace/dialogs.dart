@@ -1,5 +1,5 @@
-// The workspace's dialogs (styles/dialogs.css): the card they share. Export and the keyboard
-// shortcuts have their own files (export_dialog.dart, shortcuts_dialog.dart).
+// The workspace's dialogs: the card they share. Export and the keyboard shortcuts have their own
+// files (export_dialog.dart, shortcuts_dialog.dart).
 import 'package:flutter/widgets.dart';
 
 import '../theme/theme.dart';

@@ -1,6 +1,5 @@
-// What an import did, as the Mac app's alert says it (web/src/editor/FilmPackNotice.jsx): "Pack
-// added" with the pack and its films, "Pack not added" and why, or that the pack needs a newer
-// Fotufilm, which offers the update.
+// What an import did, as the Mac app's alert says it: "Pack added" with the pack and its films,
+// "Pack not added" and why, or that the pack needs a newer Fotufilm, which offers the update.
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/widgets.dart';
 

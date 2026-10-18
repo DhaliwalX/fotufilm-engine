@@ -1,8 +1,8 @@
-// Auto Adjust (web/src/auto-adjustment.js, useAutoAdjustment.js): a mode, not a one-off. While it
-// is on, the engine fits exposure, highlights and shadows inside the film's latitude, and fits
-// them again when the latitude (the film, its channel contrast match) or the framing changes. A
-// manual tone edit, an undo or a paste turns it off; the solved values stay, as ordinary steps of
-// the history. A generation number keeps an old measurement from landing on a newer edit.
+// Auto Adjust: a mode, not a one-off. While it is on, the engine fits exposure, highlights and
+// shadows inside the film's latitude, and fits them again when the latitude (the film, its channel
+// contrast match) or the framing changes. A manual tone edit, an undo or a paste turns it off; the
+// solved values stay, as ordinary steps of the history. A generation number keeps an old
+// measurement from landing on a newer edit.
 import 'dart:async';
 
 import 'editor.dart';

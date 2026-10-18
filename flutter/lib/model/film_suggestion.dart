@@ -1,7 +1,7 @@
-// Choose Film Per Photo, as the Mac app does it (web/src/editor/useFilmSuggestion.js): with the
-// `autoFilm` setting on, a photograph shown for the first time is ranked against every film and
-// takes the best, unless its film was changed meanwhile or it opened with a kept edit. The film a
-// photograph settles on is recorded, so the ranking learns this person's taste.
+// Choose Film Per Photo, as the Mac app does it: with the `autoFilm` setting on, a photograph shown
+// for the first time is ranked against every film and takes the best, unless its film was changed
+// meanwhile or it opened with a kept edit. The film a photograph settles on is recorded, so the
+// ranking learns this person's taste.
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';

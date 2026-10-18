@@ -1,8 +1,7 @@
 // The histogram of the developed picture, measured as the web editor's analyser does
 // (web/src/histogram-model.js, histogram-color.js): the preview reduced to a 256-pixel long edge,
 // transparent pixels skipped, 256 bins for red, green, blue, luma, the two chroma differences and
-// OKLab's L, a and b. What each view plots, and how its count axis reads, follows
-// web/src/histogram-views.js and histogram-curves.js.
+// OKLab's L, a and b.
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -139,7 +138,7 @@ class HistogramData {
 }
 
 /// A histogram view: the channels it plots, its legend (label and colour name) and the ticks
-/// under it (histogram-views.js).
+/// under it.
 class HistogramView {
   const HistogramView(this.id, this.channels, this.description, this.legend, this.ticks,
       {this.centered = false});

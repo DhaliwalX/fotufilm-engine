@@ -1,6 +1,6 @@
-// The Mac app's Settings window (web/src/editor/SettingsDialog.jsx): what new photographs start
-// on, how photos export, and the film model. Everything here is kept on this device; open
-// photographs keep their own edits. Video's settings wait for video in this editor.
+// The Mac app's Settings window: what new photographs start on, how photos export, and the film
+// model. Everything here is kept on this device; open photographs keep their own edits. Video's
+// settings wait for video in this editor.
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/widgets.dart';
 
@@ -176,7 +176,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
   }
 
   /// Video Quality, HDR and Video File Size where the engine's platform offers them, and the
-  /// transport's Playback Quality where it plays movies (SettingsDialog.jsx `Output`).
+  /// transport's Playback Quality where it plays movies.
   List<Widget> _video() {
     final exporter = widget.editor.exporter;
     final playable = widget.editor.engine?.capabilities['video'] == true;

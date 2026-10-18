@@ -1,9 +1,9 @@
 /*
  * Fotufilm engine C interface.
  *
- * One edit, one develop: a host passes the request the web editor's native backend sends
- * (web/src/backend/macos/session.js) as JSON and gets the developed picture in its own buffer.
- * The request is translated through the same edit model the plug-ins and the apps use.
+ * One edit, one develop: a host passes the request the editor sends as JSON and gets the developed
+ * picture in its own buffer. The request is translated through the same edit model the plug-ins and
+ * the apps use.
  *
  * Every function is thread-safe. Renders on one engine run one at a time; a host that wants
  * the newest edit only calls fotufilm_engine_cancel before starting the next render. A still
@@ -88,10 +88,10 @@ int32_t fotufilm_render(fotufilm_engine *engine, fotufilm_image *image, const ch
                         const fotufilm_render_target *target, fotufilm_render_info *info,
                         char **error);
 
-/* The web editor's backend calls (web/src/backend/macos/host.js), answered in the engine:
- * `method` with JSON `params` and optional bytes. The answer is JSON; images it returns are
- * named byte ranges of `payload`, listed in the JSON as "payloads": {"name": [offset, length]},
- * each range starting on a 64-byte boundary. Free the answer with fotufilm_answer_free. */
+/* The editor's backend calls, answered in the engine: `method` with JSON `params` and optional
+ * bytes. The answer is JSON; images it returns are named byte ranges of `payload`, listed in the
+ * JSON as "payloads": {"name": [offset, length]}, each range starting on a 64-byte boundary. Free
+ * the answer with fotufilm_answer_free. */
 typedef struct fotufilm_answer {
     char *json;
     uint8_t *payload;

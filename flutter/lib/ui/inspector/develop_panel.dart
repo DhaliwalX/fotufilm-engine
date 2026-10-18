@@ -1,5 +1,4 @@
-// The Develop panel (web/src/editor/DevelopInspector.jsx): push and bleach, grain, and the
-// film's colour separation.
+// The Develop panel: push and bleach, grain, and the film's colour separation.
 import 'package:flutter/widgets.dart';
 
 import '../kit/kit.dart';
