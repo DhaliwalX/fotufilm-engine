@@ -1,0 +1,39 @@
+name: fotufilm_flutter
+description: "A native Flutter prototype of the Fotufilm desktop editor."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.11.5
+
+dependencies:
+  desktop_drop: ^0.8.4
+  ffi: ^2.2.0
+  file_selector: ^1.1.0
+  flutter:
+    sdk: flutter
+  flutter_svg: ^2.3.0
+  shared_preferences: ^2.5.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: false
+  shaders:
+    - shaders/display_p3_to_srgb.frag
+  # Staged by tool/prepare.sh from web/ and Fontshare; not committed.
+  assets:
+    - assets/generated/
+    - assets/generated/glyphs/
+  fonts:
+    - family: Satoshi
+      fonts:
+        - asset: assets/generated/fonts/Satoshi-Regular.otf
+          weight: 400
+        - asset: assets/generated/fonts/Satoshi-Medium.otf
+          weight: 500
+        - asset: assets/generated/fonts/Satoshi-Bold.otf
+          weight: 700

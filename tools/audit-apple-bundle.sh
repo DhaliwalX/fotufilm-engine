@@ -44,12 +44,14 @@ done < <(find "$BUNDLE" -type f -name rec2020-reflectance-prior.coeff -print)
 # BundledCameraProfiles.swift reads them from exactly there under SWIFT_PACKAGE, so a flat layout
 # is the shipping arrangement rather than a packaging slip. Xcode also emits version.json inside
 # signed App Intents metadata directories; it describes the generated metadata format, not
-# repository content.
+# repository content. The Flutter editor's assets hold its asset and font manifests and the
+# public control catalogue and symbol list it is built from (flutter/tool/prepare.sh).
 while IFS= read -r json; do
   [[ "$json" == */Stocks/*.json || \
      "$json" == */CameraProfiles/*.json || \
      "$json" == *_FotufilmCore.bundle/*.json || \
      "$json" == */Metadata.appintents/version.json || \
+     "$json" == */App.framework/Versions/A/Resources/flutter_assets/*.json || \
      "$json" == */"Chromium Embedded Framework.framework/Libraries/vk_swiftshader_icd.json" ]] || \
     report "unexpected plaintext JSON reached the bundle: $json"
 done < <(find "$BUNDLE" -type f -name '*.json' -print)

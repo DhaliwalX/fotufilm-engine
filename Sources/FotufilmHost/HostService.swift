@@ -21,6 +21,9 @@ public final class HostService {
     public unowned let engine: HostEngine
     private let lock = NSLock()
     private var images: [Int: HostImage] = [:]
+    /// The files photographs and movies were opened from in place. Edits never touch them, and
+    /// no export may be written over one (`refuseOriginal`).
+    private var sourceFiles: [Int: URL] = [:]
     private var nextHandle = 1
     /// The last develop, kept so panning a zoomed picture only cuts new tiles from it: 8-bit
     /// Display P3, or extended-linear half floats when it was developed for an EDR layer.
@@ -110,21 +113,31 @@ public final class HostService {
                     if image.isRAW { image.originalFile = url }
                     return image
                 }())
-            // What the editor keeps this file's last edit under.
-            if let identity = HostFileIdentity.identity(of: url, isMovie: isMovie),
-               var body = try JSONSerialization.jsonObject(with: opened.json) as? [String: Any] {
-                body["identity"] = identity
-                opened.json = try JSONSerialization.data(withJSONObject: body)
+            if var body = try JSONSerialization.jsonObject(with: opened.json) as? [String: Any] {
+                if let handle = body["handle"] as? Int {
+                    lock.lock()
+                    sourceFiles[handle] = url
+                    lock.unlock()
+                }
+                // What the editor keeps this file's last edit under.
+                if let identity = HostFileIdentity.identity(of: url, isMovie: isMovie) {
+                    body["identity"] = identity
+                    opened.json = try JSONSerialization.data(withJSONObject: body)
+                }
             }
             return opened
         case "exportOriginal":
             return try answer(exportOriginal(parameters))
+        case "cancelBackground":
+            engine.cancelBackground()
+            return try answer([:])
         case "thumbnail":
             return try thumbnail(parameters, payload: payload)
         case "release":
             if let handle = parameters["handle"] as? Int {
                 lock.lock()
                 images[handle] = nil
+                sourceFiles[handle] = nil
                 lock.unlock()
             }
             videos.release(parameters["handle"])
@@ -273,11 +286,39 @@ public final class HostService {
             throw HostEngine.Failure(description: "No destination was chosen.")
         }
         let destination = URL(fileURLWithPath: path)
-        if destination.standardizedFileURL != source.standardizedFileURL {
+        // Saved onto itself, the original is already there.
+        if !Self.sameFile(destination, source) {
+            try refuseOriginal(destination)
             try? FileManager.default.removeItem(at: destination)
             try FileManager.default.copyItem(at: source, to: destination)
         }
         return ["filename": destination.lastPathComponent, "path": destination.path]
+    }
+
+    /// Edits are non-destructive: an export chosen over a file a photograph or movie was opened
+    /// from is refused before anything is written, however the path names it (case, links).
+    func refuseOriginal(_ destination: URL) throws {
+        lock.lock()
+        let opened = Array(sourceFiles.values)
+        lock.unlock()
+        if opened.contains(where: { Self.sameFile(destination, $0) }) {
+            throw HostEngine.Failure(description:
+                "\(destination.lastPathComponent) is an original. Fotufilm never writes over one; "
+                + "choose another name or folder.")
+        }
+    }
+
+    /// Whether two paths name one file: by the file system's identity where both exist.
+    static func sameFile(_ a: URL, _ b: URL) -> Bool {
+        // A link's own identity is not its file's.
+        let a = a.resolvingSymlinksInPath().standardizedFileURL
+        let b = b.resolvingSymlinksInPath().standardizedFileURL
+        let key: Set<URLResourceKey> = [.fileResourceIdentifierKey]
+        if let x = try? a.resourceValues(forKeys: key).fileResourceIdentifier,
+           let y = try? b.resourceValues(forKeys: key).fileResourceIdentifier {
+            return x.isEqual(y)
+        }
+        return a.path == b.path
     }
 
     /// Keeps a decoded photograph under a new handle and describes it to the editor.
@@ -864,6 +905,7 @@ public final class HostService {
         guard let path = parameters["path"] as? String else {
             throw HostEngine.Failure(description: "No destination was chosen.")
         }
+        try refuseOriginal(URL(fileURLWithPath: path))
         guard let encoder = HostPlatform.current.encoder else {
             throw HostEngine.Failure(description: "This build has no image encoder.")
         }

@@ -15,6 +15,14 @@ extension HostService {
     /// Scans `{progress, status}`.
     public func call(_ method: String, params: Data, payload: UnsafeRawBufferPointer?,
                      progress: @escaping ([String: Any]) -> Void) throws -> Answer {
+        // An export the host runs beside the editor's develops answers only `cancelBackground`.
+        if HostEngine.scope == .foreground, Self.backgroundMethods.contains(method),
+           ((try? JSONSerialization.jsonObject(with: params)) as? [String: Any])?["background"]
+            as? Bool == true {
+            return try HostEngine.$scope.withValue(.background) {
+                try call(method, params: params, payload: payload, progress: progress)
+            }
+        }
         switch method {
         case "exportVideo":
             return try video(method, params: params, payload: payload, progress: progress)
@@ -28,6 +36,9 @@ extension HostService {
             return try call(method, params: params, payload: payload)
         }
     }
+
+    /// The calls a host may run in the background: still exports, which develop whole frames.
+    static let backgroundMethods: Set<String> = ["export", "exportBatch", "exportOriginal"]
 
     func video(_ method: String, params: Data, payload: UnsafeRawBufferPointer?,
                progress: (([String: Any]) -> Void)?) throws -> Answer {
@@ -97,6 +108,7 @@ extension HostService {
         guard let path = parameters["path"] as? String else {
             throw HostEngine.Failure(description: "No destination was chosen.")
         }
+        try refuseOriginal(URL(fileURLWithPath: path))
         let formatID = parameters["format"] as? String ?? "mp4"
         guard let writers = HostPlatform.current.videoWriter,
               let format = writers.formats.first(where: { $0.id == formatID }) else {

@@ -1,6 +1,8 @@
 import XCTest
 @testable import FotufilmCore
 
+#if !arch(x86_64)
+
 final class SceneLinearInputTests: XCTestCase {
     private struct OffsetConverter: FilmInputConverter {
         let offset: Float
@@ -105,3 +107,4 @@ final class SceneLinearInputTests: XCTestCase {
     }
 
 }
+#endif

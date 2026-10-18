@@ -1,0 +1,14 @@
+// The app's name, version and identity. A source build is an app of its own, with no release
+// feed; build.sh writes Build.xcconfig with version.env's version and, for an official build
+// (FOTUFILM_SOURCE_BUILD=0), the Mac app's identity and feed, so it replaces the installed app in
+// place, as cef/build.sh does.
+PRODUCT_NAME = Fotufilm
+FOTUFILM_MARKETING_VERSION = $(FLUTTER_BUILD_NAME)
+FOTUFILM_BUNDLE_ID = com.muastudio.fotufilm.source
+FOTUFILM_UPDATE_FEED =
+FOTUFILM_RELEASE_LIST =
+#include? "Build.xcconfig"
+PRODUCT_BUNDLE_IDENTIFIER = $(FOTUFILM_BUNDLE_ID)
+
+// The copyright displayed in application information
+PRODUCT_COPYRIGHT = Copyright © 2026 MUAStudio Inc. All rights reserved.

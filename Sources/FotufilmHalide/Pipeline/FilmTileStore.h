@@ -26,8 +26,9 @@ public:
     static constexpr int64_t kCount = int64_t(kEntries) * FOTUFILM_FILM_TILE_LEVELS * 3;
     using Upload = int (*)(Tiles &);
 
+    /// Never destroyed: a develop on another thread may still read it while the process exits.
     static BasicFilmTileStore &shared() {
-        static BasicFilmTileStore store;
+        static BasicFilmTileStore &store = *new BasicFilmTileStore;
         return store;
     }
 
@@ -74,7 +75,10 @@ public:
     /// Frees the device copies, keeping the tiles; the next frame uploads them again.
     void device_free() {
         std::lock_guard<std::mutex> lock(mutex_);
-        for (auto &entry : tiles_) entry.second.device_free();
+        for (auto &entry : tiles_) {
+            entry.second.device_free();
+            entry.second.set_host_dirty();
+        }
         stand_in_.device_free();
         stand_in_ready_ = false;
     }

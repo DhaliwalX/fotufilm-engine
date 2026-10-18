@@ -76,6 +76,10 @@ std::vector<uint8_t> exportExif(const uint8_t *data, size_t length, bool keepLoc
 /// The ASCII records of the first directory (tag, text), for formats that carry only those.
 std::vector<std::pair<uint16_t, std::string>> exifText(const uint8_t *data, size_t length);
 
+/// What a file holds, by its first bytes (LibRaw names the RAW containers only it knows).
+enum class Kind { Unknown, JPEG, PNG, TIFF, EXR, HEIF, RAW };
+Kind sniff(const std::string &path);
+
 Raster decodeJPEG(const std::string &path, ffc_capture &capture);
 Raster decodePNG(const std::string &path, ffc_capture &capture);
 Raster decodeTIFF(const std::string &path, ffc_capture &capture);
@@ -83,6 +87,16 @@ Raster decodeEXR(const std::string &path, ffc_capture &capture);
 Raster decodeHEIF(const std::string &path, ffc_capture &capture);
 /// Whether libheif has an HEVC encoder here.
 bool heifEncodes();
+// Thumbnails (Thumbnail.cpp): each format read as little as its small picture needs.
+/// JPEG bytes decoded at the coarsest DCT scale that keeps the long edge at least `minEdge`, with
+/// the stream's ICC profile and the Exif orientation still to apply.
+Raster decodeJPEGReduced(const uint8_t *bytes, size_t length, uint32_t minEdge);
+/// A HEIF's stored thumbnail whose long edge reaches `minEdge`, else its primary image, upright.
+Raster decodeHEIFReduced(const std::string &path, uint32_t minEdge);
+/// An 8-bit grey or RGB raster as RGBA8 Display P3 codes (sRGB curve, opaque), through the colour
+/// its encoding states.
+std::vector<uint8_t> displayP3Codes(const Raster &raster);
+
 /// A camera RAW straight to linear Rec. 2020 (`RawDecode.cpp`).
 void decodeRaw(const std::string &path, uint32_t options, uint32_t longEdge, ffc_image &out);
 

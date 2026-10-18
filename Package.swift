@@ -54,12 +54,14 @@ let halideGPUCXXSettings: [CXXSetting] = halideRoot != nil
 
 // SwiftPM builds every test file before applying filters; exclude Apple-only fixtures on Linux.
 let appleOnlyTests = [
-    // Unguarded CoreGraphics/CoreImage/ImageIO: these five reach Apple's frameworks directly.
+    // Unguarded CoreGraphics/CoreImage/ImageIO: these seven reach Apple's frameworks directly.
     "RGBAImage.swift",
     "GamutShowcaseTool.swift",
     "LensCorpusHarness.swift",
     "LensCorrectionFilterTests.swift",
     "UnitCropCoordinatesTests.swift",
+    "GrainABTool.swift",
+    "NegativeScanFramingTests.swift",
     // Image comparisons use ImageIO through RGBAImage.
     "PrintDifference.swift",
     "CatalogueStocks.swift",
@@ -161,8 +163,10 @@ let package = Package(
                                                  condition: .when(platforms: [.macOS]))]),
         .testTarget(
             name: "FotufilmCoreTests",
-            dependencies: ["FotufilmCore", "FotufilmMetal", "FotufilmImaging",
-                           "FotufilmStockMatch"],
+            dependencies: ["FotufilmCore",
+                           .target(name: "FotufilmMetal",
+                                   condition: .when(platforms: [.macOS, .iOS])),
+                           "FotufilmImaging", "FotufilmStockMatch"],
             exclude: appleOnlyTests
         ),
         .testTarget(

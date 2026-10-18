@@ -362,6 +362,44 @@ extension CInterfaceTests {
             payload: nil))
     }
 
+    /// Edits are non-destructive: an export chosen over the file a photograph was opened from,
+    /// by its own path, through a link or in other letter case, is refused and the file kept.
+    func testExportsNeverWriteOverTheOriginal() throws {
+        let engine = try makeEngine()
+        defer { fotufilm_engine_destroy(engine) }
+        let service = Unmanaged<HostEngine>.fromOpaque(UnsafeRawPointer(engine))
+            .takeUnretainedValue().service
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("fotufilm-originals-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let url = folder.appendingPathComponent("photo.png")
+        try writeRamp(to: url, width: 32, height: 16)
+        let bytes = try Data(contentsOf: url)
+        let link = folder.appendingPathComponent("link.png")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: url)
+        let opened = try service.call("importPath", params: Data(#"{"path": "\#(url.path)"}"#.utf8),
+                                      payload: nil)
+        let handle = try XCTUnwrap(
+            (JSONSerialization.jsonObject(with: opened.json) as? [String: Any])?["handle"] as? Int)
+        func export(to target: URL) throws {
+            _ = try service.call("export", params: Data("""
+            {"handle": \(handle), "maxEdge": null, "type": "image/png", "path": "\(target.path)",
+             "edit": {"params": {}}, "profileRequest": {"controls": {}}}
+            """.utf8), payload: nil)
+        }
+        var targets = [url, link]
+        let otherCase = folder.appendingPathComponent("PHOTO.png")
+        if FileManager.default.fileExists(atPath: otherCase.path) { targets.append(otherCase) }
+        for target in targets {
+            XCTAssertThrowsError(try export(to: target), target.lastPathComponent)
+        }
+        XCTAssertEqual(try Data(contentsOf: url), bytes)
+        // Anywhere else is written as before.
+        try export(to: folder.appendingPathComponent("photo-normal.png"))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: folder.appendingPathComponent("photo-normal.png").path))
+    }
+
     /// A gauge nobody picked follows the frame the file's camera exposed, as the Mac app develops
     /// it: an iPhone-sized sensor lands on the nearest small gauge rather than the film's 35 mm.
     func testUnpickedGaugeFollowsTheCamerasFrame() throws {
