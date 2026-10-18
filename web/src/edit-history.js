@@ -111,6 +111,7 @@ function stepKind(before, after) {
   if (profileChanged(before, after, (field) => field === "negativeViewing"))
     return "Negative Viewing";
   if (changed(before, after, ["printFrame"])) return "Print Frame";
+  if (changed(before, after, ["printFrameMargin"])) return "Border Width";
   if (changed(before, after, ["selective"])) return "Selective";
   if (changed(before, after, ["video"])) return "Video";
   return "Edit";

@@ -1237,11 +1237,12 @@ public final class HalideMetalFilmRenderer {
             guard shouldContinue?() != false else { return false }
             let source = Array(UnsafeBufferPointer(start: staging.scenePixels, count: width*height*4))
             do {
+                // Encoded as `carriesOutputTransform` promised, as the streaming road encodes.
                 let result = try LayeredMetalTransport.process(source, width: width, height: height,
-                    stock: stock, options: options, frameIndex: frameIndex)
+                    stock: stock, options: options, frameIndex: frameIndex,
+                    outputTransform: &outputTransform)
                 guard shouldContinue?() != false else { return false }
                 result.withUnsafeBufferPointer { staging.developedPixels.update(from: $0.baseAddress!, count: $0.count) }
-                outputTransform = nil
                 return true
             } catch { print(error.localizedDescription); return false }
         }
