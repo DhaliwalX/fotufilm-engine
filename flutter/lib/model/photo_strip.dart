@@ -69,11 +69,13 @@ class PhotoStripModel extends ChangeNotifier {
   static String folderOf(String path) => path.substring(0, path.lastIndexOf('/') + 1);
 
   /// Opens files as Open…, the Finder and the command line do: one file with a path brings the
-  /// files beside it in its folder, not those of folders below, in name order (`withOpenedFolder`).
+  /// files beside it in its folder, not those of folders below, in name order (`withOpenedFolder`);
+  /// several are put in the strip and only the first is imported, the others waiting until they
+  /// are chosen.
   Future<void> open(List<PhotoFile> files) async {
-    if (files.length != 1 || files.single.path == null || !libraryFilesAvailable) {
-      return editor.openFiles(files);
-    }
+    if (files.isEmpty) return;
+    if (files.any((f) => f.path == null) || !libraryFilesAvailable) return editor.openFiles(files);
+    if (files.length > 1) return openRoll(files, shown: files.first.path!);
     final file = files.single, path = file.path!;
     var paths = [path];
     try {
