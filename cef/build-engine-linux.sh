@@ -121,11 +121,14 @@ case "$SWIFT_STDLIB" in
     echo "error: FOTUFILM_SWIFT_STDLIB must be static or dynamic" >&2
     exit 1 ;;
 esac
+# $ORIGIN: the Flutter app loads the engine by path, so the libraries an AppImage carries beside it
+# are found from the library itself.
 swiftc -emit-library ${STDLIB_FLAGS[@]+"${STDLIB_FLAGS[@]}"} \
   "$OBJ/FotufilmHost.o" "$OBJ/FotufilmHalideLinux.o" "$OBJ"/codecs-*.o "$OBJ"/video-*.o \
   "$KERNELS"/*.a \
   -Xlinker --gc-sections -Xlinker --version-script="$OBJ/exports.map" \
   -Xlinker -soname -Xlinker libfotufilm.so \
+  -Xlinker -rpath -Xlinker '$ORIGIN' \
   "${CODEC_LIBS[@]}" -lstdc++ -ldl -lpthread \
   -o "$LIBRARY"
 
