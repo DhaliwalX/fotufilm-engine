@@ -65,21 +65,31 @@ struct HalideGPUDeveloper: HostDeveloper {
         }
         let dimension = Int32(invocation.spectral.exposure.dimension)
         var output = [Float](repeating: 0, count: width * height * 4)
-        var status: Int32 = -1
-        invocation.configuration.withUnsafeBufferPointer { configuration in
-            invocation.withSpectralPointers { exposure, film, paper in
-                guard fotufilm_halide_cuda_prepare(
-                    invocation.featureMask, exposure, film, paper, dimension,
-                    invocation.spectralCacheID) == 0 else { return }
-                scene.withUnsafeBufferPointer { input in
-                    output.withUnsafeMutableBufferPointer { result in
-                        status = fotufilm_halide_cuda_process_linear_float(
-                            input.baseAddress, result.baseAddress, Int32(width), Int32(height),
-                            0, 0, configuration.baseAddress, exposure, film, paper, dimension,
-                            invocation.spectralCacheID, invocation.featureMask, invocation.seed)
+        func run(_ invocation: FilmEngineInvocation) -> Int32 {
+            var status: Int32 = -1
+            invocation.configuration.withUnsafeBufferPointer { configuration in
+                invocation.withSpectralPointers { exposure, film, paper in
+                    guard fotufilm_halide_cuda_prepare(
+                        invocation.featureMask, exposure, film, paper, dimension,
+                        invocation.spectralCacheID) == 0 else { return }
+                    scene.withUnsafeBufferPointer { input in
+                        output.withUnsafeMutableBufferPointer { result in
+                            status = fotufilm_halide_cuda_process_linear_float(
+                                input.baseAddress, result.baseAddress, Int32(width), Int32(height),
+                                0, 0, configuration.baseAddress, exposure, film, paper, dimension,
+                                invocation.spectralCacheID, invocation.featureMask, invocation.seed)
+                        }
                     }
                 }
             }
+            return status
+        }
+        var status = run(invocation)
+        // A develop whose realtime schedule this build does not carry (no film has none) runs on
+        // the reference one, as the Mac's developer does.
+        if status == -3, pace.realtime, shouldContinue() {
+            invocation.featureMask &= ~FilmEngineFeature.realtime
+            status = run(invocation)
         }
         guard status == 0 else {
             let cancelled = !shouldContinue()
