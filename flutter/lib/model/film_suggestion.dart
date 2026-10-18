@@ -92,7 +92,8 @@ class FilmSuggestion extends ChangeNotifier {
   /// The film a photograph settles on, once it has stayed a moment.
   void _settle(PhotoDocument doc) {
     final stock = doc.edit['stock'] as String?;
-    final next = stock == null || doc.edit['negative'] != null ? null : (doc, stock);
+    final next =
+        !available || stock == null || doc.edit['negative'] != null ? null : (doc, stock);
     if (next?.$1 == _recording?.$1 && next?.$2 == _recording?.$2) return;
     _recording = next;
     _record?.cancel();

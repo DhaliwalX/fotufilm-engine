@@ -215,6 +215,9 @@ class NegativeScans {
   List<Json>? _lightFrames;
   bool _loadingLights = false;
 
+  /// Whether the host keeps light frames: one with a file system does, a browser does not.
+  bool get keepsLightFrames => _engine?.opensPaths == true;
+
   /// The light frames the host keeps: as the scan opened with them, then as they change.
   List<Json> get lightFrames {
     if (_lightFrames == null && !_loadingLights) _loadLightFrames();
@@ -224,7 +227,7 @@ class NegativeScans {
 
   Future<void> _loadLightFrames() async {
     final engine = _engine;
-    if (engine == null) return;
+    if (engine == null || !keepsLightFrames) return;
     _loadingLights = true;
     try {
       final answer = await engine.call('negativeLightFrames');

@@ -1,6 +1,7 @@
 // What an export just saved (web/src/editor/SavedExportNotice.jsx, styles/video.css
 // `.saved-export`): a dark card at the window's foot with Open (the system's viewer for it), Show
 // in Finder and Dismiss. Export All saved many files, so only Show in Finder is offered for it.
+// In a browser the export is a download, so only Dismiss is.
 import 'package:flutter/widgets.dart';
 
 import '../../app/host_window.dart';
@@ -39,12 +40,14 @@ class SavedExportNotice extends StatelessWidget {
             Text('Saved ${saved.filename}',
                 style: editorText(context, color: const Color(0xFFFFFFFF))),
             const SizedBox(width: 16),
-            if (saved.count == null) ...[
-              _NoticeButton('Open', () => HostWindow.openFile(saved.path)),
+            if (HostWindow.showsFiles) ...[
+              if (saved.count == null) ...[
+                _NoticeButton('Open', () => HostWindow.openFile(saved.path)),
+                const SizedBox(width: 16),
+              ],
+              _NoticeButton('Show in Finder', () => HostWindow.reveal([saved.path])),
               const SizedBox(width: 16),
             ],
-            _NoticeButton('Show in Finder', () => HostWindow.reveal([saved.path])),
-            const SizedBox(width: 16),
             _NoticeButton('Dismiss', editor.exporter.dismissSaved),
           ])),
       );

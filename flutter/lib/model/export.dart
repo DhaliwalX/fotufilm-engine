@@ -29,6 +29,7 @@ const exportTypeLabels = {
   'image/tiff': 'TIFF · 16-bit',
   'image/jpeg': 'JPEG',
   'image/heic': 'HEIC',
+  'image/webp': 'WebP',
 };
 
 /// Export Original's format: the camera RAW file itself.

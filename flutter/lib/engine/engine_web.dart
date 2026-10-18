@@ -32,12 +32,15 @@ Future<EngineConnection> connect() async {
     }
     await Future<void>.delayed(const Duration(milliseconds: 20));
   }
-  return WebEngine._(_bridge!);
+  final engine = WebEngine._(_bridge!);
+  engine._capabilities = (await engine.call('capabilities')).json;
+  return engine;
 }
 
 class WebEngine implements EngineConnection {
   WebEngine._(this._engine);
   final _Bridge _engine;
+  Map<String, dynamic> _capabilities = const {};
 
   @override
   int? get address => null;
@@ -48,9 +51,10 @@ class WebEngine implements EngineConnection {
   @override
   bool get opensPaths => false;
 
-  /// A browser installs no packs or plug-ins and has no update feed.
+  /// What the browser engine writes and plays; it installs no packs or plug-ins and has no
+  /// update feed.
   @override
-  Map<String, dynamic> get capabilities => const {};
+  Map<String, dynamic> get capabilities => _capabilities;
 
   @override
   Future<EngineReply> call(String method,

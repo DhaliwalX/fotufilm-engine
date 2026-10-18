@@ -41,6 +41,9 @@ abstract final class HostWindow {
     return paths;
   }
 
+  /// Files are on a disk the system can open and show; in a browser an export is a download.
+  static bool get showsFiles => !kIsWeb;
+
   /// Shows files in the Finder (the CEF shell's `revealLibraryFiles`).
   static Future<void> reveal(List<String> paths) => _call('reveal', paths);
 

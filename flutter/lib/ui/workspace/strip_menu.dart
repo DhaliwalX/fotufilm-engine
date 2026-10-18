@@ -1,6 +1,6 @@
 // The photo strip's right-click menu, in the photo library's order: edits, export, rating, the
 // file, closing. It acts on the photos chosen in the strip when the click is on one of them, and
-// on the photo clicked otherwise. An edit to one photo shows it first, importing a waiting one;
+// on the photo clicked otherwise. In a browser there are no files to show, rename or trash. An edit to one photo shows it first, importing a waiting one;
 // its rating and its file are changed where it lies.
 import 'package:flutter/widgets.dart';
 
@@ -63,22 +63,25 @@ void showStripMenu(BuildContext context, EditorModel editor, StripItem item, Off
         ),
       ]),
     ],
-    const MenuItem.divider(),
-    MenuItem(label: 'Show in Finder', onSelected: () => HostWindow.reveal(files)),
-    if (single)
+    // A browser holds the photos it was given, not files on a disk.
+    if (HostWindow.showsFiles) ...[
+      const MenuItem.divider(),
+      MenuItem(label: 'Show in Finder', onSelected: () => HostWindow.reveal(files)),
+      if (single)
+        MenuItem(
+          label: 'Rename…',
+          onSelected: () => showRenameDialog(context, item.name, (name) => library.renameAt(item.path, name)),
+        ),
       MenuItem(
-        label: 'Rename…',
-        onSelected: () => showRenameDialog(context, item.name, (name) => library.renameAt(item.path, name)),
+        label: 'Move to Trash…',
+        onSelected: () => showConfirmDialog(
+          context,
+          title: single ? 'Move “${item.name}” to the Trash?' : 'Move ${files.length} photos to the Trash?',
+          action: 'Move to Trash',
+          onConfirm: () => library.trashFiles(files),
+        ),
       ),
-    MenuItem(
-      label: 'Move to Trash…',
-      onSelected: () => showConfirmDialog(
-        context,
-        title: single ? 'Move “${item.name}” to the Trash?' : 'Move ${files.length} photos to the Trash?',
-        action: 'Move to Trash',
-        onConfirm: () => library.trashFiles(files),
-      ),
-    ),
+    ],
     const MenuItem.divider(),
     MenuItem(
       label: !single

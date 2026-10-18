@@ -72,18 +72,20 @@ List<Widget> negativePanel(InspectorControls c) {
         onEnd: editor.endEdit,
       ),
     ]),
-    Section(title: 'Light Source', children: [
-      PickerField<String?>(
-        value: frames.any((f) => f['id'] == lightFrame) ? lightFrame : null,
-        options: [
-          const PickerOption(null, 'As Scanned'),
-          for (final f in frames) PickerOption(f['id'] as String, f['name'] as String),
-        ],
-        onChanged: (id) => scans.read({'lightFrame': id}),
-      ),
-      ScanButton('Add Light Frame…', onPressed: scans.chooseLightFrame),
-      ScanButton('Remove Light Frame',
-          onPressed: lightFrame == null ? null : scans.removeLightFrame),
-    ]),
+    // Light frames are kept by a host with a file system, not by a browser.
+    if (scans.keepsLightFrames)
+      Section(title: 'Light Source', children: [
+        PickerField<String?>(
+          value: frames.any((f) => f['id'] == lightFrame) ? lightFrame : null,
+          options: [
+            const PickerOption(null, 'As Scanned'),
+            for (final f in frames) PickerOption(f['id'] as String, f['name'] as String),
+          ],
+          onChanged: (id) => scans.read({'lightFrame': id}),
+        ),
+        ScanButton('Add Light Frame…', onPressed: scans.chooseLightFrame),
+        ScanButton('Remove Light Frame',
+            onPressed: lightFrame == null ? null : scans.removeLightFrame),
+      ]),
   ];
 }
