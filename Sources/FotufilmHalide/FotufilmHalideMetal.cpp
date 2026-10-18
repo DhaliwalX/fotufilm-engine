@@ -765,6 +765,81 @@ extern "C" int32_t fotufilm_halide_cuda_process_linear_float(
     });
 }
 
+namespace {
+
+/// The window entry points' body, as `process_tile` without fields: `channels` 3 is a light grid,
+/// whose unit stride keeps one cell a pixel.
+int32_t process_cuda_window(
+    const float *input, float *output, int32_t width, int32_t height,
+    int32_t out_x, int32_t out_columns, int32_t out_y, int32_t out_rows,
+    int32_t origin_x, int32_t origin_y, const float *configuration,
+    const float *exposure_lut, const float *film_output_lut,
+    const float *paper_output_lut, int32_t lut_dimension,
+    uint64_t spectral_cache_id, int32_t feature_mask, uint32_t seed, bool light) {
+    if (!fotufilm_halide_cuda_available() || !input || !output || !configuration ||
+        !exposure_lut || !film_output_lut || !paper_output_lut ||
+        width <= 0 || height <= 0 || out_x < 0 || out_columns <= 0 ||
+        out_x + out_columns > width || out_y < 0 || out_rows <= 0 ||
+        out_y + out_rows > height || !valid_flare_mean(configuration, feature_mask))
+        return -1;
+    if (light && fotufilm_halation_stride(
+            std::max(0, int32_t(configuration[FOTUFILM_CONFIG_HALATION_RADIUS]))) != 1)
+        return -1;
+    GpuFramePipeline::Tile tile;
+    tile.input_host = input;
+    tile.output_host = output;
+    tile.width = width;
+    tile.height = height;
+    tile.out_x = out_x;
+    tile.out_columns = out_columns;
+    tile.out_y = out_y;
+    tile.out_rows = out_rows;
+    tile.origin_x = origin_x;
+    tile.origin_y = origin_y;
+    tile.configuration = configuration;
+    tile.exposure = exposure_lut;
+    tile.film = film_output_lut;
+    tile.paper = paper_output_lut;
+    tile.dimension = lut_dimension;
+    tile.cache_id = spectral_cache_id;
+    tile.seed = seed;
+    tile.requested = light
+        ? (feature_mask | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_LIGHT_OUT)
+            & ~FOTUFILM_FRAME_FIELDS_IN
+        : feature_mask | FOTUFILM_FRAME_FLOAT_IO;
+    return translate_metal_exceptions([&] {
+        pipeline_for(tile.requested)->run_tile<float, float>(tile);
+    });
+}
+
+}
+
+extern "C" int32_t fotufilm_halide_cuda_process_linear_float_tile(
+    const float *input, float *output, int32_t width, int32_t height,
+    int32_t out_x, int32_t out_columns, int32_t out_y, int32_t out_rows,
+    int32_t origin_x, int32_t origin_y, const float *configuration,
+    const float *exposure_lut, const float *film_output_lut,
+    const float *paper_output_lut, int32_t lut_dimension,
+    uint64_t spectral_cache_id, int32_t feature_mask, uint32_t seed) {
+    return process_cuda_window(input, output, width, height, out_x, out_columns, out_y,
+                               out_rows, origin_x, origin_y, configuration, exposure_lut,
+                               film_output_lut, paper_output_lut, lut_dimension,
+                               spectral_cache_id, feature_mask, seed, false);
+}
+
+extern "C" int32_t fotufilm_halide_cuda_process_light_grid(
+    const float *input, float *grid_out, int32_t width, int32_t height,
+    int32_t out_x, int32_t out_columns, int32_t out_y, int32_t out_rows,
+    int32_t origin_x, int32_t origin_y, const float *configuration,
+    const float *exposure_lut, const float *film_output_lut,
+    const float *paper_output_lut, int32_t lut_dimension,
+    uint64_t spectral_cache_id, int32_t feature_mask, uint32_t seed) {
+    return process_cuda_window(input, grid_out, width, height, out_x, out_columns, out_y,
+                               out_rows, origin_x, origin_y, configuration, exposure_lut,
+                               film_output_lut, paper_output_lut, lut_dimension,
+                               spectral_cache_id, feature_mask, seed, true);
+}
+
 // The device-pointer pair. On a discrete GPU the host round trip above is not a detail of the
 // entry point, it is the frame budget: a 4K RGBA float frame is 132 MB each way, which costs
 // about 21 ms on a 4090 against the 1.6 ms the whole simulation takes. A video pipeline whose
