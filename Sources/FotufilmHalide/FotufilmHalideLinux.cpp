@@ -177,10 +177,14 @@ struct State {
     Buffer<float> exposure, film, paper;
     uint64_t identifier = 0;
     Buffer<float> configuration{FOTUFILM_FRAME_CONFIGURATION_COUNT};
+    /// Set at exit once the device is released: a develop still running (the engine's warm-up)
+    /// stops rather than use it.
+    bool released = false;
 
     int ensure(Device device, const float *exposure_values, const float *film_values,
                const float *paper_values, int32_t dimension, uint64_t cache_id) {
-        if (dimension != kLutDimension || !exposure_values || !film_values || !paper_values)
+        if (released || dimension != kLutDimension || !exposure_values || !film_values
+            || !paper_values)
             return -1;
         if (identifier == cache_id && exposure.data() != nullptr) return 0;
         const int bound = device == kVulkan ? kLutVulkanPaddedCount : kLutValueCount;
@@ -200,8 +204,9 @@ struct State {
     }
 };
 
+/// Never destroyed: a develop on another thread may still hold it while the process exits.
 State &state() {
-    static State shared;
+    static State &shared = *new State;
     return shared;
 }
 
@@ -226,6 +231,7 @@ void release_device() {
         for (Buffer<float> *buffer : {&cache.exposure, &cache.film, &cache.paper, &cache.configuration})
             buffer->device_free();
         cache.identifier = 0;
+        cache.released = true;
     }
     film_tile_store().device_free();
     halide_device_release(nullptr, interface_for(chosen_device()));

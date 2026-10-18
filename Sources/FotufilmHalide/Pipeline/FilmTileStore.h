@@ -26,8 +26,9 @@ public:
     static constexpr int64_t kCount = int64_t(kEntries) * FOTUFILM_FILM_TILE_LEVELS * 3;
     using Upload = int (*)(Tiles &);
 
+    /// Never destroyed: a develop on another thread may still read it while the process exits.
     static BasicFilmTileStore &shared() {
-        static BasicFilmTileStore store;
+        static BasicFilmTileStore &store = *new BasicFilmTileStore;
         return store;
     }
 
