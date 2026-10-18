@@ -71,7 +71,7 @@ void main() {
     expect(folderItems('/p/b.png', [('b.png', 1, 0), ('a.png', 1, 0), ('c.arw', 1, 0)]),
         ['/p/a.png', '/p/b.png', '/p/c.arw']);
     expect(folderItems('/p/z.png', [('a.png', 1, 0)]), ['/p/z.png']);
-    expect(stripPath('/Users/someone/Pictures/a.png'), '~/Pictures/a.png');
+    expect(stripPath('/home/someone/Pictures/a.png'), '~/Pictures/a.png');
   });
 
   test('names a folder can hold', () {
