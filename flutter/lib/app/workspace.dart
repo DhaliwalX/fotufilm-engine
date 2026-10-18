@@ -9,6 +9,7 @@ import 'package:flutter/material.dart' show Material, MaterialType;
 import 'package:flutter/widgets.dart';
 
 import '../model/editor.dart';
+import '../model/file_types.dart';
 import '../model/film_packs.dart';
 import '../model/panel_layout.dart';
 import '../ui/inspector/inspector.dart';
@@ -133,9 +134,9 @@ class _WorkspaceState extends State<Workspace> {
 
   Future<void> _open() async {
     if (!editor.ready) return;
-    final files = await openFiles(acceptedTypeGroups: const [
-      XTypeGroup(label: 'Images', extensions: imageExtensions),
-      XTypeGroup(label: 'Videos', extensions: videoExtensions),
+    final files = await openFiles(acceptedTypeGroups: [
+      fileType('Images', imageExtensions),
+      fileType('Videos', videoExtensions),
     ]);
     if (!kIsWeb && files.isNotEmpty) HostWindow.noteRecent([for (final f in files) f.path]);
     // One file brings its folder into the strip.

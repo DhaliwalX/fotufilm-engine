@@ -11,6 +11,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import '../engine/engine.dart';
 import 'editor.dart';
 import 'edit.dart';
+import 'file_types.dart';
 import 'negative_document.dart';
 
 export 'negative_document.dart';
@@ -68,8 +69,8 @@ class NegativeScans {
   /// Import Scanned Negative…: scans chosen in the open panel, each opened as a negative.
   Future<void> chooseNegatives() async {
     if (!canImport) return;
-    final chosen = await files.openFiles(acceptedTypeGroups: const [
-      files.XTypeGroup(label: 'Scanned negatives', extensions: negativeExtensions),
+    final chosen = await files.openFiles(acceptedTypeGroups: [
+      fileType('Scanned negatives', negativeExtensions),
     ]);
     await openNegatives([
       for (final f in chosen)
@@ -93,8 +94,8 @@ class NegativeScans {
   Future<void> chooseExposures() async {
     if (!canMerge) return;
     final chosen = await files.openFiles(
-      acceptedTypeGroups: const [
-        files.XTypeGroup(label: 'Exposures', extensions: negativeExtensions),
+      acceptedTypeGroups: [
+        fileType('Exposures', negativeExtensions),
       ],
       confirmButtonText: 'Merge',
     );
@@ -242,8 +243,8 @@ class NegativeScans {
 
   /// Add Light Frame…: a photograph of the bare light source, which evens out this scan's light.
   Future<void> chooseLightFrame() async {
-    final chosen = await files.openFile(acceptedTypeGroups: const [
-      files.XTypeGroup(label: 'Light frames', extensions: negativeExtensions),
+    final chosen = await files.openFile(acceptedTypeGroups: [
+      fileType('Light frames', negativeExtensions),
     ]);
     if (chosen == null) return;
     await addLightFrame(PhotoFile(chosen.name,

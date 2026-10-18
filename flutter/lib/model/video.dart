@@ -15,6 +15,7 @@ import 'package:flutter/scheduler.dart';
 
 import '../app/soundtrack.dart';
 import 'editor.dart';
+import 'file_types.dart';
 
 /// The movie files the editor opens (media-types.js `VIDEO_ACCEPT`).
 const videoExtensions = ['mp4', 'mov', 'm4v', 'webm', 'mkv'];
@@ -418,9 +419,7 @@ class VideoPlayer extends ChangeNotifier {
   /// Chooses movies to open; one brings its folder into the strip, as Open… does.
   Future<void> chooseMovies() async {
     if (!editor.ready || editor.exporting) return;
-    final files = await openFiles(acceptedTypeGroups: const [
-      XTypeGroup(label: 'Videos', extensions: videoExtensions),
-    ]);
+    final files = await openFiles(acceptedTypeGroups: [fileType('Videos', videoExtensions)]);
     await editor.strip.open([
       for (final f in files) PhotoFile(f.name, path: kIsWeb ? null : f.path, read: f.readAsBytes),
     ]);
