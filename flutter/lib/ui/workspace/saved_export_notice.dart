@@ -45,7 +45,7 @@ class SavedExportNotice extends StatelessWidget {
                 _NoticeButton('Open', () => HostWindow.openFile(saved.path)),
                 const SizedBox(width: 16),
               ],
-              _NoticeButton('Show in Finder', () => HostWindow.reveal([saved.path])),
+              _NoticeButton(HostWindow.revealLabel, () => HostWindow.reveal([saved.path])),
               const SizedBox(width: 16),
             ],
             _NoticeButton('Dismiss', editor.exporter.dismissSaved),

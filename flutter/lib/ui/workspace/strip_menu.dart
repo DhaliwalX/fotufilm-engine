@@ -66,7 +66,7 @@ void showStripMenu(BuildContext context, EditorModel editor, StripItem item, Off
     // A browser holds the photos it was given, not files on a disk.
     if (HostWindow.showsFiles) ...[
       const MenuItem.divider(),
-      MenuItem(label: 'Show in Finder', onSelected: () => HostWindow.reveal(files)),
+      MenuItem(label: HostWindow.revealLabel, onSelected: () => HostWindow.reveal(files)),
       if (single)
         MenuItem(
           label: 'Rename…',

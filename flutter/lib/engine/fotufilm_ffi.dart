@@ -62,8 +62,10 @@ class FotufilmLibrary {
   static String _path() {
     final override = Platform.environment['FOTUFILM_LIBRARY'];
     if (override != null && override.isNotEmpty) return override;
-    // Contents/MacOS/<app> → Contents/Frameworks/libfotufilm.dylib
     final exe = File(Platform.resolvedExecutable).parent;
+    // <bundle>/fotufilm → <bundle>/lib/libfotufilm.so (linux/CMakeLists.txt)
+    if (Platform.isLinux) return '${exe.path}/lib/libfotufilm.so';
+    // Contents/MacOS/<app> → Contents/Frameworks/libfotufilm.dylib
     return '${exe.parent.path}/Frameworks/libfotufilm.dylib';
   }
 

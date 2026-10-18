@@ -44,6 +44,14 @@ abstract final class HostWindow {
   /// Files are on a disk the system can open and show; in a browser an export is a download.
   static bool get showsFiles => !kIsWeb;
 
+  /// What showing a file in the system's file manager is called (the CEF hosts' `reveal`).
+  static String get revealLabel =>
+      defaultTargetPlatform == TargetPlatform.macOS ? 'Show in Finder' : 'Show in Folder';
+
+  /// Where the file manager is, for a plug-in's Show… command.
+  static String get fileManager =>
+      defaultTargetPlatform == TargetPlatform.macOS ? 'in Finder' : 'in Folder';
+
   /// Shows files in the Finder (the CEF shell's `revealLibraryFiles`).
   static Future<void> reveal(List<String> paths) => _call('reveal', paths);
 

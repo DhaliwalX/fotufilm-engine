@@ -250,7 +250,7 @@ List<SubmenuNode> mainMenu(List<Json> plugins) => [
           for (final (i, p) in plugins.indexed) ...[
             if (i > 0) _separator,
             CommandNode('installPlugin:${p['id']}', 'Install ${p['name']} Plug-in…'),
-            CommandNode('revealPlugin:${p['id']}', 'Show ${p['name']} Plug-in in Finder'),
+            CommandNode('revealPlugin:${p['id']}', 'Show ${p['name']} Plug-in ${HostWindow.fileManager}'),
           ],
         ]),
       const SubmenuNode('Window', [

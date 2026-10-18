@@ -6,6 +6,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import '../../../app/host_window.dart';
 import '../../../model/editor.dart';
 import '../../../model/library_model.dart';
 import '../../kit/kit.dart';
@@ -163,7 +164,7 @@ class _PhotoLibraryViewState extends State<PhotoLibraryView> {
     final single = targets.length == 1;
     showMenuAt(context, position, width: 200, [
       MenuItem(label: single ? 'Open' : 'Open ${targets.length} Photos', onSelected: () => _open(targets)),
-      MenuItem(label: 'Show in Finder', onSelected: () => library.reveal(targets)),
+      MenuItem(label: HostWindow.revealLabel, onSelected: () => library.reveal(targets)),
       const MenuItem.divider(),
       MenuItem(
         label: _selection.selected.contains(key) ? 'Deselect' : 'Select',
