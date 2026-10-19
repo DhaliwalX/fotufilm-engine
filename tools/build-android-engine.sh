@@ -60,7 +60,10 @@ if [[ -n "${HALIDE_ROOT:-}" || ! -f "$KERNELS/fotufilm_aot_runtime.a" ]]; then
   tools/generate-halide-aot-android.sh "$KERNELS"
 fi
 CFLAGS_COMMON=(-O2 -g1 -fPIC -fvisibility=hidden -fvisibility-inlines-hidden
-  -ffunction-sections -fdata-sections -ffile-prefix-map="$PWD"=Fotufilm)
+  -ffunction-sections -fdata-sections -ffile-prefix-map="$PWD"=Fotufilm
+  # The kernels and codecs can live outside the checkout; their headers are named relative too.
+  -ffile-prefix-map="$(cd "$KERNELS" && pwd -P)"=kernels
+  -ffile-prefix-map="$(cd "$DEPS" 2>/dev/null && pwd -P || echo "$DEPS")"=android-deps)
 echo "Compiling the Halide shim…"
 "$CXX" -std=c++17 "${CFLAGS_COMMON[@]}" -c -DFOTUFILM_HALIDE_ANDROID_AOT=1 \
   -I"$KERNELS" -ISources/FotufilmHalide/include -ISources/FotufilmHalide \
