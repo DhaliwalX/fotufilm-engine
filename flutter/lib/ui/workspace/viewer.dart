@@ -155,6 +155,18 @@ class _PhotoCanvasState extends State<PhotoCanvas> {
     }
   }
 
+  /// Fingers on the screen: two pinch the photograph around them and move it with them, and one
+  /// drags it while it is magnified. A trackpad's pinch comes as pan-zoom events instead (_pinch).
+  double? _fingersStart;
+
+  void _fingers(ScaleUpdateDetails details) {
+    final start = _fingersStart;
+    if (details.pointerCount > 1 && start != null) {
+      editor.zoomAround(start * details.scale, details.localFocalPoint);
+    }
+    editor.panBy(details.focalPointDelta);
+  }
+
   void _pinch(PointerPanZoomUpdateEvent event) {
     if ((event.scale - 1).abs() > 0.01 && _pinchStart != null) {
       editor.zoomAround(_pinchStart! * event.scale, event.localPosition);
@@ -162,6 +174,8 @@ class _PhotoCanvasState extends State<PhotoCanvas> {
       editor.panBy(event.panDelta);
     }
   }
+
+  bool get _tooled => editor.crop.showing || editor.selective.sampling || editor.negatives.sampling;
 
   @override
   Widget build(BuildContext context) {
@@ -180,7 +194,16 @@ class _PhotoCanvasState extends State<PhotoCanvas> {
       onPointerPanZoomEnd: (_) => _pinchStart = null,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onPanUpdate: editor.zoomed ? (d) => editor.panBy(d.delta) : null,
+        supportedDevices: const {
+          PointerDeviceKind.touch,
+          PointerDeviceKind.mouse,
+          PointerDeviceKind.stylus,
+          PointerDeviceKind.invertedStylus,
+        },
+        // The crop and the samplers keep a single finger on a fitted photograph.
+        onScaleStart: editor.zoomed || !_tooled ? (_) => _fingersStart = editor.scale : null,
+        onScaleUpdate: editor.zoomed || !_tooled ? _fingers : null,
+        onScaleEnd: (_) => _fingersStart = null,
         onDoubleTapDown: (d) =>
             editor.zoomed ? editor.setZoom(null) : editor.zoomAround(1, d.localPosition),
         onDoubleTap: () {},

@@ -1,5 +1,6 @@
 // The film library, compact: Films and Presets, a search field and the film type, and a row for
-// each film with the photograph developed on it. Collapsed, it is a column of pictures.
+// each film with the photograph developed on it. Collapsed, it is a column of pictures; on a
+// phone, a strip of them to swipe through.
 import 'dart:ui' as ui;
 
 import 'package:flutter/widgets.dart';
@@ -23,11 +24,16 @@ class FilmLibrary extends StatefulWidget {
 
 class _FilmLibraryState extends State<FilmLibrary> {
   final _scroll = ScrollController();
+  final _strip = ScrollController();
   final _search = TextEditingController();
+
+  /// Whether the strip has been brought round to the chosen film since the dock opened.
+  bool _stripPlaced = false;
 
   @override
   void dispose() {
     _scroll.dispose();
+    _strip.dispose();
     _search.dispose();
     super.dispose();
   }
@@ -124,6 +130,7 @@ class _FilmLibraryState extends State<FilmLibrary> {
     if (films.isEmpty) return const LibraryEmpty('No matching films.');
     final selected = editor.edit['stock'] as String?;
     final doc = editor.active;
+    if (editor.layout.compact) return _filmStrip(films, selected);
     return ThinScroll(
       controller: _scroll,
       child: ListView.builder(
@@ -152,6 +159,109 @@ class _FilmLibraryState extends State<FilmLibrary> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  /// The phone's strip: a tile for each film, swiped across, opening on the chosen one.
+  Widget _filmStrip(List<Json?> films, String? selected) {
+    final editor = widget.editor;
+    final doc = editor.active;
+    const extent = Metrics.filmStripTile + Metrics.filmStripGap;
+    if (!_stripPlaced) {
+      _stripPlaced = true;
+      final index = films.indexWhere((s) => s?['id'] == selected);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!_strip.hasClients || index <= 0) return;
+        final position = _strip.position;
+        _strip.jumpTo((index * extent - (position.viewportDimension - extent) / 2)
+            .clamp(0, position.maxScrollExtent));
+      });
+    }
+    return ListView.builder(
+      controller: _strip,
+      scrollDirection: Axis.horizontal,
+      // Tiles are built as they come into view, which is when their pictures develop.
+      cacheExtent: 0,
+      itemExtent: extent,
+      padding: Metrics.filmStripPadding,
+      itemCount: films.length,
+      itemBuilder: (context, index) {
+        final stock = films[index];
+        final id = stock?['id'] as String?;
+        return Padding(
+          padding: const EdgeInsets.only(right: Metrics.filmStripGap),
+          child: _ShownRow(
+            editor: editor,
+            id: id ?? '',
+            child: StripTile(
+              name: stock?['name'] as String? ?? 'Normal',
+              thumbnail: doc?.filmThumbnails[id ?? ''] ?? doc?.importPicture,
+              selected: id == selected,
+              onPressed: doc == null ? null : () => editor.chooseStock(id),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// One film in the phone's strip: its picture, ringed while chosen, over its name.
+class StripTile extends StatelessWidget {
+  const StripTile({
+    super.key,
+    required this.name,
+    required this.thumbnail,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final String name;
+  final ui.Image? thumbnail;
+  final bool selected;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = Palette.of(context);
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: name,
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onPressed,
+        child: Column(children: [
+          Container(
+            height: Metrics.filmStripThumb,
+            decoration: BoxDecoration(
+              color: palette.dark ? const Color(0x08FFFFFF) : const Color(0x07000000),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                  color: selected ? palette.accent : const Color(0x00000000), width: 2),
+            ),
+            padding: const EdgeInsets.all(2),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: SizedBox.expand(
+                child: thumbnail != null
+                    ? EnginePicture(thumbnail!, fit: BoxFit.cover)
+                    : const Center(child: AppIcon('film', size: 18, color: Color(0xFF8D9097))),
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(name,
+              maxLines: 2,
+              textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
+              style: editorText(context,
+                  size: TextSizes.label,
+                  weight: selected ? FontWeight.w700 : FontWeight.w500,
+                  height: 1.2)),
+        ]),
       ),
     );
   }

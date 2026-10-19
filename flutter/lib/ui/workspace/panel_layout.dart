@@ -14,7 +14,10 @@ class FilmSidebarToggle extends StatelessWidget {
   final EditorModel editor;
 
   @override
-  Widget build(BuildContext context) => QuietButton(
+  // The compact rail's Film button opens and closes the film dock.
+  Widget build(BuildContext context) => editor.layout.compact
+      ? const SizedBox.shrink()
+      : QuietButton(
         icon: 'sidebar',
         tooltip: editor.filmOpen ? 'Collapse films' : 'Expand films',
         selected: editor.filmOpen,
@@ -57,8 +60,9 @@ class PanelDismissButton extends StatelessWidget {
       : const SizedBox.shrink();
 }
 
-/// The compact layout's rail: each panel's icon over its name, across the bottom. The Film button
-/// opens the film list's dock, and reads as chosen while that is open.
+/// The compact layout's rail: each panel's icon over its name, across the bottom, under the docks.
+/// The Film button opens the film list's dock and the others the inspector's; a button reads as
+/// chosen while its dock is open, and closes it when pressed again.
 class CompactRail extends StatelessWidget {
   const CompactRail({super.key, required this.editor});
   final EditorModel editor;
@@ -77,7 +81,7 @@ class CompactRail extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 2),
               child: _RailButton(
                 panel: p,
-                selected: editor.filmOpen ? p == Panel.film : editor.panel == p,
+                selected: editor.layout.railShowing(p),
                 onPressed: () => editor.layout.railPressed(p),
               ),
             ),

@@ -1,10 +1,12 @@
-// The app: the editor's palette for the system's appearance, around the workspace.
+// The app: the editor's palette for the system's appearance, around the workspace, drawn larger
+// on a phone.
 import 'package:flutter/material.dart' show MaterialApp, ThemeData;
 import 'package:flutter/widgets.dart';
 
 import '../model/editor.dart';
 import '../ui/theme/theme.dart';
 import 'environment.dart';
+import 'touch_scale.dart';
 import 'workspace.dart';
 
 class FotufilmApp extends StatelessWidget {
@@ -23,6 +25,8 @@ class FotufilmApp extends StatelessWidget {
       title: 'Fotufilm',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(fontFamily: editorFont, useMaterial3: true),
+      // A phone draws everything larger, the menus and dialogs too (touch_scale.dart).
+      builder: (context, child) => TouchScale(child: child!),
       home: PaletteScope(
         palette: dark ? Palette.darkPalette : Palette.light,
         child: Workspace(editor: editor),

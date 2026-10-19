@@ -73,6 +73,29 @@ class PanelLayout extends ChangeNotifier {
 
   bool compact = false;
 
+  /// The compact docks' height as the grabber last left it; null takes the default for the window.
+  double? dockHeight;
+
+  /// The compact dock's grabber dragged to `height`; `max` is what leaves the picture its room.
+  void dragDock(double height, double max) {
+    dockHeight = height.clamp(Metrics.compactDockMin * .5, math.max(Metrics.compactDockMin, max));
+    notifyListeners();
+  }
+
+  /// The grabber let go: a dock pulled down well below its least height, or flung down, closes
+  /// and comes back at the height it had before; flung up, it takes all the room it may.
+  void releaseDock(double velocity, {required double before}) {
+    final height = dockHeight;
+    if (velocity > 700 || (height != null && height < Metrics.compactDockMin * .6)) {
+      dockHeight = before;
+      if (editor.filmOpen) editor.toggleFilm();
+      if (editor.inspectorOpen) editor.toggleInspector();
+    } else if (velocity < -700) {
+      dockHeight = double.infinity;
+    }
+    notifyListeners();
+  }
+
   ({double film, double inspector}) get widths => shownWidths(preferred, window);
 
   /// The workspace's width changed: a window narrowed into the compact layout closes both docks.
@@ -115,13 +138,17 @@ class PanelLayout extends ChangeNotifier {
     if (editor.filmOpen != films) editor.toggleFilm();
   }
 
-  /// The compact rail's Film button: closes the film dock when it is open.
+  /// The compact rail's dock showing: the film list or the Film settings for the Film button, the
+  /// inspector for the others.
+  bool railShowing(Panel panel) =>
+      (panel == Panel.film && editor.filmOpen) ||
+      (!editor.filmOpen && editor.inspectorOpen && editor.panel == panel);
+
+  /// A rail button opens its panel's dock, or closes it when it is already open.
   void railPressed(Panel panel) {
-    if (compact && editor.filmOpen && panel == Panel.film) {
-      editor.toggleFilm();
-    } else {
-      choosePanel(panel);
-    }
+    if (!compact) return choosePanel(panel);
+    if (!railShowing(panel)) return choosePanel(panel);
+    dismiss(editor.filmOpen ? PanelSide.film : PanelSide.inspector);
   }
 
   /// A dock's close button.
