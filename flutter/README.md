@@ -1,11 +1,13 @@
 # Fotufilm editor
 
-The editor, drawn by Flutter: the desktop app on macOS and Linux and the browser editor, from one
-UI.
+The editor, drawn by Flutter: the desktop app on macOS and Linux, the Android app and the browser
+editor, from one UI.
 
 - **Desktop:** the engine (`libfotufilm`, `Sources/CFotufilmHost/include/fotufilm.h`) is called
   through `dart:ffi` on its own isolate. Developed pictures are written straight into platform
   textures through the engine's presenter, so no image is encoded on the way to the screen.
+- **Android:** the same engine and `dart:ffi` calls, cross-compiled for arm64. Developed pictures
+  come back as pixels rather than through a presenter.
 - **Browser:** the UI is compiled to WebAssembly and calls the WASM and WebGPU engine in `web/src`
   through `web/src/flutter-bridge.js`, which answers the same host calls the native engine does.
 
@@ -117,3 +119,32 @@ libswresample-dev`, and a machine without FFmpeg 6 runs with video off.
 
 The OFX plugin (`resolve/build-linux.sh`) rides along in the AppImage when it has been built, and
 `Fotufilm-<version>-x86_64.AppImage --install-ofx-plugin` installs it for DaVinci Resolve.
+
+## Building for Android
+
+```sh
+flutter/build-android.sh              # build/flutter-host/Fotufilm.apk
+flutter/build-android.sh --appbundle  # build/flutter-host/Fotufilm.aab, for Google Play
+```
+
+The engine is the Linux desktop engine cross-compiled for 64-bit ARM phones on Android 9 and later
+(`tools/build-android-engine.sh`): the desktop graph ahead of time for Vulkan, behind the Linux
+shim without CUDA (`tools/generate-halide-aot-android.sh`, with the same patched Halide in
+`HALIDE_ROOT`), and the Swift engine built by a swift.org toolchain and its matching Swift SDK for
+Android (`SWIFT_TOOLCHAIN`, `SWIFT_SDK`, set up against the NDK by the SDK's own
+`scripts/setup-android-sdk.sh`, which the build runs when the SDK points at another NDK). The NDK is
+`ANDROID_NDK_HOME`, or the newest under `ANDROID_HOME/ndk`.
+
+The codecs have no system copy to call on Android: `tools/build-android-codecs.sh` builds LibRaw,
+lcms2, libjpeg-turbo, libpng, libtiff, libheif with libde265 and OpenEXR as static libraries linked
+into the engine, and FFmpeg (LGPL, with Android's MediaCodec) as shared libraries the app carries,
+into `FOTUFILM_ANDROID_DEPS` (default `build/android-deps`). `build-android.sh` runs it once.
+
+The Swift runtime and FFmpeg go into the APK beside `libfotufilm.so`, and the films and camera
+profiles as assets, which the app unpacks before the engine opens its library
+(`android/app/src/main/kotlin/.../EngineResources.kt`). A bare `flutter build apk` is a source
+build, `com.muastudio.fotufilm.flutter`; an official one (`FOTUFILM_SOURCE_BUILD=0`) takes the
+Android app's identity. `FOTUFILM_ANDROID_KEYSTORE`, with `FOTUFILM_ANDROID_KEYSTORE_PASSWORD`,
+`FOTUFILM_ANDROID_KEY_ALIAS` and `FOTUFILM_ANDROID_KEY_PASSWORD`, signs a release; without it the app
+is signed with the debug keys. Exporting movies and HEIC, and the photo library, are not there yet
+on Android.

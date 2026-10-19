@@ -1,0 +1,12 @@
+--- a/src/runtime/CMakeLists.txt
++++ b/src/runtime/CMakeLists.txt
+@@ -161,6 +161,9 @@
+ # Note: this always uses Clang-from-LLVM for compilation, so none of these flags should need conditionalization.
+ set(RUNTIME_CXX_FLAGS
+     -O3
++    # The runtime's assertions name their source files; name them from the checkout, so no build
++    # folder reaches the kernels a program links.
++    "-ffile-prefix-map=${Halide_SOURCE_DIR}=Halide"
+     -std=c++17
+     -ffreestanding
+     -fno-blocks

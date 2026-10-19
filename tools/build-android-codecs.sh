@@ -69,8 +69,10 @@ Libs: -lz
 Cflags:
 PC
 
-# Unused functions and data in sections of their own, so the engine's --gc-sections can drop them.
-CFLAGS_COMMON="-O2 -fPIC -ffunction-sections -fdata-sections"
+# Unused functions and data in sections of their own, so the engine's --gc-sections can drop them;
+# source paths (in assertions) written relative, so no local path reaches the app.
+PREFIX_MAPS="-ffile-prefix-map=$DEPS=android-deps -ffile-prefix-map=$NDK=ndk"
+CFLAGS_COMMON="-O2 -fPIC -ffunction-sections -fdata-sections $PREFIX_MAPS"
 
 # Fetches a release archive once and unpacks it beside it.
 fetch() {
@@ -95,7 +97,7 @@ done_building() { echo "$2" > "$BUILD/$1.stamp"; }
 cmake_install() {
   local name="$1" source="$2"
   shift 2
-  local settings="$*"
+  local settings="$CFLAGS_COMMON $*"
   if built "$name" "$settings"; then echo "== $name is up to date"; return; fi
   echo "== building $name"
   rm -rf "${BUILD:?}/$name"
@@ -253,7 +255,7 @@ FFMPEG_OPTIONS=(
   --enable-zlib --enable-jni --enable-mediacodec --enable-neon
   --disable-encoders --enable-encoder=prores_aw,prores_ks,aac,h264_mediacodec,hevc_mediacodec
   --disable-muxers --enable-muxer=mov,mp4
-  --extra-cflags="-O2 -fPIC" --extra-ldflags="-Wl,-z,max-page-size=16384"
+  --extra-cflags="-O2 -fPIC $PREFIX_MAPS" --extra-ldflags="-Wl,-z,max-page-size=16384"
 )
 FFMPEG_SETTINGS="$FFMPEG_VERSION ${FFMPEG_OPTIONS[*]}"
 if built "ffmpeg-$FFMPEG_VERSION" "$FFMPEG_SETTINGS"; then
@@ -269,6 +271,14 @@ else
       tail -40 ffbuild/config.log >&2
       exit 1
     }
+    # FFmpeg keeps its configure line for av*_configuration(): the options stay, the folders go.
+    python3 -c '
+import re, sys
+path = sys.argv[1]
+text = open(path).read()
+text = re.sub(r"^#define FFMPEG_CONFIGURATION .*$",
+              lambda m: re.sub(r"(?<==)/[^ \x27]*/", "", m.group(0)), text, flags=re.M)
+open(path, "w").write(text)' config.h
     make -j"$JOBS" > ../ffmpeg.build.log 2>&1 || { tail -40 ../ffmpeg.build.log >&2; exit 1; }
     make install > ../ffmpeg.install.log 2>&1
   )
