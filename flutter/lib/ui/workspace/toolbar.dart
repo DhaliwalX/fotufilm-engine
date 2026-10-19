@@ -56,7 +56,14 @@ class EditorToolbar extends StatelessWidget {
         _whileEditing(_EditGroup(commands: commands)),
       ]),
     );
-    if (!titlebar) return bar;
+    // Under a phone's status bar, the bar's colour runs up behind it.
+    final inset = MediaQuery.paddingOf(context).top;
+    if (!titlebar) {
+      if (inset == 0) return bar;
+      return ColoredBox(
+          color: palette.panel,
+          child: Padding(padding: EdgeInsets.only(top: inset), child: bar));
+    }
     // Empty space drags and zooms the window, as a title bar does. The surface sits behind the
     // controls rather than around them: its double-click would otherwise hold every button's
     // press in the gesture arena until a second click could no longer come.

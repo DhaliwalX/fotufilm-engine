@@ -41,7 +41,8 @@ typedef ProgressCallback = Void Function(Pointer<Void> context, Pointer<Utf8> js
 typedef _AnswerFreeC = Void Function(Pointer<FotufilmAnswer>);
 typedef _AnswerFreeDart = void Function(Pointer<FotufilmAnswer>);
 
-/// The loaded `libfotufilm`. The app carries it in Contents/Frameworks, beside Flutter's own;
+/// The loaded `libfotufilm`. The app carries it in Contents/Frameworks, beside Flutter's own (on
+/// Android, in the APK's libraries);
 /// `FOTUFILM_LIBRARY` names another build for development.
 class FotufilmLibrary {
   FotufilmLibrary._(DynamicLibrary lib)
@@ -62,6 +63,8 @@ class FotufilmLibrary {
   static String _path() {
     final override = Platform.environment['FOTUFILM_LIBRARY'];
     if (override != null && override.isNotEmpty) return override;
+    // An APK's libraries are found by name (android/app/build.gradle.kts packs them).
+    if (Platform.isAndroid) return 'libfotufilm.so';
     final exe = File(Platform.resolvedExecutable).parent;
     // <bundle>/fotufilm → <bundle>/lib/libfotufilm.so (linux/CMakeLists.txt)
     if (Platform.isLinux) return '${exe.path}/lib/libfotufilm.so';

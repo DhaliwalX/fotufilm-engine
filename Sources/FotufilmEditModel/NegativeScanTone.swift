@@ -1,5 +1,5 @@
 import Foundation
-#if canImport(Android)
+#if canImport(Android) && canImport(FotufilmCore)
 import FotufilmCore
 #endif
 

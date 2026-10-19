@@ -14,7 +14,13 @@
 #include <thread>
 
 #define FFV_TEXT(x) #x
+#if defined(__ANDROID__)
+// An APK carries its libraries by their plain names, and carries the very FFmpeg these headers
+// describe, so the major version is the build's to keep rather than the loader's to check.
+#define FFV_SONAME(library, major) "lib" #library ".so"
+#else
 #define FFV_SONAME(library, major) "lib" #library ".so." FFV_TEXT(major)
+#endif
 
 namespace fotufilm::video {
 namespace {

@@ -8,6 +8,7 @@ import Android
 @_transparent public func asin(_ x: Float) -> Float { asinf(x) }
 @_transparent public func atan(_ x: Float) -> Float { atanf(x) }
 @_transparent public func atan2(_ y: Float, _ x: Float) -> Float { atan2f(y, x) }
+@_transparent public func cbrt(_ x: Float) -> Float { cbrtf(x) }
 @_transparent public func ceil(_ x: Float) -> Float { ceilf(x) }
 @_transparent public func cos(_ x: Float) -> Float { cosf(x) }
 @_transparent public func exp(_ x: Float) -> Float { expf(x) }

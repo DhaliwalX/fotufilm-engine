@@ -62,6 +62,18 @@ void main() {
     });
   });
 
+  group('a phone held sideways', () {
+    test('opens its docks beside the picture, and under it again held upright', () {
+      final layout = EditorModel(catalogue).layout..layOut(740, 260);
+      expect((layout.compact, layout.side), (true, true));
+      layout.layOut(390, 700);
+      expect((layout.compact, layout.side), (true, false));
+      // A desktop window as wide is never beside.
+      layout.layOut(1400, 500);
+      expect((layout.compact, layout.side), (false, false));
+    });
+  });
+
   group('the compact dock', () {
     test('its grabber sets the height, within the room left for the picture', () {
       final layout = phone().layout;
