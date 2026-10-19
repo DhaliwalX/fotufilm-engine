@@ -46,7 +46,17 @@ if [[ "$artifact" == apk ]]; then
   output=build/flutter-host/Fotufilm.apk
   cp "$stage/flutter/build/app/outputs/flutter-apk/app-release.apk" "$output"
   # No local path in anything the package carries.
-  unzip -q "$output" -d "$stage/package"
+  # Each entry under its own number: resource names can differ only in case, which a Mac's
+  # filesystem folds together.
+  python3 -c '
+import sys, zipfile
+from pathlib import Path
+out = Path(sys.argv[2])
+out.mkdir()
+with zipfile.ZipFile(sys.argv[1]) as package:
+    for number, entry in enumerate(package.infolist()):
+        if not entry.is_dir():
+            (out / str(number)).write_bytes(package.read(entry))' "$output" "$stage/package"
   python3 tools/audit-bundle-paths.py "$stage/package"
   deps="$(cd "${FOTUFILM_ANDROID_DEPS:-build/android-deps}" && pwd -P)"
   folders=(-e "$PWD/" -e "$deps/" -e "$HOME/")
