@@ -615,6 +615,8 @@ class Driver {
   Future<void> _bench(String key, int steps) async {
     final renderer = editor.renderer!;
     final latencies = <int>[];
+    // The engine's own time for each develop shown, beside the time to the screen.
+    final engine = <int>[], gpu = <int>[];
     final start = (editor.edit['params'] as Map)[key] as num? ?? 0;
     for (var i = 1; i <= steps; i++) {
       final before = renderer.developed;
@@ -624,6 +626,8 @@ class Driver {
         await Future<void>.delayed(const Duration(milliseconds: 1));
       }
       latencies.add(clock.elapsedMilliseconds);
+      engine.add(((renderer.lastPreview?['elapsed'] as num?) ?? 0).round());
+      gpu.add(((renderer.lastPreview?['renderMilliseconds'] as num?) ?? 0).round());
       await WidgetsBinding.instance.endOfFrame;
     }
     final settle = Stopwatch()..start();
@@ -634,7 +638,12 @@ class Driver {
     }
     settle.stop();
     latencies.sort();
-    _log('bench $key steps=$steps median=${latencies[steps ~/ 2]}ms '
+    engine.sort();
+    gpu.sort();
+    final shown = renderer.lastPreview;
+    final size = '${shown?['width']}x${shown?['height']} on ${shown?['backend']}';
+    _log('bench $key steps=$steps engine=${engine[steps ~/ 2]}ms render=${gpu[steps ~/ 2]}ms '
+        'at $size median=${latencies[steps ~/ 2]}ms '
         'p90=${latencies[(steps * .9).floor().clamp(0, steps - 1)]}ms max=${latencies.last}ms '
         'settle=${settle.elapsedMilliseconds}ms');
     editor.undo();
