@@ -39,6 +39,10 @@ export const decodeCurve = (code, curve) => {
       return code >= 0.100686685370811
         ? (10 ** ((code - 0.384316) / 0.245281) - 0.064829) / 5.555556
         : (code - 0.092864) / 8.799461
+    case 'vLog':
+      return code >= 0.181
+        ? 10 ** ((code - 0.598206) / 0.241514) - 0.00873
+        : (code - 0.125) / 5.6
     case 'hlg':
       return (hlg(Math.max(0, Math.min(1, code))) * 0.9) / hlg(0.75)
     default:

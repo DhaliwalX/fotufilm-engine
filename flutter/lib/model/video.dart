@@ -86,6 +86,7 @@ const videoEncodings = [
   ('slog2', 'S-Log2 · S-Gamut'),
   ('slog3', 'S-Log3 · S-Gamut3'),
   ('slog3Cine', 'S-Log3 · S-Gamut3.Cine'),
+  ('vlog', 'V-Log · V-Gamut'),
 ];
 
 /// The Mac app's Cadence choices, by their VIDEO_LABELS keys; Native keeps the source's rate.

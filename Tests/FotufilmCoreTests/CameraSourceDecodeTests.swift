@@ -61,6 +61,12 @@ final class CameraSourceDecodeTests: XCTestCase {
             : e * reflectance + f
     }
 
+    private func vlogEncode(_ reflectance: Double) -> Double {
+        reflectance >= 0.01
+            ? 0.241514 * log10(reflectance + 0.00873) + 0.598206
+            : 5.6 * reflectance + 0.125
+    }
+
     private func encode(_ curve: CameraLogCurve, _ reflectance: Double) -> Float {
         switch curve {
         case .appleLog: return Float(appleLogEncode(reflectance))
@@ -69,6 +75,7 @@ final class CameraSourceDecodeTests: XCTestCase {
         case .hlg: return Float(hlgEncode(reflectance))
         case .fLog: return Float(flogEncode(reflectance))
         case .fLog2: return Float(flog2Encode(reflectance))
+        case .vLog: return Float(vlogEncode(reflectance))
         }
     }
 
@@ -166,6 +173,21 @@ final class CameraSourceDecodeTests: XCTestCase {
                        accuracy: 3e-3)
     }
 
+    /// The 10-bit full-range codes Panasonic's V-Log/V-Gamut Reference Manual tabulates for 0%,
+    /// 18%, and 90% reflection, and the code where the linear toe meets the log segment.
+    func testPanasonicVLogPublishedAnchors() {
+        // The table rounds black's 127.875 to 128; half a code through the toe is 8.7e-5.
+        XCTAssertEqual(CameraLogCurve.vlogToLinear(128.0 / 1023.0), 0,
+                       accuracy: 9e-5)
+        XCTAssertEqual(CameraLogCurve.vlogToLinear(433.0 / 1023.0), 0.18,
+                       accuracy: 5e-4)
+        XCTAssertEqual(CameraLogCurve.vlogToLinear(602.0 / 1023.0), 0.9,
+                       accuracy: 3e-3)
+        XCTAssertEqual(CameraLogCurve.vlogToLinear(0.181), 0.01, accuracy: 1e-6)
+        XCTAssertEqual(CameraLogCurve.vlogToLinear(Float(0.181).nextDown), 0.01, accuracy: 1e-6,
+                       "the toe and the log segment meet")
+    }
+
     func testDecodeInvertsPublishedEncode() {
         let reflectances = [0.02, 0.05, 0.09, 0.18, 0.45, 0.9, 1.8, 3.0, 6.0]
         for curve in CameraLogCurve.allCases {
@@ -191,6 +213,7 @@ final class CameraSourceDecodeTests: XCTestCase {
         XCTAssertNil(CameraLogEncoding.flog.declaredHeadroom)
         XCTAssertNil(CameraLogEncoding.flog2.declaredHeadroom)
         XCTAssertNil(CameraLogEncoding.flog2C.declaredHeadroom)
+        XCTAssertNil(CameraLogEncoding.vlog.declaredHeadroom)
         XCTAssertEqual(CameraLogEncoding.hlg.declaredHeadroom,
                        HLGSceneTransfer.headroom)
     }
@@ -200,7 +223,7 @@ final class CameraSourceDecodeTests: XCTestCase {
     func testGamutMatricesPreserveWhite() {
         let gamuts: [(String, CameraGamut)] = [
             ("Rec.2020", .rec2020), ("S-Gamut3.Cine", .sGamut3Cine),
-            ("S-Gamut", .sGamut), ("F-Gamut C", .fGamutC),
+            ("S-Gamut", .sGamut), ("F-Gamut C", .fGamutC), ("V-Gamut", .vGamut),
             ("Display P3", .displayP3),
         ]
         for (name, gamut) in gamuts {
@@ -272,6 +295,24 @@ final class CameraSourceDecodeTests: XCTestCase {
         XCTAssertEqual(CameraLogEncoding.flog2C.gamut, .fGamutC)
         XCTAssertEqual(CameraLogEncoding.hlg.curve, .hlg)
         XCTAssertEqual(CameraLogEncoding.hlg.gamut, .rec2020)
+        XCTAssertEqual(CameraLogEncoding.vlog.curve, .vLog)
+        XCTAssertEqual(CameraLogEncoding.vlog.gamut, .vGamut)
+        XCTAssertEqual(CameraLogEncoding.vlog.transferFunction, .vLog)
+    }
+
+    /// V-Gamut solved against Rec.2020, D65 on both sides. The expected values come from the
+    /// V-Gamut-to-XYZ matrix Panasonic prints in the reference manual, so they also check that the
+    /// primaries here reproduce it.
+    func testVGamutMatchesThePublishedMatrix() {
+        let expected: [Double] = [
+            1.076352126, -0.013145437, -0.063208344,
+            -0.031860797, 1.151052195, -0.119190776,
+            -0.007931857, -0.034802691, 1.042734766,
+        ]
+        let matrix = CameraGamut.vGamut.toRec2020
+        for (index, value) in expected.enumerated() {
+            XCTAssertEqual(matrix[index], value, accuracy: 2e-6, "element \(index)")
+        }
     }
 
     /// Apple Wide Gamut as published for Apple Log 2 (and carried into the ACES CSC transforms

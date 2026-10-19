@@ -173,7 +173,7 @@ manually if your node receives a different space.
 - **Input Color Space** describes the pixels actually arriving at the node. It supports the
   eight working spaces below plus Apple Log / Rec.2020, Apple Log 2 / Apple Wide Gamut,
   S-Log3 / S-Gamut3.Cine, S-Log3 / S-Gamut3, S-Log2 / S-Gamut, F-Log / F-Gamut,
-  F-Log2 / F-Gamut, F-Log2 C / F-Gamut C, and HLG / Rec.2020.
+  F-Log2 / F-Gamut, F-Log2 C / F-Gamut C, HLG / Rec.2020, and V-Log / V-Gamut.
 - **Output Color Space** independently selects Rec.709 / Gamma 2.4, sRGB,
   DaVinci Wide Gamut / Intermediate, ACEScct (AP1), ACEScg (AP1), Linear Rec.709,
   Linear Display P3, or Linear Rec.2020.

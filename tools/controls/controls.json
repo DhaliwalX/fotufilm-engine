@@ -6796,6 +6796,12 @@
           "id" : "hlg",
           "label" : "HLG / Rec.2020",
           "value" : 16
+        },
+        {
+          "detail" : "",
+          "id" : "vlog",
+          "label" : "V-Log / V-Gamut",
+          "value" : 17
         }
       ],
       "detail" : "The encoding arriving at the Fotufilm node.",
@@ -6909,6 +6915,12 @@
             "id" : "hlg",
             "label" : "HLG / Rec.2020",
             "value" : 16
+          },
+          {
+            "detail" : "",
+            "id" : "vlog",
+            "label" : "V-Log / V-Gamut",
+            "value" : 17
           }
         ],
         "composed" : false,

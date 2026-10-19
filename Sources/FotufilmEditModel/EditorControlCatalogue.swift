@@ -27,6 +27,7 @@ public enum EditorControlCatalogue {
         (.flog2, "F-Log2 / F-Gamut"),
         (.flog2C, "F-Log2 C / F-Gamut C"),
         (.hlg, "HLG / Rec.2020"),
+        (.vlog, "V-Log / V-Gamut"),
     ]
     public static let pluginInputSpaces: [EditorMenuChoice] = pluginWorkingSpaces
         + pluginCameraInputs.enumerated().map { index, item in
