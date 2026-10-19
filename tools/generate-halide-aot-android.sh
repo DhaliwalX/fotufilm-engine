@@ -19,7 +19,9 @@ FINGERPRINT="$({
   cat tools/generate_halide_ios.cpp "$0" "$HALIDE/include/Halide.h" "$LIBHALIDE"
   find Sources/FotufilmHalide/include Sources/FotufilmHalide/Pipeline Sources/FotufilmHalide/Stages \
     -type f -name '*.h' 2>/dev/null | sort | xargs cat
-  env | grep '^FOTUFILM_' | grep -v '^FOTUFILM_AOT_JOBS=' | sort || true
+  # Settings of the generator itself, not of the app built around the kernels.
+  env | grep '^FOTUFILM_' | grep -vE '^FOTUFILM_(AOT_JOBS|ANDROID_[A-Z_]+|SOURCE_BUILD|USE_SOURCE_IDENTITY)=' \
+    | sort || true
 } | shasum -a 256 | cut -c1-32)"
 if [[ -f "$STAMP" && "$(cat "$STAMP")" == "$FINGERPRINT" ]]; then
   echo "Android kernels in $OUTPUT are current."
