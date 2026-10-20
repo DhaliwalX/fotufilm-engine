@@ -152,6 +152,34 @@ public enum PrintFrameRenderer {
     /// The neutral scan-bed visible through the physical holes.
     private static var cutoutColor: CGColor { baseColor(SIMD3(repeating: 0.96)) }
 
+    /// The edge printer's lettering for `text`: glyph outlines in font units, the baseline at
+    /// zero. Stretching its bounding box to a mark's millimetre box letters the way the rebate is.
+    ///
+    /// System vector lettering approximates the edge printer. No manufacturer font or scanned
+    /// asset is shipped. Paths avoid display-sized hinting at small physical sizes.
+    public static func letteringPath(_ text: String) -> CGPath {
+        let font = CTFontCreateWithName("Helvetica" as CFString, 100, nil)
+        let attributes = [kCTFontAttributeName: font] as CFDictionary
+        let string = CFAttributedStringCreate(nil, text as CFString, attributes)!
+        let line = CTLineCreateWithAttributedString(string)
+        let path = CGMutablePath()
+        for run in CTLineGetGlyphRuns(line) as! [CTRun] {
+            let count = CTRunGetGlyphCount(run)
+            var glyphs = [CGGlyph](repeating: 0, count: count)
+            var positions = [CGPoint](repeating: .zero, count: count)
+            CTRunGetGlyphs(run, CFRange(location: 0, length: 0), &glyphs)
+            CTRunGetPositions(run, CFRange(location: 0, length: 0), &positions)
+            let runFont = (CTRunGetAttributes(run) as NSDictionary)[kCTFontAttributeName] as! CTFont
+            for i in 0..<count {
+                if let glyph = CTFontCreatePathForGlyph(runFont, glyphs[i], nil) {
+                    path.addPath(glyph, transform: CGAffineTransform(translationX: positions[i].x,
+                                                                    y: positions[i].y))
+                }
+            }
+        }
+        return path
+    }
+
     private static func drawEdgePrinting(in context: CGContext, geometry g: FilmBorderGeometry,
                                          printing: FilmEdgePrinting, color: CGColor) {
         context.saveGState()
@@ -164,29 +192,9 @@ public enum PrintFrameRenderer {
         let along = g.horizontalTransport ? g.widthMM : g.heightMM
         let across = g.horizontalTransport ? g.heightMM : g.widthMM
         context.clip(to: CGRect(x: 0, y: 0, width: along, height: across))
-        // System vector lettering approximates the edge printer. No manufacturer font or
-        // scanned asset is shipped. Paths avoid display-sized hinting at small physical sizes.
-        let font = CTFontCreateWithName("Helvetica" as CFString, 100, nil)
         context.setFillColor(color)
         for mark in printing.marks {
-            let attributes = [kCTFontAttributeName: font] as CFDictionary
-            let string = CFAttributedStringCreate(nil, mark.text as CFString, attributes)!
-            let line = CTLineCreateWithAttributedString(string)
-            let path = CGMutablePath()
-            for run in CTLineGetGlyphRuns(line) as! [CTRun] {
-                let count = CTRunGetGlyphCount(run)
-                var glyphs = [CGGlyph](repeating: 0, count: count)
-                var positions = [CGPoint](repeating: .zero, count: count)
-                CTRunGetGlyphs(run, CFRange(location: 0, length: 0), &glyphs)
-                CTRunGetPositions(run, CFRange(location: 0, length: 0), &positions)
-                let runFont = (CTRunGetAttributes(run) as NSDictionary)[kCTFontAttributeName] as! CTFont
-                for i in 0..<count {
-                    if let glyph = CTFontCreatePathForGlyph(runFont, glyphs[i], nil) {
-                        path.addPath(glyph, transform: CGAffineTransform(translationX: positions[i].x,
-                                                                        y: positions[i].y))
-                    }
-                }
-            }
+            let path = letteringPath(mark.text)
             let bounds = path.boundingBoxOfPath
             guard !bounds.isEmpty, !bounds.isNull else { continue }
             context.saveGState()
