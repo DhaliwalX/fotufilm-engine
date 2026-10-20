@@ -281,7 +281,7 @@ are embedded. Image pixels, profiles and bit depth remain unchanged by the compo
 Film Border Positive is the same strip as Film Border, as a scanner shows it after inverting the
 negative. The geometry, perforations, sheet notches and edge printing are identical. The scanner
 sets its black point just past the clear base and removes the colour mask, so the rebate is a
-neutral dark 0.02 display-linear P3; that level is a presentation choice, not a measured scanner.
+neutral near-black 0.004 display-linear P3 (about 13 of 255 encoded); that level is a presentation choice, not a measured scanner.
 The open perforations and notches passed more light than the base and clip to black. The lettering
 is the Film Border edge exposure (72% of the stock's density span) normalised on the clear base
 under the reference lamp and inverted, so each stock's letters come out near white, by how little
@@ -328,8 +328,8 @@ the share of the rebate’s light that the edge exposure leaves them (`edgeTrans
 lettering's colour over the base's), so the rebate's grain and glow continue through them; a
 transparency's or an inverted scan's lighter letters are laid over the dark rebate. Blending the
 delivery's encoded values stands in for blending light, which is exact for a power-law transfer
-and close for sRGB. The inverted scan lifts the developed rebate by its 0.02 black point so the
-holes stand below it. Letters therefore carry no halation of their own.
+and close for sRGB. The inverted scan lifts the whole developed strip by its 0.004 black point, so
+film that saw no light reads as the rebate inside the gate too and the holes stand below it. Letters therefore carry no halation of their own.
 
 A scanned negative already shows its own film: its Film Border is drawn around the scan, as is
 integral instant film's mask. The iPhone, iPad and Mac editors, the desktop app and the browser

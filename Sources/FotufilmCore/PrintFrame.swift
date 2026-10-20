@@ -495,8 +495,9 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
     /// The neutral scan bed seen through the physical holes of a film border.
     public static let scanBedRGB = SIMD3<Float>(repeating: 0.96)
     /// An inverted scan's rebate: the scanner sets its black point just past the clear base,
-    /// removing the colour mask. A representative presentation level, not a measured scanner.
-    public static let invertedBaseRGB = SIMD3<Float>(repeating: 0.02)
+    /// removing the colour mask, so the rebate reads near-black with the open holes clipped a
+    /// shade deeper. A representative presentation level, not a measured scanner.
+    public static let invertedBaseRGB = SIMD3<Float>(repeating: 0.004)
 
     public let frame: PrintFrame
     /// The margin multiple for a frame with an adjustable margin; nil for every other frame.
