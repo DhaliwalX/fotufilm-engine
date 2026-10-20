@@ -123,7 +123,13 @@ struct PortableImageDecoder: HostImageDecoder {
         #if os(Android)
         if let image = try Self.working(url) { return image }
         #endif
-        let scene = try Self.scene(url, rawLongEdge: 0)
+        return try Self.decode(url, options: UInt32(FFC_DECODE_SCENE))
+    }
+
+    /// With FFC_DECODE_SENSOR_AREA, a RAW's whole visible sensor area, for RAW Corrections off;
+    /// LibRaw corrects no lens either way.
+    private static func decode(_ url: URL, options: UInt32) throws -> HostImage {
+        let scene = try Self.scene(url, rawLongEdge: 0, options: options)
         let image = HostImage(rgba: scene.rgba, width: scene.width, height: scene.height,
                               contentHeadroom: scene.contentHeadroom)
         image.lensShot = scene.lensShot
@@ -132,8 +138,13 @@ struct PortableImageDecoder: HostImageDecoder {
         image.isRAW = scene.isRAW
         if scene.isRAW {
             image.decodeReduced = { longEdge in
-                let reduced = try Self.scene(url, rawLongEdge: longEdge)
+                let reduced = try Self.scene(url, rawLongEdge: longEdge, options: options)
                 return (reduced.rgba, reduced.width, reduced.height)
+            }
+            if options & UInt32(FFC_DECODE_SENSOR_AREA) == 0 {
+                image.decodeUncorrected = {
+                    try Self.decode(url, options: options | UInt32(FFC_DECODE_SENSOR_AREA))
+                }
             }
         }
         return image
@@ -177,9 +188,9 @@ struct PortableImageDecoder: HostImageDecoder {
     }
     #endif
 
-    private static func scene(_ url: URL, rawLongEdge: Int) throws -> PortableCodecs.Decoded {
-        var scene = try PortableCodecs.decode(url, options: UInt32(FFC_DECODE_SCENE),
-                                              rawLongEdge: rawLongEdge)
+    private static func scene(_ url: URL, rawLongEdge: Int,
+                              options: UInt32 = UInt32(FFC_DECODE_SCENE)) throws -> PortableCodecs.Decoded {
+        var scene = try PortableCodecs.decode(url, options: options, rawLongEdge: rawLongEdge)
         if scene.isRAW, let corrected = CameraProfileCorrection.resolve(
             camera: scene.camera, sceneKelvin: scene.sceneKelvin) {
             CameraProfileCorrection.apply(corrected.matrix, toRGBA: &scene.rgba)

@@ -3188,6 +3188,34 @@
     },
     {
       "availability" : "always",
+      "detail" : "Apply the camera's lens and sensor-edge corrections to a RAW photograph.",
+      "documentation" : "On, a camera RAW decodes as the camera's maker intends: Apple's decoder corrects the lens's distortion and vignetting where it knows the lens, and the picture is the camera's default crop. Off shows the capture as the sensor recorded it — the lens's own distortion and dark corners, and on Linux the whole sensor area with its edges — so the true flaws of the capture print. Choosing Film Border or Film Border Positive turns it off. On the Mac and iPhone Core Image always delivers the camera's crop. Lens Correction's own correction still applies when it is on. Included in saved edits and exports.",
+      "drives" : [
+
+      ],
+      "field" : "rawCorrections",
+      "group" : "lens",
+      "kind" : "toggle",
+      "omitted" : {
+        "android" : "Android decodes RAW with LibRaw, which applies no lens correction.",
+        "cli" : "the command line renders the whole frame as given",
+        "finalcut" : "the host owns the frame's geometry and its colour corrector",
+        "resolve" : "the host owns the frame's geometry and its colour corrector",
+        "web" : "The browser decodes RAW with LibRaw, which applies no lens correction and shows the whole sensor area."
+      },
+      "persistedKey" : "rawCorrections",
+      "restingOn" : true,
+      "scope" : "edit",
+      "section" : "lensCorrection",
+      "storedEncoding" : "same",
+      "surfaces" : [
+        "app",
+        "desktop"
+      ],
+      "title" : "RAW Corrections"
+    },
+    {
+      "availability" : "always",
       "detail" : "Correct lens distortion, dark corners, and color fringing.",
       "documentation" : "Enables the matched lens profile or the calibrated camera profile.",
       "drives" : [

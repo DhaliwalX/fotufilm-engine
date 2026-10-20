@@ -26,11 +26,14 @@ struct SceneGeometry: Decodable, Equatable {
     var perspectiveH = 0.0
     var crop: [[Double]] = SceneGeometry.fullCrop
     var lens: Lens?
+    /// RAW Corrections: false develops a camera RAW from its uncorrected decode
+    /// (`HostImage.uncorrected`), whose frame the rest of the geometry then applies to.
+    var rawCorrections = true
 
     static let fullCrop: [[Double]] = [[0, 0], [1, 0], [1, 1], [0, 1]]
 
     private enum CodingKeys: String, CodingKey {
-        case rotation, flip, straighten, perspectiveV, perspectiveH, crop, lens
+        case rotation, flip, straighten, perspectiveV, perspectiveH, crop, lens, rawCorrections
     }
 
     init() {}
@@ -44,6 +47,7 @@ struct SceneGeometry: Decodable, Equatable {
         perspectiveH = try values.decodeIfPresent(Double.self, forKey: .perspectiveH) ?? 0
         crop = try values.decodeIfPresent([[Double]].self, forKey: .crop) ?? Self.fullCrop
         lens = try values.decodeIfPresent(Lens.self, forKey: .lens).flatMap { $0.enabled ? $0 : nil }
+        rawCorrections = try values.decodeIfPresent(Bool.self, forKey: .rawCorrections) ?? true
         guard (0...3).contains(rotation), abs(straighten) <= 15, crop.count == 4,
               crop.allSatisfy({ $0.count == 2 && $0.allSatisfy(\.isFinite) }) else {
             throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath,

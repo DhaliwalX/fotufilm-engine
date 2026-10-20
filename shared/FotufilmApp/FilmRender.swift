@@ -166,6 +166,8 @@ enum FilmRender {
         /// develops the reading it was made with. Nil and false for a photograph.
         var negative: WebNativeEdit.Negative?
         var printsPlain: Bool
+        /// RAW Corrections, which decide the decode itself.
+        var rawCorrections: Bool
 
         init(state: EditState, longEdge: Int?,
              viewport: PreviewViewport? = nil) {
@@ -183,6 +185,7 @@ enum FilmRender {
             lens = state.lensSettings
             negative = state.negative
             printsPlain = state.negative != nil && !state.hasFilm
+            rawCorrections = state.rawCorrections
         }
     }
 
@@ -462,7 +465,8 @@ enum FilmRender {
             return source.decoded(longEdge: decodeLongEdge, neutralKelvin: fixedCaptureIlluminant,
                                   upright: upright,
                                   decodeMode: .expandedHDR,
-                                  correctingLens: lens.supersedesDecoder ? false : nil)
+                                  correctingLens: lens.supersedesDecoder || !state.rawCorrections
+                                      ? false : nil)
         }) else { return nil }
         // What the scan's framing reads as, measured on the whole framing so a viewport, a strip
         // tile and the export all print alike; and in Normal, the plain positive laid down.

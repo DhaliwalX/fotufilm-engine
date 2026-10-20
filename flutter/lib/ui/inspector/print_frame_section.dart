@@ -42,6 +42,8 @@ class PrintFrameSection extends StatelessWidget {
           'printFrame': frame,
           // A film border or slide mount develops on Legacy halation, as the web editor's do.
           if (frame == 'film' || frame == 'slideMount') 'halationModel': 'legacy',
+          // A film border shows a RAW as its sensor captured it (RAW Corrections).
+          if (frame == 'film' || frame == 'filmPositive') 'rawCorrections': false,
         }),
       ),
       // The stock's edge printing on a film border, and the frame of the roll it is cut from.

@@ -41,6 +41,13 @@ photograph and is moved onto the crop for the develop. In the desktop and browse
 on the fitted picture moves the photograph under the aperture, as far as its edges; the framing
 is saved with the edit and undone in one step. Every other frame shows the whole photograph.
 
+Choosing Film Border or Film Border Positive in the desktop and browser editors also turns RAW
+Corrections off, so a camera RAW in the film's frame shows the capture as the sensor recorded it:
+Core Image's lens distortion and vignetting correction is left out (`HostImage.uncorrected`,
+`RawDecode.Recipe.correctsLens`), and on Linux LibRaw delivers the whole visible sensor area
+rather than the camera's default crop (`FFC_DECODE_SENSOR_AREA`). Core Image always delivers the
+camera's crop; the browser's LibRaw decode corrects nothing and already shows the whole area.
+
 | Format | Image aperture, mm | Film segment, mm | Edge construction |
 | --- | --- | --- | --- |
 | 135 still | 36 × 24 | 38 × 35 | Two rows of KS holes, eight pitches per frame |

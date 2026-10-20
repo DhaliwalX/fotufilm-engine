@@ -79,6 +79,7 @@
 <thead><tr><th>Control</th><th>Description</th><th>Default</th></tr></thead>
 <tbody data-controls="lens">
   <tr><td>Filters</td><td>An ordered stack of absorbing and diffusion filters before film exposure.</td><td></td></tr>
+  <tr><td>RAW Corrections</td><td>On, a camera RAW decodes as the camera's maker intends: Apple's decoder corrects the lens's distortion and vignetting where it knows the lens, and the picture is the camera's default crop. Off shows the capture as the sensor recorded it — the lens's own distortion and dark corners, and on Linux the whole sensor area with its edges — so the true flaws of the capture print. Choosing Film Border or Film Border Positive turns it off. On the Mac and iPhone Core Image always delivers the camera's crop. Lens Correction's own correction still applies when it is on. Included in saved edits and exports.</td><td>On</td></tr>
   <tr><td>Lens Correction</td><td>Enables the matched lens profile or the calibrated camera profile.</td><td>Off</td></tr>
   <tr><td>Lens</td><td>Identifies the matched lens model.</td><td>Matched</td></tr>
   <tr><td>Amount</td><td>Sets overall correction intensity.</td><td>100%</td></tr>
@@ -129,7 +130,9 @@
               Film Border follows the stock’s native format, or an explicit Film Gauge choice, with
               physical aperture proportions, perforations, and the stock’s own base color. A photograph
               of another shape is cropped to fill the aperture; drag the picture to choose the part
-              that shows, as far as the photograph's edges. Negative stocks
+              that shows, as far as the photograph's edges. Choosing a Film Border turns RAW
+              Corrections off, so a camera RAW shows its lens's own distortion and vignetting;
+              turn it back on under Lens. Negative stocks
               show their developed negative on a standard light box, including the color mask; reversal
               and instant film stay positive. Every choice other than Film Border and Slide Mount restores the selected output medium.
               The whole strip is developed with the photograph, so the film's fog, grain and the

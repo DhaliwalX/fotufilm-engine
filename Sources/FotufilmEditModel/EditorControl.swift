@@ -22,7 +22,7 @@ public enum EditorControlField: String, CaseIterable, Sendable, Codable {
 
     case lensFilterStack, lensFilter1, lensFilter2, lensFilter3, metering, diffusion, diffusionGrade
     case focalLength, flare, filterCoating
-    case lensCorrection, lensProfile, lensAmount
+    case rawCorrections, lensCorrection, lensProfile, lensAmount
     case lensDistortion, lensVignetting, lensRedCyan, lensBlueYellow
 
     case screenCyan, screenMagenta, screenYellow

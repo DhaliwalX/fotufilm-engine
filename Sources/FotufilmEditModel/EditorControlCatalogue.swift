@@ -1256,6 +1256,16 @@ public enum EditorControlCatalogue {
                                          generic: false)),
 
         EditorControl(
+            .rawCorrections, title: "RAW Corrections",
+            detail: "Apply the camera's lens and sensor-edge corrections to a RAW photograph.",
+            section: .lensCorrection, kind: .toggle(restingOn: true),
+            surfaces: [.app, .desktop],
+            omitted: hostsOwnIt.filter { $0.key != .web }.merging([
+                .android: "Android decodes RAW with LibRaw, which applies no lens correction.",
+                .web: "The browser decodes RAW with LibRaw, which applies no lens correction and shows the whole sensor area.",
+            ]) { $1 },
+            documentation: "On, a camera RAW decodes as the camera's maker intends: Apple's decoder corrects the lens's distortion and vignetting where it knows the lens, and the picture is the camera's default crop. Off shows the capture as the sensor recorded it — the lens's own distortion and dark corners, and on Linux the whole sensor area with its edges — so the true flaws of the capture print. Choosing Film Border or Film Border Positive turns it off. On the Mac and iPhone Core Image always delivers the camera's crop. Lens Correction's own correction still applies when it is on. Included in saved edits and exports."),
+        EditorControl(
             .lensCorrection, title: "Lens Correction",
             detail: "Correct lens distortion, dark corners, and color fringing.",
             section: .lensCorrection, kind: .toggle(restingOn: false),

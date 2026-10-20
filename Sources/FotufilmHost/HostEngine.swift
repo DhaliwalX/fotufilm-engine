@@ -45,10 +45,26 @@ public final class HostImage {
     /// Decodes the file again no larger than needed for a long edge (twice it, for a RAW's
     /// demosaic), as the Mac app decodes an uncropped preview; nil where it reduces the full decode.
     var decodeReduced: ((_ longEdge: Int) throws -> (rgba: [Float], width: Int, height: Int))?
+    /// Decodes a camera RAW again with none of the camera's corrections (RAW Corrections off):
+    /// no lens distortion or vignetting correction, and where the decoder can, the whole sensor
+    /// area instead of the camera's crop. Made on first use and kept with this one.
+    var decodeUncorrected: (() throws -> HostImage)?
+    private var uncorrectedImage: HostImage?
     private let lock = NSLock()
     /// The most recent reductions, least recently used first: the settled preview, a moving
     /// edit's drafts and the film strip's thumbnails. A draft was made from another reduction.
     private var reductions: [(width: Int, height: Int, rgba: [Float], draft: Bool)] = []
+
+    /// The photograph without the camera's corrections, or nil where it has none to leave out.
+    func uncorrected() throws -> HostImage? {
+        lock.lock()
+        defer { lock.unlock() }
+        if let uncorrectedImage { return uncorrectedImage }
+        guard let decodeUncorrected else { return nil }
+        let made = try decodeUncorrected()
+        uncorrectedImage = made
+        return made
+    }
 
     /// What the editor's image descriptor says about the source.
     var descriptor: [String: Any] {

@@ -23,6 +23,7 @@ Json defaultEdit(Catalogue catalogue, [String? stock, String? filmMedium]) => {
       'filterMetering': 'throughTheLens',
       'medium': filmMedium,
       'mediumFollowsFilm': true,
+      'rawCorrections': true,
       'printFrame': 'none',
       'printFrameEdgePrinting': true,
       'printFrameNumber': 1,

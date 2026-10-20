@@ -23,6 +23,9 @@ enum {
     /* With FFC_DECODE_SCAN, one exposure of a trichromatic scan (RAW): the camera's daylight
      * balance rather than the shot's, each colour from its own photosites (half size). */
     FFC_DECODE_EXPOSURE = 1 << 2,
+    /* A RAW's whole visible sensor area rather than the camera's default or inset crop, so its
+     * edges show as captured (RAW Corrections off). */
+    FFC_DECODE_SENSOR_AREA = 1 << 3,
 };
 
 /* What the file records about how it was made; strings are empty when unknown. */
@@ -75,7 +78,7 @@ void ffc_image_free(ffc_image *image);
  * source_width/height describe the upright default crop before preview reduction.
  * Returns FFC_RAW_OK, FFC_RAW_UNSUPPORTED (not recognized by LibRaw), or
  * FFC_RAW_ERROR. Failure clears out and source dimensions. Release success with ffc_image_free.
- * options accepts FFC_DECODE_SCENE or FFC_DECODE_SCAN. */
+ * options accepts FFC_DECODE_SCENE or FFC_DECODE_SCAN, with FFC_DECODE_SENSOR_AREA. */
 typedef struct ffc_raw_limits {
     uint64_t max_file_bytes;
     uint64_t max_sensor_pixels;

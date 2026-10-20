@@ -316,12 +316,13 @@ static void developRaw(const std::string &path, uint32_t options, uint32_t longE
     for (int k = 0; k < 9; ++k) matrix[k] *= scale;
 
     // The frame Core Image delivers: a DNG's default crop, else the maker's inset crop, within
-    // the sensor's visible area; in the pre-turn frame, then carried through LibRaw's turn.
+    // the sensor's visible area, or that whole area when asked (FFC_DECODE_SENSOR_AREA); in the
+    // pre-turn frame, then carried through LibRaw's turn.
     const auto &sizes = data.sizes;
-    if (diamondLayout || !(crop[0] >= 0 && crop[1] >= 0 && crop[2] > 0 && crop[3] > 0 && crop[0] + crop[2] <= visibleWidth
+    if ((options & FFC_DECODE_SENSOR_AREA) || diamondLayout || !(crop[0] >= 0 && crop[1] >= 0 && crop[2] > 0 && crop[3] > 0 && crop[0] + crop[2] <= visibleWidth
           && crop[1] + crop[3] <= visibleHeight)) {
         crop = {0, 0, double(visibleWidth), double(visibleHeight)};
-        if (!diamondLayout && inset.cwidth > 0 && inset.cheight > 0 && inset.cwidth != 0xFFFF
+        if (!(options & FFC_DECODE_SENSOR_AREA) && !diamondLayout && inset.cwidth > 0 && inset.cheight > 0 && inset.cwidth != 0xFFFF
             && inset.cleft + inset.cwidth <= visibleWidth && inset.ctop + inset.cheight <= visibleHeight)
             crop = {double(inset.cleft), double(inset.ctop), double(inset.cwidth), double(inset.cheight)};
     }
@@ -431,7 +432,7 @@ extern "C" int32_t ffc_decode_raw(const char *path, uint32_t options, uint32_t l
     try {
         if (!path || !out || !sourceWidth || !sourceHeight || !limits || !limits->max_file_bytes
             || !limits->max_sensor_pixels || !limits->max_working_bytes
-            || (options & ~(FFC_DECODE_SCAN | FFC_DECODE_EXPOSURE)))
+            || (options & ~(FFC_DECODE_SCAN | FFC_DECODE_EXPOSURE | FFC_DECODE_SENSOR_AREA)))
             throw ffc::Failure("Invalid RAW decode request.");
         ffc::developRaw(path, options, longEdge, limits, *out, *sourceWidth, *sourceHeight);
         return FFC_RAW_OK;

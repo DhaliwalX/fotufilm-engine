@@ -119,6 +119,8 @@ export const defaultEdit = (stock = null) => ({
   medium: null,
   // Match Film: the medium follows the film, to each film's own, as the Mac app's does.
   mediumFollowsFilm: false,
+  // RAW Corrections, which the native decoders apply; the browser's decoder corrects nothing.
+  rawCorrections: true,
   printFrame: "none",
   printFrameMargin: 1,
   printFrameEdgePrinting: true,
@@ -396,6 +398,7 @@ export function parseEdit(json, stockIDs) {
     cropShape: edit.cropShape ?? "corners",
     medium: edit.medium ?? null,
     mediumFollowsFilm: edit.mediumFollowsFilm === true,
+    rawCorrections: edit.rawCorrections !== false,
     printFrame: parsePrintFrame(edit.printFrame),
     printFrameMargin: parsePrintFrameMargin(edit.printFrameMargin),
     printFrameEdgePrinting: parsePrintFrameEdgePrinting(edit.printFrameEdgePrinting),

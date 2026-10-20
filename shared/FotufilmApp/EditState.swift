@@ -437,6 +437,9 @@ struct EditState: Equatable {
     /// would give, rather than an enlargement of the negative.
     var framingZoom = 1.0
 
+    /// RAW Corrections: false decodes a camera RAW without Core Image's lens correction, so its
+    /// distortion and vignetting show as captured.
+    var rawCorrections = true
     /// Whether to apply lens correction. Disabled by default because correction resamples the image.
     var lensCorrectionEnabled = false
     /// The profile the photographer pinned, overriding what the metadata matched. Nil lets the

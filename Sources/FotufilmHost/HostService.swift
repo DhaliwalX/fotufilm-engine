@@ -410,7 +410,9 @@ public final class HostService {
         } catch {
             throw HostEngine.Failure(description: "Unreadable render request: \(error)")
         }
-        let image = try source ?? self.image(request.handle)
+        let opened = try source ?? self.image(request.handle)
+        // RAW Corrections off develops the capture as the sensor recorded it.
+        let image = request.edit.rawCorrections ? opened : try opened.uncorrected() ?? opened
         image.video?.select(params)
         let geometry = (request.cropMode == true ? request.edit.uncropped() : request.edit)
             .snapped(width: image.width, height: image.height)

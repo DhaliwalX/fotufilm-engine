@@ -2,6 +2,7 @@
 // photograph's lens, or one chosen), the engine's note on what it found, the amount and the manual
 // corrections, and the imported lens-profile catalogue.
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import '../../model/catalogue.dart';
@@ -35,7 +36,16 @@ class LensSection extends StatelessWidget {
 
     final amount = catalogue.catalogueSlider('lensAmount', 'Lens');
     final profileID = lens['profileID'] as String?;
+    final raw = catalogue.control('rawCorrections');
     return Section(title: 'Lens', children: [
+      // The browser's RAW decoder corrects nothing, so it has no RAW Corrections to turn off.
+      if (doc != null && doc.raw && !kIsWeb)
+        SwitchRow(
+          label: raw['title'] as String,
+          detail: raw['detail'] as String?,
+          value: editor.edit['rawCorrections'] as bool? ?? true,
+          onChanged: (on) => editor.change({'rawCorrections': on}),
+        ),
       SwitchRow(
         label: correction['title'] as String,
         detail: correction['detail'] as String?,

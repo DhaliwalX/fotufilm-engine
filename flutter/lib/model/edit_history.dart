@@ -113,6 +113,7 @@ _Kind _stepKind(Json? before, Json? after) {
       return 'Channel Contrast Match';
     }
     if (_profileChanged(before, after, (f) => f == 'negativeViewing')) return 'Negative Viewing';
+    if (_changed(before, after, const ['rawCorrections'])) return 'RAW Corrections';
     if (_changed(before, after, const ['printFrame'])) return 'Print Frame';
     if (_changed(before, after, const ['printFrameEdgePrinting'])) return 'Edge Printing';
     if (_changed(before, after, const ['printFrameNumber'])) return 'Frame Number';

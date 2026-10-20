@@ -100,6 +100,9 @@ Json parseEdit(String text, Catalogue catalogue, Iterable<String?> stocks) {
           !frameNumbers.any((c) => c['value'] == edit['printFrameNumber']))) {
     throw const EditProblem('Invalid film border settings.');
   }
+  if (edit['rawCorrections'] != null && edit['rawCorrections'] is! bool) {
+    throw const EditProblem('Invalid RAW corrections.');
+  }
   final framing = edit['printFrameFraming'];
   if (framing != null &&
       (framing is! List ||

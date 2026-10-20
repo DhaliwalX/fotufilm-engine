@@ -103,6 +103,7 @@ extension EditorControlField {
             return .unstored("a photograph already carries its own lens's glare")
         case .filterCoating:
             return .unstored("the app's filters are multi-coated")
+        case .rawCorrections: return .flag(\.rawCorrections)
         case .lensCorrection: return .flag(\.lensCorrectionEnabled)
         case .lensProfile:
             return .bespoke { $0.lensProfileID != nil }
