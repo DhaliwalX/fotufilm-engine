@@ -51,8 +51,7 @@ class KeptEdits {
       }
     }
     return (
-      edit: newPhotoEdit(editor.catalogue, editor.settings, currentFilm,
-          editor.stocks.map((s) => s['id'] as String)),
+      edit: newPhotoEdit(editor.catalogue, editor.settings, currentFilm, editor.stocks),
       saved: false,
     );
   }

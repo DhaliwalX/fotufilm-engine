@@ -82,7 +82,9 @@ class FilmSuggestion extends ChangeNotifier {
       if (doc.edit['stock'] != starting || best == starting) return;
       // A change the app made for the photograph, not a step to undo.
       final before = doc.history.present;
-      doc.history.present = copyEdit(before)..['stock'] = best;
+      doc.history.present = copyEdit(before)
+        ..['stock'] = best
+        ..['medium'] = mediumOnFilm(before, editor.stockById(best));
       editor.historyChanged(doc, 'replace', before);
     } catch (_) {
       // Without a suggestion the photograph keeps the film it opened on.

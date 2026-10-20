@@ -201,17 +201,17 @@ Json restoreEdit(String text, Catalogue catalogue, List<Json> stocks) {
 }
 
 /// A newly opened photograph's edit: the default edit on `currentFilm`, with the starting film,
-/// format and film model the settings choose. Films the library lacks are ignored.
-Json newPhotoEdit(Catalogue catalogue, AppSettings settings, String? currentFilm,
-    Iterable<String> stockIds) {
-  final edit = defaultEdit(catalogue, currentFilm);
-  final profile = edit['profile'] as Map;
+/// format and film model the settings choose, printing on the film's own medium. Films the library
+/// lacks are ignored.
+Json newPhotoEdit(
+    Catalogue catalogue, AppSettings settings, String? currentFilm, Iterable<Json> stocks) {
   final film = settings.get<String>('startingFilm');
-  if (film == 'none') {
-    edit['stock'] = null;
-  } else if (film != null && stockIds.contains(film)) {
-    edit['stock'] = film;
-  }
+  final id = film == 'none'
+      ? null
+      : (film != null && stocks.any((s) => s['id'] == film) ? film : currentFilm);
+  final stock = stocks.where((s) => s['id'] == id).firstOrNull;
+  final edit = defaultEdit(catalogue, id, stock?['filmMedium'] as String?);
+  final profile = edit['profile'] as Map;
   final format = settings.get<String>('startingFormat');
   if (format != null) edit['format'] = format;
   edit['halationModel'] = settings.get<String>('halationModel') ?? 'legacy';

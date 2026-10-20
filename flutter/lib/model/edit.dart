@@ -4,7 +4,9 @@ import 'dart:convert';
 
 import 'catalogue.dart';
 
-Json defaultEdit(Catalogue catalogue, [String? stock]) => {
+/// A new edit prints on what its film prints on (Match Film): `filmMedium` is the film's own, the
+/// library entry's (`WebStockCatalogue.entries`).
+Json defaultEdit(Catalogue catalogue, [String? stock, String? filmMedium]) => {
       'stock': stock,
       'format': null,
       'profile': <String, dynamic>{},
@@ -19,8 +21,8 @@ Json defaultEdit(Catalogue catalogue, [String? stock]) => {
         'blueYellow': 0,
       },
       'filterMetering': 'throughTheLens',
-      'medium': null,
-      'mediumFollowsFilm': false,
+      'medium': filmMedium,
+      'mediumFollowsFilm': true,
       'printFrame': 'none',
       'digitalReference': 'auto-levels',
       'halationModel': 'legacy',
@@ -45,6 +47,14 @@ Json defaultEdit(Catalogue catalogue, [String? stock]) => {
       'ratio': 'free',
       'negative': null,
     };
+
+/// The medium `edit` keeps when its film becomes `stock`: the film's own while it follows the
+/// film, else the one it names where the next film offers it, else the film's default (null).
+String? mediumOnFilm(Json edit, Json? stock) {
+  if (edit['mediumFollowsFilm'] == true) return stock?['filmMedium'] as String?;
+  final media = ((stock?['media'] as List?) ?? const []).map((m) => (m as Map)['id']);
+  return media.contains(edit['medium']) ? edit['medium'] as String? : null;
+}
 
 /// A deep copy, so a step of the history never shares a map with the next.
 Json copyEdit(Json edit) => jsonDecode(jsonEncode(edit)) as Json;

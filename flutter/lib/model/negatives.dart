@@ -79,11 +79,15 @@ class NegativeScans {
 
   /// A new negative's edit: a new photograph's (`base`), on the film its base looks like, read
   /// against an estimated base.
-  Json startingEdit(Json base, Json? scan, String? scanLight) => {
-        ...base,
-        'stock': negativeStartingStock(scan, editor.stocks, base['stock'] as String?),
-        'negative': newNegative(scanLight ?? 'white'),
-      };
+  Json startingEdit(Json base, Json? scan, String? scanLight) {
+    final stock = negativeStartingStock(scan, editor.stocks, base['stock'] as String?);
+    return {
+      ...base,
+      'stock': stock,
+      'medium': mediumOnFilm(base, editor.stockById(stock)),
+      'negative': newNegative(scanLight ?? 'white'),
+    };
+  }
 
   /// Import Trichromatic Scan…: each frame's exposures under red, green and blue light, merged
   /// into scans beside the red ones.

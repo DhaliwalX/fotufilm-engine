@@ -169,6 +169,10 @@ class EditorModel extends ChangeNotifier implements RenderHost {
   late final Json _emptyEdit = defaultEdit(catalogue);
   Json? get selectedStock => stockById(edit['stock'] as String?);
 
+  /// The default edit on film `id`, printing on the film's own medium.
+  Json blankEdit(String? id) =>
+      defaultEdit(catalogue, id, stockById(id)?['filmMedium'] as String?);
+
   /// The picture on show at full size: the cropped photograph, or the crop tool's whole frame.
   /// Until one is on show, the one asked for.
   ui.Size get photoSize => active == null
@@ -454,7 +458,7 @@ class EditorModel extends ChangeNotifier implements RenderHost {
   bool get canUndo => active?.history.past.isNotEmpty ?? false;
   bool get canRedo => active?.history.future.isNotEmpty ?? false;
   bool get edited =>
-      active != null && !sameEdit(edit, defaultEdit(catalogue, edit['stock'] as String?));
+      active != null && !sameEdit(edit, blankEdit(edit['stock'] as String?));
 
   /// Told of each change to a photograph's history, so features follow edits (kept edits, Auto
   /// Adjust).
@@ -539,13 +543,7 @@ class EditorModel extends ChangeNotifier implements RenderHost {
 
   void chooseStock(String? id) {
     if (active == null) return;
-    final stock = stockById(id);
-    // A medium the next film has no print for falls back to its own default, as the web does.
-    final media = ((stock?['media'] as List?) ?? const []).map((m) => (m as Map)['id']).toSet();
-    final medium = edit['mediumFollowsFilm'] == true
-        ? (stock?['filmMedium'])
-        : (media.contains(edit['medium']) ? edit['medium'] : null);
-    change({'stock': id, 'medium': medium});
+    change({'stock': id, 'medium': mediumOnFilm(edit, stockById(id))});
   }
 
   void undo() => _step(back: true);
@@ -567,7 +565,7 @@ class EditorModel extends ChangeNotifier implements RenderHost {
   }
 
   void resetEdit() {
-    if (active != null) change(defaultEdit(catalogue, edit['stock'] as String?));
+    if (active != null) change(blankEdit(edit['stock'] as String?));
   }
 
   void newGrainPattern() => change({'seed': math.Random().nextInt(0x7fffffff) + 1});
