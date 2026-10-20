@@ -109,18 +109,20 @@ int main(int argc, char **argv) {
     const auto *bright = sceneHeadroom.value.rgba + (96 * 320 + 160) * 4;
     require(*std::max_element(bright, bright + 3) > 1.5f, "scene highlight blending retains floating-point range");
 
-    // The preview samples the same linear camera values before matrix conversion. Verify its
-    // pixel centres independently against the full raster, including the last row and column.
+    // The preview averages the same linear camera values before matrix conversion: reduced by
+    // half or more, each pixel is the mean of the developed pixels it covers. Verify that against
+    // the full raster independently, including the last row and column.
     for (uint32_t y = 0; y < small.value.height; y += 5) for (uint32_t x = 0; x < small.value.width; x += 5) {
-        const double sx = (x + 0.5) * odd.value.width / small.value.width - 0.5;
-        const double sy = (y + 0.5) * odd.value.height / small.value.height - 0.5;
-        const uint32_t x0 = uint32_t(sx), y0 = uint32_t(sy);
-        const double fx = sx - x0, fy = sy - y0;
+        const uint32_t rowFirst = y * odd.value.height / small.value.height;
+        const uint32_t rowEnd = std::max(rowFirst + 1, (y + 1) * odd.value.height / small.value.height);
+        const uint32_t first = x * odd.value.width / small.value.width;
+        const uint32_t last = std::max(first + 1, (x + 1) * odd.value.width / small.value.width);
         for (int c = 0; c < 3; ++c) {
-            const auto sample = [&](uint32_t xx, uint32_t yy) { return odd.value.rgba[(yy * odd.value.width + xx) * 4 + c]; };
-            const double expected = sample(x0, y0) * (1 - fx) * (1 - fy) + sample(x0 + 1, y0) * fx * (1 - fy)
-                + sample(x0, y0 + 1) * (1 - fx) * fy + sample(x0 + 1, y0 + 1) * fx * fy;
-            close(small.value.rgba[(y * small.value.width + x) * 4 + c], float(expected), 1e-6f, "linear preview reduction");
+            double sum = 0;
+            for (uint32_t yy = rowFirst; yy < rowEnd; ++yy)
+                for (uint32_t xx = first; xx < last; ++xx) sum += odd.value.rgba[(yy * odd.value.width + xx) * 4 + c];
+            const double expected = sum / (double(rowEnd - rowFirst) * (last - first));
+            close(small.value.rgba[(y * small.value.width + x) * 4 + c], float(expected), 1e-5f, "linear preview reduction");
         }
     }
 
