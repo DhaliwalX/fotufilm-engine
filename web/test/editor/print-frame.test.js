@@ -175,16 +175,31 @@ test('a film border strip continues the photograph past its edges', async () => 
     { left: 1, right: 0, top: 0, bottom: 0 }).read(0, 0, 3, 1)
   assert.deepEqual([promised[0], promised[4], promised[8]], [0, 0, 1])
 })
-test("perforations trace the native renderer's imperfect edges", () => {
-  // The same points PrintFrameTests checks natively.
-  const ks = perforationOutline(2, 7.125, 1.98, 2.794, 0.5, false, 3);
-  const bh = perforationOutline(2, 7.125, 1.98, 2.794, 0.5, true, 4097);
+test("perforations are cut clean, as the native renderer traces them", () => {
+  // The same holes PrintFrameTests.testPerforationsAreCutClean checks natively.
+  const ks = perforationOutline(2, 7.125, 1.98, 2.794, 0.5, false);
   assert.equal(ks.length, 220);
-  assert.ok(Math.abs(ks[0][0] - 2.494434539) < 1e-6);
-  assert.ok(Math.abs(ks[100][1] - 8.380326384) < 1e-6);
-  assert.equal(bh.length, 156);
-  assert.ok(Math.abs(bh[100][0] - 2.238402747) < 1e-6);
-  assert.notDeepEqual(perforationOutline(2, 7.125, 1.98, 2.794, 0.5, false, 4), ks);
+  for (const [x, y] of ks) {
+    const qx = Math.abs(x - 2.99) - 0.49,
+      qy = Math.abs(y - 7.125) - 0.897;
+    const d = Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - 0.5;
+    assert.ok(Math.abs(d) < 1e-9, `${x}, ${y}`);
+  }
+  const next = perforationOutline(2, 7.125 + 4.75, 1.98, 2.794, 0.5, false);
+  next.forEach(([x, y], i) => {
+    assert.ok(Math.abs(x - ks[i][0]) < 1e-12 && Math.abs(y - ks[i][1] - 4.75) < 1e-12);
+  });
+  const bh = perforationOutline(2, 7.125, 2.794, 1.854, 0, true);
+  assert.equal(bh.length, 208);
+  for (const [x, y] of bh) {
+    const dx = x - 3.397,
+      dy = y - 7.125;
+    assert.ok(
+      Math.abs(Math.hypot(dx, dy) - 1.397) < 1e-9 ||
+        (Math.abs(Math.abs(dy) - 0.927) < 1e-9 && Math.abs(dx) <= 1.397),
+      `${x}, ${y}`,
+    );
+  }
 });
 
 test("a panorama's frame count survives save/load and reaches the frame plan", () => {
