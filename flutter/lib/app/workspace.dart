@@ -134,7 +134,7 @@ class _WorkspaceState extends State<Workspace> {
 
   Future<void> _open() async {
     if (!editor.ready) return;
-    final files = await openFiles(acceptedTypeGroups: [
+    final files = await chooseFiles([
       fileType('Images', imageExtensions),
       fileType('Videos', videoExtensions),
     ]);
