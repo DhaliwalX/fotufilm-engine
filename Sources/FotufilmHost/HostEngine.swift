@@ -134,7 +134,7 @@ public final class HostImage {
         // over is the two sizes' rounding, which the copy covers.
         if let decodeLarger, targetWidth > sceneWidth + 1 || targetHeight > sceneHeight + 1 {
             let larger = (try? decodeLarger(max(targetWidth, targetHeight)))
-                ?? (scene, sceneWidth, sceneHeight)
+                ?? (rgba: scene, width: sceneWidth, height: sceneHeight)
             if larger.width == targetWidth && larger.height == targetHeight { return larger.rgba }
             return AreaResample.reduce(larger.rgba, width: larger.width, height: larger.height,
                                        to: targetWidth, targetHeight)
