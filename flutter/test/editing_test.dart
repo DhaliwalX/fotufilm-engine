@@ -93,11 +93,36 @@ void main() {
 
     test('a new film keeps a medium only where it offers one', () {
       final source = defaultEdit(catalogue, 'portra400');
-      final target = defaultEdit(catalogue, 'gold200')..['medium'] = 'ra4';
+      final target = defaultEdit(catalogue, 'gold200')
+        ..['medium'] = 'ra4'
+        ..['mediumFollowsFilm'] = false;
       final pasted =
           pastedEdit(catalogue, target, CopiedSettings(['filmStock'], source), stocks);
       expect(pasted['stock'], 'portra400');
       expect(pasted['medium'], isNull);
+    });
+
+    test('an edit matching its film prints on each film’s own medium', () {
+      final edit = defaultEdit(catalogue, 'portra400', 'endura');
+      expect(edit['mediumFollowsFilm'], isTrue);
+      expect(mediumOnFilm(edit, stocks.first), 'ra4');
+      expect(mediumOnFilm(edit, null), isNull);
+      // A medium chosen by hand stays where the next film offers it.
+      final chosen = copyEdit(edit)
+        ..['medium'] = 'ra4'
+        ..['mediumFollowsFilm'] = false;
+      expect(mediumOnFilm(chosen, stocks.first), 'ra4');
+      expect(mediumOnFilm(chosen, stocks.last), isNull);
+      final pasted = pastedEdit(catalogue, defaultEdit(catalogue, 'portra400'),
+          CopiedSettings(['filmStock'], defaultEdit(catalogue, 'gold200', 'ra4')), stocks);
+      expect(pasted['medium'], 'ra4');
+    });
+
+    test('a kept edit from before Match Film was the default keeps its medium', () {
+      final kept = Map.of(defaultEdit(catalogue, 'gold200'))..remove('mediumFollowsFilm');
+      final restored = restoreEdit(editText(kept), catalogue, stocks);
+      expect(restored['mediumFollowsFilm'], isFalse);
+      expect(restored['medium'], isNull);
     });
 
     test('Paste Settings is named for several photos', () {
@@ -185,13 +210,13 @@ void main() {
       final settings = AppSettings.memory()
         ..set('startingFilm', 'portra400')
         ..set('startingFormat', '120');
-      final edit = newPhotoEdit(catalogue, settings, 'gold200', ['gold200', 'portra400']);
+      final edit = newPhotoEdit(catalogue, settings, 'gold200', stocks);
       expect(edit['stock'], 'portra400');
       expect(edit['format'], '120');
       settings.set('startingFilm', 'none');
-      expect(newPhotoEdit(catalogue, settings, 'gold200', ['gold200'])['stock'], isNull);
+      expect(newPhotoEdit(catalogue, settings, 'gold200', stocks.take(1))['stock'], isNull);
       settings.set('startingFilm', 'missing');
-      expect(newPhotoEdit(catalogue, settings, 'gold200', ['gold200'])['stock'], 'gold200');
+      expect(newPhotoEdit(catalogue, settings, 'gold200', stocks.take(1))['stock'], 'gold200');
     });
   });
 

@@ -87,7 +87,7 @@ class Presets {
       _each((doc) => pastedEdit(editor.catalogue, doc.edit, settings, editor.stocks));
 
   /// Reset Edits on the chosen photos, or the shown one alone; each keeps its film.
-  void reset() => _each((doc) => defaultEdit(editor.catalogue, doc.edit['stock'] as String?));
+  void reset() => _each((doc) => editor.blankEdit(doc.edit['stock'] as String?));
 
   void _each(Json Function(PhotoDocument doc) next) {
     final shown = editor.active;

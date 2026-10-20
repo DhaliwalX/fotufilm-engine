@@ -12,7 +12,10 @@ import 'package:fotufilm_flutter/model/settings.dart';
 import 'package:fotufilm_flutter/model/updates.dart';
 
 late Catalogue catalogue;
-const _films = ['gold200', 'portra400'];
+const _films = [
+  {'id': 'gold200', 'filmMedium': 'ra4'},
+  {'id': 'portra400', 'filmMedium': 'endura'},
+];
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -25,6 +28,9 @@ void main() {
       expect(edit['format'], isNull);
       expect(edit['halationModel'], 'legacy');
       expect(edit['profile'], isEmpty);
+      // The print matches the film: Match Film, on the film's own medium.
+      expect(edit['mediumFollowsFilm'], isTrue);
+      expect(edit['medium'], 'ra4');
     });
 
     test('takes the starting film, format and film model', () {
@@ -40,6 +46,7 @@ void main() {
         ..set('couplerSelf', 1);
       final edit = newPhotoEdit(catalogue, settings, 'gold200', _films);
       expect(edit['stock'], 'portra400');
+      expect(edit['medium'], 'endura');
       expect(edit['format'], '16mm');
       expect(edit['halationModel'], 'layered');
       // A pair left at Separation follows it; one set on its own starts there.
@@ -53,9 +60,11 @@ void main() {
 
     test('ignores a film the library lacks, and Normal starts without one', () {
       final settings = AppSettings.memory()..set('startingFilm', 'gone');
-      expect(newPhotoEdit(catalogue, settings, 'gold200', ['gold200'])['stock'], 'gold200');
+      expect(newPhotoEdit(catalogue, settings, 'gold200', _films.take(1))['stock'], 'gold200');
       settings.set('startingFilm', 'none');
-      expect(newPhotoEdit(catalogue, settings, 'gold200', _films)['stock'], isNull);
+      final normal = newPhotoEdit(catalogue, settings, 'gold200', _films);
+      expect(normal['stock'], isNull);
+      expect(normal['medium'], isNull);
     });
 
     test('Restore Film Model follows any change from the defaults', () {

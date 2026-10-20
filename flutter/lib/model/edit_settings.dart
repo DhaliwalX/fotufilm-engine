@@ -102,13 +102,8 @@ Json pastedEdit(Catalogue catalogue, Json edit, CopiedSettings settings, List<Js
   final pasted = pasteSettings(catalogue, edit, settings);
   // A new film keeps a chosen medium only where it offers one, as choosing the film does.
   if (pasted['stock'] != edit['stock'] && !settings.sections.contains('printPaper')) {
-    final stock = stocks.where((s) => s['id'] == pasted['stock']).firstOrNull;
-    final media = ((stock?['media'] as List?) ?? const []).map((m) => (m as Map)['id']);
-    if (pasted['mediumFollowsFilm'] == true) {
-      pasted['medium'] = stock?['filmMedium'];
-    } else if (!media.contains(pasted['medium'])) {
-      pasted['medium'] = null;
-    }
+    pasted['medium'] =
+        mediumOnFilm(pasted, stocks.where((s) => s['id'] == pasted['stock']).firstOrNull);
   }
   // A negative stays a negative, read as a film it can be or as none; frames of one roll share
   // their film base and light source with the film.
