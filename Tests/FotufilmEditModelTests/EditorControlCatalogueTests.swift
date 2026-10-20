@@ -8,8 +8,9 @@ final class EditorControlCatalogueTests: XCTestCase {
         XCTAssertEqual(EditorControlCatalogue.pluginWorkingSpaces.map(\.value),
                        (0..<8).map { Optional(Double($0)) })
         XCTAssertEqual(EditorControlCatalogue.pluginCameraInputs.map(\.encoding),
-                       [.appleLog, .appleLog2, .slog3Cine, .slog3, .slog2, .flog, .flog2, .flog2C, .hlg])
-        XCTAssertEqual(EditorControlCatalogue.pluginInputSpaces.count, 17)
+                       [.appleLog, .appleLog2, .slog3Cine, .slog3, .slog2, .flog, .flog2, .flog2C, .hlg,
+                        .vlog])
+        XCTAssertEqual(EditorControlCatalogue.pluginInputSpaces.count, 18)
         for field in [EditorControlField.colorManagement, .inputColorSpace, .outputColorSpace] {
             let control = try XCTUnwrap(EditorControlCatalogue.control(field))
             XCTAssertEqual(control.surfaces, [.resolve])

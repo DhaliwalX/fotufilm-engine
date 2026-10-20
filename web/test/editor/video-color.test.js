@@ -29,7 +29,7 @@ for (const [id, entry] of Object.entries(catalog.encodings)) {
   })
 }
 test('every Mac encoding is selectable and saved video settings round trip', () => {
-  assert.equal(VIDEO_ENCODINGS.length, 10)
+  assert.equal(VIDEO_ENCODINGS.length, 11)
   const edit = {
     ...defaultEdit(),
     video: { encoding: 'flog2C', trimStart: 1.2, trimEnd: 2.4, audio: false, frameRate: 18 },

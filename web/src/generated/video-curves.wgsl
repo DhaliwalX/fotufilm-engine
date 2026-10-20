@@ -70,6 +70,16 @@ fn flog2_to_linear(code: f32) -> f32
     return (code - f) / e;
 }
 
+fn vlog_to_linear(code: f32) -> f32
+{
+    var b: f32 = 0.00873;
+    var c: f32 = 0.241514;
+    var d: f32 = 0.598206;
+    var cut: f32 = 0.181;
+    if (code >= cut) { return pow(10.0, (code - d) / c) - b; }
+    return (code - 0.125) / 5.6;
+}
+
 fn decode_curve(code: f32, curve: u32) -> f32
 {
     switch (curve) {
@@ -78,6 +88,7 @@ fn decode_curve(code: f32, curve: u32) -> f32
     case 2u: { return slog2_to_linear(code); }
     case 3u: { return hlg_to_linear(code); }
     case 4u: { return flog_to_linear(code); }
-    default: { return flog2_to_linear(code); }
+    case 5u: { return flog2_to_linear(code); }
+    default: { return vlog_to_linear(code); }
     }
 }

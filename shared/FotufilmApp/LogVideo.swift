@@ -21,6 +21,7 @@ enum VideoSourceEncoding: String, CaseIterable, Identifiable {
     case flog2
     case flog2C
     case hlg
+    case vlog
 
     var id: String { rawValue }
 
@@ -36,6 +37,7 @@ enum VideoSourceEncoding: String, CaseIterable, Identifiable {
         case .flog2: return "F-Log2 · F-Gamut"
         case .flog2C: return "F-Log2 C · F-Gamut C"
         case .hlg: return "HLG · Rec.2020"
+        case .vlog: return "V-Log · V-Gamut"
         }
     }
 
@@ -57,6 +59,7 @@ enum VideoSourceEncoding: String, CaseIterable, Identifiable {
         case .flog2: return .flog2
         case .flog2C: return .flog2C
         case .hlg: return .hlg
+        case .vlog: return .vlog
         }
     }
 

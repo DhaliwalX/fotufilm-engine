@@ -85,6 +85,7 @@ public enum CameraLogCurve: UInt32, CaseIterable, Codable, Sendable {
     case hlg = 3
     case fLog = 4
     case fLog2 = 5
+    case vLog = 6
 
     /// Code value (full-scale 0…1) to scene reflectance, 0.18 = mid grey.
     public func linear(_ code: Float) -> Float {
@@ -95,6 +96,7 @@ public enum CameraLogCurve: UInt32, CaseIterable, Codable, Sendable {
         case .hlg: return Self.hlgToLinear(code)
         case .fLog: return Self.flogToLinear(code)
         case .fLog2: return Self.flog2ToLinear(code)
+        case .vLog: return Self.vlogToLinear(code)
         }
     }
 
@@ -164,6 +166,19 @@ public enum CameraLogCurve: UInt32, CaseIterable, Codable, Sendable {
         return (code - f) / e
     }
 
+    /// V-Log, from Panasonic's V-Log/V-Gamut Reference Manual (November 2014): a linear toe below
+    /// 1% reflection that meets the log segment at code 0.181.
+    public static func vlogToLinear(_ code: Float) -> Float {
+        let b: Float = 0.00873
+        let c: Float = 0.241514
+        let d: Float = 0.598206
+        let cut: Float = 0.181
+        if code >= cut {
+            return pow(10, (code - d) / c) - b
+        }
+        return (code - 0.125) / 5.6
+    }
+
     /// All the curves plus the `decode_curve(code, curve)` dispatcher, as Metal source, indexed
     /// by this enum's raw values.
     public static var metalSource: String { """
@@ -229,6 +244,16 @@ public enum CameraLogCurve: UInt32, CaseIterable, Codable, Sendable {
         return (code - f) / e;
     }
 
+    static float vlog_to_linear(float code)
+    {
+        const float b = 0.00873f;
+        const float c = 0.241514f;
+        const float d = 0.598206f;
+        const float cut = 0.181f;
+        if (code >= cut) { return pow(10.0f, (code - d) / c) - b; }
+        return (code - 0.125f) / 5.6f;
+    }
+
     static float decode_curve(float code, uint curve)
     {
         switch (curve) {
@@ -237,7 +262,8 @@ public enum CameraLogCurve: UInt32, CaseIterable, Codable, Sendable {
         case 2: return slog2_to_linear(code);
         case 3: return hlg_to_linear(code);
         case 4: return flog_to_linear(code);
-        default: return flog2_to_linear(code);
+        case 5: return flog2_to_linear(code);
+        default: return vlog_to_linear(code);
         }
     }
     """ }
@@ -283,6 +309,10 @@ public struct CameraGamut: Equatable, Sendable {
     /// Fujifilm F-Gamut C, used by F-Log2 C.
     public static let fGamutC = CameraGamut(primaries: Primaries(
         r: (0.73470, 0.26530), g: (0.02630, 0.97370), b: (0.11730, -0.02240)))
+
+    /// Panasonic V-Gamut (V-Log/V-Gamut Reference Manual, D65).
+    public static let vGamut = CameraGamut(primaries: Primaries(
+        r: (0.73000, 0.28000), g: (0.16500, 0.84000), b: (0.10000, -0.03000)))
 
     public static let displayP3 = CameraGamut(primaries: Primaries(
         r: (0.680, 0.320), g: (0.265, 0.690), b: (0.150, 0.060)))
@@ -370,6 +400,7 @@ public enum CameraLogEncoding: String, CaseIterable, Codable, Sendable, Identifi
     case flog2
     case flog2C
     case hlg
+    case vlog
 
     public var id: String { rawValue }
 
@@ -381,6 +412,7 @@ public enum CameraLogEncoding: String, CaseIterable, Codable, Sendable, Identifi
         case .flog: return .fLog
         case .flog2, .flog2C: return .fLog2
         case .hlg: return .hlg
+        case .vlog: return .vLog
         }
     }
 
@@ -392,6 +424,7 @@ public enum CameraLogEncoding: String, CaseIterable, Codable, Sendable, Identifi
         case .slog3, .slog2: return .sGamut
         case .flog, .flog2: return .fGamut
         case .flog2C: return .fGamutC
+        case .vlog: return .vGamut
         }
     }
 
@@ -405,6 +438,7 @@ public enum CameraLogEncoding: String, CaseIterable, Codable, Sendable, Identifi
         case .flog: return .fLog
         case .flog2, .flog2C: return .fLog2
         case .hlg: return .hlg
+        case .vlog: return .vLog
         }
     }
 
@@ -417,7 +451,7 @@ public enum CameraLogEncoding: String, CaseIterable, Codable, Sendable, Identifi
     public var declaredHeadroom: Float? {
         switch self {
         case .appleLog, .appleLog2, .slog3Cine, .slog3, .slog2,
-             .flog, .flog2, .flog2C: return nil
+             .flog, .flog2, .flog2C, .vlog: return nil
         case .hlg: return HLGSceneTransfer.headroom
         }
     }

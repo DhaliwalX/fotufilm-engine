@@ -37,6 +37,7 @@ public enum SourceTransferFunction: String, CaseIterable, Codable, Sendable {
     case sLog2
     case fLog
     case fLog2
+    case vLog
 }
 
 /// The camera behind a frame, as far as the file says.
