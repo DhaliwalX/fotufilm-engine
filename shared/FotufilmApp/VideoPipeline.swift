@@ -903,6 +903,7 @@ enum VideoPipeline {
         hdr: Bool = false,
         bitsPerPixel: Double? = nil,
         includeAudio: Bool = true,
+        overlay: FrameOverlay? = nil,
         progress: @escaping @Sendable (Double, Int, Int) -> Void,
         preview: @escaping @Sendable (CGImage, CGImagePropertyOrientation) -> Void = { _, _ in },
         pause: PauseFlag? = nil,
@@ -1078,6 +1079,15 @@ enum VideoPipeline {
         }
         let developedWidth = hybridDevelop ? outputWidth : developWidth
         let developedHeight = hybridDevelop ? outputHeight : developHeight
+        // Laid on the developed frame before delivery, so every codec and range carries it. The
+        // deep road develops at the source size in linear float; the shallow one at its own size
+        // in display-encoded bytes.
+        let overlayStamp = try overlay.map {
+            try FrameOverlay.Stamp(
+                $0, width: deepInput ? width : developedWidth,
+                height: deepInput ? height : developedHeight,
+                linearFloat: deepInput, naturalSize: naturalSize, transform: transform)
+        }
         let scaledFloatOutput: MTLBuffer?
         if deepInput && (outputWidth != width || outputHeight != height) {
             guard let buffer = metal.makeBuffer(
@@ -1262,6 +1272,7 @@ enum VideoPipeline {
                         return .writerFailed(
                             writer.error?.localizedDescription ?? "frame develop failed")
                     }
+                    overlayStamp?.apply(to: gpuOutputs[entry.slot])
                     while !videoInput.isReadyForMoreMediaData { usleep(1000) }
                     let appendStart = clock.mark()
                     let appended: Bool
@@ -1809,5 +1820,125 @@ enum VideoPipeline {
 
         ExportProof.add(key: ordinal, pixelBuffer: outBuffer)
         return adaptor.append(outBuffer, withPresentationTime: time)
+    }
+}
+
+extension VideoPipeline {
+    /// A still laid over every developed frame, the same in each: a title, a credit, a mark.
+    ///
+    /// `draw` paints the picture upright, as the video plays, into a context of the given size
+    /// whose origin is the lower left; `bounds` names the rectangle it paints there. Only that
+    /// rectangle is carried to the frames, so a small mark costs a small blend.
+    struct FrameOverlay: Sendable {
+        let bounds: @Sendable (CGSize) -> CGRect
+        let draw: @Sendable (CGContext, CGSize) -> Void
+
+        init(bounds: @escaping @Sendable (CGSize) -> CGRect,
+             draw: @escaping @Sendable (CGContext, CGSize) -> Void) {
+            self.bounds = bounds
+            self.draw = draw
+        }
+
+        /// The overlay rasterized once for one export's developed frames: turned into the track's
+        /// stored orientation, in the frame buffer's own encoding, premultiplied.
+        struct Stamp {
+            private let pixels: [UInt8]
+            private let rect: (x: Int, y: Int, width: Int, height: Int)
+            private let frameWidth: Int
+            private let linearFloat: Bool
+
+            init(_ overlay: FrameOverlay, width: Int, height: Int, linearFloat: Bool,
+                 naturalSize: CGSize, transform: CGAffineTransform) throws {
+                // The display rectangle the track's transform makes of its stored frame,
+                // moved to the origin as players place it.
+                let natural = CGRect(origin: .zero, size: CGSize(
+                    width: abs(naturalSize.width), height: abs(naturalSize.height)))
+                let shown = natural.applying(transform)
+                let toDisplay = transform.concatenating(
+                    CGAffineTransform(translationX: -shown.minX, y: -shown.minY))
+                let upright = CGSize(width: shown.width.rounded(), height: shown.height.rounded())
+                // Upright context points (y up) to display pixels (y down), back through the
+                // track transform to stored pixels, scaled to the buffer, and to stored context
+                // points (y up).
+                let toStored = CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: upright.height)
+                    .concatenating(toDisplay.inverted())
+                    .concatenating(CGAffineTransform(
+                        scaleX: CGFloat(width) / natural.width,
+                        y: CGFloat(height) / natural.height))
+                    .concatenating(CGAffineTransform(
+                        a: 1, b: 0, c: 0, d: -1, tx: 0, ty: CGFloat(height)))
+
+                let painted = overlay.bounds(upright).applying(toStored)
+                    .integral
+                    .intersection(CGRect(x: 0, y: 0, width: width, height: height))
+                guard !painted.isNull, painted.width >= 1, painted.height >= 1 else {
+                    pixels = []
+                    rect = (0, 0, 0, 0)
+                    frameWidth = width
+                    self.linearFloat = linearFloat
+                    return
+                }
+                let stampWidth = Int(painted.width)
+                let stampHeight = Int(painted.height)
+                let bytesPerPixel = linearFloat ? 16 : 4
+                var pixels = [UInt8](repeating: 0,
+                                     count: stampWidth * stampHeight * bytesPerPixel)
+                let drawn = pixels.withUnsafeMutableBytes { raw -> Bool in
+                    let space = linearFloat
+                        ? CGColorSpace(name: CGColorSpace.extendedLinearDisplayP3)
+                        : CGColorSpace(name: CGColorSpace.displayP3)
+                    let info = linearFloat
+                        ? CGImageAlphaInfo.premultipliedLast.rawValue
+                            | CGBitmapInfo.floatComponents.rawValue
+                            | CGBitmapInfo.byteOrder32Little.rawValue
+                        : CGImageAlphaInfo.premultipliedLast.rawValue
+                    guard let space, let context = CGContext(
+                        data: raw.baseAddress, width: stampWidth, height: stampHeight,
+                        bitsPerComponent: linearFloat ? 32 : 8,
+                        bytesPerRow: stampWidth * bytesPerPixel,
+                        space: space, bitmapInfo: info) else { return false }
+                    // The stamp's context points are stored context points less its corner.
+                    context.translateBy(x: -painted.minX, y: -painted.minY)
+                    context.concatenate(toStored)
+                    overlay.draw(context, upright)
+                    return true
+                }
+                guard drawn else { throw Failure.engineUnavailable }
+                self.pixels = pixels
+                // Buffer and bitmap rows run top-down, so the stamp's first row is the frame row
+                // under the painted rectangle's top edge.
+                rect = (Int(painted.minX), height - Int(painted.maxY), stampWidth, stampHeight)
+                frameWidth = width
+                self.linearFloat = linearFloat
+            }
+
+            /// Blends the stamp over its rectangle of one developed frame, in place.
+            func apply(to frame: MTLBuffer) {
+                guard rect.width > 0 else { return }
+                let bytesPerPixel = linearFloat ? 16 : 4
+                let rowBytes = frameWidth * bytesPerPixel
+                let corner = frame.contents()
+                    .advanced(by: rect.y * rowBytes + rect.x * bytesPerPixel)
+                var bottom = vImage_Buffer(
+                    data: corner, height: vImagePixelCount(rect.height),
+                    width: vImagePixelCount(rect.width), rowBytes: rowBytes)
+                pixels.withUnsafeBytes { raw in
+                    var top = vImage_Buffer(
+                        data: UnsafeMutableRawPointer(mutating: raw.baseAddress),
+                        height: vImagePixelCount(rect.height),
+                        width: vImagePixelCount(rect.width),
+                        rowBytes: rect.width * bytesPerPixel)
+                    // Alpha is last in both encodings, which is the layout these BGRA blends
+                    // read; the three colour channels blend alike whatever their order.
+                    if linearFloat {
+                        _ = vImagePremultipliedAlphaBlend_BGRAFFFF(
+                            &top, &bottom, &bottom, vImage_Flags(kvImageNoFlags))
+                    } else {
+                        _ = vImagePremultipliedAlphaBlend_BGRA8888(
+                            &top, &bottom, &bottom, vImage_Flags(kvImageNoFlags))
+                    }
+                }
+            }
+        }
     }
 }
