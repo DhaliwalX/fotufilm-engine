@@ -26,6 +26,8 @@ class PrintFrameSection extends StatelessWidget {
     final renderMedium = plan?['renderMedium'] as String?;
     final edgePrinting = editor.catalogue.control('printFrameEdgePrinting');
     final frameNumber = editor.catalogue.control('printFrameNumber');
+    final frameCount = editor.catalogue.control('printFrameCount');
+    final camera = editor.catalogue.control('printFrameCamera');
     final printsEdge = editor.edit['printFrameEdgePrinting'] as bool? ?? true;
     return Section(title: 'Frame', children: [
       PickerField<String>(
@@ -68,6 +70,32 @@ class PrintFrameSection extends StatelessWidget {
             onChanged: (number) => editor.change({'printFrameNumber': number}),
           ),
       ],
+      // A panorama across consecutive frames of the roll.
+      if (plan?['spansFrames'] == true && (shown == 'film' || shown == 'filmPositive'))
+        PickerField<int>(
+          label: frameCount['title'] as String,
+          detail: frameCount['detail'] as String?,
+          value: (editor.edit['printFrameCount'] as num? ?? 1).toInt(),
+          enabled: !frames.pending,
+          options: [
+            for (final c in (frameCount['choices'] as List).cast<Json>())
+              PickerOption((c['value'] as num).toInt(), c['label'] as String),
+          ],
+          onChanged: (count) => editor.change({'printFrameCount': count}),
+        ),
+      // 135 in a 35mm or panoramic camera's gate, or across its width in a medium-format back.
+      if (plan?['camera'] == true && (shown == 'film' || shown == 'filmPositive'))
+        PickerField<String>(
+          label: camera['title'] as String,
+          detail: camera['detail'] as String?,
+          value: editor.edit['printFrameCamera'] as String? ?? 'panoramic',
+          enabled: !frames.pending,
+          options: [
+            for (final c in (camera['choices'] as List).cast<Json>())
+              PickerOption(c['id'] as String, c['label'] as String),
+          ],
+          onChanged: (choice) => editor.change({'printFrameCamera': choice}),
+        ),
       if (frames.framable) const Note('Drag the picture to choose the part the film shows.'),
       if (error != null || frames.pending) Note(error ?? 'Loading frame options…'),
       if (plan != null && shown != value) const Note('Shown once the film and medium support it.'),

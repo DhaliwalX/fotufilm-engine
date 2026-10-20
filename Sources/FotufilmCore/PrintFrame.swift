@@ -243,6 +243,31 @@ public struct FilmEdgePrinting: Codable, Equatable, Sendable {
         }
         return copy
     }
+
+    /// The cut `numbered(frame)` and the `frames - 1` cuts after it on the roll, each a frame's
+    /// length, `pitchMM`, further along and numbered one on, as one length of film.
+    public func run(from frame: Int, frames: Int, pitchMM: Double) -> FilmEdgePrinting {
+        var copy = numbered(frame)
+        copy.marks = (0..<max(frames, 1)).flatMap { index in
+            numbered(frame + index).marks.map { mark in
+                var moved = mark
+                moved.xMM += Double(index) * pitchMM
+                return moved
+            }
+        }
+        return copy
+    }
+
+    /// The DX codes along `run(from:frames:pitchMM:)`: each frame's own, where its cut puts them.
+    public func barcodeRun(from frame: Int, frames: Int, pitchMM: Double) -> [Bar] {
+        (0..<max(frames, 1)).flatMap { index in
+            numbered(frame + index).barcode(frame: frame + index).map { bar in
+                var moved = bar
+                moved.xMM += Double(index) * pitchMM
+                return moved
+            }
+        }
+    }
 }
 
 /// The DX film edge barcode (ISO 1007, ANSI PH1.14), printed as a latent image along 135
@@ -306,6 +331,28 @@ public struct DXEdgeCode: Codable, Equatable, Sendable {
     }
 }
 
+/// The camera a 135 Film Border's picture was exposed in (Camera).
+public enum FilmBorderCamera: String, CaseIterable, Codable, Sendable, Identifiable {
+    /// A 35mm or panoramic camera, whose gate stands between the perforation rows.
+    case panoramic
+    /// A medium-format camera loaded with 135: its taller gate exposes the film to both edges,
+    /// across the perforations and the edge printing.
+    case mediumFormatBack
+    public var id: String { rawValue }
+    public var name: String {
+        switch self {
+        case .panoramic: return "35mm or Panoramic Camera"
+        case .mediumFormatBack: return "Medium-Format Back"
+        }
+    }
+    public var detail: String {
+        switch self {
+        case .panoramic: return "The picture stands between the perforations, as a 35mm or panoramic camera's gate exposes it."
+        case .mediumFormatBack: return "135 in a medium-format camera: the picture runs across the perforations to the film's edges."
+        }
+    }
+}
+
 /// Millimetre geometry before the finished photograph is fitted into the camera aperture.
 /// x runs across the film, y along transport, except 135 stills which transport horizontally.
 public struct FilmBorderGeometry: Codable, Equatable, Sendable {
@@ -329,15 +376,70 @@ public struct FilmBorderGeometry: Codable, Equatable, Sendable {
     public let widthMM: Double
     public let heightMM: Double
     public let apertureX: Double
-    public let apertureY: Double
+    public private(set) var apertureY: Double
     public let apertureWidth: Double
-    public let apertureHeight: Double
+    public private(set) var apertureHeight: Double
     public let perforation: Perforation?
     public let pitchMM: Double
     public let rows: Int
     public let horizontalTransport: Bool
     public let isInstant: Bool
     public let isSheet: Bool
+    /// The frames' length of roll this cut runs across, one long picture exposed over them
+    /// (`spanning`). The size and aperture above are the whole cut's.
+    public private(set) var frames = 1
+    /// Whether the aperture runs across the film to both edges (`exposingEdges`).
+    public private(set) var exposesEdges = false
+
+    /// How many frames a panorama can run across.
+    public static let frameCountRange: ClosedRange<Int> = 1...4
+
+    /// Whether one picture can run across several frames' length of this cut: 135 and 120 still
+    /// roll film in a panoramic camera. A motion-picture frame is a fixed gate, and sheets and
+    /// instant prints are single.
+    public var spansFrames: Bool {
+        !isSheet && !isInstant && (horizontalTransport || perforation == nil)
+    }
+
+    /// Whether a taller gate can expose this cut to its edges: 135, whose width is less than a
+    /// medium-format camera's gate.
+    public var opensToEdges: Bool { horizontalTransport && !isSheet && !isInstant }
+
+    /// This cut exposed across its whole width, as 135 is in a medium-format camera: the aperture
+    /// reaches both cut edges, over the perforations and edge printing, along the same length.
+    public func exposingEdges() -> Self {
+        guard opensToEdges, !exposesEdges else { return self }
+        var cut = self
+        cut.apertureY = 0
+        cut.apertureHeight = heightMM
+        cut.exposesEdges = true
+        return cut
+    }
+
+    /// One frame's length of film along transport: the camera's frame advance.
+    public var frameLengthMM: Double { (horizontalTransport ? widthMM : heightMM) / Double(frames) }
+
+    /// This cut run on to `count` frames' length, exposed as one picture: a panoramic camera's
+    /// wider gate, or 135 in a medium-format camera, advanced that far between exposures. The
+    /// film and its aperture run on by a frame's length for each frame, the aperture unbroken.
+    /// A gauge that does not `spansFrames` keeps one frame.
+    public func spanning(_ count: Int) -> Self {
+        let count = spansFrames
+            ? min(max(count, Self.frameCountRange.lowerBound), Self.frameCountRange.upperBound) : 1
+        guard count != frames else { return self }
+        let length = frameLengthMM
+        let aperture = (horizontalTransport ? apertureWidth : apertureHeight) - Double(frames - 1) * length
+        let span = Double(count) * length, opening = aperture + Double(count - 1) * length
+        var cut = Self(widthMM: horizontalTransport ? span : widthMM,
+                       heightMM: horizontalTransport ? heightMM : span,
+                       apertureX: apertureX, apertureY: apertureY,
+                       apertureWidth: horizontalTransport ? opening : apertureWidth,
+                       apertureHeight: horizontalTransport ? apertureHeight : opening,
+                       perforation: perforation, pitchMM: pitchMM, rows: rows,
+                       horizontalTransport: horizontalTransport, isInstant: isInstant, isSheet: isSheet)
+        cut.frames = count
+        return exposesEdges ? cut.exposingEdges() : cut
+    }
 
     /// Camera apertures and pitch are physical format data; a nonmatching crop is fitted inside
     /// that aperture without stretching it. See docs/print-frame-model.md for sources/conventions.
@@ -404,6 +506,8 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
     /// (`PrintFramePlacement.photoCrop`). Nil for every other frame.
     public let framing: SIMD2<Double>?
     public let geometry: FilmBorderGeometry?
+    /// The camera a 135 film border's picture was exposed in; nil where the gauge offers no choice.
+    public let camera: FilmBorderCamera?
     public let sheet: PaperSheetGeometry?
     public let slideMount: SlideMountGeometry?
     public let canvas: SocialCanvasGeometry?
@@ -443,11 +547,11 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
                 paper: PrintPaper, viewingKelvin: Float? = nil,
                 negativeViewing: NegativeViewing = .lightBox, margin: Double = 1,
                 frameNumber: Int = FilmEdgePrinting.recordedFrameNumber, showsEdgePrinting: Bool = true,
-                framing: SIMD2<Double> = .zero) {
+                framing: SIMD2<Double> = .zero, frames: Int = 1, camera: FilmBorderCamera = .panoramic) {
         self.init(frame: frame, formatID: formatID, definition: FilmStock.presetDefinitions[stockID],
                   paper: paper, viewingKelvin: viewingKelvin, negativeViewing: negativeViewing,
                   margin: margin, frameNumber: frameNumber, showsEdgePrinting: showsEdgePrinting,
-                  framing: framing)
+                  framing: framing, frames: frames, camera: camera)
     }
 
     /// Explicit stock metadata also supports isolated runtimes without a process-wide pack registry.
@@ -455,7 +559,7 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
                 paper: PrintPaper, viewingKelvin: Float? = nil,
                 negativeViewing: NegativeViewing = .lightBox, margin: Double = 1,
                 frameNumber: Int = FilmEdgePrinting.recordedFrameNumber, showsEdgePrinting: Bool = true,
-                framing: SIMD2<Double> = .zero) {
+                framing: SIMD2<Double> = .zero, frames: Int = 1, camera: FilmBorderCamera = .panoramic) {
         let nativeID = definition?.nativeFormatID
         let motionStock = nativeID.flatMap(FilmFormat.preset(id:))?.isMotionPicture == true
         let nativeInstant = nativeID.flatMap { FilmBorderGeometry.preset($0) }?.isInstant == true
@@ -492,7 +596,11 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
         let scale = margin.isFinite
             ? min(max(margin, Self.marginRange.lowerBound), Self.marginRange.upperBound) : 1
         self.margin = self.frame.hasAdjustableMargin ? scale : nil
-        geometry = self.frame.showsFilmStrip ? film : nil
+        // Frames: a panorama exposed across several frames' length of the roll; Camera: 135 in a
+        // medium-format camera, exposed to its edges.
+        let run = self.frame.showsFilmStrip ? film?.spanning(frames) : nil
+        geometry = camera == .mediumFormatBack ? run?.exposingEdges() : run
+        self.camera = run?.opensToEdges == true ? camera : nil
         self.framing = geometry == nil ? nil : SIMD2(
             framing.x.isFinite ? min(max(framing.x, -1), 1) : 0,
             framing.y.isFinite ? min(max(framing.y, -1), 1) : 0)
@@ -510,12 +618,14 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
                          FilmEdgePrinting.frameNumberRange.upperBound)
         let printing = self.frame.showsFilmStrip
             ? definition?.edgePrinting?.first { $0.formatID == formatID } : nil
-        edgePrinting = showsEdgePrinting ? printing?.numbered(number) : nil
+        let roll = (frames: geometry?.frames ?? 1, pitch: geometry?.frameLengthMM ?? 0)
+        edgePrinting = showsEdgePrinting
+            ? printing?.run(from: number, frames: roll.frames, pitchMM: roll.pitch) : nil
         self.frameNumber = edgePrinting == nil ? nil : number
         cutoutRGB = self.frame == .filmPositive ? .zero : Self.scanBedRGB
         // The DX barcode is printed on negatives only; a transparency's edge carries none.
-        edgeBars = definition?.stock.isReversal == false
-            ? edgePrinting?.barcode(frame: number) ?? [] : []
+        edgeBars = definition?.stock.isReversal == false && edgePrinting != nil
+            ? printing?.barcodeRun(from: number, frames: roll.frames, pitchMM: roll.pitch) ?? [] : []
         // The edge printer's two exposures: lettering at a representative 72% of the density
         // span, and the barcode at the standard's 0.5 above base. Not measured edge-printer
         // calibrations. Reversal clears exposed letters; negatives darken.

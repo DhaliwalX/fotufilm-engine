@@ -12,6 +12,8 @@ import {
   frameSamplePoint,
   frameRequest,
   parsePrintFrame,
+  parsePrintFrameCamera,
+  parsePrintFrameCount,
   parsePrintFrameEdgePrinting,
   parsePrintFrameFraming,
   parsePrintFrameMargin,
@@ -183,4 +185,26 @@ test("perforations trace the native renderer's imperfect edges", () => {
   assert.equal(bh.length, 156);
   assert.ok(Math.abs(bh[100][0] - 2.238402747) < 1e-6);
   assert.notDeepEqual(perforationOutline(2, 7.125, 1.98, 2.794, 0.5, false, 4), ks);
+});
+
+test("a panorama's frame count survives save/load and reaches the frame plan", () => {
+  const edit = { ...defaultEdit(), printFrame: "film", printFrameCount: 3 };
+  const loaded = parseEdit(JSON.stringify({ version: 1, edit }), []);
+  assert.equal(loaded.printFrameCount, 3);
+  assert.equal(frameRequest(loaded).frames, 3);
+  delete edit.printFrameCount;
+  assert.equal(parseEdit(JSON.stringify({ version: 1, edit }), []).printFrameCount, 1);
+  assert.equal(frameRequest(defaultEdit()).frames, 1);
+  for (const value of [0, 5, 1.5, "2"])
+    assert.throws(() => parsePrintFrameCount(value), /Invalid film border frame count/);
+});
+test("a film border's camera survives save/load and reaches the frame plan", () => {
+  const edit = { ...defaultEdit(), printFrame: "film", printFrameCamera: "mediumFormatBack" };
+  const loaded = parseEdit(JSON.stringify({ version: 1, edit }), []);
+  assert.equal(loaded.printFrameCamera, "mediumFormatBack");
+  assert.equal(frameRequest(loaded).camera, "mediumFormatBack");
+  delete edit.printFrameCamera;
+  assert.equal(parseEdit(JSON.stringify({ version: 1, edit }), []).printFrameCamera, "panoramic");
+  assert.equal(frameRequest(defaultEdit()).camera, "panoramic");
+  for (const value of ["box", 1]) assert.throws(() => parsePrintFrameCamera(value), /Invalid film border camera/);
 });

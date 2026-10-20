@@ -5171,6 +5171,98 @@
       "webTransform" : "runtime"
     },
     {
+      "availability" : "always",
+      "choices" : [
+        {
+          "detail" : "",
+          "id" : "1",
+          "label" : "1 frame",
+          "value" : 1
+        },
+        {
+          "detail" : "",
+          "id" : "2",
+          "label" : "2 frames",
+          "value" : 2
+        },
+        {
+          "detail" : "",
+          "id" : "3",
+          "label" : "3 frames",
+          "value" : 3
+        },
+        {
+          "detail" : "",
+          "id" : "4",
+          "label" : "4 frames",
+          "value" : 4
+        }
+      ],
+      "detail" : "Expose the photograph across several frames' length of a Film Border, as a panorama.",
+      "documentation" : "Exposes one photograph across up to four frames' length of a 135 or 120 Film Border or Film Border Positive, as a panoramic camera or 135 in a medium-format camera does: one unbroken picture, its aperture running on by the gauge's frame advance for each frame. The photograph is cropped to that long aperture and placed by Framing. The roll's edge printing runs along with it, each frame's length carrying its own numbers and DX code, counting on from Frame Number. Motion-picture gauges, sheet film and instant film keep one frame. Included in saved edits and exports.",
+      "drives" : [
+
+      ],
+      "field" : "printFrameCount",
+      "group" : "print",
+      "kind" : "menu",
+      "omitted" : {
+        "android" : "Frame finishing is offered in the iPhone, iPad and Mac photo editors.",
+        "cli" : "Frame finishing is offered in the iPhone, iPad and Mac photo editors.",
+        "finalcut" : "The host owns output framing.",
+        "resolve" : "The host owns output framing."
+      },
+      "scope" : "edit",
+      "section" : "printPaper",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "web"
+      ],
+      "title" : "Frames",
+      "webTransform" : "runtime"
+    },
+    {
+      "availability" : "always",
+      "choices" : [
+        {
+          "detail" : "The picture stands between the perforations, as a 35mm or panoramic camera's gate exposes it.",
+          "id" : "panoramic",
+          "label" : "35mm or Panoramic Camera",
+          "value" : 0
+        },
+        {
+          "detail" : "135 in a medium-format camera: the picture runs across the perforations to the film's edges.",
+          "id" : "mediumFormatBack",
+          "label" : "Medium-Format Back",
+          "value" : 1
+        }
+      ],
+      "detail" : "Choose the camera a 135 Film Border's picture was exposed in.",
+      "documentation" : "Sets the camera a 135 Film Border or Film Border Positive was exposed in. 35mm or Panoramic Camera, the default, keeps the picture between the perforation rows, as a 35mm camera's gate or a panoramic camera's wider one does. Medium-Format Back runs it across the whole width of the film, as 135 loaded in a medium-format camera is exposed: the perforations are punched through the picture and the edge printing lies over it, the denser of the two showing. With Frames, the picture is as long as that many frames of the roll. Included in saved edits and exports.",
+      "drives" : [
+
+      ],
+      "field" : "printFrameCamera",
+      "group" : "print",
+      "kind" : "menu",
+      "omitted" : {
+        "android" : "Frame finishing is offered in the iPhone, iPad and Mac photo editors.",
+        "cli" : "Frame finishing is offered in the iPhone, iPad and Mac photo editors.",
+        "finalcut" : "The host owns output framing.",
+        "resolve" : "The host owns output framing."
+      },
+      "scope" : "edit",
+      "section" : "printPaper",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "web"
+      ],
+      "title" : "Camera",
+      "webTransform" : "runtime"
+    },
+    {
       "availability" : "printStage",
       "commandLineFlag" : "--paper",
       "commandLineGeneric" : false,

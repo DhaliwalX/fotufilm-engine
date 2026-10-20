@@ -95,9 +95,15 @@ Json parseEdit(String text, Catalogue catalogue, Iterable<String?> stocks) {
     throw const EditProblem('Invalid output medium.');
   }
   final frameNumbers = (catalogue.control('printFrameNumber')['choices'] as List).cast<Json>();
+  final frameCounts = (catalogue.control('printFrameCount')['choices'] as List).cast<Json>();
   if ((edit['printFrameEdgePrinting'] != null && edit['printFrameEdgePrinting'] is! bool) ||
       (edit['printFrameNumber'] != null &&
-          !frameNumbers.any((c) => c['value'] == edit['printFrameNumber']))) {
+          !frameNumbers.any((c) => c['value'] == edit['printFrameNumber'])) ||
+      (edit['printFrameCount'] != null &&
+          !frameCounts.any((c) => c['value'] == edit['printFrameCount'])) ||
+      (edit['printFrameCamera'] != null &&
+          !(catalogue.control('printFrameCamera')['choices'] as List)
+              .any((c) => (c as Json)['id'] == edit['printFrameCamera']))) {
     throw const EditProblem('Invalid film border settings.');
   }
   if (edit['rawCorrections'] != null && edit['rawCorrections'] is! bool) {

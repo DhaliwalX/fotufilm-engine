@@ -118,6 +118,8 @@ _Kind _stepKind(Json? before, Json? after) {
     if (_changed(before, after, const ['printFrameEdgePrinting'])) return 'Edge Printing';
     if (_changed(before, after, const ['printFrameNumber'])) return 'Frame Number';
     if (_changed(before, after, const ['printFrameFraming'])) return 'Framing';
+    if (_changed(before, after, const ['printFrameCount'])) return 'Frames';
+    if (_changed(before, after, const ['printFrameCamera'])) return 'Camera';
     if (_changed(before, after, const ['selective'])) return 'Selective';
     if (_changed(before, after, const ['video'])) return 'Video';
     return null;

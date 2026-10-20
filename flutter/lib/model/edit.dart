@@ -28,6 +28,8 @@ Json defaultEdit(Catalogue catalogue, [String? stock, String? filmMedium]) => {
       'printFrameEdgePrinting': true,
       'printFrameNumber': 1,
       'printFrameFraming': [0, 0],
+      'printFrameCount': 1,
+      'printFrameCamera': 'panoramic',
       'digitalReference': 'auto-levels',
       'halationModel': 'legacy',
       'sceneLight': 'unspecified',

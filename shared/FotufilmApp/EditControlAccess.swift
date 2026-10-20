@@ -121,6 +121,8 @@ extension EditorControlField {
         case .printFrameEdgePrinting: return .flag(\.printFrameEdgePrinting)
         case .printFrameNumber:
             return .bespoke { $0.printFrameNumber != FilmEdgePrinting.recordedFrameNumber }
+        case .printFrameCount: return .bespoke { $0.printFrameCount != 1 }
+        case .printFrameCamera: return .bespoke { $0.printFrameCamera != .panoramic }
         case .printLight:
             return .bespoke { $0.printLightKelvin != nil }
         case .digitalReference:
@@ -294,6 +296,8 @@ extension EditState {
         if field == .digitalReference { digitalReference = EditState.defaultDigitalReference; return }
         if field == .printFrame { printFrame = .none; return }
         if field == .printFrameNumber { printFrameNumber = FilmEdgePrinting.recordedFrameNumber; return }
+        if field == .printFrameCount { printFrameCount = 1; return }
+        if field == .printFrameCamera { printFrameCamera = .panoramic; return }
         if field == .negativeViewing { negativeViewing = .lightBox; return }
         if field == .halationReturn { halationReturnRatio = nil; return }
         if field == .grainModel { grainModel = .clumpField; return }

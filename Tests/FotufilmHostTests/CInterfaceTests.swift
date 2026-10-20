@@ -573,6 +573,23 @@ extension CInterfaceTests {
         XCTAssertNotEqual(left.payload.subdata(in: leftPreview[0]..<(leftPreview[0] + leftPreview[1])),
                           right.payload.subdata(in: rightPreview[0]..<(rightPreview[0] + rightPreview[1])))
 
+        // A panorama across three frames' length is one long exposure: the whole photograph's
+        // width in the aperture, cropped to 112 by 24 mm, in a strip 114 mm long at the scale the
+        // crop's 26 rows set.
+        let panorama = try call("render", """
+        {"handle": \(handle), "maxEdge": null,
+         "printFrame": {"kind": "print-frame", "stock": "gold200", "frame": "film", "width": 1, "height": 1,
+                        "frames": 3},
+         "edit": {"stock": "gold200", "params": {}}, "profileRequest": {"controls": {}}}
+        """)
+        let run = try XCTUnwrap(panorama.json["framePlan"] as? [String: Any])
+        let runCrop = try XCTUnwrap(run["crop"] as? [String: Any])
+        XCTAssertEqual(runCrop["width"] as? Double, 120)
+        XCTAssertEqual(runCrop["height"] as? Double, 26)
+        let runSize = try XCTUnwrap((run["placement"] as? [String: Any])?["size"] as? [String: Any])
+        XCTAssertEqual(panorama.json["width"] as? Int, runSize["width"] as? Int)
+        XCTAssertEqual(runSize["width"] as? Int, 124)
+
         // Lens sliders plan a correction without a profile, and it reaches the develop.
         let lens = #""lens": {"enabled": true, "amount": 1, "profileID": null, "distortion": -0.5, "vignetting": 0.5, "redCyan": 0, "blueYellow": 0}"#
         let plan = try call("lensPlan", #"{"handle": \#(handle), \#(lens)}"#)

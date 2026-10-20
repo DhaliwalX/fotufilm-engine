@@ -659,6 +659,153 @@ final class PrintFrameTests: XCTestCase {
         XCTAssertEqual(part, [20, 21, 22, 23, 24, 25, 26, 27, 36, 37, 38, 39, 40, 41, 42, 43])
     }
 
+    func testAPanoramaIsOneExposureAcrossSeveralFramesOfTheRoll() throws {
+        func film(_ frames: Int, format: String = "35mm", stock: String = "portra400",
+                  frame: PrintFrame = .film) -> PrintFrameConfiguration {
+            PrintFrameConfiguration(frame: frame, formatID: format, stockID: stock,
+                                    paper: .ektacolorEdge, frameNumber: 12, frames: frames)
+        }
+        // 135 runs on by its 38 mm frame advance, the aperture unbroken across it.
+        let three = try XCTUnwrap(film(3).geometry)
+        XCTAssertEqual(three.frames, 3)
+        XCTAssertEqual(three.widthMM, 114, accuracy: 1e-9)
+        XCTAssertEqual(three.apertureWidth, 112, accuracy: 1e-9)
+        XCTAssertEqual(three.apertureHeight, 24)
+        XCTAssertEqual(three.apertureX, 1, accuracy: 1e-9)
+        XCTAssertEqual(three.frameLengthMM, 38, accuracy: 1e-9)
+        XCTAssertEqual(film(2).geometry?.apertureWidth ?? 0, 74, accuracy: 1e-9)
+        // 120 runs along its length, 60 mm a 6 × 6 frame: 6 × 12 and 6 × 17.
+        let two = try XCTUnwrap(film(2, format: "120").geometry)
+        XCTAssertEqual([two.widthMM, two.heightMM, two.apertureWidth, two.apertureHeight], [61, 120, 56, 116])
+        XCTAssertEqual(film(3, format: "120").geometry?.apertureHeight, 176)
+        // Spanning is from the one-frame cut, whatever it was run to before.
+        XCTAssertEqual(three.spanning(2), film(2).geometry)
+        XCTAssertEqual(three.spanning(1), film(1).geometry)
+        // Motion-picture gates, sheets and instant film keep one frame; the count is clamped.
+        XCTAssertEqual(film(3, format: "super35", stock: "vision500t").geometry?.frames, 1)
+        XCTAssertEqual(film(3, format: "4x5", stock: "portra400").geometry?.frames ?? 1, 1)
+        XCTAssertEqual(film(9).geometry?.frames, FilmBorderGeometry.frameCountRange.upperBound)
+        XCTAssertEqual(film(3, frame: .filmPositive).geometry, three)
+        XCTAssertNil(film(3, frame: .paper).geometry)
+
+        // The roll's edge printing runs along: each frame's length its own numbers and DX code.
+        let one = film(1), run = film(3)
+        let stock = try XCTUnwrap(FilmStock.presetDefinitions["portra400"]?.edgePrinting?
+            .first { $0.formatID == "35mm" })
+        let single = try XCTUnwrap(one.edgePrinting?.marks)
+        let marks = try XCTUnwrap(run.edgePrinting?.marks)
+        XCTAssertEqual(marks.count, 3 * single.count)
+        for index in 0..<3 {
+            let numbered = stock.numbered(12 + index).marks
+            let cut = Array(marks[(index * single.count)..<((index + 1) * single.count)])
+            XCTAssertEqual(cut.map(\.text), numbered.map(\.text))
+            XCTAssertEqual(cut.map(\.xMM), numbered.map { $0.xMM + 38 * Double(index) })
+        }
+        XCTAssertTrue(marks.contains { $0.text == "14A" })
+        XCTAssertEqual(run.frameNumber, 12)
+        var expected: [FilmEdgePrinting.Bar] = []
+        for index in 0..<3 {
+            let offset = 38 * Double(index)
+            for bar in stock.numbered(12 + index).barcode(frame: 12 + index) {
+                var moved = bar
+                moved.xMM += offset
+                expected.append(moved)
+            }
+        }
+        XCTAssertEqual(run.edgeBars, expected)
+        XCTAssertEqual(Array(run.edgeBars.prefix(one.edgeBars.count)), one.edgeBars)
+
+        // The photograph is cropped to the long aperture; a landscape picture turns 120 across.
+        let crop = try XCTUnwrap(PrintFramePlacement.photoCrop(width: 6000, height: 4000, configuration: run))
+        XCTAssertEqual([crop.width, crop.height], [6000, 1286])
+        XCTAssertNil(PrintFramePlacement.photoCrop(width: 1120, height: 240, configuration: run))
+        XCTAssertTrue(PrintFramePlacement.layout(width: 1160, height: 560,
+                                                 configuration: film(2, format: "120")).rotated)
+
+        // Drawn, the photograph fills the whole aperture, unbroken, inside a strip 114 mm long.
+        let space = CGColorSpace(name: CGColorSpace.sRGB)!
+        let context = try XCTUnwrap(CGContext(data: nil, width: 1120, height: 240, bitsPerComponent: 16,
+            bytesPerRow: 0, space: space,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder16Little.rawValue))
+        context.setFillColor(CGColor(colorSpace: space, components: [0.9, 0.2, 0.1, 1])!)
+        context.fill(CGRect(x: 0, y: 0, width: 1120, height: 240))
+        let framed = try XCTUnwrap(PrintFrameRenderer.render(try XCTUnwrap(context.makeImage()),
+                                                             configuration: run))
+        XCTAssertEqual([framed.width, framed.height], [1140, 350])
+        let data = try pixels(framed)
+        func pixel(_ x: Int, _ y: Int) -> [UInt16] {
+            data.withUnsafeBytes { raw in
+                let values = raw.bindMemory(to: UInt16.self)
+                return (0..<3).map { values[(y * framed.width + x) * 4 + $0] }
+            }
+        }
+        // Where frames would meet, 38 mm along, the picture carries on.
+        XCTAssertEqual(pixel(380, 175), pixel(200, 175))
+        XCTAssertEqual(pixel(760, 175), pixel(200, 175))
+        XCTAssertNotEqual(pixel(380, 303), pixel(200, 175))
+    }
+
+    func testAMediumFormatBackExposes135ToItsEdges() throws {
+        func film(_ frames: Int, camera: FilmBorderCamera, format: String = "35mm",
+                  frame: PrintFrame = .film) -> PrintFrameConfiguration {
+            PrintFrameConfiguration(frame: frame, formatID: format, stockID: "portra400",
+                                    paper: .ektacolorEdge, frames: frames, camera: camera)
+        }
+        // The aperture runs across the film's whole width, along the same length.
+        let back = film(3, camera: .mediumFormatBack)
+        let geometry = try XCTUnwrap(back.geometry)
+        XCTAssertTrue(geometry.exposesEdges)
+        XCTAssertEqual([geometry.apertureY, geometry.apertureHeight], [0, 35])
+        XCTAssertEqual(geometry.apertureWidth, 112, accuracy: 1e-9)
+        XCTAssertEqual(back.camera, .mediumFormatBack)
+        XCTAssertEqual(geometry.spanning(1).apertureHeight, 35)
+        XCTAssertEqual(film(1, camera: .mediumFormatBack).geometry?.apertureWidth, 36)
+        // The default camera keeps the gate between the perforations.
+        XCTAssertEqual(film(3, camera: .panoramic).geometry?.apertureHeight, 24)
+        XCTAssertEqual(film(3, camera: .panoramic).camera, .panoramic)
+        // 120 already fills a medium-format gate: it offers no choice and keeps its aperture.
+        let medium = film(2, camera: .mediumFormatBack, format: "120")
+        XCTAssertNil(medium.camera)
+        XCTAssertEqual(medium.geometry?.apertureWidth, 56)
+        XCTAssertNil(film(1, camera: .mediumFormatBack, frame: .paper).camera)
+        // The photograph is cropped to the whole width, and the strip reaches no further across.
+        let crop = try XCTUnwrap(PrintFramePlacement.photoCrop(width: 6000, height: 4000, configuration: back))
+        XCTAssertEqual([crop.width, crop.height], [6000, 1875])
+        let strip = try XCTUnwrap(PrintFramePlacement.filmStrip(width: 1120, height: 350, configuration: back))
+        XCTAssertEqual([strip.top, strip.bottom, strip.left, strip.right], [0, 0, 10, 10])
+
+        // Drawn, the picture reaches the film's edge; the holes are punched through it and the
+        // barcode's exposure darkens the negative where it is denser.
+        let space = CGColorSpace(name: CGColorSpace.sRGB)!
+        let context = try XCTUnwrap(CGContext(data: nil, width: 1120, height: 350, bitsPerComponent: 16,
+            bytesPerRow: 0, space: space,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder16Little.rawValue))
+        context.setFillColor(CGColor(colorSpace: space, components: [0.9, 0.8, 0.7, 1])!)
+        context.fill(CGRect(x: 0, y: 0, width: 1120, height: 350))
+        let framed = try XCTUnwrap(PrintFrameRenderer.render(try XCTUnwrap(context.makeImage()),
+                                                             configuration: back))
+        XCTAssertEqual([framed.width, framed.height], [1140, 350])
+        let data = try pixels(framed)
+        func pixel(_ x: Int, _ y: Int) -> [UInt16] {
+            data.withUnsafeBytes { raw in
+                let values = raw.bindMemory(to: UInt16.self)
+                return (0..<3).map { values[(y * framed.width + x) * 4 + $0] }
+            }
+        }
+        let picture = pixel(600, 175)
+        // 1 mm from the lower edge, between the DX tracks, and 4.7 mm up, inside the old rebate.
+        XCTAssertEqual(pixel(200, 340), picture)
+        XCTAssertEqual(pixel(380, 303), picture)
+        // A perforation, 2.375 mm along and 3 mm up, shows the scan bed through the picture.
+        let hole = pixel(24, 320)
+        XCTAssertNotEqual(hole, picture)
+        XCTAssertEqual(hole[0], hole[2])
+        // The DX clock track's first cells, 11 mm along and 1.55 mm up.
+        let bar = pixel(110, 334)
+        XCTAssertNotEqual(bar, picture)
+        XCTAssertTrue(zip(bar, picture).allSatisfy { $0 <= $1 })
+    }
+
     func testPerforationsAreCutWithTheirOwnSmallImperfections() {
         func outline(_ hole: Int, bellHowell: Bool = false) -> [SIMD2<Double>] {
             PrintFrameRenderer.perforationOutline(x: 2, centre: 7.125, width: 1.98, height: 2.794,

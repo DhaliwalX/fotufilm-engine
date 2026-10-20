@@ -424,7 +424,7 @@ final class EditorControlCatalogueTests: XCTestCase {
         let offered = EditorControlCatalogue.controls(in: .printPaper,
                                                       for: reversal)
         XCTAssertEqual(offered.map(\.field),
-                       [.printFrame, .printFrameMargin, .printFrameEdgePrinting, .printFrameNumber, .paper, .printLight, .printCorrection,
+                       [.printFrame, .printFrameMargin, .printFrameEdgePrinting, .printFrameNumber, .printFrameCount, .printFrameCamera, .paper, .printLight, .printCorrection,
                         .printerRed, .printerGreen, .printerBlue, .negativeViewing,
                         .digitalReference,
                         .screenGrade, .screenExposure, .screenRedBand, .screenGreenBand,
@@ -435,7 +435,7 @@ final class EditorControlCatalogueTests: XCTestCase {
         XCTAssertEqual(
             EditorControlCatalogue.controls(in: .printPaper, for: negative)
                 .map(\.field),
-                       [.printFrame, .printFrameMargin, .printFrameEdgePrinting, .printFrameNumber, .paper, .printLight, .printCorrection,
+                       [.printFrame, .printFrameMargin, .printFrameEdgePrinting, .printFrameNumber, .printFrameCount, .printFrameCamera, .paper, .printLight, .printCorrection,
                         .printerRed, .printerGreen, .printerBlue, .negativeViewing,
                         .digitalReference,
                         .screenGrade, .screenExposure, .screenRedBand, .screenGreenBand,

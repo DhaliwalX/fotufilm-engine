@@ -22,6 +22,8 @@ Json frameRequest(Json edit, List<Json> printLights, {int width = 1, int height 
     'frameNumber': edit['printFrameNumber'] ?? 1,
     'edgePrinting': edit['printFrameEdgePrinting'] ?? true,
     'framing': edit['printFrameFraming'] ?? const [0, 0],
+    'frames': edit['printFrameCount'] ?? 1,
+    'camera': edit['printFrameCamera'] ?? 'panoramic',
     'viewingKelvin': printLights.where((c) => c['id'] == light).firstOrNull?['value'],
     'width': width,
     'height': height,

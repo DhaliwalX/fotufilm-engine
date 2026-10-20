@@ -99,6 +99,8 @@ void main() {
       'frameNumber': 1,
       'edgePrinting': true,
       'framing': [0, 0],
+      'frames': 1,
+      'camera': 'panoramic',
       'viewingKelvin': 2856,
       'width': 300,
       'height': 200,
@@ -111,6 +113,8 @@ void main() {
     expect(request['edgePrinting'], isFalse);
     expect(request['framing'], [0, 0]);
     expect(frameRequest({...film, 'printFrameFraming': [0.5, -1]}, lights)['framing'], [0.5, -1]);
+    expect(frameRequest({...film, 'printFrameCount': 3}, lights)['frames'], 3);
+    expect(frameRequest({...film, 'printFrameCamera': 'mediumFormatBack'}, lights)['camera'], 'mediumFormatBack');
   });
 
   test('a drag moves a film border over the photograph with the pointer, as far as its edges', () {

@@ -363,6 +363,21 @@ export async function renderPrintFrame(
     ctx.fillStyle = color(c.slideMount ? palette.card : palette.base);
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
+  // 135 exposed to its edges in a medium-format camera: the picture lies under the edge printing
+  // and is punched with the perforations, so it goes down first.
+  const exposed = c.geometry?.exposesEdges === true,
+    top = canvas.height - p.image.y - p.image.height;
+  const placePhoto = () => {
+    if (omitPhoto) ctx.clearRect(p.image.x, top, p.image.width, p.image.height);
+    else {
+      // Integer placement preserves the delivered photograph without resampling.
+      const pixels = image
+        .getContext("2d")
+        .getImageData(0, 0, image.width, image.height);
+      ctx.putImageData(pixels, p.image.x, top);
+    }
+  };
+  if (exposed && !developed) placePhoto();
   // Shared native geometry is lower-left. Physical material drawing stays in that space.
   ctx.save();
   ctx.translate(0, canvas.height);
@@ -409,22 +424,20 @@ export async function renderPrintFrame(
   } else if (c.geometry) {
     // On a developed strip a negative's letters pass a share of the rebate's light, grain and
     // glow included; lighter letters are laid over the dark rebate. Blending encoded values
-    // stands in for blending light, as natively.
-    const transmission = developed ? palette.edgeTransmission : null;
-    ctx.fillStyle = color(transmission || palette.edge);
-    ctx.globalCompositeOperation = !developed
-      ? "source-over"
-      : transmission
-        ? "multiply"
-        : "screen";
+    // stands in for blending light, as natively. Over a picture exposed to the edges the denser
+    // of the edge printer's exposure and the camera's develops, nearly.
+    const marking = (rgb, shared) => {
+      if (exposed) return [rgb, shared ? "darken" : "lighten"];
+      const used = developed ? shared : null;
+      return [used || rgb, !developed ? "source-over" : used ? "multiply" : "screen"];
+    };
+    const [ink, inkBlend] = marking(palette.edge, palette.edgeTransmission);
+    ctx.fillStyle = color(ink);
+    ctx.globalCompositeOperation = inkBlend;
     edgePrinting(ctx, c.geometry, c.edgePrinting);
-    const barTransmission = developed ? palette.barcodeTransmission : null;
-    ctx.fillStyle = color(barTransmission || palette.barcode || [0, 0, 0]);
-    ctx.globalCompositeOperation = !developed
-      ? "source-over"
-      : barTransmission
-        ? "multiply"
-        : "screen";
+    const [bar, barBlend] = marking(palette.barcode || [0, 0, 0], palette.barcodeTransmission);
+    ctx.fillStyle = color(bar);
+    ctx.globalCompositeOperation = barBlend;
     edgeBars(ctx, c.geometry, c.edgeBars);
     ctx.globalCompositeOperation = "source-over";
     ctx.fillStyle = color(palette.cutout);
@@ -441,16 +454,7 @@ export async function renderPrintFrame(
   ctx.restore();
   if (stale()) return null;
   ctx.imageSmoothingEnabled = false;
-  const top = canvas.height - r.y - r.height;
-  if (developed) {
-    // The photograph is part of the developed strip, already in place.
-  } else if (omitPhoto) ctx.clearRect(r.x, top, r.width, r.height);
-  else {
-    // Integer placement preserves the delivered photograph without resampling.
-    const pixels = image
-      .getContext("2d")
-      .getImageData(0, 0, image.width, image.height);
-    ctx.putImageData(pixels, r.x, top);
-  }
+  // A developed strip already holds the photograph in place.
+  if (!developed && !exposed) placePhoto();
   return canvas;
 }

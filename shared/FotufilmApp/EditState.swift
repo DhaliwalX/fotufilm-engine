@@ -391,6 +391,10 @@ struct EditState: Equatable {
     /// Where a film border's aperture sits on a photograph of another shape, across and down
     /// from -1 to 1 (`PrintFrameConfiguration.framing`).
     var printFrameFraming = SIMD2<Double>.zero
+    /// Frames: how many consecutive frames of the roll a film border's picture runs across.
+    var printFrameCount = 1
+    /// Camera: the camera a 135 film border's picture was exposed in.
+    var printFrameCamera = FilmBorderCamera.panoramic
     /// How the developed negative is read when it is the output: on the light box with its
     /// orange base, or through a scanner that divides the base out.
     var negativeViewing = NegativeViewing.lightBox
@@ -602,7 +606,8 @@ struct EditState: Equatable {
                                 negativeViewing: .lightBox, margin: printFrameMargin,
                                 frameNumber: printFrameNumber,
                                 showsEdgePrinting: printFrameEdgePrinting,
-                                framing: printFrameFraming)
+                                framing: printFrameFraming, frames: printFrameCount,
+                                camera: printFrameCamera)
     }
 
     /// A negative stock is seen by transmission on the same reference light box as its rebate.

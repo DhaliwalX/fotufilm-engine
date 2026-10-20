@@ -201,18 +201,26 @@ void main() {
         ..['rawCorrections'] = false
         ..['printFrameNumber'] = 12
         ..['printFrameEdgePrinting'] = false
-        ..['printFrameFraming'] = [0.5, -1];
+        ..['printFrameFraming'] = [0.5, -1]
+        ..['printFrameCount'] = 3
+        ..['printFrameCamera'] = 'mediumFormatBack';
       expect(sameEdit(restoreEdit(editText(edit), catalogue, stocks), edit), isTrue);
       final older = defaultEdit(catalogue, 'gold200')
         ..remove('rawCorrections')
-        ..remove('printFrameFraming');
+        ..remove('printFrameFraming')
+        ..remove('printFrameCount')
+        ..remove('printFrameCamera');
       final restored = restoreEdit(editText(older), catalogue, stocks);
       expect(restored['rawCorrections'], isTrue);
       expect(restored['printFrameFraming'], [0, 0]);
+      expect(restored['printFrameCount'], 1);
+      expect(restored['printFrameCamera'], 'panoramic');
       for (final bad in [
         {'rawCorrections': 'no'},
         {'printFrameFraming': [0, 2]},
         {'printFrameNumber': 99},
+        {'printFrameCount': 5},
+        {'printFrameCamera': 'box'},
       ]) {
         expect(() => restoreEdit(editText({...edit, ...bad}), catalogue, stocks),
             throwsA(isA<EditProblem>()));

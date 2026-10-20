@@ -6,13 +6,16 @@ final class WebPrintFrameRequestTests: XCTestCase {
     private func request(_ frame: PrintFrame, stock: String? = "gold200", format: String = "35mm",
                          medium: String = "ektacolor-edge", width: Int = 300, height: Int = 200,
                          margin: Double? = nil, frameNumber: Int? = nil,
-                         edgePrinting: Bool? = nil, framing: [Double]? = nil) throws -> Data {
+                         edgePrinting: Bool? = nil, framing: [Double]? = nil,
+                         frames: Int? = nil, camera: String? = nil) throws -> Data {
         var value: [String: Any] = ["kind": "print-frame", "frame": frame.rawValue,
             "format": format, "medium": medium, "width": width, "height": height]
         if let margin { value["margin"] = margin }
         if let frameNumber { value["frameNumber"] = frameNumber }
         if let edgePrinting { value["edgePrinting"] = edgePrinting }
         if let framing { value["framing"] = framing }
+        if let frames { value["frames"] = frames }
+        if let camera { value["camera"] = camera }
         if let stock {
             value["stock"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(
                 XCTUnwrap(FilmStock.presetDefinitions[stock])))
@@ -174,6 +177,43 @@ final class WebPrintFrameRequestTests: XCTestCase {
         XCTAssertNil(try result(request(.paper, stock: "portra400", width: 400, height: 300)).crop)
         for framing in [[0.0], [0, 1.5], [-1.01, 0]] {
             XCTAssertThrowsError(try WebRenderRequest.prepare(request(.film, framing: framing)))
+        }
+    }
+
+    func testAPanoramaPlansOneLongApertureAcrossItsFrames() throws {
+        let plan = try result(request(.film, stock: "portra400", width: 6000, height: 4000, frames: 3))
+        XCTAssertTrue(plan.spansFrames)
+        XCTAssertEqual(plan.configuration.geometry?.frames, 3)
+        let crop = try XCTUnwrap(plan.crop)
+        XCTAssertEqual([crop.width, crop.height], [6000, 1286])
+        // The frame is laid out around the long aperture.
+        XCTAssertEqual(plan.placement.image.width, 6000)
+        XCTAssertEqual(plan.materialSize.width, 114, accuracy: 1e-9)
+        XCTAssertNotNil(plan.strip)
+        // The positive offers it too, and 120 runs along its length.
+        XCTAssertTrue(try result(request(.filmPositive, stock: "portra400", frames: 2)).spansFrames)
+        let medium = try result(request(.film, stock: "portra400", format: "120", width: 1160, height: 560,
+                                        frames: 2))
+        XCTAssertTrue(medium.spansFrames)
+        XCTAssertNil(medium.crop)
+        XCTAssertTrue(medium.placement.rotated)
+        // A motion-picture gate and every other frame offer none.
+        XCTAssertTrue(try result(request(.film, stock: "portra400")).spansFrames)
+        let motion = try result(request(.film, stock: "vision500t", format: "super35", frames: 3))
+        XCTAssertFalse(motion.spansFrames)
+        XCTAssertEqual(motion.configuration.geometry?.frames, 1)
+        XCTAssertFalse(try result(request(.paper, stock: "portra400", frames: 3)).spansFrames)
+        // A medium-format back exposes 135 to its edges; 120 offers no choice.
+        let back = try result(request(.film, stock: "portra400", width: 6000, height: 4000, frames: 3,
+                                      camera: "mediumFormatBack"))
+        XCTAssertTrue(back.camera)
+        XCTAssertEqual(back.configuration.camera, .mediumFormatBack)
+        XCTAssertEqual(back.crop.map { [$0.width, $0.height] }, [6000, 1875])
+        XCTAssertEqual(back.strip.map { [$0.top, $0.bottom] }, [0, 0])
+        XCTAssertFalse(medium.camera)
+        XCTAssertThrowsError(try WebRenderRequest.prepare(request(.film, camera: "box")))
+        for frames in [0, 5] {
+            XCTAssertThrowsError(try WebRenderRequest.prepare(request(.film, frames: frames)))
         }
     }
 

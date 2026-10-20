@@ -48,6 +48,33 @@ Core Image's lens distortion and vignetting correction is left out (`HostImage.u
 rather than the camera's default crop (`FFC_DECODE_SENSOR_AREA`). Core Image always delivers the
 camera's crop; the browser's LibRaw decode corrects nothing and already shows the whole area.
 
+### Frames
+
+Frames (`frames` in the frame request, 1 to 4) exposes one photograph across several frames'
+length of a 135 or 120 roll (`FilmBorderGeometry.spanning`), as a panoramic camera's wide gate
+does, or 135 run through a medium-format camera. The cut runs on by the gauge's frame advance for
+each frame, 38 mm on 135 and 60 mm on 6 × 6, and its aperture runs on with it unbroken: 74, 112 and
+150 mm by 24 on 135, 116 and 176 mm by 56 on 120. The photograph is cropped and framed to that
+aperture like any other (`photoCrop`), and the strip is developed around it as one exposure. The
+roll's edge printing is exposed at the factory, so it runs along regardless: each frame's length
+carries its own numbers and DX code, numbered on from Frame Number (`FilmEdgePrinting.run`,
+`barcodeRun`). Motion-picture gauges, whose frame is a fixed gate, sheets and instant film keep one
+frame.
+
+### Camera
+
+Camera (`camera` in the frame request) says what a 135 cut was exposed in. A 35mm or panoramic
+camera (`panoramic`, the default) has its gate between the perforation rows, 24 mm across. A
+medium-format camera loaded with 135 (`mediumFormatBack`) has a gate taller than the film is wide,
+so the picture runs across all 35 mm to both cut edges (`FilmBorderGeometry.exposingEdges`): the
+photograph is cropped to that, the strip has no rebate across the film, the perforations, punched
+before exposure, show the scan bed through the picture, and the factory's latent edge printing
+lies over it. Where both exposed the film, the denser of the two is drawn, darken for a negative's
+letters and lighten for lighter ones, an approximation of the two exposures adding on the
+characteristic curve. The exposed length still follows Frames rather than a particular camera's
+gate; 120 fills a medium-format gate already and offers no choice. The plan's `camera` says whether
+the gauge offers it.
+
 | Format | Image aperture, mm | Film segment, mm | Edge construction |
 | --- | --- | --- | --- |
 | 135 still | 36 × 24 | 38 × 35 | Two rows of KS holes, eight pitches per frame |

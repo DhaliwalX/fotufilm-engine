@@ -20,6 +20,10 @@ public struct WebPrintFrameRequest: Decodable {
     /// Where a film border's aperture sits on a photograph of another shape, [across, down] from
     /// -1 to 1; absent centres it.
     public let framing: [Double]?
+    /// How many frames' length of the roll a Film Border's picture is exposed across; absent is one.
+    public let frames: Int?
+    /// The camera a 135 Film Border's picture was exposed in; absent is a 35mm or panoramic camera.
+    public let camera: FilmBorderCamera?
     public let width: Int
     public let height: Int
 
@@ -44,6 +48,10 @@ public struct WebPrintFrameRequest: Decodable {
         /// and whether that printing carries a frame number or DX barcode to set.
         public let edgePrinting: Bool
         public let frameNumber: Bool
+        /// Whether this frame's gauge can run a picture across several frames (Frames).
+        public let spansFrames: Bool
+        /// Whether this frame's gauge can be exposed to its edges in a medium-format camera (Camera).
+        public let camera: Bool
         /// Encoded sRGB material colours for the current browser delivery boundary.
         public let palette: [String: [Float]]
     }
@@ -62,6 +70,9 @@ public struct WebPrintFrameRequest: Decodable {
         }
         guard frameNumber == nil || FilmEdgePrinting.frameNumberRange.contains(frameNumber!) else {
             throw WebProfileRequest.Failure(description: "Invalid film border frame number.")
+        }
+        guard frames == nil || FilmBorderGeometry.frameCountRange.contains(frames!) else {
+            throw WebProfileRequest.Failure(description: "Invalid film border frame count.")
         }
         let definition = try stock?.validated()
         let film = definition?.stock
@@ -82,7 +93,9 @@ public struct WebPrintFrameRequest: Decodable {
                 frameNumber: recorded ? FilmEdgePrinting.recordedFrameNumber
                     : frameNumber ?? FilmEdgePrinting.recordedFrameNumber,
                 showsEdgePrinting: recorded || edgePrinting ?? true,
-                framing: framing.map { SIMD2($0[0], $0[1]) } ?? .zero)
+                framing: framing.map { SIMD2($0[0], $0[1]) } ?? .zero,
+                frames: recorded ? 1 : frames ?? 1,
+                camera: recorded ? .panoramic : camera ?? .panoramic)
         }
         let config = configuration(frame)
         let crop = PrintFramePlacement.photoCrop(width: width, height: height, configuration: config)
@@ -132,6 +145,8 @@ public struct WebPrintFrameRequest: Decodable {
             strip: PrintFramePlacement.filmStrip(width: shownWidth, height: shownHeight,
                                                  configuration: config),
             edgePrinting: recorded.edgePrinting != nil, frameNumber: numbered,
+            spansFrames: recorded.geometry?.spansFrames == true,
+            camera: recorded.camera != nil,
             palette: palette))
     }
 }

@@ -41,6 +41,22 @@ export function parsePrintFrameFraming(value) {
     throw new Error("Invalid film border framing.");
   return value;
 }
+// How many frames' length of the roll a Film Border's picture is exposed across (Frames); older
+// edits have one.
+export function parsePrintFrameCount(value) {
+  if (value == null) return 1;
+  if (!editorControl("printFrameCount").choices.some((c) => c.value === value))
+    throw new Error("Invalid film border frame count.");
+  return value;
+}
+// The camera a 135 Film Border's picture was exposed in (Camera); older edits have a 35mm or
+// panoramic camera's.
+export function parsePrintFrameCamera(value) {
+  if (value == null) return "panoramic";
+  if (!editorControl("printFrameCamera").choices.some((c) => c.id === value))
+    throw new Error("Invalid film border camera.");
+  return value;
+}
 export function frameRequest(edit, width = 1, height = 1) {
   return {
     kind: "print-frame",
@@ -52,6 +68,8 @@ export function frameRequest(edit, width = 1, height = 1) {
     frameNumber: edit.printFrameNumber ?? 1,
     edgePrinting: edit.printFrameEdgePrinting ?? true,
     framing: edit.printFrameFraming ?? [0, 0],
+    frames: edit.printFrameCount ?? 1,
+    camera: edit.printFrameCamera ?? "panoramic",
     viewingKelvin:
       PROFILE_MENUS.printLight.find((c) => c.id === edit.profile?.printLight)
         ?.value ?? null,

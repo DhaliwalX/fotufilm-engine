@@ -1620,6 +1620,35 @@ public enum EditorControlCatalogue {
             web: .runtime,
             documentation: "Sets which frame of the roll a Film Border or Film Border Positive is cut from, 0 to 38: the printed frame number and half-frame number (12 and 12A) and the frame encoded in a 135 negative's DX barcode follow it. The stock's name and codes stay. Offered for stocks whose edge printing numbers its frames; the default is frame 1. Included in saved edits and exports."),
         EditorControl(
+            .printFrameCount, title: "Frames",
+            detail: "Expose the photograph across several frames' length of a Film Border, as a panorama.",
+            section: .printPaper,
+            kind: .menu(.fixed(FilmBorderGeometry.frameCountRange.map {
+                EditorMenuChoice(Double($0), $0 == 1 ? "1 frame" : "\($0) frames", id: String($0))
+            })),
+            surfaces: [.app, .desktop, .web],
+            omitted: [.android: "Frame finishing is offered in the iPhone, iPad and Mac photo editors.",
+                      .resolve: "The host owns output framing.",
+                      .finalcut: "The host owns output framing.",
+                      .cli: "Frame finishing is offered in the iPhone, iPad and Mac photo editors."],
+            web: .runtime,
+            documentation: "Exposes one photograph across up to four frames' length of a 135 or 120 Film Border or Film Border Positive, as a panoramic camera or 135 in a medium-format camera does: one unbroken picture, its aperture running on by the gauge's frame advance for each frame. The photograph is cropped to that long aperture and placed by Framing. The roll's edge printing runs along with it, each frame's length carrying its own numbers and DX code, counting on from Frame Number. Motion-picture gauges, sheet film and instant film keep one frame. Included in saved edits and exports."),
+        EditorControl(
+            .printFrameCamera, title: "Camera",
+            detail: "Choose the camera a 135 Film Border's picture was exposed in.",
+            section: .printPaper,
+            kind: .menu(.fixed(FilmBorderCamera.allCases.enumerated().map {
+                EditorMenuChoice(Double($0.offset), $0.element.name,
+                                 detail: $0.element.detail, id: $0.element.id)
+            })),
+            surfaces: [.app, .desktop, .web],
+            omitted: [.android: "Frame finishing is offered in the iPhone, iPad and Mac photo editors.",
+                      .resolve: "The host owns output framing.",
+                      .finalcut: "The host owns output framing.",
+                      .cli: "Frame finishing is offered in the iPhone, iPad and Mac photo editors."],
+            web: .runtime,
+            documentation: "Sets the camera a 135 Film Border or Film Border Positive was exposed in. 35mm or Panoramic Camera, the default, keeps the picture between the perforation rows, as a 35mm camera's gate or a panoramic camera's wider one does. Medium-Format Back runs it across the whole width of the film, as 135 loaded in a medium-format camera is exposed: the perforations are punched through the picture and the edge printing lies over it, the denser of the two showing. With Frames, the picture is as long as that many frames of the roll. Included in saved edits and exports."),
+        EditorControl(
             .paper, title: "Output Medium",
             detail: "Choose how the film is printed, scanned, or viewed.",
             section: .printPaper, kind: .menu(.dynamic(.papers)), availability: .printStage,

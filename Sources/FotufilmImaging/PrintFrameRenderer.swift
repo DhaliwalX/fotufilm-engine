@@ -66,6 +66,10 @@ public enum PrintFrameRenderer {
             context.setFillColor(configuration.slideMount == nil ? baseColor(configuration.baseRGB) : cardColor)
         }
         context.fill(CGRect(origin: .zero, size: placement.size))
+        // 135 exposed to its edges in a medium-format camera: the picture lies under the edge
+        // printing and is punched with the perforations, so it goes down first.
+        let exposed = configuration.geometry?.exposesEdges == true
+        if strip == nil, exposed { drawDeveloped(image, into: context, at: placement.imageRect, film: film) }
         if strip != nil {
             drawDeveloped(image, into: context, at: placement.imageRect, film: film)
             if configuration.frame == .filmPositive {
@@ -103,19 +107,23 @@ public enum PrintFrameRenderer {
                            excluding: photo.insetBy(dx: -CGFloat(sheet.rebateMM), dy: -CGFloat(sheet.rebateMM)))
             }
         } else if let geometry = configuration.geometry {
+            // On a developed strip a negative's letters pass a share of the rebate's light, grain
+            // and glow included; lighter letters are laid over the dark rebate. Over a picture
+            // exposed to the edges the edge printer's exposure adds to the camera's, and the denser
+            // of the two develops, nearly: a negative's letters darken it, lighter letters lighten.
+            func marking(_ rgb: SIMD3<Float>, _ transmission: SIMD3<Float>?) -> (CGColor, CGBlendMode) {
+                if exposed { return (baseColor(rgb), transmission == nil ? .lighten : .darken) }
+                let shared = strip == nil ? nil : transmission
+                return (baseColor(shared ?? rgb), strip == nil ? .normal : shared == nil ? .screen : .multiply)
+            }
             if let printing = configuration.edgePrinting {
-                // On a developed strip a negative's letters pass a share of the rebate's light,
-                // grain and glow included; lighter letters are laid over the dark rebate.
-                let transmission = strip == nil ? nil : configuration.edgeTransmission
-                drawEdgePrinting(in: context, geometry: geometry, printing: printing,
-                                 color: baseColor(transmission ?? configuration.edgeRGB),
-                                 blend: strip == nil ? .normal : transmission == nil ? .screen : .multiply)
+                let (color, blend) = marking(configuration.edgeRGB, configuration.edgeTransmission)
+                drawEdgePrinting(in: context, geometry: geometry, printing: printing, color: color, blend: blend)
             }
             if !configuration.edgeBars.isEmpty {
-                let transmission = strip == nil ? nil : configuration.barcodeTransmission
+                let (color, blend) = marking(configuration.barcodeRGB, configuration.barcodeTransmission)
                 drawEdgeBars(in: context, geometry: geometry, bars: configuration.edgeBars,
-                             color: baseColor(transmission ?? configuration.barcodeRGB),
-                             blend: strip == nil ? .normal : transmission == nil ? .screen : .multiply)
+                             color: color, blend: blend)
             }
             let cutout = baseColor(configuration.cutoutRGB)
             drawPerforations(in: context, geometry: geometry, cutout: cutout)
@@ -124,7 +132,7 @@ public enum PrintFrameRenderer {
             }
         }
         context.restoreGState()
-        if strip == nil { drawDeveloped(image, into: context, at: placement.imageRect, film: film) }
+        if strip == nil, !exposed { drawDeveloped(image, into: context, at: placement.imageRect, film: film) }
         return context.makeImage()
     }
 

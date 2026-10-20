@@ -88,6 +88,8 @@ List<Widget> printPanel(InspectorControls c) {
     if (printMedium?['enlarger'] == true)
       Section(
         title: 'Lamp',
+        // The enlarger's lamp is set once in a while; it starts folded away below the output.
+        initiallyOpen: false,
         children: c.profileControls(const [
           'enlarger',
           'printerEnabled',

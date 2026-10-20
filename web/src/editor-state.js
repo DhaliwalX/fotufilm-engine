@@ -1,5 +1,7 @@
 import {
   parsePrintFrame,
+  parsePrintFrameCamera,
+  parsePrintFrameCount,
   parsePrintFrameEdgePrinting,
   parsePrintFrameFraming,
   parsePrintFrameMargin,
@@ -126,6 +128,8 @@ export const defaultEdit = (stock = null) => ({
   printFrameEdgePrinting: true,
   printFrameNumber: 1,
   printFrameFraming: [0, 0],
+  printFrameCount: 1,
+  printFrameCamera: "panoramic",
   digitalReference: "auto-levels",
   // `frameRate` is the clip's cadence, the rate it exports at; null keeps the source's.
   video: { encoding: "standard", trimStart: 0, trimEnd: null, audio: true, frameRate: null },
@@ -404,6 +408,8 @@ export function parseEdit(json, stockIDs) {
     printFrameEdgePrinting: parsePrintFrameEdgePrinting(edit.printFrameEdgePrinting),
     printFrameNumber: parsePrintFrameNumber(edit.printFrameNumber),
     printFrameFraming: parsePrintFrameFraming(edit.printFrameFraming),
+    printFrameCount: parsePrintFrameCount(edit.printFrameCount),
+    printFrameCamera: parsePrintFrameCamera(edit.printFrameCamera),
     digitalReference: edit.digitalReference ?? "auto-levels",
     video: edit.video ? { ...base.video, ...edit.video } : base.video,
     halationModel: edit.halationModel ?? "legacy",
