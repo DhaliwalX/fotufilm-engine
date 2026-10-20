@@ -23432,6 +23432,68 @@
     "sourcePage": 6,
     "temperatureC": 20
   },
+  "edgePrinting": [
+    {
+      "formatID": "35mm",
+      "marks": [
+        {
+          "heightMM": 1.15,
+          "text": "ILFORD",
+          "widthMM": 4.62,
+          "xMM": 2,
+          "yMM": 33.3
+        },
+        {
+          "heightMM": 1.15,
+          "text": "DELTA 3200 PROFESSIONAL",
+          "widthMM": 17.71,
+          "xMM": 12,
+          "yMM": 33.3
+        },
+        {
+          "heightMM": 1.4,
+          "text": "1",
+          "widthMM": 0.7,
+          "xMM": 9,
+          "yMM": 0.35
+        },
+        {
+          "heightMM": 1.05,
+          "text": "1A",
+          "widthMM": 1.45,
+          "xMM": 28,
+          "yMM": 0.4
+        }
+      ],
+      "sources": [
+        "https://www.flickr.com/photos/ctait/6975514467/",
+        "https://www.flickr.com/photos/hwtstudio/4019514308/"
+      ]
+    },
+    {
+      "formatID": "120",
+      "marks": [
+        {
+          "heightMM": 1.3,
+          "text": "ILFORD DELTA 3200 PRO",
+          "widthMM": 17.85,
+          "xMM": 7,
+          "yMM": 58.95
+        },
+        {
+          "heightMM": 1.4,
+          "text": "1",
+          "widthMM": 0.8,
+          "xMM": 12,
+          "yMM": 0.45
+        }
+      ],
+      "sources": [
+        "https://www.flickr.com/photos/yospyn/3663961358/",
+        "https://www.flickr.com/photos/dagr/208932973/"
+      ]
+    }
+  ],
   "emulsionDiffusionMM": [
     0.0035,
     0.0035,

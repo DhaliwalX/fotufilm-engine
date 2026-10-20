@@ -357,6 +357,17 @@ final class PrintFrameTests: XCTestCase {
             XCTAssertEqual(configuration(.film, format: "16mm", stock: stock).edgePrinting?.marks.first?.text, prefix)
             XCTAssertNil(configuration(.film, format: "120", stock: stock).edgePrinting)
         }
+        for (stock, format, text) in [("gold200", "35mm", "KODAK GB 200-7"), ("gold200", "120", "KODAK 200"),
+                                      ("ektachromee100", "120", "KODAK E100"), ("provia100f", "35mm", "FUJI RDPIII"),
+                                      ("pro400h", "120", "FUJI"), ("delta3200", "120", "ILFORD DELTA 3200 PRO"),
+                                      ("eterna500", "16mm", "FN73"), ("verita200d", "super35", "5206")] {
+            XCTAssertEqual(configuration(.film, format: format, stock: stock).edgePrinting?.marks.first?.text, text)
+        }
+        // Stocks without a documented inscription, and respools sold without one, stay unlettered.
+        for stock in ["acros100", "aerocolor2460", "aerochrome1443", "cinestill400d", "agfachrome50"] {
+            XCTAssertNil(configuration(.film, stock: stock).edgePrinting, stock)
+        }
+        XCTAssertNil(configuration(.film, format: "120", stock: "superia400").edgePrinting)
         XCTAssertNil(configuration(.film, format: "4x5", stock: "portra400").edgePrinting)
         XCTAssertNil(configuration(.film, format: "super8", stock: "vision500t").edgePrinting)
         XCTAssertNil(configuration(.film, stock: "no-film").edgePrinting)
@@ -415,7 +426,9 @@ final class PrintFrameTests: XCTestCase {
 
     func testLetteringIsVisibleInItsPhysicalBoxForBothImageOrientations() throws {
         let source = try fixture()
-        for id in ["portra400", "hp5plus400", "velvia50", "vision500t"] {
+        let lettered = FilmStock.presetDefinitions.filter { $0.value.edgePrinting != nil }.keys.sorted()
+        XCTAssertGreaterThanOrEqual(lettered.count, 39)
+        for id in lettered {
             let definition = try XCTUnwrap(FilmStock.presetDefinitions[id])
             for printing in try XCTUnwrap(definition.edgePrinting) {
                 try definition.validate()

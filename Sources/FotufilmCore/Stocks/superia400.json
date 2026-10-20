@@ -9207,6 +9207,58 @@
       ]
     }
   ],
+  "edgePrinting": [
+    {
+      "formatID": "35mm",
+      "marks": [
+        {
+          "heightMM": 1.15,
+          "text": "S-400",
+          "widthMM": 3.85,
+          "xMM": 12,
+          "yMM": 33.3
+        },
+        {
+          "heightMM": 1.15,
+          "text": "FUJI",
+          "widthMM": 3.08,
+          "xMM": 18,
+          "yMM": 33.3
+        },
+        {
+          "heightMM": 1.15,
+          "text": "CH23",
+          "widthMM": 3.08,
+          "xMM": 24,
+          "yMM": 33.3
+        },
+        {
+          "heightMM": 1.4,
+          "text": "1",
+          "widthMM": 0.7,
+          "xMM": 9,
+          "yMM": 33.15
+        },
+        {
+          "heightMM": 1.4,
+          "text": "1",
+          "widthMM": 0.7,
+          "xMM": 9,
+          "yMM": 0.35
+        },
+        {
+          "heightMM": 1.05,
+          "text": "1A",
+          "widthMM": 1.45,
+          "xMM": 28,
+          "yMM": 0.4
+        }
+      ],
+      "sources": [
+        "https://asset.fujifilm.com/master/emea/files/2020-10/9a958fdcc6bd1442a06f71e134b811f6/films_superia-xtra400_datasheet_01.pdf"
+      ]
+    }
+  ],
   "emulsionDiffusionMM": [
     0.007895,
     0.007895,

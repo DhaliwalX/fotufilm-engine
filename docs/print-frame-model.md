@@ -83,13 +83,37 @@ up for notch identification; sheet lettering has not been verified and is omitte
 | --- | --- | --- |
 | Portra 400 | 135, 120 | KODAK PORTRA 400 |
 | Ektar 100 | 135, 120 | KODAK EKTAR 100 |
+| Gold 200 | 135, 120 | KODAK GB 200-7 on 135; KODAK 200 on 120 |
+| UltraMax 400 | 135 | KODAK GC 400 |
+| Kodacolor 100 | 135 | KODAK 100-8 |
+| Ektachrome E100 | 135, 120 | KODAK E100 |
+| Kodachrome 64 | 135 | KODAK 5032 / KR 64 |
+| Kodachrome 25, 200 | 135 | KODAK 5073 / KM 25; KODAK 5001 / KL 200 (see below) |
 | Tri-X 400 | 135, 120 | KODAK 400TX |
 | T-Max 100 | 135, 120 | KODAK 100TMX |
 | HP5 Plus | 135 | ILFORD HP5 PLUS |
+| FP4 Plus | 135, 120 | ILFORD FP4 PLUS |
+| Delta 3200 | 135, 120 | ILFORD / DELTA 3200 PROFESSIONAL on 135; ILFORD DELTA 3200 PRO on 120 |
+| Harman Phoenix 200 | 135, 120 | HARMAN PHOENIX 200 |
 | Velvia 50 | 135, 120 | FUJI / RVP50 |
+| Provia 100F | 135, 120 | FUJI / RDPIII |
+| Astia 100F | 135, 120 | FUJI / RAP100F |
+| PRO 400H | 135, 120 | PRO400H / FUJI |
+| PRO 160NS | 120 | FUJI / PN160NS |
+| C200 | 135 | 200 / FUJI / CA24 |
+| Superia X-TRA 400 | 135 | S-400 / FUJI / CH23 |
+| Superia 200 | 135 | S-200 / FUJI |
+| Reala 100 | 135, 120 | REALA / FUJI |
+| Agfachrome RSX II 100 | 135, 120 | AGFA RSX II 100 on 135; RSX II 100 / AGFA on 120 |
+| Agfachrome RSX II 200 | 120 | RSX II 200 / AGFA |
+| LomoChrome Metropolis, Purple, Turquoise | 135 | LOMO♥ frame METROPOLIS, PURPLE or TURQUOISE, on both edges |
+| Lomography Color Negative 100 | 135, 120 | 100-2 on 135; LOMO♥ frame ◄ CN 100 on 120 |
 | Vision3 250D | 35 mm still, Super 35, Super 16 | 5207 / EN |
 | Vision3 500T | 35 mm still, Super 35, Super 16 | 5219 / EJ |
 | Double-X | 35 mm still, Super 35, Super 16 | 5222 / KE |
+| VERITA 200D | 35 mm still, Super 35, Super 16 | 5206 / ET |
+| Eterna 500, Eterna Vivid 500, F-64D, Reala 500D | 35 mm still, Super 35, Super 16 | FN73 / FUJI 500, FN47 / FUJI V500, FN22 / FUJI F-64D, FN92 / FUJI 500D |
+| CineStill 800T | 135 | EJ (2021 rolls) |
 
 Sources:
 
@@ -110,6 +134,34 @@ Sources:
   and [16 mm KEYKODE guide](https://www.kodak.com/content/products-brochures/Film/post-production-16mm-keykode-diagram.pdf),
   PDF p. 2: gauge-specific production inscriptions. A single cinema frame shows only a stock-code
   fragment, not an entire foot of KEYKODE data squeezed into one frame.
+- Fujifilm datasheets with rebate diagrams:
+  [Provia 100F, AF3-036E](https://asset.fujifilm.com/www/za/files/2019-09/4ca5dfc19ecbea6b26c635b5079d6ff3/films_provia-100f_datasheet_01.pdf) p. 4,
+  [PRO 400H, AF3-176E](https://asset.fujifilm.com/www/za/files/2019-09/d68b00b13f1b6234629342317be9cf2b/films_pro-400h_datasheet_01.pdf) p. 6,
+  [PRO 160NS](https://asset.fujifilm.com/www/jp/files/2024-04/6b75b1c1cb4253623fb2cd7a56ff7443/datasheet_pro160ns_01.pdf) p. 6,
+  [C200](https://asset.fujifilm.com/master/emea/files/2020-10/98c3d5087c253f51c132a5d46059f131/films_c200_datasheet_01.pdf) p. 4 and
+  [Superia X-TRA 400](https://asset.fujifilm.com/master/emea/files/2020-10/9a958fdcc6bd1442a06f71e134b811f6/films_superia-xtra400_datasheet_01.pdf) p. 4.
+  The [Professional Film Data Guide](https://asset.fujifilm.com/www/ca/files/2020-04/9cdee030ab7fc76bbcfddbcd38650038/ProfessionalFilmDataGuide.pdf),
+  PDF pp. 9–10, gives the RAP100F strip and the abbreviated edge names REALA and S-200; those two
+  stocks have no rebate diagram of their own, so their generation codes are omitted.
+- [Kodak Gold 120](https://www.kodakprofessional.com/photographers/film/color/kodak-professional-gold-film-120-format/514)
+  and [Ektachrome E100](https://www.kodakprofessional.com/photographers/film/color/kodak-professional-ektachrome-film-e100/531)
+  specifications give their edge prints. Gold 200 135, UltraMax 400, Kodacolor 100, Kodachrome 64,
+  the Ilford, Harman, Agfa and Lomography stocks and CineStill 800T follow legible photographs of
+  developed film listed in each stock's `edgePrinting.sources`.
+- Kodachrome 25 and 200 use the Kodachrome 64 layout with Kodak's K-14 product codes 5073/KM and
+  5001/KL from a [Kodak process table](https://www.dagiebrundert.de/alle%20Bilder/Kodachromemagicbath.pdf);
+  no legible developed edge of either has been found.
+- Fujifilm's [Motion Picture Film Manual KB-0707E](https://www.theodoropoulos.info/attachments/076_fujifilm_motion_picture_film_manual.pdf),
+  PDF pp. 2, 13–19 and 31–34 (KB-1101E for Eterna Vivid 500), gives the FN identification mark
+  and film name on 35 mm and 16 mm. Key numbers, emulsion and roll numbers are omitted.
+  [VERITA 200D, H-1-5206](https://www.kodak.com/content/pdfs/motion/KODAK-VERITA-200D-5206-7206-technical-information.pdf),
+  p. 2, gives 5206/7206 and identification code ET; its manufacturer word is not documented and is omitted.
+- CineStill 800T rolls photographed in 2021 carry the 5219 KEYKODE prefix EJ. CineStill states
+  that current rolls carry only frame numbers, so this is one batch, not every roll.
+
+Stocks without a documented developed edge stay unlettered: Acros 100 II, Agfachrome RSX II 50,
+RSX II 200 on 135, CineStill 400D, Aerochrome 1443 and Infrared Color. Respooled Aerocolor IV
+2460 is sold without edge printing or frame numbers, so its border is blank by design.
 
 These are reference cuts, not reproductions of an identified manufactured roll. The still-film
 numbers select a representative position; they are not the imported photograph's original frame

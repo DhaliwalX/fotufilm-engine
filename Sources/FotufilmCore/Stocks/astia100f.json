@@ -16348,6 +16348,75 @@
     "sourcePage": 5,
     "temperatureC": 38.0
   },
+  "edgePrinting": [
+    {
+      "formatID": "35mm",
+      "marks": [
+        {
+          "heightMM": 1.15,
+          "text": "FUJI RAP100F",
+          "widthMM": 9.24,
+          "xMM": 12,
+          "yMM": 33.3
+        },
+        {
+          "heightMM": 1.4,
+          "text": "1",
+          "widthMM": 0.7,
+          "xMM": 9,
+          "yMM": 33.15
+        },
+        {
+          "heightMM": 1.4,
+          "text": "1",
+          "widthMM": 0.7,
+          "xMM": 9,
+          "yMM": 0.35
+        },
+        {
+          "heightMM": 1.05,
+          "text": "1A",
+          "widthMM": 1.45,
+          "xMM": 28,
+          "yMM": 0.4
+        }
+      ],
+      "sources": [
+        "https://asset.fujifilm.com/www/ca/files/2020-04/9cdee030ab7fc76bbcfddbcd38650038/ProfessionalFilmDataGuide.pdf",
+        "https://125px.com/docs/film/fuji/astia_100f_datasheet.pdf"
+      ]
+    },
+    {
+      "formatID": "120",
+      "marks": [
+        {
+          "heightMM": 1.2,
+          "text": "FUJI",
+          "widthMM": 3.7,
+          "xMM": 2,
+          "yMM": 58.95
+        },
+        {
+          "heightMM": 1.6,
+          "text": "2",
+          "widthMM": 0.9,
+          "xMM": 8,
+          "yMM": 58.7
+        },
+        {
+          "heightMM": 1.2,
+          "text": "RAP100F",
+          "widthMM": 7.28,
+          "xMM": 12,
+          "yMM": 58.95
+        }
+      ],
+      "sources": [
+        "https://asset.fujifilm.com/www/ca/files/2020-04/9cdee030ab7fc76bbcfddbcd38650038/ProfessionalFilmDataGuide.pdf",
+        "https://125px.com/docs/film/fuji/astia_100f_datasheet.pdf"
+      ]
+    }
+  ],
   "emulsionDiffusionMM": [
     0.010217,
     0.010217,

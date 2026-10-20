@@ -3107,6 +3107,37 @@
       ]
     }
   ],
+  "edgePrinting": [
+    {
+      "formatID": "120",
+      "marks": [
+        {
+          "heightMM": 1.2,
+          "text": "FUJI",
+          "widthMM": 3.7,
+          "xMM": 2,
+          "yMM": 58.95
+        },
+        {
+          "heightMM": 1.6,
+          "text": "2",
+          "widthMM": 0.9,
+          "xMM": 8,
+          "yMM": 58.7
+        },
+        {
+          "heightMM": 1.2,
+          "text": "PN160NS",
+          "widthMM": 7.28,
+          "xMM": 12,
+          "yMM": 58.95
+        }
+      ],
+      "sources": [
+        "https://asset.fujifilm.com/www/jp/files/2024-04/6b75b1c1cb4253623fb2cd7a56ff7443/datasheet_pro160ns_01.pdf"
+      ]
+    }
+  ],
   "emulsionDiffusionMM": [
     0.012565,
     0.012565,

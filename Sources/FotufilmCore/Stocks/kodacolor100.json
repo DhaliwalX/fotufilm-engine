@@ -9084,6 +9084,45 @@
     "sourcePage": 27,
     "temperatureC": 37.8
   },
+  "edgePrinting": [
+    {
+      "formatID": "35mm",
+      "marks": [
+        {
+          "heightMM": 1.15,
+          "text": "KODAK 100-8",
+          "widthMM": 8.47,
+          "xMM": 12,
+          "yMM": 33.3
+        },
+        {
+          "heightMM": 1.4,
+          "text": "1",
+          "widthMM": 0.7,
+          "xMM": 9,
+          "yMM": 33.15
+        },
+        {
+          "heightMM": 1.4,
+          "text": "1",
+          "widthMM": 0.7,
+          "xMM": 9,
+          "yMM": 0.35
+        },
+        {
+          "heightMM": 1.05,
+          "text": "1A",
+          "widthMM": 1.45,
+          "xMM": 28,
+          "yMM": 0.4
+        }
+      ],
+      "sources": [
+        "https://www.analog.cafe/r/kodak-kodacolor-100-film-review-z3ia",
+        "https://www.cameraclara.com/p/kodak-kodacolor-100-and-200-review"
+      ]
+    }
+  ],
   "emulsionDiffusionMM": [
     0.004,
     0.003,

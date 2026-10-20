@@ -5451,6 +5451,52 @@
       "toeWidth": 0.15
     }
   ],
+  "edgePrinting": [
+    {
+      "formatID": "35mm",
+      "marks": [
+        {
+          "heightMM": 1.15,
+          "text": "KODAK 5073",
+          "widthMM": 7.7,
+          "xMM": 12,
+          "yMM": 33.3
+        },
+        {
+          "heightMM": 1.15,
+          "text": "KM 25",
+          "widthMM": 3.85,
+          "xMM": 26,
+          "yMM": 33.3
+        },
+        {
+          "heightMM": 1.4,
+          "text": "1",
+          "widthMM": 0.7,
+          "xMM": 9,
+          "yMM": 33.15
+        },
+        {
+          "heightMM": 1.4,
+          "text": "1",
+          "widthMM": 0.7,
+          "xMM": 9,
+          "yMM": 0.35
+        },
+        {
+          "heightMM": 1.05,
+          "text": "1A",
+          "widthMM": 1.45,
+          "xMM": 28,
+          "yMM": 0.4
+        }
+      ],
+      "sources": [
+        "https://www.dagiebrundert.de/alle%20Bilder/Kodachromemagicbath.pdf",
+        "https://havecamerawilltravel.com/kodak-film-edgeprint-codes/"
+      ]
+    }
+  ],
   "emulsionDiffusionMM": [
     0.005,
     0.0045,

@@ -130,6 +130,67 @@
     "sourcePage": 27,
     "temperatureC": 37.8
   },
+  "edgePrinting": [
+    {
+      "formatID": "35mm",
+      "marks": [
+        {
+          "heightMM": 1.15,
+          "text": "100-2",
+          "widthMM": 3.85,
+          "xMM": 2,
+          "yMM": 33.3
+        },
+        {
+          "heightMM": 1.4,
+          "text": "1",
+          "widthMM": 0.7,
+          "xMM": 9,
+          "yMM": 0.35
+        },
+        {
+          "heightMM": 1.05,
+          "text": "1A",
+          "widthMM": 1.45,
+          "xMM": 28,
+          "yMM": 0.4
+        }
+      ],
+      "sources": [
+        "https://www.lomography.com/films/871910961-lomography-color-negative-35-mm-iso-100/photos/21368669",
+        "https://www.flickr.com/photos/sneddonphotography/8507415493/"
+      ]
+    },
+    {
+      "formatID": "120",
+      "marks": [
+        {
+          "heightMM": 1.3,
+          "text": "LOMO♥",
+          "widthMM": 4.25,
+          "xMM": 7,
+          "yMM": 58.95
+        },
+        {
+          "heightMM": 1.4,
+          "text": "1",
+          "widthMM": 0.8,
+          "xMM": 12,
+          "yMM": 58.85
+        },
+        {
+          "heightMM": 1.3,
+          "text": "◄ CN 100",
+          "widthMM": 6.8,
+          "xMM": 13.5,
+          "yMM": 58.95
+        }
+      ],
+      "sources": [
+        "https://www.holgaphotography.com/lomography-color-negative-iso-100-120-film/"
+      ]
+    }
+  ],
   "emulsionDiffusionMM": [
     0.0038,
     0.003,
