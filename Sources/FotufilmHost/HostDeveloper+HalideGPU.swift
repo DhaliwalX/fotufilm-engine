@@ -182,6 +182,16 @@ struct HalideGPUDeveloper: HostDeveloper {
 
     // MARK: The device
 
+    /// What a phone develops at once, as the iPhone tiles an export
+    /// (`HalideMetalFilmRenderer.maximumTilePixels`): a phone's GPU shares the app's memory, and a
+    /// whole 42-megapixel frame through the graph took 3.5 GB more than the app held. A screen's
+    /// preview still develops whole.
+    #if os(Android)
+    private static let phoneTilePixels: Int? = 4_000_000
+    #else
+    private static let phoneTilePixels: Int? = nil
+    #endif
+
     /// The fewest pixels a develop has failed on for want of device memory, as the frame or a
     /// tile with its apron: later frames start below it rather than fail again.
     private static let refused = Refused()
@@ -204,7 +214,7 @@ struct HalideGPUDeveloper: HostDeveloper {
             : fotufilm_halide_cuda_process_linear_float_tile
         let dimension = Int32(invocation.spectral.exposure.dimension)
         let forced = ProcessInfo.processInfo.environment["FOTUFILM_GPU_TILE_PIXELS"]
-            .flatMap(Int.init)
+            .flatMap(Int.init) ?? phoneTilePixels
         return invocation.configuration.withUnsafeBufferPointer { configuration in
             invocation.withSpectralPointers { exposure, film, paper -> Int32 in
                 guard fotufilm_halide_cuda_prepare(

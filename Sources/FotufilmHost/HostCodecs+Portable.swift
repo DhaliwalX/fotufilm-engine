@@ -35,6 +35,31 @@ enum PortableCodecs {
             throw HostEngine.Failure(description: String(cString: message))
         }
         defer { ffc_image_free(&image) }
+        return decoded(image)
+    }
+
+    /// A camera RAW delivered no longer than `longEdge` on its long side (0 for its own size),
+    /// reduced from the demosaic before the float picture is made, with the photograph's own
+    /// upright size; nil when the file is not a RAW.
+    static func decodeRAW(_ url: URL, longEdge: Int) throws
+        -> (decoded: Decoded, width: Int, height: Int)? {
+        var image = ffc_image()
+        var message = [CChar](repeating: 0, count: 512)
+        var width: UInt32 = 0, height: UInt32 = 0
+        // The editor's own limits are the device's: these only admit any file a camera writes.
+        var limits = ffc_raw_limits(max_file_bytes: 4 << 30, max_sensor_pixels: 400_000_000,
+                                    max_working_bytes: 1 << 50)
+        switch ffc_decode_raw(url.path, UInt32(FFC_DECODE_SCENE), UInt32(clamping: longEdge),
+                              &limits, &image, &width, &height, &message, message.count) {
+        case Int32(FFC_RAW_OK): break
+        case Int32(FFC_RAW_UNSUPPORTED): return nil
+        default: throw HostEngine.Failure(description: String(cString: message))
+        }
+        defer { ffc_image_free(&image) }
+        return (decoded(image), Int(width), Int(height))
+    }
+
+    private static func decoded(_ image: ffc_image) -> Decoded {
         let count = Int(image.width) * Int(image.height) * 4
         let capture = image.capture
         let make = text(capture.make), model = text(capture.model)
@@ -95,6 +120,9 @@ private extension String {
 /// The editor's photographs: RAW with its camera profile, as `CoreImageDecoder` opens them.
 struct PortableImageDecoder: HostImageDecoder {
     func decode(_ url: URL) throws -> HostImage {
+        #if os(Android)
+        if let image = try Self.working(url) { return image }
+        #endif
         let scene = try Self.scene(url, rawLongEdge: 0)
         let image = HostImage(rgba: scene.rgba, width: scene.width, height: scene.height,
                               contentHeadroom: scene.contentHeadroom)
@@ -110,6 +138,44 @@ struct PortableImageDecoder: HostImageDecoder {
         }
         return image
     }
+
+    #if os(Android)
+    /// A phone holds a camera RAW as the iPhone does: decoded once no longer than the editor's
+    /// working edge, the iPhone's preview ceiling (`PreviewViewport.baseLongEdgeCeiling`), and again
+    /// only for what that cannot cover, an export. Held whole, a 61-megapixel RAW is a gigabyte of
+    /// floats, and its decode twice that.
+    static let workingLongEdge = 2560
+
+    private static func working(_ url: URL) throws -> HostImage? {
+        guard let raw = try rawScene(url, longEdge: workingLongEdge) else { return nil }
+        let scene = raw.decoded
+        let image = HostImage(working: scene.rgba, width: scene.width, height: scene.height,
+                              naturalWidth: raw.width, naturalHeight: raw.height,
+                              contentHeadroom: scene.contentHeadroom)
+        image.lensShot = scene.lensShot
+        image.captureMetadata = scene.exif.map { ["exif": $0] }
+        image.sensorFrame = scene.sensorFrame
+        image.isRAW = true
+        let natural = max(raw.width, raw.height)
+        image.decodeLarger = { longEdge in
+            guard let larger = try rawScene(url, longEdge: longEdge >= natural ? 0 : longEdge) else {
+                throw HostEngine.Failure(description: "This RAW file is not supported.")
+            }
+            return (larger.decoded.rgba, larger.decoded.width, larger.decoded.height)
+        }
+        return image
+    }
+
+    private static func rawScene(_ url: URL, longEdge: Int) throws
+        -> (decoded: PortableCodecs.Decoded, width: Int, height: Int)? {
+        guard var raw = try PortableCodecs.decodeRAW(url, longEdge: longEdge) else { return nil }
+        if let corrected = CameraProfileCorrection.resolve(
+            camera: raw.decoded.camera, sceneKelvin: raw.decoded.sceneKelvin) {
+            CameraProfileCorrection.apply(corrected.matrix, toRGBA: &raw.decoded.rgba)
+        }
+        return raw
+    }
+    #endif
 
     private static func scene(_ url: URL, rawLongEdge: Int) throws -> PortableCodecs.Decoded {
         var scene = try PortableCodecs.decode(url, options: UInt32(FFC_DECODE_SCENE),

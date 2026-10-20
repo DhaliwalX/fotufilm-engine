@@ -418,7 +418,10 @@ public final class HostService {
         // size, bounded by the photograph's own pixels, and cut the region out of it.
         var maxEdge = request.maxEdge
         let full = geometry.sizes(width: image.width, height: image.height, maxEdge: nil)
-        if let viewport = request.viewport { maxEdge = max(viewport.width, viewport.height) }
+        if let viewport = request.viewport {
+            // A working copy (a phone's RAW) is magnified no further than its own pixels.
+            maxEdge = min(max(viewport.width, viewport.height), image.workingLongEdge ?? .max)
+        }
         // A limit at or past the picture's own size is no limit, and keys the same develop.
         if let limit = maxEdge, limit <= 0 || limit >= max(full.output.0, full.output.1) { maxEdge = nil }
         let sizes = geometry.sizes(width: image.width, height: image.height, maxEdge: maxEdge)
