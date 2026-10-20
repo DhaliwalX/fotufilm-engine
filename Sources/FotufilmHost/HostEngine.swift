@@ -18,8 +18,15 @@ public final class HostImage {
     /// The file's capture records (camera, exposure, lens, place) in the decoder's own form, for
     /// the encoder to carry into exports.
     var captureMetadata: [String: Any]?
-    /// Scene-linear RGBA in the engine's working space, alpha flattened over black.
+    /// Scene-linear RGBA in the engine's working space, alpha flattened over black: the
+    /// photograph, or a working copy of it (`decodeLarger`).
     private let scene: [Float]
+    /// The scene's own size: the photograph's, or its working copy's.
+    private let sceneWidth: Int, sceneHeight: Int
+    /// Where the scene is a working copy smaller than the photograph, as a phone holds a camera
+    /// RAW and as the iPhone decodes one (`PreviewViewport.baseLongEdgeCeiling`): decodes the file
+    /// again for a size the copy cannot cover, which only an export asks for.
+    var decodeLarger: ((_ longEdge: Int) throws -> (rgba: [Float], width: Int, height: Int))?
     /// A video's pixels: the frame the current request selected, decoded at the size asked for.
     private let frames: ((_ width: Int, _ height: Int) -> [Float])?
     /// Names the pixels `frames` delivers now, so caches keyed on the image see a new frame.
@@ -76,9 +83,31 @@ public final class HostImage {
         self.scene = scene
         self.width = width
         self.height = height
+        sceneWidth = width
+        sceneHeight = height
         self.contentHeadroom = contentHeadroom
         frames = nil
     }
+
+    /// A photograph of `width` × `height` held as a smaller working copy, `rgba` of `workingWidth`
+    /// × `workingHeight`; `decodeLarger` delivers what the copy cannot.
+    init(working rgba: [Float], width workingWidth: Int, height workingHeight: Int,
+         naturalWidth width: Int, naturalHeight height: Int, contentHeadroom: Float) {
+        precondition(rgba.count >= workingWidth * workingHeight * 4)
+        var scene = rgba
+        PremultipliedAlpha.flatten(&scene, over: .zero)
+        self.scene = scene
+        self.width = width
+        self.height = height
+        sceneWidth = workingWidth
+        sceneHeight = workingHeight
+        self.contentHeadroom = contentHeadroom
+        frames = nil
+    }
+
+    /// The longest edge developed from what is held, without decoding the file again: a working
+    /// copy's, so a magnified view stops there rather than decoding the whole photograph.
+    var workingLongEdge: Int? { decodeLarger == nil ? nil : max(sceneWidth, sceneHeight) }
 
     /// An image whose pixels are produced on demand at the size asked for, as a video's frames.
     init(width: Int, height: Int, contentHeadroom: Float,
@@ -86,6 +115,8 @@ public final class HostImage {
         scene = []
         self.width = width
         self.height = height
+        sceneWidth = width
+        sceneHeight = height
         self.contentHeadroom = contentHeadroom
         self.frames = frames
     }
@@ -98,7 +129,16 @@ public final class HostImage {
     /// the smallest reduction already made that covers it, where there is one.
     func scene(width targetWidth: Int, height targetHeight: Int, draft: Bool = false) -> [Float] {
         if let frames { return frames(targetWidth, targetHeight) }
-        if targetWidth == width && targetHeight == height { return scene }
+        if targetWidth == sceneWidth && targetHeight == sceneHeight { return scene }
+        // Larger than a working copy: decoded again for this ask (an export) and not kept. A pixel
+        // over is the two sizes' rounding, which the copy covers.
+        if let decodeLarger, targetWidth > sceneWidth + 1 || targetHeight > sceneHeight + 1 {
+            let larger = (try? decodeLarger(max(targetWidth, targetHeight)))
+                ?? (scene, sceneWidth, sceneHeight)
+            if larger.width == targetWidth && larger.height == targetHeight { return larger.rgba }
+            return AreaResample.reduce(larger.rgba, width: larger.width, height: larger.height,
+                                       to: targetWidth, targetHeight)
+        }
         lock.lock()
         defer { lock.unlock() }
         if let index = reductions.firstIndex(where: {
@@ -114,7 +154,7 @@ public final class HostImage {
             : nil
         let source: (rgba: [Float], width: Int, height: Int) = covering.map { ($0.rgba, $0.width, $0.height) }
             ?? (try? decodeReduced?(max(targetWidth, targetHeight)))
-            ?? (scene, width, height)
+            ?? (scene, sceneWidth, sceneHeight)
         // A draft takes the plain area reduction: the platform's resampler may build a filter for
         // every new ratio, and a moving edit asks for a new size at every step.
         let reduced = source.width == targetWidth && source.height == targetHeight

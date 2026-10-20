@@ -57,7 +57,7 @@ struct HostPlatform {
     static let current: HostPlatform = {
         #if canImport(ImageIO) && canImport(CoreImage)
         return .apple
-        #elseif os(Linux)
+        #elseif os(Linux) || os(Android)
         return .linux
         #else
         return HostPlatform()

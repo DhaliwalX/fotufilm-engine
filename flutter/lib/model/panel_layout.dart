@@ -12,6 +12,9 @@ import 'editor.dart';
 /// The widest window that takes the compact layout (`(max-width: 833px)`).
 const compactMaxWidth = 833.0;
 
+/// How much wider than tall a compact window is before its docks open beside the picture.
+const sideAspect = 1.3;
+
 enum PanelSide { film, inspector }
 
 /// A side's initial, least and greatest width.
@@ -98,10 +101,19 @@ class PanelLayout extends ChangeNotifier {
 
   ({double film, double inspector}) get widths => shownWidths(preferred, window);
 
-  /// The workspace's width changed: a window narrowed into the compact layout closes both docks.
-  void layOut(double width) {
+  /// In the compact layout, whether the docks open beside the picture rather than under it: a
+  /// phone held sideways, too short for a dock under the picture.
+  bool side = false;
+
+  /// The workspace's size changed: a window narrowed into the compact layout closes both docks.
+  void layOut(double width, [double? height]) {
     window = width;
     final next = width <= compactMaxWidth;
+    final beside = next && height != null && width > height * sideAspect;
+    if (beside != side) {
+      side = beside;
+      if (next == compact) return notifyListeners();
+    }
     if (next == compact) return;
     compact = next;
     if (compact) {

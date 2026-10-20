@@ -4,7 +4,18 @@
 // on any other GPU (a discrete one first), a software Vulkan device when there is no GPU, and
 // none otherwise.
 // FOTUFILM_GPU_DEVICE=cuda, vulkan or cpu chooses instead.
+//
+// Android builds the same shim with FOTUFILM_HALIDE_ANDROID_AOT (tools/build-android-engine.sh):
+// the Vulkan set alone (tools/generate-halide-aot-android.sh), with no CUDA to try first.
+#if defined(FOTUFILM_HALIDE_ANDROID_AOT) && !defined(FOTUFILM_HALIDE_LINUX_AOT)
+#define FOTUFILM_HALIDE_LINUX_AOT 1
+#endif
 #if defined(FOTUFILM_HALIDE_LINUX_AOT)
+#if defined(FOTUFILM_HALIDE_ANDROID_AOT)
+#define FOTUFILM_HALIDE_HAS_CUDA 0
+#else
+#define FOTUFILM_HALIDE_HAS_CUDA 1
+#endif
 
 #include "FotufilmAotFrame.h"
 #include "fotufilm_aot_negative_cpu.h"
@@ -18,7 +29,9 @@
 #include "TransportFrameAot.h"
 #include "FotufilmTransport.h"
 #include <HalideBuffer.h>
+#if FOTUFILM_HALIDE_HAS_CUDA
 #include <HalideRuntimeCuda.h>
+#endif
 #include <HalideRuntimeVulkan.h>
 
 #include "FotufilmHalide.h"
@@ -40,9 +53,14 @@ using Halide::Runtime::Buffer;
 using fotufilm::aot::AotVariant;
 using fotufilm::aot::FrameFunction;
 
+#if FOTUFILM_HALIDE_HAS_CUDA
 #define FOTUFILM_AOT_DECLARE(variant_name, variant_mask)                                   \
     extern "C" int fotufilm_aot_cuda_##variant_name(FOTUFILM_AOT_FRAME_SIGNATURE);        \
     extern "C" int fotufilm_aot_vulkan_##variant_name(FOTUFILM_AOT_FRAME_SIGNATURE);
+#else
+#define FOTUFILM_AOT_DECLARE(variant_name, variant_mask)                                   \
+    extern "C" int fotufilm_aot_vulkan_##variant_name(FOTUFILM_AOT_FRAME_SIGNATURE);
+#endif
 FOTUFILM_AOT_VARIANTS(FOTUFILM_AOT_DECLARE)
 #undef FOTUFILM_AOT_DECLARE
 
@@ -58,12 +76,14 @@ constexpr int kLutVulkanPaddedCount = 147456;
 
 enum Device : int32_t { kNone = 0, kCuda = 1, kVulkan = 2 };
 
+#if FOTUFILM_HALIDE_HAS_CUDA
 const AotVariant kCudaVariants[] = {
 #define FOTUFILM_AOT_ENTRY(variant_name, variant_mask) \
     {(variant_mask), fotufilm_aot_cuda_##variant_name, #variant_name},
     FOTUFILM_AOT_VARIANTS(FOTUFILM_AOT_ENTRY)
 #undef FOTUFILM_AOT_ENTRY
 };
+#endif
 const AotVariant kVulkanVariants[] = {
 #define FOTUFILM_AOT_ENTRY(variant_name, variant_mask) \
     {(variant_mask), fotufilm_aot_vulkan_##variant_name, #variant_name},
@@ -81,7 +101,12 @@ void configure_error_handler() {
 }
 
 const halide_device_interface_t *interface_for(Device device) {
+#if FOTUFILM_HALIDE_HAS_CUDA
     return device == kCuda ? halide_cuda_device_interface() : halide_vulkan_device_interface();
+#else
+    (void)device;
+    return halide_vulkan_device_interface();
+#endif
 }
 
 /// Whether the device takes a buffer: its driver loads, a device answers, and memory moves.
@@ -99,6 +124,10 @@ bool answers(Device device) {
 /// lavapipe) only when there is no GPU at all. Halide alone takes the first GPU it enumerates and
 /// never a software one. Read through the loader directly, with only the fields it needs.
 const char *preferred_vulkan_device_type() {
+#if defined(FOTUFILM_HALIDE_ANDROID_AOT)
+    // A phone has the one GPU.
+    return nullptr;
+#endif
     void *loader = dlopen("libvulkan.so.1", RTLD_NOW | RTLD_LOCAL);
     if (!loader) return nullptr;
     struct ApplicationInfo {
@@ -152,8 +181,10 @@ Device pick_device() {
     const char *setting = std::getenv("FOTUFILM_GPU_DEVICE");
     const std::string wanted = setting ? setting : "";
     if (wanted == "cpu") return kNone;
+#if FOTUFILM_HALIDE_HAS_CUDA
     if (wanted == "cuda") return answers(kCuda) ? kCuda : kNone;
     if (wanted != "vulkan" && answers(kCuda)) return kCuda;
+#endif
     if (!std::getenv("HL_VK_DEVICE_TYPE"))
         if (const char *type = preferred_vulkan_device_type())
             setenv("HL_VK_DEVICE_TYPE", type, 0);
@@ -277,8 +308,13 @@ int32_t develop(const Element *input, Element *output, int32_t width, int32_t he
         window.y < 0 || window.rows <= 0 || window.y + window.rows > height ||
         !valid_flare_mean(configuration, feature_mask))
         return -1;
-    const FrameFunction pipeline = device == kCuda
+    const FrameFunction pipeline =
+#if FOTUFILM_HALIDE_HAS_CUDA
+        device == kCuda
         ? fotufilm::aot::select_variant(kCudaVariants, std::size(kCudaVariants), feature_mask)
+#else
+        false ? nullptr
+#endif
         : fotufilm::aot::select_variant(kVulkanVariants, std::size(kVulkanVariants), feature_mask);
     if (!pipeline) return -3;
     State &cache = state();
@@ -323,8 +359,11 @@ int32_t develop(const Element *input, Element *output, int32_t width, int32_t he
         // NVIDIA's driver crashes tearing down at exit.
         cache.device_free();
         film_tile_store().device_free();
+#if FOTUFILM_HALIDE_HAS_CUDA
         if (device == kCuda) halide_cuda_release_unused_device_allocations(nullptr);
-        else halide_vulkan_release_unused_device_allocations(nullptr);
+        else
+#endif
+        halide_vulkan_release_unused_device_allocations(nullptr);
         error = attempt();
     }
     return error;

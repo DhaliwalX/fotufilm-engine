@@ -25,7 +25,7 @@ PIN="$(git ls-tree HEAD third_party/Halide | awk '{print $3}')"
 # many times this is run.
 git -C "$SOURCE" checkout --quiet --force --detach "$PIN"
 git -C "$SOURCE" clean -fdxq
-for patch in halide-vulkan-strict-float halide-vulkan-bool-uniforms halide-vulkan-allocation-padding halide-vulkan-readback-staging; do
+for patch in halide-vulkan-strict-float halide-vulkan-bool-uniforms halide-vulkan-allocation-padding halide-vulkan-readback-staging halide-runtime-prefix-map; do
   git -C "$SOURCE" apply "$PWD/tools/$patch.patch"
 done
 

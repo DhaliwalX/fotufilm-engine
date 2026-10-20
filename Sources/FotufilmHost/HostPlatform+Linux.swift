@@ -1,4 +1,4 @@
-#if os(Linux)
+#if os(Linux) || os(Android)
 import Foundation
 #if canImport(CFotufilmVideo)
 import CFotufilmVideo

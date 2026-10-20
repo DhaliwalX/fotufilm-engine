@@ -33,6 +33,8 @@ abstract final class Metrics {
   static const compactDockMin = 180.0, compactDockMax = 340.0;
   /// The compact dock's grabber, and the least picture left above the tallest dock.
   static const compactGrabber = 16.0, compactPictureMin = 120.0;
+  /// The dock beside the picture on a phone held sideways.
+  static const compactSideMin = 280.0, compactSideMax = 380.0;
 
   // ── Controls (Spectrum size S) ─────────────────────────────────────────────────────────────
   static const control = 24.0;

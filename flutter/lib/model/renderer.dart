@@ -1,5 +1,8 @@
 // What the engine develops, and when. One request is in flight at a time (the engine thread runs
-// them in order); a newer edit cancels the develop in progress and only the newest is developed.
+// them in order), and only the newest edit waiting is developed next. A newer edit cancels a
+// full-size develop in progress, but not a slider's draft: where a draft takes longer than the
+// hand takes to move again (a phone's GPU), cancelling each would leave the picture still until
+// the slider was let go.
 //
 //   1. preview  the whole photograph at the size it is shown (smaller while a slider moves)
 //   2. detail   when magnified and settled, only the visible region at full resolution
@@ -12,6 +15,8 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
+
+import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
 
 import '../engine/engine.dart';
 import '../engine/presenter.dart';
@@ -56,11 +61,21 @@ class Renderer {
   /// The edge a slider's develops are held to while it moves.
   static const interactiveEdge = 1200;
 
+  /// A phone's: its GPU takes a film's develop at a quarter of the time with a quarter of the
+  /// pixels, and a moving picture on a small screen shows the difference least.
+  static const phoneInteractiveEdge = 600;
+
+  static int get _draftEdge => switch (defaultTargetPlatform) {
+        TargetPlatform.android || TargetPlatform.iOS => phoneInteractiveEdge,
+        _ => interactiveEdge,
+      };
+
   /// The longest preview develop; past it the detail layer carries the resolution.
   static const maxPreviewEdge = 4096;
 
   bool _running = false;
   bool _foreground = false;
+  bool _draft = false;
   bool _dirty = false;
   bool _interactive = false;
   Timer? _background;
@@ -106,7 +121,7 @@ class Renderer {
     _dirty = true;
     _background?.cancel();
     if (_running) {
-      if (_foreground && !holdCancel && !playing) engine.cancel();
+      if (_foreground && !_draft && !holdCancel && !playing) engine.cancel();
       return;
     }
     _run();
@@ -122,14 +137,16 @@ class Renderer {
         final interactive = _interactive;
         _foreground = true;
         try {
+          _draft = interactive;
           await _preview(doc, interactive);
+          _draft = false;
           if (!_dirty && !interactive) await _detail(doc);
         } on FotufilmCancelled {
           // A newer request is waiting.
         } catch (e) {
           host.renderFailed('$e');
         } finally {
-          _foreground = false;
+          _foreground = _draft = false;
         }
       }
     } finally {
@@ -150,7 +167,7 @@ class Renderer {
     final scale = view.magnified(photo) && !whole ? view.fitScale(photo) : view.scale(photo);
     final shown = (long * scale * view.devicePixelRatio).round();
     final settled = math.min(long, math.min(maxPreviewEdge, math.max(256, shown)));
-    return interactive ? math.min(interactiveEdge, settled) : settled;
+    return interactive ? math.min(_draftEdge, settled) : settled;
   }
 
   Json _request(PhotoDocument doc, Json edit, {int? maxEdge, bool draft = false}) =>

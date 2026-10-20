@@ -3,7 +3,6 @@
 // negative_document.dart; the host's side is Sources/FotufilmHost/HostService+NegativeScan.swift.
 import 'dart:ui' show Offset;
 
-import 'package:file_selector/file_selector.dart' as files;
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 import '../engine/engine.dart';
@@ -67,9 +66,8 @@ class NegativeScans {
   /// Import Scanned Negative…: scans chosen in the open panel, each opened as a negative.
   Future<void> chooseNegatives() async {
     if (!canImport) return;
-    final chosen = await files.openFiles(acceptedTypeGroups: [
-      fileType('Scanned negatives', negativeExtensions),
-    ]);
+    final chosen = await chooseFiles([fileType('Scanned negatives', negativeExtensions)],
+        android: const ['image/*']);
     await openNegatives([
       for (final f in chosen)
         PhotoFile(f.name, path: kIsWeb ? null : f.path, read: f.readAsBytes),
@@ -91,12 +89,8 @@ class NegativeScans {
   /// into scans beside the red ones.
   Future<void> chooseExposures() async {
     if (!canMerge) return;
-    final chosen = await files.openFiles(
-      acceptedTypeGroups: [
-        fileType('Exposures', negativeExtensions),
-      ],
-      confirmButtonText: 'Merge',
-    );
+    final chosen = await chooseFiles([fileType('Exposures', negativeExtensions)],
+        confirmButtonText: 'Merge', android: const ['image/*']);
     if (chosen.isNotEmpty) await mergeExposures([for (final f in chosen) f.path]);
   }
 
@@ -241,10 +235,10 @@ class NegativeScans {
 
   /// Add Light Frame…: a photograph of the bare light source, which evens out this scan's light.
   Future<void> chooseLightFrame() async {
-    final chosen = await files.openFile(acceptedTypeGroups: [
-      fileType('Light frames', negativeExtensions),
-    ]);
-    if (chosen == null) return;
+    final all = await chooseFiles([fileType('Light frames', negativeExtensions)],
+        android: const ['image/*']);
+    if (all.isEmpty) return;
+    final chosen = all.first;
     await addLightFrame(PhotoFile(chosen.name,
         path: kIsWeb ? null : chosen.path, read: chosen.readAsBytes));
   }

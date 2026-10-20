@@ -134,7 +134,7 @@ class _WorkspaceState extends State<Workspace> {
 
   Future<void> _open() async {
     if (!editor.ready) return;
-    final files = await openFiles(acceptedTypeGroups: [
+    final files = await chooseFiles([
       fileType('Images', imageExtensions),
       fileType('Videos', videoExtensions),
     ]);
@@ -194,8 +194,12 @@ class _WorkspaceState extends State<Workspace> {
               type: MaterialType.transparency,
               child: DefaultTextStyle(
                 style: editorText(context),
-                child: ColoredBox(
+                child: Container(
                   color: Palette.of(context).page,
+                  // Clear of a phone's camera cutout and rounded corners at the sides.
+                  padding: EdgeInsets.only(
+                      left: MediaQuery.paddingOf(context).left,
+                      right: MediaQuery.paddingOf(context).right),
                   child: Stack(children: [
                     Column(children: [
                       AppDialogHost(editor: editor),
@@ -226,8 +230,9 @@ class _WorkspaceState extends State<Workspace> {
     final total = constraints.maxWidth;
     final layout = editor.layout;
     // The window's width chooses the layout; the model hears of it after this frame.
-    if (layout.window != total) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => layout.layOut(total));
+    if (layout.window != total || layout.side != _beside(total, constraints.maxHeight)) {
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => layout.layOut(total, constraints.maxHeight));
     }
     if (total <= compactMaxWidth) return _compactPanels(context, constraints);
     final preferred = layout.preferred;
@@ -283,6 +288,9 @@ class _WorkspaceState extends State<Workspace> {
     ]);
   }
 
+  static bool _beside(double width, double height) =>
+      width <= compactMaxWidth && width > height * sideAspect;
+
   /// How far the strip of films' grabber has been pulled down.
   double _stripPull = 0;
 
@@ -305,6 +313,35 @@ class _WorkspaceState extends State<Workspace> {
     // The strip of films keeps its own height; its grabber only closes it.
     final strip = editor.filmOpen && !editor.presetsTab;
     final palette = Palette.of(context);
+    final rail = Container(
+      height: Metrics.compactRail + bottom,
+      color: palette.panel,
+      padding: EdgeInsets.only(bottom: bottom),
+      child: CompactRail(editor: editor),
+    );
+    final docked = editor.filmOpen ? FilmLibrary(editor: editor) : EditorInspector(editor: editor);
+    // A phone held sideways: the dock beside the picture, the full height above the rail.
+    if (layout.side) {
+      final width = (constraints.maxWidth * .45)
+          .clamp(Metrics.compactSideMin, Metrics.compactSideMax)
+          .toDouble();
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Expanded(
+          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Expanded(child: EditorViewer(editor: editor, onOpen: _open, dropping: _dropping)),
+            if (open)
+              SizedBox(
+                width: width,
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.only(topLeft: Radius.circular(18)),
+                  child: ColoredBox(color: palette.panel, child: docked),
+                ),
+              ),
+          ]),
+        ),
+        rail,
+      ]);
+    }
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Expanded(child: EditorViewer(editor: editor, onOpen: _open, dropping: _dropping)),
       if (open)
@@ -331,22 +368,13 @@ class _WorkspaceState extends State<Workspace> {
                     onTap: () => layout.dismiss(
                         editor.filmOpen ? PanelSide.film : PanelSide.inspector),
                   ),
-                  Expanded(
-                    child: editor.filmOpen
-                        ? FilmLibrary(editor: editor)
-                        : EditorInspector(editor: editor),
-                  ),
+                  Expanded(child: docked),
                 ]),
               ),
             ),
           ),
         ),
-      Container(
-        height: Metrics.compactRail + bottom,
-        color: palette.panel,
-        padding: EdgeInsets.only(bottom: bottom),
-        child: CompactRail(editor: editor),
-      ),
+      rail,
     ]);
   }
 }

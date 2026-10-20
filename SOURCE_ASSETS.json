@@ -267,6 +267,30 @@
     "provenance": "Project-authored branding or Motion effect template; no photography or manufacturer artwork.",
     "sha256": "9407bfe0a57eed7c37398f1bb2c02f870aefbb77d94a29b74d8bb3fbaecdbe2b"
   },
+  "flutter/android/app/src/main/res/drawable-nodpi/ic_launcher_bands.png": {
+    "provenance": "Project-authored branding: web/public/app-icon.png resampled for the Android launcher; no photography or manufacturer artwork.",
+    "sha256": "4a305990be4442062f554f2f4af235a529e25e329585eec83e3f186dfaa26969"
+  },
+  "flutter/android/app/src/main/res/mipmap-hdpi/ic_launcher.png": {
+    "provenance": "Project-authored branding: web/public/app-icon.png resampled for the Android launcher; no photography or manufacturer artwork.",
+    "sha256": "808b728943617342bd58b409c0b9e49ebfacf88dbb5e6ee0f81d2550ff8af08b"
+  },
+  "flutter/android/app/src/main/res/mipmap-mdpi/ic_launcher.png": {
+    "provenance": "Project-authored branding: web/public/app-icon.png resampled for the Android launcher; no photography or manufacturer artwork.",
+    "sha256": "5853c944901a44c6ab5aeaf94ab9a51e34cbea9e146aac71950a54448fe9b59d"
+  },
+  "flutter/android/app/src/main/res/mipmap-xhdpi/ic_launcher.png": {
+    "provenance": "Project-authored branding: web/public/app-icon.png resampled for the Android launcher; no photography or manufacturer artwork.",
+    "sha256": "7e093e9116b5824518f8bab0d89fd30329b59c74f6efaa11ad3e962ab9045d74"
+  },
+  "flutter/android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png": {
+    "provenance": "Project-authored branding: web/public/app-icon.png resampled for the Android launcher; no photography or manufacturer artwork.",
+    "sha256": "adb657bd985395be930cf76229c5773cd738bdd4075f5f57c97c9ebb464528ab"
+  },
+  "flutter/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png": {
+    "provenance": "Project-authored branding: web/public/app-icon.png resampled for the Android launcher; no photography or manufacturer artwork.",
+    "sha256": "a64e9f6896a05ef9876d042b96789fe7f1255caa5c077cd75d1e8b2cab3c9a78"
+  },
   "resolve/openfx/ofx-native-v1.5_aces-v1.3_ocio-v2.3.h": {
     "provenance": "OpenFX interface headers; upstream BSD-3-Clause notices retained in each header.",
     "sha256": "80309703dd0e105d80c3101fba57ad365add79eb407abb96e7d9ad2fd157da33"

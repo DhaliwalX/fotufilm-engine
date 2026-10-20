@@ -5,7 +5,9 @@ import 'dart:isolate';
 
 import 'library_model.dart';
 
-const libraryFilesAvailable = true;
+/// Android hands out a picked folder as a content URI, not a path dart:io can list, so the library
+/// is the desktop's alone for now.
+final libraryFilesAvailable = !Platform.isAndroid;
 
 /// Every file under `folder` the library shows, depth first, as [FileRow]s relative to it.
 /// Hidden files and folders are left out, and an entry that vanishes or cannot be read is

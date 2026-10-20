@@ -130,7 +130,8 @@ class _FilmLibraryState extends State<FilmLibrary> {
     if (films.isEmpty) return const LibraryEmpty('No matching films.');
     final selected = editor.edit['stock'] as String?;
     final doc = editor.active;
-    if (editor.layout.compact) return _filmStrip(films, selected);
+    // Beside the picture there is the height for the list.
+    if (editor.layout.compact && !editor.layout.side) return _filmStrip(films, selected);
     return ThinScroll(
       controller: _scroll,
       child: ListView.builder(

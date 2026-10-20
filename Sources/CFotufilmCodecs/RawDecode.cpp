@@ -361,17 +361,33 @@ static void developRaw(const std::string &path, uint32_t options, uint32_t longE
     const auto *pixels = reinterpret_cast<const uint16_t *>(image->data);
     float *rgba = out.rgba;
     const bool resize = width != cropWidth || height != cropHeight;
+    // Halved or more, each delivered pixel is the mean of the developed pixels it covers: a
+    // bilinear tap there would skip most of them and alias fine detail.
+    const bool area = resize && (cropWidth >= 2 * width || cropHeight >= 2 * height);
     parallelRows(height, [&](uint32_t begin, uint32_t end) {
         for (uint32_t y = begin; y < end; ++y) {
             float *o = rgba + size_t(y) * width * 4;
             const double sy = std::max(0.0, (y + 0.5) * cropHeight / height - 0.5);
             const uint32_t y0 = uint32_t(sy), y1 = std::min(y0 + 1, cropHeight - 1);
             const float fy = float(sy - y0);
+            const uint32_t rowFirst = uint32_t(uint64_t(y) * cropHeight / height);
+            const uint32_t rowEnd = std::max(rowFirst + 1, uint32_t(uint64_t(y + 1) * cropHeight / height));
             for (uint32_t x = 0; x < width; ++x, o += 4) {
                 float rgb[3];
                 if (!resize) {
                     const uint16_t *pixel = pixels + ((size_t(top) + y) * stride + left + x) * 3;
                     for (int c = 0; c < 3; ++c) rgb[c] = pixel[c];
+                } else if (area) {
+                    const uint32_t first = uint32_t(uint64_t(x) * cropWidth / width);
+                    const uint32_t last = std::max(first + 1, uint32_t(uint64_t(x + 1) * cropWidth / width));
+                    double sum[3] = {0, 0, 0};
+                    for (uint32_t row = rowFirst; row < rowEnd; ++row) {
+                        const uint16_t *pixel = pixels + ((size_t(top) + row) * stride + left + first) * 3;
+                        for (uint32_t column = first; column < last; ++column, pixel += 3)
+                            for (int c = 0; c < 3; ++c) sum[c] += pixel[c];
+                    }
+                    const double count = double(rowEnd - rowFirst) * (last - first);
+                    for (int c = 0; c < 3; ++c) rgb[c] = float(sum[c] / count);
                 } else {
                     const double sx = std::max(0.0, (x + 0.5) * cropWidth / width - 0.5);
                     const uint32_t x0 = uint32_t(sx), x1 = std::min(x0 + 1, cropWidth - 1);

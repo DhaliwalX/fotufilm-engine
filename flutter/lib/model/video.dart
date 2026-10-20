@@ -7,7 +7,6 @@
 // background pictures wait. A paused frame develops at full detail.
 import 'dart:math' as math;
 
-import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 
@@ -414,7 +413,8 @@ class VideoPlayer extends ChangeNotifier {
   /// Chooses movies to open; one brings its folder into the strip, as Open… does.
   Future<void> chooseMovies() async {
     if (!editor.ready || editor.exporting) return;
-    final files = await openFiles(acceptedTypeGroups: [fileType('Videos', videoExtensions)]);
+    final files =
+        await chooseFiles([fileType('Videos', videoExtensions)], android: const ['video/*']);
     await editor.strip.open([
       for (final f in files) PhotoFile(f.name, path: kIsWeb ? null : f.path, read: f.readAsBytes),
     ]);
