@@ -6,7 +6,7 @@ import {
 } from './canvas-color.js'
 import { createBackgroundDeveloper } from './background-developer.js'
 import { loadPerspective } from './perspective.js'
-import { frameRenderEdit } from './print-frame.js'
+import { frameRenderEdit, stripSource } from './print-frame.js'
 import { loadPrintFrame } from './backend/browser-print-frame.js'
 import { renderPrintFrame16 } from './print-frame-16.js'
 import { renderPrintFrame } from './print-frame-renderer.js'
@@ -478,7 +478,11 @@ export class RenderSession {
     edit = frameRenderEdit(edit, frameConfiguration)
     const negative = !!edit.negative && edit.stock !== null
     const sceneKelvin = negative ? null : sourceIlluminant(edit)
-    const dynamic = needsRuntimeProfile(edit, sceneKelvin)
+    // A Film Border develops its whole strip with the photograph, from a profile prepared at
+    // the strip's size with the gate at the photograph's edge. A scan already shows its film.
+    const developsStrip =
+      !!frameConfiguration?.strip && !viewport && !edit.negative && edit.stock !== null
+    const dynamic = needsRuntimeProfile(edit, sceneKelvin) || developsStrip
     if (dynamic && stage !== null)
       throw new Error(
         'Pipeline inspection requires default film, print and filter settings.',
@@ -553,6 +557,11 @@ export class RenderSession {
         )
         if (!prepared || stale()) return null
         const { source: scan } = prepared
+        const stripPlan = developsStrip
+          ? await loadPrintFrame(requestedEdit, scan.width, scan.height, report)
+          : null
+        if (stale()) return null
+        const strip = stripPlan?.strip || null
         // Not `framed`, which says whether the picture takes a print frame.
         const reading = edit.negative
           ? await this.negativeFraming(image, edit, report, stale)
@@ -574,10 +583,14 @@ export class RenderSession {
         if (stale()) return null
         const scene = (pixels) => (plain ? positiveSource(pixels, plain, preparation) : pixels)
         const source = scene(scan)
+        // The light over the whole strip, the photograph's own continued past its edges.
+        const film = strip ? stripSource(source, strip) : source
         const sourceCanvas = plain ? null : prepared.canvas
-        const outputWidth = region?.width || source.width
-        const outputHeight = region?.height || source.height
-        const selectionSource = region
+        const outputWidth = region?.width || film.width
+        const outputHeight = region?.height || film.height
+        const selectionSource = strip
+          ? film
+          : region
           ? {
               width: outputWidth,
               height: outputHeight,
@@ -623,8 +636,9 @@ export class RenderSession {
               await loadFilmProfile(
                 {
                   stock,
-                  width: source.width,
-                  height: source.height,
+                  width: film.width,
+                  height: film.height,
+                  ...(strip ? { unexposedEdge: strip } : {}),
                   format: edit.format,
                   medium: edit.medium,
                   sceneKelvin,
@@ -675,8 +689,8 @@ export class RenderSession {
           output.toneGrid = await measuredTone(meterSource, controls)
         developer?.usePack(pack)
         const developed = developer
-          ? await developer.develop(source, controls, rendering, stale, output)
-          : await developNormal(source, controls, rendering, stale, output)
+          ? await developer.develop(film, controls, rendering, stale, output)
+          : await developNormal(film, controls, rendering, stale, output)
         if (!developed || stale()) return null
         let { pixels, elapsed } = developed
         if (edit.selective?.sample && !cropMode && stage === null && !negative) {
@@ -703,14 +717,14 @@ export class RenderSession {
             ? null
             : developer
               ? await developer.develop(
-                  source,
+                  film,
                   localControls,
                   rendering,
                   stale,
                   localOutput,
                 )
               : await developNormal(
-                  source,
+                  film,
                   localControls,
                   rendering,
                   stale,
@@ -759,14 +773,15 @@ export class RenderSession {
         const backend = developer?.backend || 'reference'
         if (bitDepth === 16) {
           const framePlan =
-            framed && !viewport
+            stripPlan ||
+            (framed && !viewport
               ? await loadPrintFrame(
                   requestedEdit,
                   source.width,
                   source.height,
                   report,
                 )
-              : null
+              : null)
           const output = await renderPrintFrame16(
             pixels,
             outputWidth,
@@ -774,6 +789,7 @@ export class RenderSession {
             framePlan,
             () => this.closed || stale(),
             colorSpace,
+            { developed: !!strip },
           )
           if (!output || stale()) return null
           return {
@@ -788,20 +804,22 @@ export class RenderSession {
         report(`Encoding ${purpose} image`)
         let canvas = pixelsCanvas(pixels, outputWidth, outputHeight, colorSpace)
         const framePlan =
-          framed && !viewport
+          stripPlan ||
+          (framed && !viewport
             ? await loadPrintFrame(
                 requestedEdit,
                 source.width,
                 source.height,
                 report,
               )
-            : null
+            : null)
         if (framePlan) {
           report('Finishing print frame')
           canvas = await renderPrintFrame(
             canvas,
             framePlan,
             () => this.closed || stale(),
+            { developed: !!strip },
           )
           if (!canvas || stale()) return null
         }
@@ -827,15 +845,18 @@ export class RenderSession {
             { colorSpace, region },
           )
           if (!baseline || stale()) return null
+          // The photograph alone, which the comparison frames as drawn.
+          const baselineWidth = region?.width || source.width,
+            baselineHeight = region?.height || source.height
           original = transient
             ? await encodePreview(
                 baseline.pixels,
-                outputWidth,
-                outputHeight,
+                baselineWidth,
+                baselineHeight,
                 colorSpace,
               )
             : await canvasBlob(
-                pixelsCanvas(baseline.pixels, outputWidth, outputHeight, colorSpace),
+                pixelsCanvas(baseline.pixels, baselineWidth, baselineHeight, colorSpace),
               )
         }
         if (!viewport && !plain) prepared.original = original

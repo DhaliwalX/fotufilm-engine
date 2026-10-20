@@ -518,6 +518,8 @@ public final class HostService {
         if developed?.key != developKey {
             let scene = try scene()
             var pixels = [UInt8](repeating: 0, count: width * height * 4)
+            // A Film Border's strip developed around the photograph, larger than it.
+            var developedEdge: UnexposedEdge.Margins?
             var format = HostSurfaceFormat.rgba8DisplayP3
             let developStart = DispatchTime.now().uptimeNanoseconds
             if let ceiling {
@@ -529,14 +531,24 @@ public final class HostService {
                 pixels = try developStage(stage, difference: body["difference"] as? Bool ?? false,
                                           scene: scene, width: width, height: height,
                                           image: image, edit: edit)
+            } else if let plan, let strip = HostFrames.strip(plan, width: width, height: height) {
+                pixels = try developStrip(scene, width: width, height: height, margins: strip,
+                                          image: image, edit: edit, body: body,
+                                          cropMode: request.cropMode == true)
+                developedEdge = strip
             } else {
                 pixels = try developSelective(scene, width: width, height: height, image: image,
                                               edit: edit, body: body,
                                               cropMode: request.cropMode == true)
             }
             renderMilliseconds = Double(DispatchTime.now().uptimeNanoseconds - developStart) / 1e6
-            var frame = (pixels: pixels, width: width, height: height)
-            if let plan, let framed = HostFrames.frame(pixels, width: width, height: height, plan: plan) {
+            let edge = developedEdge ?? UnexposedEdge.Margins(left: 0, right: 0, top: 0, bottom: 0)
+            let (developedWidth, developedHeight) = (width + edge.left + edge.right,
+                                                     height + edge.top + edge.bottom)
+            var frame = (pixels: pixels, width: developedWidth, height: developedHeight)
+            if let plan, let framed = HostFrames.frame(pixels, width: developedWidth,
+                                                       height: developedHeight, plan: plan,
+                                                       edge: developedEdge) {
                 frame = framed
             }
             developed = (developKey, frame.width, frame.height, format, frame.pixels)
@@ -734,18 +746,39 @@ public final class HostService {
         return linear
     }
 
+    /// A Film Border's whole strip, `margins` beyond the photograph `scene`, developed as one
+    /// piece of film with the photograph: the scene continued over it and passed by the gate
+    /// (`UnexposedEdge`), on the photograph's own levels. A selective adjustment's mask reaches
+    /// the film as the picture does, continued from the nearest edge.
+    private func developStrip(_ scene: [Float], width: Int, height: Int,
+                              margins: UnexposedEdge.Margins, image: HostImage,
+                              edit: WebNativeEdit, body: [String: Any],
+                              cropMode: Bool) throws -> [UInt8] {
+        let film = UnexposedEdge.extended(scene, width: width, height: height, margins: margins)
+        let edge = try engine.unexposedEdge(scene, width: width, height: height, margins: margins,
+                                            edit: edit, contentHeadroom: image.contentHeadroom)
+        return try developSelective(film, width: width + margins.left + margins.right,
+                                    height: height + margins.top + margins.bottom, image: image,
+                                    edit: edit, body: body, cropMode: cropMode,
+                                    unexposedEdge: edge,
+                                    photo: (scene, width, height, margins))
+    }
+
     /// The photograph's develop, with a selective adjustment blended over it when the edit has
-    /// one and the crop tool is not showing.
+    /// one and the crop tool is not showing. With `unexposedEdge` the scene is a larger piece of
+    /// film around `photo`, whose subject is found on the photograph alone.
     private func developSelective(_ scene: [Float], width: Int, height: Int, image: HostImage,
                                   edit: WebNativeEdit, body: [String: Any],
-                                  cropMode: Bool) throws -> [UInt8] {
+                                  cropMode: Bool, unexposedEdge: UnexposedEdge.Develop? = nil,
+                                  photo: (scene: [Float], width: Int, height: Int,
+                                          margins: UnexposedEdge.Margins)? = nil) throws -> [UInt8] {
         func develop(_ edit: WebNativeEdit) throws -> [UInt8] {
             var pixels = [UInt8](repeating: 0, count: width * height * 4)
             try pixels.withUnsafeMutableBytes { buffer in
                 try engine.develop(scene, width: width, height: height,
                                    contentHeadroom: image.contentHeadroom, edit: edit,
                                    frameIndex: image.pace.frameIndex,
-                                   realtime: image.pace.realtime,
+                                   realtime: image.pace.realtime, unexposedEdge: unexposedEdge,
                                    into: .init(maxEdge: 0, format: .rgba8DisplayP3,
                                                pixels: buffer.baseAddress!, rowBytes: width * 4,
                                                capacity: buffer.count))
@@ -763,15 +796,36 @@ public final class HostService {
         var subject: [Float]?
         if selection.isSubject {
             // With nobody found the photograph stays as it is and the inspector says so.
-            guard let found = subjects(scene, width: width, height: height, image: image),
+            let picture = photo ?? (scene, width, height, UnexposedEdge.Margins(left: 0, right: 0,
+                                                                                 top: 0, bottom: 0))
+            guard let found = subjects(picture.scene, width: picture.width, height: picture.height,
+                                       image: image),
                   found.count > 0 else { return ground }
-            subject = found.weights(at: selection.point, width: width, height: height,
-                                    edge: selection.subjectEdge,
-                                    feather: selection.subjectFeather)
+            let weights = found.weights(at: selection.point, width: picture.width,
+                                        height: picture.height, edge: selection.subjectEdge,
+                                        feather: selection.subjectFeather)
+            subject = photo == nil ? weights
+                : Self.extended(weights, width: picture.width, height: picture.height,
+                                margins: picture.margins)
         }
         let selected = showMask ? nil : try develop(selection.develop(edit))
         return selection.composite(ground: ground, selected: selected, scene: scene, width: width,
                                    height: height, showMask: showMask, subject: subject)
+    }
+
+    /// One value per pixel continued past the photograph's edges over a larger piece of film.
+    static func extended(_ plane: [Float], width: Int, height: Int,
+                         margins: UnexposedEdge.Margins) -> [Float] {
+        let outerWidth = width + margins.left + margins.right
+        let outerHeight = height + margins.top + margins.bottom
+        var out = [Float](repeating: 0, count: outerWidth * outerHeight)
+        for row in 0..<outerHeight {
+            let source = min(max(row - margins.top, 0), height - 1) * width
+            for column in 0..<outerWidth {
+                out[row * outerWidth + column] = plane[source + min(max(column - margins.left, 0), width - 1)]
+            }
+        }
+        return out
     }
 
     private var subjectCache: (key: String, subject: HostSubject?)?
@@ -1011,14 +1065,24 @@ public final class HostService {
     /// Develops a still job. Photo Quality: exact film math unless the page asks for Fast, as the
     /// Mac app exports.
     func developStill(_ job: StillJob, deep: Bool, hdr: Bool, exact: Bool) throws -> HostStill {
-        let (width, height) = (job.width, job.height)
+        // A Film Border develops its whole strip, as the preview does.
+        let strip = job.plan.flatMap { HostFrames.strip($0, width: job.width, height: job.height) }
+        let unexposedEdge = try strip.flatMap {
+            try engine.unexposedEdge(job.scene, width: job.width, height: job.height, margins: $0,
+                                     edit: job.edit, contentHeadroom: job.contentHeadroom)
+        }
+        let scene = strip.map {
+            UnexposedEdge.extended(job.scene, width: job.width, height: job.height, margins: $0)
+        } ?? job.scene
+        let (width, height) = (job.width + (strip.map { $0.left + $0.right } ?? 0),
+                               job.height + (strip.map { $0.top + $0.bottom } ?? 0))
         func develop(_ format: HostEngine.PixelFormat) throws -> [UInt8] {
             let stride = format == .rgba8DisplayP3 ? 4 : 16
             var pixels = [UInt8](repeating: 0, count: width * height * stride)
             try pixels.withUnsafeMutableBytes { buffer in
-                try engine.develop(job.scene, width: width, height: height,
+                try engine.develop(scene, width: width, height: height,
                                    contentHeadroom: job.contentHeadroom,
-                                   edit: job.edit, exactMath: exact,
+                                   edit: job.edit, exactMath: exact, unexposedEdge: unexposedEdge,
                                    into: .init(maxEdge: 0, format: format,
                                                pixels: buffer.baseAddress!,
                                                rowBytes: width * stride, capacity: buffer.count))
@@ -1039,7 +1103,7 @@ public final class HostService {
             pixels: deep ? .display16(HostExport.display16(linear: linear!, width: width,
                                                            height: height, knee: knee))
                          : .display8(try develop(.rgba8DisplayP3)),
-            width: width, height: height, frame: job.plan?.configuration,
+            width: width, height: height, frame: job.plan?.configuration, frameEdge: strip,
             capture: job.capture)
         if wantsHDR, let linear {
             still.hlg = HostExport.hlg16(linear: linear, width: width, height: height)

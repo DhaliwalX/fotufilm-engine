@@ -79,7 +79,8 @@ struct ImageIOStillEncoder: HostStillEncoder {
             throw HostEngine.Failure(description: "The image could not be encoded.")
         }
         guard let frame = still.frame else { return developed }
-        guard let framed = PrintFrameRenderer.render(developed, configuration: frame) else {
+        guard let framed = PrintFrameRenderer.render(developed, configuration: frame,
+                                                     edge: still.frameEdge) else {
             throw HostEngine.Failure(description: "The print frame could not be drawn.")
         }
         return framed

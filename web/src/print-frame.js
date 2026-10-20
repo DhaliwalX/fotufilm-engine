@@ -59,3 +59,40 @@ export function frameSamplePoint(point, plan) {
     image.height;
   return x >= 0 && x <= 1 && y >= 0 && y <= 1 ? [x, y] : null;
 }
+// A Film Border develops its whole strip with the photograph (`plan.strip`, from
+// PrintFramePlacement.filmStrip): the photograph continued past its edges over the larger piece
+// of film, as UnexposedEdge.extend does natively. The gate the profile carries shades it there.
+export function stripSource(source, strip) {
+  const width = source.width + strip.left + strip.right,
+    height = source.height + strip.top + strip.bottom;
+  const clampX = (x) => Math.min(Math.max(x - strip.left, 0), source.width - 1),
+    clampY = (y) => Math.min(Math.max(y - strip.top, 0), source.height - 1);
+  return {
+    width,
+    height,
+    read(x, y, w, h) {
+      const x0 = clampX(x),
+        x1 = clampX(x + w - 1),
+        y0 = clampY(y),
+        y1 = clampY(y + h - 1);
+      const sw = x1 - x0 + 1;
+      const extend = (inner) => {
+        const out = new inner.constructor(w * h * 4);
+        for (let row = 0; row < h; row++) {
+          const from = (clampY(y + row) - y0) * sw * 4;
+          for (let column = 0; column < w; column++) {
+            const i = from + (clampX(x + column) - x0) * 4,
+              o = (row * w + column) * 4;
+            out[o] = inner[i];
+            out[o + 1] = inner[i + 1];
+            out[o + 2] = inner[i + 2];
+            out[o + 3] = inner[i + 3];
+          }
+        }
+        return out;
+      };
+      const inner = source.read(x0, y0, sw, y1 - y0 + 1);
+      return inner && typeof inner.then === "function" ? inner.then(extend) : extend(inner);
+    },
+  };
+}

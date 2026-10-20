@@ -24,6 +24,9 @@ public struct WebPrintFrameRequest: Decodable {
         /// A frame can change the delivered medium without replacing the saved paper selection.
         public let renderMedium: String?
         public let available: [PrintFrame]
+        /// The film a Film Border develops with the photograph, beyond it on each side, at this
+        /// size (`PrintFramePlacement.filmStrip`); nil draws the rebate around the photograph.
+        public let strip: UnexposedEdge.Margins?
         /// Encoded sRGB material colours for the current browser delivery boundary.
         public let palette: [String: [Float]]
     }
@@ -76,10 +79,13 @@ public struct WebPrintFrameRequest: Decodable {
         let palette = ["base": encoded(config.baseRGB), "edge": encoded(config.edgeRGB),
                        "rebate": encoded(config.rebateRGB), "card": encoded(SIMD3(repeating: 0.86)),
                        "cutout": encoded(config.cutoutRGB)]
+            .merging(config.edgeTransmission.map { ["edgeTransmission": encoded($0)] } ?? [:]) { $1 }
         return try JSONEncoder().encode(Result(configuration: config, placement: placement,
             perforation: config.geometry?.perforation?.dimensions,
             materialSize: PrintFramePlacement.materialGeometry(config).size,
             renderMedium: renderMedium,
-            available: PrintFrame.allCases.filter { configuration($0).frame == $0 }, palette: palette))
+            available: PrintFrame.allCases.filter { configuration($0).frame == $0 },
+            strip: PrintFramePlacement.filmStrip(width: width, height: height, configuration: config),
+            palette: palette))
     }
 }

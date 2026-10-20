@@ -27,13 +27,16 @@ public enum PrintFrameRenderer {
                       pixelsPerMM: p.scale, rotated: p.rotated)
     }
 
-    /// Every frame but the Emulsion Border takes the developed photograph. The Emulsion Border
-    /// takes the developed piece of film larger than the aperture (`UnexposedEdge`) and how far it
-    /// reaches beyond the photograph on each side, `edge`, which it requires.
+    /// Every frame takes the developed photograph, or a developed piece of film larger than the
+    /// aperture (`UnexposedEdge`) and how far it reaches beyond the photograph on each side,
+    /// `edge`. The Emulsion Border requires that piece. A Film Border given one takes its whole
+    /// developed strip (`PrintFramePlacement.filmStrip`) and punches and letters it; without one
+    /// it draws the rebate in the stock's colours.
     public static func render(_ image: CGImage, configuration: PrintFrameConfiguration,
                               edge: UnexposedEdge.Margins? = nil) -> CGImage? {
         guard configuration.frame != .none else { return image }
-        let band = configuration.frame == .emulsion ? edge : nil
+        let strip = configuration.frame.showsFilmStrip ? edge : nil
+        let band = configuration.frame == .emulsion ? edge : strip
         if configuration.frame == .emulsion, band == nil { return nil }
         let film = band ?? UnexposedEdge.Margins(left: 0, right: 0, top: 0, bottom: 0)
         let photoWidth = image.width - film.left - film.right
@@ -41,6 +44,10 @@ public enum PrintFrameRenderer {
         guard photoWidth > 0, photoHeight > 0 else { return nil }
         let placement = layout(width: photoWidth, height: photoHeight, configuration: configuration,
                                edge: band)
+        // The developed strip is the frame's whole canvas.
+        if strip != nil, image.width != Int(placement.size.width) || image.height != Int(placement.size.height) {
+            return nil
+        }
         guard let space = image.colorSpace, space.model == .rgb,
               let context = CGContext(data: nil, width: Int(placement.size.width),
                                       height: Int(placement.size.height), bitsPerComponent: 16,
@@ -59,6 +66,20 @@ public enum PrintFrameRenderer {
             context.setFillColor(configuration.slideMount == nil ? baseColor(configuration.baseRGB) : cardColor)
         }
         context.fill(CGRect(origin: .zero, size: placement.size))
+        if strip != nil {
+            drawDeveloped(image, into: context, at: placement.imageRect, film: film)
+            if configuration.frame == .filmPositive {
+                // The inverted scan's black point sits just past the developed base, so the rebate
+                // stands a little above the open holes, its grain kept.
+                context.saveGState()
+                context.setBlendMode(.screen)
+                context.setFillColor(baseColor(configuration.baseRGB))
+                context.addRect(CGRect(origin: .zero, size: placement.size))
+                context.addRect(placement.imageRect)
+                context.fillPath(using: .evenOdd)
+                context.restoreGState()
+            }
+        }
         context.saveGState()
         context.scaleBy(x: placement.pixelsPerMM, y: placement.pixelsPerMM)
         if placement.rotated {
@@ -83,8 +104,12 @@ public enum PrintFrameRenderer {
             }
         } else if let geometry = configuration.geometry {
             if let printing = configuration.edgePrinting {
+                // On a developed strip a negative's letters pass a share of the rebate's light,
+                // grain and glow included; lighter letters are laid over the dark rebate.
+                let transmission = strip == nil ? nil : configuration.edgeTransmission
                 drawEdgePrinting(in: context, geometry: geometry, printing: printing,
-                                 color: baseColor(configuration.edgeRGB))
+                                 color: baseColor(transmission ?? configuration.edgeRGB),
+                                 blend: strip == nil ? .normal : transmission == nil ? .screen : .multiply)
             }
             let cutout = baseColor(configuration.cutoutRGB)
             drawPerforations(in: context, geometry: geometry, cutout: cutout)
@@ -93,17 +118,21 @@ public enum PrintFrameRenderer {
             }
         }
         context.restoreGState()
-        // Copy at integer pixel coordinates. The original profile, 16-bit depth and every
-        // developed pixel survive, including P3 and HLG delivery.
+        if strip == nil { drawDeveloped(image, into: context, at: placement.imageRect, film: film) }
+        return context.makeImage()
+    }
+
+    /// Copies the develop at integer pixel coordinates, the photograph at `photo`. The original
+    /// profile, 16-bit depth and every developed pixel survive, including P3 and HLG delivery.
+    private static func drawDeveloped(_ image: CGImage, into context: CGContext, at photo: CGRect,
+                                      film: UnexposedEdge.Margins) {
         context.saveGState()
         context.interpolationQuality = .none
         context.setBlendMode(.copy)
-        let photo = placement.imageRect
         context.draw(image, in: CGRect(x: photo.minX - CGFloat(film.left),
                                        y: photo.minY - CGFloat(film.bottom),
                                        width: CGFloat(image.width), height: CGFloat(image.height)))
         context.restoreGState()
-        return context.makeImage()
     }
 
     private static func materialGeometry(_ configuration: PrintFrameConfiguration)
@@ -179,8 +208,12 @@ public enum PrintFrameRenderer {
     }
 
     private static func drawEdgePrinting(in context: CGContext, geometry g: FilmBorderGeometry,
-                                         printing: FilmEdgePrinting, color: CGColor) {
+                                         printing: FilmEdgePrinting, color: CGColor,
+                                         blend: CGBlendMode = .normal) {
         context.saveGState()
+        // Blending in the delivery's encoding stands in for blending light: for a power-law
+        // transfer a product of encoded values is the encoded product of the light.
+        context.setBlendMode(blend)
         // In the reference strip x is transport and y is across. Turn that strip with its
         // perforations when the camera transports vertically; portrait rotation is outside.
         if !g.horizontalTransport {

@@ -534,6 +534,22 @@ extension CInterfaceTests {
             as? [String: Any])
         XCTAssertGreaterThan(framed.json["width"] as? Int ?? 0, 120)
         XCTAssertEqual(((placement["size"] as? [String: Any])?["width"] as? Int), framed.json["width"] as? Int)
+        // Its strip is developed with the photograph: the rail outside the perforations carries
+        // the film's grain, where a drawn rebate would be one colour.
+        let railRange = try XCTUnwrap((framed.json["payloads"] as? [String: [Int]])?["preview"])
+        let railImage = try XCTUnwrap(CGImageSourceCreateWithData(
+            framed.payload.subdata(in: railRange[0]..<(railRange[0] + railRange[1])) as CFData, nil)
+            .flatMap { CGImageSourceCreateImageAtIndex($0, 0, nil) })
+        let railData = try XCTUnwrap(railImage.dataProvider?.data as Data?)
+        let perMM = Double(railImage.width) / (4.75 * 8)
+        var rail = Set<[UInt8]>()
+        for y in (railImage.height - Int(1.8 * perMM))..<railImage.height {
+            for x in 0..<Int(8 * perMM) {
+                let i = y * railImage.bytesPerRow + x * (railImage.bitsPerPixel / 8)
+                rail.insert([railData[i], railData[i + 1], railData[i + 2]])
+            }
+        }
+        XCTAssertGreaterThan(rail.count, 3)
 
         // Lens sliders plan a correction without a profile, and it reaches the develop.
         let lens = #""lens": {"enabled": true, "amount": 1, "profileID": null, "distortion": -0.5, "vignetting": 0.5, "redCyan": 0, "blueYellow": 0}"#

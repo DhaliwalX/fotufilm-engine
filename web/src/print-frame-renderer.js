@@ -14,7 +14,8 @@ export function framePalette(plan, colorSpace) {
       edge: c.edgeRGB,
       rebate: c.rebateRGB,
       card: [0.86, 0.86, 0.86],
-      cutout: [0.96, 0.96, 0.96],
+      cutout: c.cutoutRGB ?? [0.96, 0.96, 0.96],
+      ...(c.edgeTransmission ? { edgeTransmission: c.edgeTransmission } : {}),
     }).map(([key, rgb]) => [key, rgb.map(encode)]),
   );
 }
@@ -175,6 +176,43 @@ async function lustre(ctx, size, photo, stale) {
   }
 }
 
+/** The letters and holes of a Film Border as coverage masks over its developed strip, in the
+ * frame's pixels: the 16-bit compositor blends them into the strip's own samples. */
+export function stripMasks(plan) {
+  const c = plan.configuration,
+    p = plan.placement,
+    m = plan.materialSize;
+  const mask = (draw) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = p.size.width;
+    canvas.height = p.size.height;
+    const ctx = canvas.getContext("2d");
+    ctx.translate(0, canvas.height);
+    ctx.scale(p.scale, -p.scale);
+    if (p.rotated) {
+      ctx.translate(m.height, 0);
+      ctx.rotate(Math.PI / 2);
+    }
+    ctx.fillStyle = "#fff";
+    draw(ctx);
+    return ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+  };
+  return {
+    letters: mask((ctx) => edgePrinting(ctx, c.geometry, c.edgePrinting)),
+    holes: mask((ctx) => {
+      perforations(ctx, c.geometry, plan.perforation);
+      for (const notch of c.sheetNotches?.notches || [])
+        ellipse(
+          ctx,
+          m.width - 30 + notch.position * 20,
+          m.height - notch.depth * 20,
+          notch.width * 20,
+          notch.depth * 40,
+        );
+    }),
+  };
+}
+
 /** One finishing path for previews, comparisons and exports. Photograph pixels are copied
  * at integer coordinates and never covered. */
 export async function renderPrintFrame(
@@ -185,6 +223,8 @@ export async function renderPrintFrame(
     omitPhoto = false,
     colorSpace = canvasColorSpace(image),
     rawColors = false,
+    // `image` is a Film Border's whole developed strip (`plan.strip`), the frame's canvas.
+    developed = false,
   } = {},
 ) {
   if (!plan || plan.configuration.frame === "none") return image;
@@ -204,8 +244,25 @@ export async function renderPrintFrame(
     throw new Error(
       "The framed image is too large. Choose a smaller export size.",
     );
-  ctx.fillStyle = color(c.slideMount ? palette.card : palette.base);
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  if (developed && image) {
+    ctx.drawImage(image, 0, 0);
+    if (c.frame === "filmPositive") {
+      // The inverted scan's black point sits just past the developed base, so the rebate
+      // stands a little above the open holes, its grain kept.
+      const r = p.image;
+      ctx.save();
+      ctx.globalCompositeOperation = "screen";
+      ctx.fillStyle = color(palette.base);
+      ctx.beginPath();
+      ctx.rect(0, 0, canvas.width, canvas.height);
+      ctx.rect(r.x, canvas.height - r.y - r.height, r.width, r.height);
+      ctx.fill("evenodd");
+      ctx.restore();
+    }
+  } else {
+    ctx.fillStyle = color(c.slideMount ? palette.card : palette.base);
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
   // Shared native geometry is lower-left. Physical material drawing stays in that space.
   ctx.save();
   ctx.translate(0, canvas.height);
@@ -250,8 +307,18 @@ export async function renderPrintFrame(
     if (c.hasLustre)
       await lustre(ctx, m, inset(photo, -c.sheet.rebateMM), stale);
   } else if (c.geometry) {
-    ctx.fillStyle = color(palette.edge);
+    // On a developed strip a negative's letters pass a share of the rebate's light, grain and
+    // glow included; lighter letters are laid over the dark rebate. Blending encoded values
+    // stands in for blending light, as natively.
+    const transmission = developed ? palette.edgeTransmission : null;
+    ctx.fillStyle = color(transmission || palette.edge);
+    ctx.globalCompositeOperation = !developed
+      ? "source-over"
+      : transmission
+        ? "multiply"
+        : "screen";
     edgePrinting(ctx, c.geometry, c.edgePrinting);
+    ctx.globalCompositeOperation = "source-over";
     ctx.fillStyle = color(palette.cutout);
     perforations(ctx, c.geometry, plan.perforation);
     for (const notch of c.sheetNotches?.notches || [])
@@ -267,7 +334,9 @@ export async function renderPrintFrame(
   if (stale()) return null;
   ctx.imageSmoothingEnabled = false;
   const top = canvas.height - r.y - r.height;
-  if (omitPhoto) ctx.clearRect(r.x, top, r.width, r.height);
+  if (developed) {
+    // The photograph is part of the developed strip, already in place.
+  } else if (omitPhoto) ctx.clearRect(r.x, top, r.width, r.height);
   else {
     // Integer placement preserves the delivered photograph without resampling.
     const pixels = image

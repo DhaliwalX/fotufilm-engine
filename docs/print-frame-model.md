@@ -195,7 +195,8 @@ physical dimensions and ignores Border Width.
 
 ## Film colour
 
-Film Border depicts the material surrounding the image. Colour-negative borders use the stock's
+Film Border depicts the material surrounding the image. Where the strip is drawn rather than
+developed (a scanned negative), colour-negative borders use the stock's
 minimum-density records and dye spectra, retaining its base-plus-fog and orange mask. Monochrome
 negative borders retain their modelled clear-base tint. A common light-box gain is used for negatives,
 so it does not neutralise their colours. Reversal borders use the stock's maximum-density records:
@@ -207,6 +208,33 @@ that output. Integral instant film keeps its attached white mask, separate from 
 These colours follow the existing spectral stock models; they are not separately measured samples of
 individual roll edges. The photograph inside the aperture retains the stock's development,
 grain and exposure; its density is viewed through the film instead of printed to paper.
+
+## Developed strip
+
+Film Border and Film Border Positive develop their whole strip with the photograph, as the
+Emulsion Border develops its band (`PrintFramePlacement.filmStrip`, `UnexposedEdge`). The piece
+of film is the frame's canvas: the photograph in the camera aperture and the film out to its cut
+edges on every side, across the perforation rows. The photograph's light, continued past its
+edges, passes the gate at the photograph's edge, so a crop narrower than the camera aperture
+leaves unexposed film beside it. Beyond the gate the film is base plus fog on a negative and
+maximum density on a transparency, with the stock's grain running unbroken from the picture, and
+the frame's halation and emulsion scatter spread into the rebate in that stock's colour and reach.
+The develop prints on the photograph's own Auto Levels readings. There is no enlarger carrier:
+the strip is viewed whole, on the light box for Film Border and through the selected medium for
+Film Border Positive. With no lens aperture recorded the gate's shadow is drawn at f/2.
+
+The perforations and sheet notches are punched after development and show the scan bed (black
+in the inverted scan). The edge printing is not exposed with the frame. A negative's letters pass
+the share of the rebate’s light that the edge exposure leaves them (`edgeTransmission`, the
+lettering's colour over the base's), so the rebate's grain and glow continue through them; a
+transparency's or an inverted scan's lighter letters are laid over the dark rebate. Blending the
+delivery's encoded values stands in for blending light, which is exact for a power-law transfer
+and close for sRGB. The inverted scan lifts the developed rebate by its 0.02 black point so the
+holes stand below it. Letters therefore carry no halation of their own.
+
+A scanned negative already shows its own film: its Film Border is drawn around the scan, as is
+integral instant film's mask. The iPhone, iPad and Mac editors, the desktop app and the browser
+develop the strip alike; the browser prepares a profile at the strip's size for it.
 
 ## Paper construction
 

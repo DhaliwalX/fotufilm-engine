@@ -72,6 +72,23 @@ public struct PrintFramePlacement: Codable, Equatable, Sendable {
                       scale: scale, rotated: rotated)
     }
 
+    /// The film a Film Border develops around a photograph of this size, in pixels of its
+    /// placement: from the gate, which is the photograph's edge, out to the film's cut edges on
+    /// every side and across the perforation rows, which are punched after development. The
+    /// developed piece is the frame's whole canvas. Nil for every other frame and for integral
+    /// instant film, whose mask is not emulsion.
+    public static func filmStrip(width: Int, height: Int,
+                                 configuration: PrintFrameConfiguration) -> UnexposedEdge.Margins? {
+        guard configuration.frame.showsFilmStrip, let film = configuration.geometry, !film.isInstant
+        else { return nil }
+        let placement = layout(width: width, height: height, configuration: configuration)
+        let left = Int(placement.image.x), bottom = Int(placement.image.y)
+        let right = Int(placement.size.width) - left - width
+        let top = Int(placement.size.height) - bottom - height
+        guard min(left, right, top, bottom) >= 0 else { return nil }
+        return UnexposedEdge.Margins(left: left, right: right, top: top, bottom: bottom)
+    }
+
     public static func materialGeometry(_ configuration: PrintFrameConfiguration) -> (size: Size, aperture: Rect) {
         if let g = configuration.geometry {
             return (Size(width: g.widthMM, height: g.heightMM),

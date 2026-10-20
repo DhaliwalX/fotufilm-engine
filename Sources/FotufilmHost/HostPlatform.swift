@@ -139,8 +139,8 @@ protocol HostSubjectDetector {
 /// Draws a print frame around a developed picture.
 protocol HostFrameCompositor {
     /// The framed picture from 8-bit Display P3 pixels, in the same form.
-    func frame(_ pixels: [UInt8], width: Int, height: Int,
-               configuration: PrintFrameConfiguration) -> (pixels: [UInt8], width: Int, height: Int)?
+    func frame(_ pixels: [UInt8], width: Int, height: Int, configuration: PrintFrameConfiguration,
+               edge: UnexposedEdge.Margins?) -> (pixels: [UInt8], width: Int, height: Int)?
 }
 
 extension HostImage {

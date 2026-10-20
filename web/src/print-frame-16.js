@@ -1,4 +1,4 @@
-import { renderPrintFrame } from "./print-frame-renderer.js";
+import { framePalette, renderPrintFrame, stripMasks } from "./print-frame-renderer.js";
 import { yieldToBrowser } from "./yield.js";
 
 // Reuse the exact native placement and material drawing. The photo aperture stays
@@ -10,9 +10,11 @@ export async function renderPrintFrame16(
   plan,
   stale = () => false,
   colorSpace = "srgb",
+  { developed = false } = {},
 ) {
   if (!plan || plan.configuration.frame === "none")
     return { pixels, width, height, colorSpace };
+  if (developed) return developedStrip16(pixels, width, height, plan, stale, colorSpace);
   const layer = await renderPrintFrame(null, plan, stale, {
     omitPhoto: true,
     colorSpace,
@@ -56,4 +58,48 @@ export async function renderPrintFrame16(
     height: layer.height,
     colorSpace,
   };
+}
+
+// A Film Border's developed strip, already the frame's size: its letters and holes blended into
+// the strip's own 16-bit samples as the 8-bit compositor blends them (multiply for a negative's
+// denser letters, screen for lighter ones), and an inverted scan's rebate lifted off black.
+async function developedStrip16(pixels, width, height, plan, stale, colorSpace) {
+  const p = plan.placement;
+  if (p.size.width !== width || p.size.height !== height)
+    throw new Error("Print frame dimensions do not match the developed film.");
+  const palette = framePalette(plan, colorSpace),
+    c = plan.configuration;
+  const { letters, holes } = stripMasks(plan);
+  const transmission = palette.edgeTransmission,
+    ink = transmission || palette.edge,
+    cutout = palette.cutout,
+    lift = c.frame === "filmPositive" ? palette.base : null;
+  const r = p.image,
+    top = height - r.y - r.height;
+  const output = new Uint16Array(pixels.length);
+  for (let y = 0; y < height; y++) {
+    if (y % 64 === 0) {
+      await yieldToBrowser();
+      if (stale()) return null;
+    }
+    const inPhotoRow = y >= top && y < top + r.height;
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      const rebate = !(inPhotoRow && x >= r.x && x < r.x + r.width);
+      const letter = letters[i + 3] / 255,
+        hole = holes[i + 3] / 255;
+      for (let ch = 0; ch < 3; ch++) {
+        let v = pixels[i + ch] / 65535;
+        if (lift && rebate) v = 1 - (1 - v) * (1 - lift[ch]);
+        if (letter > 0) {
+          const marked = transmission ? v * ink[ch] : 1 - (1 - v) * (1 - ink[ch]);
+          v += (marked - v) * letter;
+        }
+        if (hole > 0) v += (cutout[ch] - v) * hole;
+        output[i + ch] = Math.round(Math.min(1, Math.max(0, v)) * 65535);
+      }
+      output[i + 3] = 65535;
+    }
+  }
+  return { pixels: output, width, height, colorSpace };
 }

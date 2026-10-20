@@ -12,6 +12,7 @@ import {
   frameRequest,
   parsePrintFrame,
   parsePrintFrameMargin,
+  stripSource,
 } from "../../src/print-frame.js";
 import { frameNoise } from "../../src/frame-texture.js";
 
@@ -95,3 +96,31 @@ test("material noise is stable and bounded across negative and positive coordina
   }
   assert.notEqual(frameNoise(3, 4, 409), frameNoise(3, 4, 613));
 });
+
+test('a film border strip continues the photograph past its edges', async () => {
+  const data = new Float32Array(2 * 2 * 4)
+  for (let i = 0; i < 4; i++) data.set([i, i, i, 1], i * 4)
+  const source = {
+    width: 2,
+    height: 2,
+    read(x, y, w, h) {
+      const out = new Float32Array(w * h * 4)
+      for (let row = 0; row < h; row++)
+        out.set(data.subarray(((y + row) * 2 + x) * 4, ((y + row) * 2 + x + w) * 4), row * w * 4)
+      return out
+    },
+  }
+  const strip = stripSource(source, { left: 1, right: 2, top: 1, bottom: 0 })
+  assert.equal(strip.width, 5)
+  assert.equal(strip.height, 3)
+  const whole = strip.read(0, 0, 5, 3)
+  const at = (x, y) => whole[(y * 5 + x) * 4]
+  // The photograph's own pixels sit inside its margins; beyond, the nearest edge pixel.
+  assert.deepEqual([at(1, 1), at(2, 1), at(1, 2), at(2, 2)], [0, 1, 2, 3])
+  assert.deepEqual([at(0, 0), at(4, 0), at(0, 2), at(4, 2)], [0, 1, 2, 3])
+  const part = strip.read(3, 1, 2, 2)
+  assert.deepEqual([part[0], part[4], part[8], part[12]], [1, 1, 3, 3])
+  const promised = await stripSource({ ...source, read: (...a) => Promise.resolve(source.read(...a)) },
+    { left: 1, right: 0, top: 0, bottom: 0 }).read(0, 0, 3, 1)
+  assert.deepEqual([promised[0], promised[4], promised[8]], [0, 0, 1])
+})

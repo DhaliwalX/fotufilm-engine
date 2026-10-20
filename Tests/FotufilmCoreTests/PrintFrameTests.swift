@@ -420,6 +420,80 @@ final class PrintFrameTests: XCTestCase {
         XCTAssertEqual(holePixel.prefix(6), Data(repeating: 0, count: 6))
     }
 
+    func testFilmBorderDevelopsItsWholeStripAndLettersAndPunchesIt() throws {
+        // The strip is the frame's whole canvas around the photograph, at both orientations.
+        for (width, height) in [(300, 200), (200, 300), (150, 150)] {
+            for format in ["35mm", "120", "super35", "16mm", "4x5"] {
+                let config = configuration(.film, format: format, stock: "portra400")
+                let margins = try XCTUnwrap(PrintFramePlacement.filmStrip(width: width, height: height,
+                                                                         configuration: config))
+                let placement = PrintFramePlacement.layout(width: width, height: height, configuration: config)
+                XCTAssertEqual(Double(width + margins.left + margins.right), placement.size.width)
+                XCTAssertEqual(Double(height + margins.top + margins.bottom), placement.size.height)
+                XCTAssertEqual(Double(margins.left), placement.image.x)
+                XCTAssertEqual(Double(margins.bottom), placement.image.y)
+                XCTAssertEqual(margins.carrier, 0)
+            }
+        }
+        XCTAssertNotNil(PrintFramePlacement.filmStrip(width: 300, height: 200,
+                                                      configuration: configuration(.filmPositive, stock: "portra400")))
+        for config in [configuration(.paper), configuration(.emulsion), configuration(.none),
+                       configuration(.film, format: "instaxmini", stock: "instaxmini")] {
+            XCTAssertNil(PrintFramePlacement.filmStrip(width: 300, height: 200, configuration: config))
+        }
+
+        // A developed strip: noise standing for grain over the whole piece of film.
+        let config = configuration(.film, stock: "portra400")
+        let margins = try XCTUnwrap(PrintFramePlacement.filmStrip(width: 300, height: 200, configuration: config))
+        let (width, height) = (300 + margins.left + margins.right, 200 + margins.top + margins.bottom)
+        let space = CGColorSpace(name: CGColorSpace.sRGB)!
+        let context = try XCTUnwrap(CGContext(data: nil, width: width, height: height,
+            bitsPerComponent: 16, bytesPerRow: 0, space: space,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder16Little.rawValue))
+        var state: UInt32 = 1
+        for y in 0..<height {
+            for x in 0..<width {
+                state = state &* 1664525 &+ 1013904223
+                let grain = 0.6 + 0.1 * CGFloat(state >> 24) / 255
+                context.setFillColor(CGColor(colorSpace: space, components: [grain, grain * 0.8, grain * 0.6, 1])!)
+                context.fill(CGRect(x: x, y: y, width: 1, height: 1))
+            }
+        }
+        let developed = try XCTUnwrap(context.makeImage())
+        let framed = try XCTUnwrap(PrintFrameRenderer.render(developed, configuration: config, edge: margins))
+        XCTAssertEqual([framed.width, framed.height], [width, height])
+        let layout = PrintFrameRenderer.layout(width: 300, height: 200, configuration: config)
+        let photo = CGRect(x: layout.imageRect.minX, y: layout.size.height - layout.imageRect.maxY,
+                           width: 300, height: 200)
+        XCTAssertEqual(try pixels(XCTUnwrap(framed.cropping(to: photo))),
+                       try pixels(XCTUnwrap(developed.cropping(to: photo))))
+        // The rebate keeps the developed grain; the holes are punched to the scan bed.
+        let corner = CGRect(x: 0, y: framed.height - 4, width: 12, height: 4)
+        XCTAssertEqual(try pixels(XCTUnwrap(framed.cropping(to: corner))),
+                       try pixels(XCTUnwrap(developed.cropping(to: corner))))
+        let g = try XCTUnwrap(config.geometry), hole = try XCTUnwrap(g.perforation?.dimensions)
+        let x = (g.pitchMM / 2) * layout.pixelsPerMM
+        let y = layout.size.height - (hole.edge + hole.height / 2) * layout.pixelsPerMM
+        let holePixel = try pixels(XCTUnwrap(framed.cropping(to: CGRect(x: x, y: y, width: 1, height: 1))))
+        XCTAssertGreaterThan(holePixel[1], 0xF0)
+        // The lettering darkens the developed rebate under it.
+        let printing = try XCTUnwrap(config.edgePrinting?.marks.first)
+        let letters = CGRect(x: printing.xMM * layout.pixelsPerMM,
+                             y: layout.size.height - (printing.yMM + printing.heightMM) * layout.pixelsPerMM,
+                             width: printing.widthMM * layout.pixelsPerMM,
+                             height: printing.heightMM * layout.pixelsPerMM).integral
+        func mean(_ image: CGImage) throws -> Double {
+            let bytes = try pixels(image)
+            var total = 0.0
+            for i in stride(from: 0, to: bytes.count, by: 8) { total += Double(bytes[i + 3]) }
+            return total / Double(bytes.count / 8)
+        }
+        XCTAssertLessThan(try mean(XCTUnwrap(framed.cropping(to: letters))),
+                          try mean(XCTUnwrap(developed.cropping(to: letters))) - 2)
+        // A develop that is not the strip's size is refused rather than misplaced.
+        XCTAssertNil(PrintFrameRenderer.render(try fixture(), configuration: config, edge: margins))
+    }
+
     func testEdgeExposureUsesNegativeAndReversalDensityWithTheSameViewingLamp() {
         for id in ["portra400", "hp5plus400", "vision500t"] {
             let config = configuration(.film, stock: id)

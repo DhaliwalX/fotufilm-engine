@@ -58,10 +58,19 @@ enum HostFrames {
     }
 
     /// Draws the frame around 8-bit Display P3 pixels and returns the framed picture, or nil
-    /// where the platform draws no frames.
-    static func frame(_ pixels: [UInt8], width: Int, height: Int,
-                      plan: Plan) -> (pixels: [UInt8], width: Int, height: Int)? {
+    /// where the platform draws no frames. With `edge` the pixels are a developed piece of film
+    /// larger than the photograph (`PrintFrameRenderer.render(_:configuration:edge:)`).
+    static func frame(_ pixels: [UInt8], width: Int, height: Int, plan: Plan,
+                      edge: UnexposedEdge.Margins? = nil) -> (pixels: [UInt8], width: Int, height: Int)? {
         HostPlatform.current.frames?.frame(pixels, width: width, height: height,
-                                           configuration: plan.configuration)
+                                           configuration: plan.configuration, edge: edge)
+    }
+
+    /// The film a Film Border develops around a photograph of this size: its whole strip, on a
+    /// platform that draws frames (`PrintFramePlacement.filmStrip`). Nil keeps the drawn rebate.
+    static func strip(_ plan: Plan, width: Int, height: Int) -> UnexposedEdge.Margins? {
+        guard HostPlatform.current.frames != nil else { return nil }
+        return PrintFramePlacement.filmStrip(width: width, height: height,
+                                             configuration: plan.configuration)
     }
 }

@@ -305,6 +305,13 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
     /// Positive polyester media are smooth; the existing RC papers use a lustre approximation.
     public let hasLustre: Bool
 
+    /// The edge printing laid on a developed strip, whose rebate already carries the stock's
+    /// fog, grain and the frame's glow. A negative's letters are denser than the rebate around
+    /// them and pass this share of its light, so its grain runs through them. Nil where the
+    /// letters are lighter than the rebate — a transparency or an inverted scan — and are laid
+    /// over it in `edgeRGB`.
+    public let edgeTransmission: SIMD3<Float>?
+
     public init(frame: PrintFrame, formatID: String?, stockID: String,
                 paper: PrintPaper, viewingKelvin: Float? = nil,
                 negativeViewing: NegativeViewing = .lightBox, margin: Double = 1) {
@@ -488,6 +495,12 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
             // Display white, so the post's margin merges with the feed it is shown in.
             baseRGB = SIMD3(repeating: 1)
             detail = frame.detail
+        }
+        if self.frame == .film, edgePrinting != nil, baseRGB.min() > 0,
+           edgeRGB.x <= baseRGB.x, edgeRGB.y <= baseRGB.y, edgeRGB.z <= baseRGB.z {
+            edgeTransmission = edgeRGB / baseRGB
+        } else {
+            edgeTransmission = nil
         }
     }
 }
