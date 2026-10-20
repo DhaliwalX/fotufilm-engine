@@ -10,8 +10,8 @@ import FotufilmImaging
 
 /// Print frames drawn by `PrintFrameRenderer` through Core Graphics, as the Mac app draws them.
 struct CoreGraphicsFrameCompositor: HostFrameCompositor {
-    func frame(_ pixels: [UInt8], width: Int, height: Int,
-               configuration: PrintFrameConfiguration) -> (pixels: [UInt8], width: Int, height: Int)? {
+    func frame(_ pixels: [UInt8], width: Int, height: Int, configuration: PrintFrameConfiguration,
+               edge: UnexposedEdge.Margins?) -> (pixels: [UInt8], width: Int, height: Int)? {
         let space = CGColorSpace(name: CGColorSpace.displayP3)!
         guard let provider = CGDataProvider(data: Data(pixels) as CFData),
               let image = CGImage(width: width, height: height, bitsPerComponent: 8,
@@ -19,7 +19,7 @@ struct CoreGraphicsFrameCompositor: HostFrameCompositor {
                                   bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue),
                                   provider: provider, decode: nil, shouldInterpolate: false,
                                   intent: .defaultIntent),
-              let framed = PrintFrameRenderer.render(image, configuration: configuration)
+              let framed = PrintFrameRenderer.render(image, configuration: configuration, edge: edge)
         else { return nil }
         return Self.flatten(framed, space: space)
     }

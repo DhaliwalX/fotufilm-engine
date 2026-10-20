@@ -125,7 +125,8 @@ class _PhotoCanvasState extends State<PhotoCanvas> {
     _hold?.cancel();
     if (_pressed.length > 1) {
       editor.setComparing(false);
-    } else if (touch) {
+    } else if (touch || editor.printFrame.framable) {
+      // On a film border that crops the photograph a press may be the start of a drag.
       _hold = Timer(const Duration(milliseconds: 180), () => editor.setComparing(true));
     } else {
       editor.setComparing(true);
@@ -159,12 +160,33 @@ class _PhotoCanvasState extends State<PhotoCanvas> {
   /// drags it while it is magnified. A trackpad's pinch comes as pan-zoom events instead (_pinch).
   double? _fingersStart;
 
+  /// One finger, or the mouse, on a fitted film border that crops the photograph moves the part
+  /// of it the aperture shows.
+  bool _framing = false;
+
+  void _fingersBegin(ScaleStartDetails details) {
+    _fingersStart = editor.scale;
+    _framing = details.pointerCount == 1 && !editor.zoomed && !_tooled && editor.printFrame.framable;
+    if (_framing) editor.printFrame.beginFraming();
+  }
+
   void _fingers(ScaleUpdateDetails details) {
     final start = _fingersStart;
+    if (_framing && details.pointerCount == 1) {
+      editor.printFrame
+          .dragFraming(details.focalPointDelta, editor.view.photoRect(editor.photoSize).size);
+      return;
+    }
     if (details.pointerCount > 1 && start != null) {
       editor.zoomAround(start * details.scale, details.localFocalPoint);
     }
     editor.panBy(details.focalPointDelta);
+  }
+
+  void _fingersEnd(ScaleEndDetails details) {
+    _fingersStart = null;
+    if (_framing) editor.printFrame.endFraming();
+    _framing = false;
   }
 
   void _pinch(PointerPanZoomUpdateEvent event) {
@@ -201,13 +223,17 @@ class _PhotoCanvasState extends State<PhotoCanvas> {
           PointerDeviceKind.invertedStylus,
         },
         // The crop and the samplers keep a single finger on a fitted photograph.
-        onScaleStart: editor.zoomed || !_tooled ? (_) => _fingersStart = editor.scale : null,
+        onScaleStart: editor.zoomed || !_tooled ? _fingersBegin : null,
         onScaleUpdate: editor.zoomed || !_tooled ? _fingers : null,
-        onScaleEnd: (_) => _fingersStart = null,
+        onScaleEnd: _fingersEnd,
         onDoubleTapDown: (d) =>
             editor.zoomed ? editor.setZoom(null) : editor.zoomAround(1, d.localPosition),
         onDoubleTap: () {},
-        child: ClipRect(
+        child: MouseRegion(
+          cursor: !editor.zoomed && !_tooled && editor.printFrame.framable
+              ? SystemMouseCursors.grab
+              : MouseCursor.defer,
+          child: ClipRect(
           child: Stack(children: [
             Positioned.fromRect(
               rect: rect,
@@ -222,6 +248,7 @@ class _PhotoCanvasState extends State<PhotoCanvas> {
               Positioned.fromRect(rect: detail.region!.shift(rect.topLeft), child: _layer('detail')),
             ...viewerToolOverlays(editor, rect),
           ]),
+        ),
         ),
       ),
     );

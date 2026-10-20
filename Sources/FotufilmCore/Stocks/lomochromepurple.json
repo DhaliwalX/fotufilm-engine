@@ -128,6 +128,59 @@
     "sourcePage": 27,
     "temperatureC": 37.8
   },
+  "edgePrinting": [
+    {
+      "formatID": "35mm",
+      "marks": [
+        {
+          "heightMM": 1.15,
+          "text": "LOMO♥",
+          "widthMM": 3.85,
+          "xMM": 12,
+          "yMM": 33.3
+        },
+        {
+          "heightMM": 1.4,
+          "text": "1",
+          "widthMM": 0.7,
+          "xMM": 16.5,
+          "yMM": 33.15
+        },
+        {
+          "heightMM": 1.15,
+          "text": "PURPLE",
+          "widthMM": 4.62,
+          "xMM": 18,
+          "yMM": 33.3
+        },
+        {
+          "heightMM": 1.15,
+          "text": "LOMO♥",
+          "widthMM": 3.85,
+          "xMM": 12,
+          "yMM": 0.35
+        },
+        {
+          "heightMM": 1.4,
+          "text": "1",
+          "widthMM": 0.7,
+          "xMM": 16.5,
+          "yMM": 0.2
+        },
+        {
+          "heightMM": 1.15,
+          "text": "PURPLE",
+          "widthMM": 4.62,
+          "xMM": 18,
+          "yMM": 0.35
+        }
+      ],
+      "sources": [
+        "https://www.flickr.com/photos/jacklandau/54754461906/",
+        "https://www.flickr.com/photos/46749547@N04/54489369903/"
+      ]
+    }
+  ],
   "emulsionDiffusionMM": [
     0.004,
     0.0035,

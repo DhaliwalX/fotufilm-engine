@@ -384,6 +384,17 @@ struct EditState: Equatable {
     var printFrame = PrintFrame.none
     /// Border Width: the frame's margin as a multiple of its preset, for the frames that have one.
     var printFrameMargin = 1.0
+    /// Edge Printing and Frame Number: whether a film border shows the stock's edge printing,
+    /// and the frame number it and the DX barcode read.
+    var printFrameEdgePrinting = true
+    var printFrameNumber = FilmEdgePrinting.recordedFrameNumber
+    /// Where a film border's aperture sits on a photograph of another shape, across and down
+    /// from -1 to 1 (`PrintFrameConfiguration.framing`).
+    var printFrameFraming = SIMD2<Double>.zero
+    /// Frames: how many consecutive frames of the roll a film border's picture runs across.
+    var printFrameCount = 1
+    /// Camera: the camera a 135 film border's picture was exposed in.
+    var printFrameCamera = FilmBorderCamera.panoramic
     /// How the developed negative is read when it is the output: on the light box with its
     /// orange base, or through a scanner that divides the base out.
     var negativeViewing = NegativeViewing.lightBox
@@ -430,6 +441,9 @@ struct EditState: Equatable {
     /// would give, rather than an enlargement of the negative.
     var framingZoom = 1.0
 
+    /// RAW Corrections: false decodes a camera RAW without Core Image's lens correction, so its
+    /// distortion and vignetting show as captured.
+    var rawCorrections = true
     /// Whether to apply lens correction. Disabled by default because correction resamples the image.
     var lensCorrectionEnabled = false
     /// The profile the photographer pinned, overriding what the metadata matched. Nil lets the
@@ -589,7 +603,11 @@ struct EditState: Equatable {
         PrintFrameConfiguration(frame: printFrame, formatID: formatID,
                                 stockID: stockID, paper: resolvedPaper,
                                 viewingKelvin: printFrame.viewsTransparency ? nil : printLightKelvin.map(Float.init),
-                                negativeViewing: .lightBox, margin: printFrameMargin)
+                                negativeViewing: .lightBox, margin: printFrameMargin,
+                                frameNumber: printFrameNumber,
+                                showsEdgePrinting: printFrameEdgePrinting,
+                                framing: printFrameFraming, frames: printFrameCount,
+                                camera: printFrameCamera)
     }
 
     /// A negative stock is seen by transmission on the same reference light box as its rebate.
@@ -605,9 +623,11 @@ struct EditState: Equatable {
     var frameRenderState: EditState {
         let slideInFilmFrame = stock?.isReversal == true && resolvedPaper.isPositivePaper
             && frameConfiguration.frame.viewsTransparency
-        guard filmFrameNegative != nil || slideInFilmFrame else { return self }
+        // The inverted scan's photograph is a positive: a negative output is scanned instead.
+        let scannedPositive = frameConfiguration.frame == .filmPositive && resolvedPaper.isNegative
+        guard filmFrameNegative != nil || slideInFilmFrame || scannedPositive else { return self }
         var rendered = self
-        rendered.paper = slideInFilmFrame ? .screen : .negative
+        rendered.paper = scannedPositive ? .labScan : slideInFilmFrame ? .screen : .negative
         rendered.paperFollowsStock = false
         return rendered
     }

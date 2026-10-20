@@ -81,7 +81,21 @@ test('P3 frame materials are encoded from the native linear P3 palette', () => {
         value - (1.055 * plan.configuration.baseRGB[c] ** (1 / 2.4) - 0.055),
       ) < 1e-9,
     ),
+  )  // An inverted scan's holes are black, and a negative's letters carry their transmission.
+  const inverted = framePalette(
+    {
+      ...plan,
+      configuration: {
+        ...plan.configuration,
+        cutoutRGB: [0, 0, 0],
+        edgeTransmission: [0.25, 0.25, 0.25],
+      },
+    },
+    'display-p3',
   )
+  assert.deepEqual(inverted.cutout, [0, 0, 0])
+  assert.ok(Math.abs(inverted.edgeTransmission[0] - (1.055 * 0.25 ** (1 / 2.4) - 0.055)) < 1e-9)
+  assert.equal(actual.edgeTransmission, undefined)
 })
 test('generated ICC profiles describe distinct primaries with the same transfer curve', () => {
   function tags(bytes) {

@@ -58,7 +58,10 @@ public struct SceneImage {
 
     /// `targetLongEdge` demosaics a RAW no larger than needed for that size (`RawDecode`), as
     /// the Mac app's previews do; other files decode whole.
-    public static func decode(url: URL, targetLongEdge: Int? = nil) throws -> SceneImage {
+    /// `correctsLens` false leaves out Core Image's lens correction of a camera RAW; nil keeps
+    /// Core Image's own choice.
+    public static func decode(url: URL, targetLongEdge: Int? = nil,
+                              correctsLens: Bool? = nil) throws -> SceneImage {
         let path = url.path
         let isRaw = RawDecode.isRaw(url: url)
         let declaredHeadroom = isRaw ? nil : GainMapHeadroom.declared(url: url)
@@ -86,7 +89,8 @@ public struct SceneImage {
                 sceneChromaticity = xy
             }
             sceneKelvin = raw.neutralTemperature > 0 ? raw.neutralTemperature : nil
-            RawDecode.configure(raw, recipe: RawDecode.Recipe(targetLongEdge: targetLongEdge))
+            RawDecode.configure(raw, recipe: RawDecode.Recipe(targetLongEdge: targetLongEdge,
+                                                              correctsLens: correctsLens))
             profileCorrection = CameraProfileCorrection.resolve(
                 camera: RawDecode.cameraIdentity(url: url),
                 sceneKelvin: sceneKelvin)

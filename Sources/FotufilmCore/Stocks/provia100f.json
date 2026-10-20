@@ -16348,6 +16348,73 @@
     "sourcePage": 5,
     "temperatureC": 38.0
   },
+  "edgePrinting": [
+    {
+      "formatID": "35mm",
+      "marks": [
+        {
+          "heightMM": 1.15,
+          "text": "FUJI RDPIII",
+          "widthMM": 8.47,
+          "xMM": 12,
+          "yMM": 33.3
+        },
+        {
+          "heightMM": 1.4,
+          "text": "1",
+          "widthMM": 0.7,
+          "xMM": 9,
+          "yMM": 33.15
+        },
+        {
+          "heightMM": 1.4,
+          "text": "1",
+          "widthMM": 0.7,
+          "xMM": 9,
+          "yMM": 0.35
+        },
+        {
+          "heightMM": 1.05,
+          "text": "1A",
+          "widthMM": 1.45,
+          "xMM": 28,
+          "yMM": 0.4
+        }
+      ],
+      "sources": [
+        "https://asset.fujifilm.com/www/za/files/2019-09/4ca5dfc19ecbea6b26c635b5079d6ff3/films_provia-100f_datasheet_01.pdf"
+      ]
+    },
+    {
+      "formatID": "120",
+      "marks": [
+        {
+          "heightMM": 1.2,
+          "text": "FUJI",
+          "widthMM": 3.7,
+          "xMM": 2,
+          "yMM": 58.95
+        },
+        {
+          "heightMM": 1.6,
+          "text": "2",
+          "widthMM": 0.9,
+          "xMM": 8,
+          "yMM": 58.7
+        },
+        {
+          "heightMM": 1.2,
+          "text": "RDPIII",
+          "widthMM": 6.24,
+          "xMM": 12,
+          "yMM": 58.95
+        }
+      ],
+      "sources": [
+        "https://asset.fujifilm.com/www/za/files/2019-09/4ca5dfc19ecbea6b26c635b5079d6ff3/films_provia-100f_datasheet_01.pdf"
+      ]
+    }
+  ],
   "emulsionDiffusionMM": [
     0.005919,
     0.005919,

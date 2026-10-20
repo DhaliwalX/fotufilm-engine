@@ -8958,6 +8958,23 @@
     "sourcePage": 27,
     "temperatureC": 37.8
   },
+  "edgePrinting": [
+    {
+      "formatID": "35mm",
+      "marks": [
+        {
+          "heightMM": 0.75,
+          "text": "EJ",
+          "widthMM": 2.2,
+          "xMM": 1,
+          "yMM": 0.55
+        }
+      ],
+      "sources": [
+        "https://fstoppers.com/film/how-get-real-sprocket-holes-your-images-556406"
+      ]
+    }
+  ],
   "emulsionDiffusionMM": [
     0.009978,
     0.005329,

@@ -55,6 +55,65 @@
       "toeWidth": 0.1926569
     }
   ],
+  "edgePrinting": [
+    {
+      "dx": {
+        "part1": 105,
+        "part2": 1,
+        "source": "https://github.com/Merinorus/Open-source-film-database"
+      },
+      "formatID": "35mm",
+      "marks": [
+        {
+          "heightMM": 1.15,
+          "text": "HARMAN PHOENIX 200",
+          "widthMM": 13.86,
+          "xMM": 2,
+          "yMM": 33.3
+        },
+        {
+          "heightMM": 1.4,
+          "text": "1",
+          "widthMM": 0.7,
+          "xMM": 9,
+          "yMM": 0.35
+        },
+        {
+          "heightMM": 1.05,
+          "text": "1A",
+          "widthMM": 1.45,
+          "xMM": 28,
+          "yMM": 0.4
+        }
+      ],
+      "sources": [
+        "https://www.flickr.com/photos/lempinet/54005564580/"
+      ]
+    },
+    {
+      "formatID": "120",
+      "marks": [
+        {
+          "heightMM": 1.3,
+          "text": "HARMAN PHOENIX 200",
+          "widthMM": 15.3,
+          "xMM": 7,
+          "yMM": 58.95
+        },
+        {
+          "heightMM": 1.4,
+          "text": "1",
+          "widthMM": 0.8,
+          "xMM": 12,
+          "yMM": 0.45
+        }
+      ],
+      "sources": [
+        "https://www.flickr.com/photos/alexschubert/54096650156/",
+        "https://www.flickr.com/photos/alexschubert/54095782492/"
+      ]
+    }
+  ],
   "emulsionDiffusionMM": [
     0.004,
     0.003,

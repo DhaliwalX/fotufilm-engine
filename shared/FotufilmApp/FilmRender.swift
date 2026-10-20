@@ -166,6 +166,8 @@ enum FilmRender {
         /// develops the reading it was made with. Nil and false for a photograph.
         var negative: WebNativeEdit.Negative?
         var printsPlain: Bool
+        /// RAW Corrections, which decide the decode itself.
+        var rawCorrections: Bool
 
         init(state: EditState, longEdge: Int?,
              viewport: PreviewViewport? = nil) {
@@ -183,6 +185,7 @@ enum FilmRender {
             lens = state.lensSettings
             negative = state.negative
             printsPlain = state.negative != nil && !state.hasFilm
+            rawCorrections = state.rawCorrections
         }
     }
 
@@ -244,6 +247,29 @@ enum FilmRender {
         func withPixels<R>(_ body: (UnsafeBufferPointer<Float>) -> R) -> R {
             waitForRows(through: height)
             return withPixelsWhileFilling(body)
+        }
+
+        /// The part of the scene `crop` keeps, in its pixels from the top left: what a film
+        /// border shows of a photograph of another shape (`PrintFramePlacement.photoCrop`).
+        func cropped(to crop: PrintFramePlacement.Rect) -> Scene? {
+            let x = Int(crop.x), y = Int(crop.y), w = Int(crop.width), h = Int(crop.height)
+            guard x >= 0, y >= 0, w > 0, h > 0, x + w <= width, y + h <= height,
+                  let buffer = MappedBuffer(byteCount: w * h * 4 * MemoryLayout<Float>.size)
+            else { return nil }
+            let target = buffer.bound(to: Float.self)
+            withPixels { source in
+                for row in 0..<h {
+                    target.baseAddress!.advanced(by: row * w * 4)
+                        .update(from: source.baseAddress!.advanced(by: ((y + row) * width + x) * 4),
+                                count: w * 4)
+                }
+            }
+            var part = self
+            part.pixels = buffer
+            part.width = w
+            part.height = h
+            part.ready = nil
+            return part
         }
 
         /// The same buffer without the wait, for the one caller that reads it in step with the
@@ -439,7 +465,8 @@ enum FilmRender {
             return source.decoded(longEdge: decodeLongEdge, neutralKelvin: fixedCaptureIlluminant,
                                   upright: upright,
                                   decodeMode: .expandedHDR,
-                                  correctingLens: lens.supersedesDecoder ? false : nil)
+                                  correctingLens: lens.supersedesDecoder || !state.rawCorrections
+                                      ? false : nil)
         }) else { return nil }
         // What the scan's framing reads as, measured on the whole framing so a viewport, a strip
         // tile and the export all print alike; and in Normal, the plain positive laid down.
@@ -785,26 +812,38 @@ enum FilmRender {
         // The develop reads the frame top-down in strips and the rasterise lays it down top-down
         // in bands, so the two need not take turns: the scene comes back as soon as its geometry
         // is settled and the film model waits per strip for the rows it is about to read.
-        guard let scene = scene(source: source, state: state,
+        guard var scene = scene(source: source, state: state,
                                 longEdge: longEdge, upright: upright,
                                 usesSourceFrame: usesSourceFrame,
                                 streaming: !serialScene,
                                 report: report) else { return nil }
+        // A film border shows the part of the photograph its aperture fills, and the rest of
+        // the render is of that part.
+        if let frame, let crop = PrintFramePlacement.photoCrop(width: scene.width, height: scene.height,
+                                                               configuration: frame) {
+            guard let part = scene.cropped(to: crop) else { return nil }
+            scene = part
+        }
         #if os(iOS)
         // The phone has a few hundred megabytes for the whole export; the tile staging the
         // develop keeps for the next frame is worth more to the encode that follows it.
         defer { HalideMetalFilmRenderer.releaseIdleBuffers() }
         #endif
-        // The Emulsion Border develops a larger piece of film, the photograph included. A scanned
-        // negative has its own film's edge in the scan, and no larger piece to develop.
-        let frame = frame?.frame == .emulsion && source.scanDocument != nil ? nil : frame
-        let print = frame?.frame == .emulsion ? nil : develop(
+        // The Emulsion Border develops a larger piece of film, the photograph included, as a Film
+        // Border develops its whole strip. A scanned negative has its own film's edge in the
+        // scan, and no larger piece to develop: its Film Border is drawn around it.
+        let scanned = source.scanDocument != nil
+        let frame = frame?.frame == .emulsion && scanned ? nil : frame
+        let developsPiece = frame?.frame == .emulsion
+            || (!scanned && frame.map { PrintFramePlacement.filmStrip(width: scene.width, height: scene.height,
+                                                                      configuration: $0) != nil } == true)
+        let print = developsPiece ? nil : develop(
             scene, state: state, hdr: hdr, dynamicRange: dynamicRange,
             exact: exact, negative: negative, report: report
         )?.image
         var rendered: Rendered
         if let frame {
-            guard let framed = framed(print, in: frame, scene: scene, state: state, hdr: hdr,
+            guard let framed = framed(print, in: frame, scene: scanned ? nil : scene, state: state, hdr: hdr,
                                       dynamicRange: dynamicRange, exact: exact,
                                       negative: negative) else { return nil }
             rendered = framed.rendered
@@ -1273,10 +1312,10 @@ enum FilmRender {
         let layout: PrintFrameRenderer.Layout
     }
 
-    /// The print of `scene` inside `frame`. Every frame but the Emulsion Border is drawn around
-    /// `print`, the print `develop` made of `scene`. The Emulsion Border prints a larger piece of
-    /// film, developed here from `scene` under the same arguments, so it ignores `print` and a
-    /// caller that has not developed one may pass nil.
+    /// The print of `scene` inside `frame`. Every other frame is drawn around `print`, the print
+    /// `develop` made of `scene`. The Emulsion Border prints a larger piece of film, and a Film
+    /// Border with a scene its whole strip, developed here from `scene` under the same
+    /// arguments, so they ignore `print` and a caller that has not developed one may pass nil.
     static func framed(
         _ print: Rendered?, in frame: PrintFrameConfiguration, scene: Scene?, state: EditState,
         hdr: Bool = false,
@@ -1284,9 +1323,15 @@ enum FilmRender {
         exact: Bool = false, negative: NegativeViewing? = nil,
         shouldContinue: (() -> Bool)? = nil
     ) -> Framed? {
-        if frame.frame == .emulsion {
+        // A Film Border develops its whole strip where there is a scene to expose it with; a
+        // scanned negative, or integral instant film, keeps the drawn rebate.
+        if frame.frame == .emulsion
+            || (frame.frame.showsFilmStrip && scene != nil
+                && PrintFramePlacement.filmStrip(width: scene!.width, height: scene!.height,
+                                                 configuration: frame) != nil) {
             guard let scene,
-                  let film = developFilm(beyond: scene, state: state, hdr: hdr,
+                  let film = developFilm(beyond: scene, state: state,
+                                         strip: frame.frame == .emulsion ? nil : frame, hdr: hdr,
                                          dynamicRange: dynamicRange, exact: exact,
                                          negative: negative, shouldContinue: shouldContinue),
                   let image = PrintFrameRenderer.render(film.rendered.image, configuration: frame,
@@ -1340,10 +1385,12 @@ enum FilmRender {
     /// the lens forms inside the aperture, continued past its edges as the world beyond them, and
     /// the gate passes it only inside (`UnexposedEdge`). The film reaches as far beyond the
     /// aperture as the gauge's emulsion does before its perforations or cut edge, and the gate's
-    /// shadow is the one the picture's own aperture casts on that gauge. Nil with no film, on a
-    /// gauge with no emulsion there, or when the develop fails.
+    /// shadow is the one the picture's own aperture casts on that gauge. Given a Film Border,
+    /// the piece is that frame's whole strip instead (`PrintFramePlacement.filmStrip`), seen on
+    /// the light box with no carrier. Nil with no film, on a gauge with no emulsion there, or
+    /// when the develop fails.
     static func developFilm(
-        beyond scene: Scene, state: EditState, hdr: Bool = false,
+        beyond scene: Scene, state: EditState, strip: PrintFrameConfiguration? = nil, hdr: Bool = false,
         dynamicRange: AppSettings.DynamicRange = AppSettings.storedStillDynamicRange,
         exact: Bool = false, negative: NegativeViewing? = nil,
         shouldContinue: (() -> Bool)? = nil
@@ -1357,15 +1404,23 @@ enum FilmRender {
         if let negative { options.negativeViewing = negative }
         let motionPicture = FilmFormat.preset(id: StockPreset.nativeFormatID(for: state.stockID))?
             .isMotionPicture == true
-        guard let geometry = UnexposedEdge.Geometry.preset(options.format.presetID ?? state.formatID,
-                                                           motionPictureStock: motionPicture),
-              let invocation = try? FilmEngineInvocation(validating: stock, options: options,
+        guard let invocation = try? FilmEngineInvocation(validating: stock, options: options,
                                                          width: scene.width, height: scene.height)
         else { return nil }
-        let margins = geometry.margins(
-            photoWidth: scene.width, photoHeight: scene.height,
-            pixelsPerMM: options.pixelsPerMM(width: scene.width, height: scene.height),
-            carrier: !stock.isReversal)
+        let margins: UnexposedEdge.Margins
+        if let strip {
+            guard let film = PrintFramePlacement.filmStrip(width: scene.width, height: scene.height,
+                                                           configuration: strip) else { return nil }
+            margins = film
+        } else {
+            guard let geometry = UnexposedEdge.Geometry.preset(options.format.presetID ?? state.formatID,
+                                                               motionPictureStock: motionPicture)
+            else { return nil }
+            margins = geometry.margins(
+                photoWidth: scene.width, photoHeight: scene.height,
+                pixelsPerMM: options.pixelsPerMM(width: scene.width, height: scene.height),
+                carrier: !stock.isReversal)
+        }
         // The photograph's own Auto Levels reading, metered as its develop meters it.
         var stops = options.sceneHighlightStops
         var medians = options.sceneChannelMedians

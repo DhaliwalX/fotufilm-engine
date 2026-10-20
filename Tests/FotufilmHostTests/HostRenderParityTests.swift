@@ -146,4 +146,41 @@ final class HostRenderParityTests: XCTestCase {
         let stock = try XCTUnwrap(engine.stock("gold200"))
         XCTAssertEqual(try small.edit.options(for: stock).frameCoverage, coverage, accuracy: 1e-6)
     }
+
+    func testRAWCorrectionsOffDevelopsTheUncorrectedDecode() throws {
+        let engine = try HostEngine()
+        let service = engine.service
+        let image = HostImage(rgba: [Float](repeating: 0.18, count: 300 * 200 * 4),
+                              width: 300, height: 200, contentHeadroom: 1)
+        var decodes = 0
+        // The uncorrected decode shows more of the sensor than the camera's crop.
+        image.decodeUncorrected = {
+            decodes += 1
+            return HostImage(rgba: [Float](repeating: 0.18, count: 310 * 206 * 4),
+                             width: 310, height: 206, contentHeadroom: 1)
+        }
+        let handle = service.register(image)
+        func prepared(_ corrections: Bool?) throws -> HostService.Prepared {
+            let flag = corrections.map { #","rawCorrections":\#($0)"# } ?? ""
+            return try service.prepare(Data("""
+            {"handle":\(handle),"maxEdge":0,
+             "edit":{"stock":"gold200","params":{}\(flag)},"profileRequest":{"controls":{}}}
+            """.utf8))
+        }
+        XCTAssertEqual(try prepared(nil).sizes.output.0, 300)
+        XCTAssertEqual(try prepared(true).sizes.output.0, 300)
+        XCTAssertEqual(decodes, 0)
+        let uncorrected = try prepared(false)
+        XCTAssertEqual(uncorrected.sizes.output.0, 310)
+        XCTAssertEqual(uncorrected.sizes.output.1, 206)
+        XCTAssertEqual(try prepared(false).sizes.output.0, 310)
+        XCTAssertEqual(decodes, 1) // made once, then kept
+        // A photograph with nothing to leave out develops as it is.
+        let plain = service.register(HostImage(rgba: [Float](repeating: 0.18, count: 40 * 30 * 4),
+                                               width: 40, height: 30, contentHeadroom: 1))
+        XCTAssertEqual(try service.prepare(Data("""
+            {"handle":\(plain),"maxEdge":0,
+             "edit":{"stock":"gold200","params":{},"rawCorrections":false},"profileRequest":{"controls":{}}}
+            """.utf8)).sizes.output.0, 40)
+    }
 }

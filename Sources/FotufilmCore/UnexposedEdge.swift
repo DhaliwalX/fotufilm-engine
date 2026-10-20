@@ -203,7 +203,7 @@ public enum UnexposedEdge {
 
     /// The film's width on each side of the photograph, in pixels: the band, then `carrier` more
     /// beyond the carrier's opening, which is filed out to the band's outer edge. No carrier is 0.
-    public struct Margins: Equatable, Sendable {
+    public struct Margins: Codable, Equatable, Sendable {
         public let left: Int
         public let right: Int
         public let top: Int
@@ -213,6 +213,16 @@ public enum UnexposedEdge {
         public init(left: Int, right: Int, top: Int, bottom: Int, carrier: Int = 0) {
             self.left = left; self.right = right; self.top = top; self.bottom = bottom
             self.carrier = carrier
+        }
+
+        /// A request may leave out the carrier, which is then none.
+        public init(from decoder: Decoder) throws {
+            let values = try decoder.container(keyedBy: CodingKeys.self)
+            self.init(left: try values.decode(Int.self, forKey: .left),
+                      right: try values.decode(Int.self, forKey: .right),
+                      top: try values.decode(Int.self, forKey: .top),
+                      bottom: try values.decode(Int.self, forKey: .bottom),
+                      carrier: try values.decodeIfPresent(Int.self, forKey: .carrier) ?? 0)
         }
     }
 
@@ -239,6 +249,44 @@ public enum UnexposedEdge {
                 extended[to + 3] = photo[from + 3]
             }
         }
+    }
+}
+
+extension UnexposedEdge.Develop {
+    /// The develop of a larger piece of film around `photo`, interleaved linear RGBA of
+    /// `width` × `height`, for `stock` under `options`: the photograph's own Auto Levels readings,
+    /// metered on the photograph alone as its own develop meters it, so the film beyond the gate
+    /// does not move them.
+    public static func metering(_ photo: UnsafeBufferPointer<Float>, width: Int, height: Int,
+                                margins: UnexposedEdge.Margins, stock: FilmStock,
+                                options: FotufilmEngine.Options, fNumber: Float? = nil) throws -> Self {
+        var stops = options.sceneHighlightStops
+        var medians = options.sceneChannelMedians
+        var tone = options.sceneToneStops
+        let invocation = try FilmEngineInvocation(validating: stock, options: options,
+                                                  width: width, height: height, bindsFilmGrain: false)
+        if stops == nil, invocation.sceneMeteringActive, let base = photo.baseAddress {
+            var measurement = invocation.toneBaseMeasurement()
+            measurement.add(linearRGBA: base, rows: 0..<height)
+            stops = invocation.sceneHighlightStops(measurement)
+            medians = invocation.sceneChannelMedians(measurement)
+            tone = invocation.sceneToneStops(measurement)
+        }
+        return Self(margins: margins, sceneHighlightStops: stops, sceneChannelMedians: medians,
+                    sceneToneStops: tone, fNumber: fNumber)
+    }
+}
+
+extension UnexposedEdge {
+    /// `photo` continued past its edges over a larger piece of film (`extend`), as a new buffer.
+    public static func extended(_ photo: [Float], width: Int, height: Int, margins: Margins) -> [Float] {
+        var film = [Float](repeating: 0, count: (width + margins.left + margins.right)
+                                               * (height + margins.top + margins.bottom) * 4)
+        photo.withUnsafeBufferPointer { source in
+            film.withUnsafeMutableBufferPointer { extend(source, width: width, height: height,
+                                                         margins: margins, into: $0) }
+        }
+        return film
     }
 }
 

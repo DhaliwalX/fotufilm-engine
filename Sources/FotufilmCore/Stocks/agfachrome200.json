@@ -21787,6 +21787,38 @@
     "sourcePage": 5,
     "temperatureC": 38.0
   },
+  "edgePrinting": [
+    {
+      "formatID": "120",
+      "marks": [
+        {
+          "heightMM": 1.3,
+          "text": "RSX II 200",
+          "widthMM": 8.5,
+          "xMM": 7,
+          "yMM": 58.95
+        },
+        {
+          "heightMM": 1.4,
+          "text": "1",
+          "widthMM": 0.8,
+          "xMM": 4,
+          "yMM": 58.9
+        },
+        {
+          "heightMM": 1.3,
+          "text": "AGFA",
+          "widthMM": 3.4,
+          "xMM": 20,
+          "yMM": 0.45
+        }
+      ],
+      "sources": [
+        "https://www.flickr.com/photos/duncanholley/15381706864/",
+        "https://www.flickr.com/photos/rugbymadgirl/22220103695/"
+      ]
+    }
+  ],
   "emulsionDiffusionMM": [
     0.006,
     0.006,

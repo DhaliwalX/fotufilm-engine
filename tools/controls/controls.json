@@ -3188,6 +3188,34 @@
     },
     {
       "availability" : "always",
+      "detail" : "Apply the camera's lens and sensor-edge corrections to a RAW photograph.",
+      "documentation" : "On, a camera RAW decodes as the camera's maker intends: Apple's decoder corrects the lens's distortion and vignetting where it knows the lens, and the picture is the camera's default crop. Off shows the capture as the sensor recorded it — the lens's own distortion and dark corners, and on Linux the whole sensor area with its edges — so the true flaws of the capture print. Choosing Film Border or Film Border Positive turns it off. On the Mac and iPhone Core Image always delivers the camera's crop. Lens Correction's own correction still applies when it is on. Included in saved edits and exports.",
+      "drives" : [
+
+      ],
+      "field" : "rawCorrections",
+      "group" : "lens",
+      "kind" : "toggle",
+      "omitted" : {
+        "android" : "Android decodes RAW with LibRaw, which applies no lens correction.",
+        "cli" : "the command line renders the whole frame as given",
+        "finalcut" : "the host owns the frame's geometry and its colour corrector",
+        "resolve" : "the host owns the frame's geometry and its colour corrector",
+        "web" : "The browser decodes RAW with LibRaw, which applies no lens correction and shows the whole sensor area."
+      },
+      "persistedKey" : "rawCorrections",
+      "restingOn" : true,
+      "scope" : "edit",
+      "section" : "lensCorrection",
+      "storedEncoding" : "same",
+      "surfaces" : [
+        "app",
+        "desktop"
+      ],
+      "title" : "RAW Corrections"
+    },
+    {
+      "availability" : "always",
       "detail" : "Correct lens distortion, dark corners, and color fringing.",
       "documentation" : "Enables the matched lens profile or the calibrated camera profile.",
       "drives" : [
@@ -4709,80 +4737,86 @@
           "value" : 1
         },
         {
+          "detail" : "The negative's film border scanned and inverted: a dark rebate, light edge printing and black perforations around the positive photograph.",
+          "id" : "filmPositive",
+          "label" : "Film Border Positive",
+          "value" : 2
+        },
+        {
           "detail" : "The developed transparency in a card slide mount.",
           "id" : "slideMount",
           "label" : "Slide Mount",
-          "value" : 2
+          "value" : 3
         },
         {
           "detail" : "The selected photographic paper, in a 4 × 6 inch print.",
           "id" : "paper",
           "label" : "Paper Border 4 × 6",
-          "value" : 3
+          "value" : 4
         },
         {
           "detail" : "The selected photographic paper, in a 5 × 7 inch print.",
           "id" : "paper5x7",
           "label" : "Paper Border 5 × 7",
-          "value" : 4
+          "value" : 5
         },
         {
           "detail" : "The selected photographic paper, in an 8 × 10 inch print.",
           "id" : "paper8x10",
           "label" : "Paper Border 8 × 10",
-          "value" : 5
+          "value" : 6
         },
         {
           "detail" : "The selected photographic paper, in a 5 × 5 inch print.",
           "id" : "paper5x5",
           "label" : "Paper Border 5 × 5",
-          "value" : 6
+          "value" : 7
         },
         {
           "detail" : "The film rebate printed through a filed-out negative carrier: a black line inside the paper margin.",
           "id" : "carrier",
           "label" : "Carrier Border",
-          "value" : 7
+          "value" : 8
         },
         {
           "detail" : "The film just outside the camera gate, printed with the photograph: the stock's own unexposed tone, glow and grain, inside a paper margin.",
           "id" : "emulsion",
           "label" : "Emulsion Border",
-          "value" : 8
+          "value" : 9
         },
         {
           "detail" : "A clean white margin around the photograph.",
           "id" : "mount",
           "label" : "White Mount",
-          "value" : 9
+          "value" : 10
         },
         {
           "detail" : "A clean black margin around the photograph.",
           "id" : "darkMount",
           "label" : "Black Mount",
-          "value" : 10
+          "value" : 11
         },
         {
           "detail" : "A square 1 : 1 canvas for posting, the photograph inside a white margin.",
           "id" : "socialSquare",
           "label" : "Square Post",
-          "value" : 11
+          "value" : 12
         },
         {
           "detail" : "A 4 : 5 portrait canvas for posting, the photograph inside a white margin.",
           "id" : "socialPortrait",
           "label" : "Portrait Post",
-          "value" : 12
+          "value" : 13
         },
         {
           "detail" : "A 9 : 16 story canvas, the photograph inside a white margin.",
           "id" : "socialStory",
           "label" : "Story",
-          "value" : 13
+          "value" : 14
         }
       ],
       "detail" : "Choose a film, slide mount, paper, carrier, emulsion, plain mount, or posting canvas.",
-      "documentation" : "Choose Film Border for the selected film gauge, Slide Mount for a transparency in a 2 × 2 inch card mount, a Paper Border cut at 4 × 6, 5 × 7, 8 × 10 or 5 × 5 inches, Carrier Border for a negative's rebate printed through a filed-out carrier, Emulsion Border for the film's unexposed edge outside the camera gate — the stock's own tone, halation glow and grain — printed with the photograph inside a paper margin, a plain White or Black Mount, or a Square, Portrait or Story posting canvas with the photograph inside a white margin. Film perforations follow physical geometry; verified sheet-notch codes follow the stock. Included in saved edits and exports.",
+      "documentation" : "Choose Film Border for the selected film gauge, Film Border Positive for a negative's film border scanned and inverted around the positive photograph — a dark rebate, light edge printing and black perforations — Slide Mount for a transparency in a 2 × 2 inch card mount, a Paper Border cut at 4 × 6, 5 × 7, 8 × 10 or 5 × 5 inches, Carrier Border for a negative's rebate printed through a filed-out carrier, Emulsion Border for the film's unexposed edge outside the camera gate — the stock's own tone, halation glow and grain — printed with the photograph inside a paper margin, a plain White or Black Mount, or a Square, Portrait or Story posting canvas with the photograph inside a white margin. Film perforations follow physical geometry; documented edge printing and verified sheet-notch codes follow the stock. Included in saved edits and exports.",
       "drives" : [
 
       ],
@@ -4808,7 +4842,7 @@
     {
       "availability" : "always",
       "detail" : "Widen or narrow the margin around the photograph.",
-      "documentation" : "Scales the margin of a Paper Border, Carrier Border, White or Black Mount, or posting canvas, from none at 0% to three times the preset at 300%. A paper sheet keeps its size, so a wider easel margin prints a smaller picture; a mount or canvas grows around the photograph. Film Border and Slide Mount follow physical dimensions and have no Border Width. Included in saved edits and exports.",
+      "documentation" : "Scales the margin of a Paper Border, Carrier Border, White or Black Mount, or posting canvas, from none at 0% to three times the preset at 300%. A paper sheet keeps its size, so a wider easel margin prints a smaller picture; a mount or canvas grows around the photograph. Film Border, Film Border Positive and Slide Mount follow physical dimensions and have no Border Width. Included in saved edits and exports.",
       "drives" : [
 
       ],
@@ -4843,6 +4877,389 @@
         "web"
       ],
       "title" : "Border Width",
+      "webTransform" : "runtime"
+    },
+    {
+      "availability" : "always",
+      "detail" : "Show the film's lettering, frame numbers and barcode along a Film Border.",
+      "documentation" : "On, a Film Border or Film Border Positive carries the stock's documented edge printing for the gauge — its name and codes, the frame numbers and, on 135 negatives with a DX number, the DX barcode. Off leaves the rebate blank, as on film sold without edge printing; the developed rebate keeps its fog, grain and glow either way. Offered only for stocks with documented edge printing. Included in saved edits and exports.",
+      "drives" : [
+
+      ],
+      "field" : "printFrameEdgePrinting",
+      "group" : "print",
+      "kind" : "toggle",
+      "omitted" : {
+        "android" : "Frame finishing is offered in the iPhone, iPad and Mac photo editors.",
+        "cli" : "Frame finishing is offered in the iPhone, iPad and Mac photo editors.",
+        "finalcut" : "The host owns output framing.",
+        "resolve" : "The host owns output framing."
+      },
+      "persistedKey" : "printFrameEdgePrinting",
+      "restingOn" : true,
+      "scope" : "edit",
+      "section" : "printPaper",
+      "storedEncoding" : "same",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "web"
+      ],
+      "title" : "Edge Printing",
+      "webTransform" : "runtime"
+    },
+    {
+      "availability" : "always",
+      "choices" : [
+        {
+          "detail" : "",
+          "id" : "0",
+          "label" : "0",
+          "value" : 0
+        },
+        {
+          "detail" : "",
+          "id" : "1",
+          "label" : "1",
+          "value" : 1
+        },
+        {
+          "detail" : "",
+          "id" : "2",
+          "label" : "2",
+          "value" : 2
+        },
+        {
+          "detail" : "",
+          "id" : "3",
+          "label" : "3",
+          "value" : 3
+        },
+        {
+          "detail" : "",
+          "id" : "4",
+          "label" : "4",
+          "value" : 4
+        },
+        {
+          "detail" : "",
+          "id" : "5",
+          "label" : "5",
+          "value" : 5
+        },
+        {
+          "detail" : "",
+          "id" : "6",
+          "label" : "6",
+          "value" : 6
+        },
+        {
+          "detail" : "",
+          "id" : "7",
+          "label" : "7",
+          "value" : 7
+        },
+        {
+          "detail" : "",
+          "id" : "8",
+          "label" : "8",
+          "value" : 8
+        },
+        {
+          "detail" : "",
+          "id" : "9",
+          "label" : "9",
+          "value" : 9
+        },
+        {
+          "detail" : "",
+          "id" : "10",
+          "label" : "10",
+          "value" : 10
+        },
+        {
+          "detail" : "",
+          "id" : "11",
+          "label" : "11",
+          "value" : 11
+        },
+        {
+          "detail" : "",
+          "id" : "12",
+          "label" : "12",
+          "value" : 12
+        },
+        {
+          "detail" : "",
+          "id" : "13",
+          "label" : "13",
+          "value" : 13
+        },
+        {
+          "detail" : "",
+          "id" : "14",
+          "label" : "14",
+          "value" : 14
+        },
+        {
+          "detail" : "",
+          "id" : "15",
+          "label" : "15",
+          "value" : 15
+        },
+        {
+          "detail" : "",
+          "id" : "16",
+          "label" : "16",
+          "value" : 16
+        },
+        {
+          "detail" : "",
+          "id" : "17",
+          "label" : "17",
+          "value" : 17
+        },
+        {
+          "detail" : "",
+          "id" : "18",
+          "label" : "18",
+          "value" : 18
+        },
+        {
+          "detail" : "",
+          "id" : "19",
+          "label" : "19",
+          "value" : 19
+        },
+        {
+          "detail" : "",
+          "id" : "20",
+          "label" : "20",
+          "value" : 20
+        },
+        {
+          "detail" : "",
+          "id" : "21",
+          "label" : "21",
+          "value" : 21
+        },
+        {
+          "detail" : "",
+          "id" : "22",
+          "label" : "22",
+          "value" : 22
+        },
+        {
+          "detail" : "",
+          "id" : "23",
+          "label" : "23",
+          "value" : 23
+        },
+        {
+          "detail" : "",
+          "id" : "24",
+          "label" : "24",
+          "value" : 24
+        },
+        {
+          "detail" : "",
+          "id" : "25",
+          "label" : "25",
+          "value" : 25
+        },
+        {
+          "detail" : "",
+          "id" : "26",
+          "label" : "26",
+          "value" : 26
+        },
+        {
+          "detail" : "",
+          "id" : "27",
+          "label" : "27",
+          "value" : 27
+        },
+        {
+          "detail" : "",
+          "id" : "28",
+          "label" : "28",
+          "value" : 28
+        },
+        {
+          "detail" : "",
+          "id" : "29",
+          "label" : "29",
+          "value" : 29
+        },
+        {
+          "detail" : "",
+          "id" : "30",
+          "label" : "30",
+          "value" : 30
+        },
+        {
+          "detail" : "",
+          "id" : "31",
+          "label" : "31",
+          "value" : 31
+        },
+        {
+          "detail" : "",
+          "id" : "32",
+          "label" : "32",
+          "value" : 32
+        },
+        {
+          "detail" : "",
+          "id" : "33",
+          "label" : "33",
+          "value" : 33
+        },
+        {
+          "detail" : "",
+          "id" : "34",
+          "label" : "34",
+          "value" : 34
+        },
+        {
+          "detail" : "",
+          "id" : "35",
+          "label" : "35",
+          "value" : 35
+        },
+        {
+          "detail" : "",
+          "id" : "36",
+          "label" : "36",
+          "value" : 36
+        },
+        {
+          "detail" : "",
+          "id" : "37",
+          "label" : "37",
+          "value" : 37
+        },
+        {
+          "detail" : "",
+          "id" : "38",
+          "label" : "38",
+          "value" : 38
+        }
+      ],
+      "detail" : "Choose the frame number printed along a Film Border.",
+      "documentation" : "Sets which frame of the roll a Film Border or Film Border Positive is cut from, 0 to 38: the printed frame number and half-frame number (12 and 12A) and the frame encoded in a 135 negative's DX barcode follow it. The stock's name and codes stay. Offered for stocks whose edge printing numbers its frames; the default is frame 1. Included in saved edits and exports.",
+      "drives" : [
+
+      ],
+      "field" : "printFrameNumber",
+      "group" : "print",
+      "kind" : "menu",
+      "omitted" : {
+        "android" : "Frame finishing is offered in the iPhone, iPad and Mac photo editors.",
+        "cli" : "Frame finishing is offered in the iPhone, iPad and Mac photo editors.",
+        "finalcut" : "The host owns output framing.",
+        "resolve" : "The host owns output framing."
+      },
+      "scope" : "edit",
+      "section" : "printPaper",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "web"
+      ],
+      "title" : "Frame Number",
+      "webTransform" : "runtime"
+    },
+    {
+      "availability" : "always",
+      "choices" : [
+        {
+          "detail" : "",
+          "id" : "1",
+          "label" : "1 frame",
+          "value" : 1
+        },
+        {
+          "detail" : "",
+          "id" : "2",
+          "label" : "2 frames",
+          "value" : 2
+        },
+        {
+          "detail" : "",
+          "id" : "3",
+          "label" : "3 frames",
+          "value" : 3
+        },
+        {
+          "detail" : "",
+          "id" : "4",
+          "label" : "4 frames",
+          "value" : 4
+        }
+      ],
+      "detail" : "Expose the photograph across several frames' length of a Film Border, as a panorama.",
+      "documentation" : "Exposes one photograph across up to four frames' length of a 135 or 120 Film Border or Film Border Positive, as a panoramic camera or 135 in a medium-format camera does: one unbroken picture, its aperture running on by the gauge's frame advance for each frame. The photograph is cropped to that long aperture and placed by Framing. The roll's edge printing runs along with it, each frame's length carrying its own numbers and DX code, counting on from Frame Number. Motion-picture gauges, sheet film and instant film keep one frame. Included in saved edits and exports.",
+      "drives" : [
+
+      ],
+      "field" : "printFrameCount",
+      "group" : "print",
+      "kind" : "menu",
+      "omitted" : {
+        "android" : "Frame finishing is offered in the iPhone, iPad and Mac photo editors.",
+        "cli" : "Frame finishing is offered in the iPhone, iPad and Mac photo editors.",
+        "finalcut" : "The host owns output framing.",
+        "resolve" : "The host owns output framing."
+      },
+      "scope" : "edit",
+      "section" : "printPaper",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "web"
+      ],
+      "title" : "Frames",
+      "webTransform" : "runtime"
+    },
+    {
+      "availability" : "always",
+      "choices" : [
+        {
+          "detail" : "The picture stands between the perforations, as a 35mm or panoramic camera's gate exposes it.",
+          "id" : "panoramic",
+          "label" : "35mm or Panoramic Camera",
+          "value" : 0
+        },
+        {
+          "detail" : "135 in a medium-format camera: the picture runs across the perforations to the film's edges.",
+          "id" : "mediumFormatBack",
+          "label" : "Medium-Format Back",
+          "value" : 1
+        }
+      ],
+      "detail" : "Choose the camera a 135 Film Border's picture was exposed in.",
+      "documentation" : "Sets the camera a 135 Film Border or Film Border Positive was exposed in. 35mm or Panoramic Camera, the default, keeps the picture between the perforation rows, as a 35mm camera's gate or a panoramic camera's wider one does. Medium-Format Back runs it across the whole width of the film, as 135 loaded in a medium-format camera is exposed: the perforations are punched through the picture and the edge printing lies over it, the denser of the two showing. With Frames, the picture is as long as that many frames of the roll. Included in saved edits and exports.",
+      "drives" : [
+
+      ],
+      "field" : "printFrameCamera",
+      "group" : "print",
+      "kind" : "menu",
+      "omitted" : {
+        "android" : "Frame finishing is offered in the iPhone, iPad and Mac photo editors.",
+        "cli" : "Frame finishing is offered in the iPhone, iPad and Mac photo editors.",
+        "finalcut" : "The host owns output framing.",
+        "resolve" : "The host owns output framing."
+      },
+      "scope" : "edit",
+      "section" : "printPaper",
+      "surfaces" : [
+        "app",
+        "desktop",
+        "web"
+      ],
+      "title" : "Camera",
       "webTransform" : "runtime"
     },
     {

@@ -5,13 +5,16 @@ import FotufilmCore
 final class WebProfileRequestTests: XCTestCase {
     private func request(_ controls: [String: Any], stock id: String = "gold200",
                          medium: String? = nil, filters: [String]? = nil, metering: String? = nil,
-                         definition: FilmStockDefinition? = nil) throws -> WebProfileRequest {
+                         definition: FilmStockDefinition? = nil,
+                         edge: [String: Int]? = nil, stops: Float? = nil) throws -> WebProfileRequest {
         let stock = try XCTUnwrap(definition ?? FilmStock.presetDefinitions[id])
         let encoded = try JSONSerialization.jsonObject(with: JSONEncoder().encode(stock))
         var input: [String: Any] = ["stock": encoded, "width": 80, "height": 64, "controls": controls]
         if let medium { input["medium"] = medium }
         if let filters { input["filters"] = filters }
         if let metering { input["filterMetering"] = metering }
+        if let edge { input["unexposedEdge"] = edge }
+        if let stops { input["sceneHighlightStops"] = stops }
         return try JSONDecoder().decode(WebProfileRequest.self, from: JSONSerialization.data(withJSONObject: input))
     }
 
@@ -29,6 +32,22 @@ final class WebProfileRequestTests: XCTestCase {
         XCTAssertThrowsError(try request(["halationModel": "layered"], stock: "superia400").prepare()) {
             XCTAssertEqual(($0 as? WebFilmProfile.Failure)?.description,
                            WebFilmProfile.Failure.donorTransport.description)
+        }
+    }
+
+    /// A Film Border's strip is prepared at the strip's size, with the gate at the photograph's
+    /// edges and the photograph's own measurement.
+    func testFilmBeyondThePhotographCarriesTheGateAndThePhotographsLevels() throws {
+        let edge = ["left": 4, "right": 4, "top": 10, "bottom": 10]
+        let options = try request([:], edge: edge, stops: 1.5).configured().1
+        XCTAssertEqual(options.unexposedEdge?.margins,
+                       UnexposedEdge.Margins(left: 4, right: 4, top: 10, bottom: 10))
+        XCTAssertEqual(options.unexposedEdge?.sceneHighlightStops, 1.5)
+        XCTAssertNoThrow(try request([:], edge: edge).prepare())
+        XCTAssertNil(try request([:]).configured().1.unexposedEdge)
+        for bad in [["left": -1, "right": 0, "top": 0, "bottom": 0],
+                    ["left": 40, "right": 40, "top": 0, "bottom": 0]] {
+            XCTAssertThrowsError(try request([:], edge: bad).configured())
         }
     }
 

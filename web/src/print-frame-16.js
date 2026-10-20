@@ -1,4 +1,4 @@
-import { renderPrintFrame } from "./print-frame-renderer.js";
+import { framePalette, renderPrintFrame, stripMasks } from "./print-frame-renderer.js";
 import { yieldToBrowser } from "./yield.js";
 
 // Reuse the exact native placement and material drawing. The photo aperture stays
@@ -10,9 +10,13 @@ export async function renderPrintFrame16(
   plan,
   stale = () => false,
   colorSpace = "srgb",
+  { developed = false } = {},
 ) {
   if (!plan || plan.configuration.frame === "none")
     return { pixels, width, height, colorSpace };
+  if (developed) return developedStrip16(pixels, width, height, plan, stale, colorSpace);
+  if (plan.configuration.geometry?.exposesEdges)
+    return exposedStrip16(pixels, width, height, plan, stale, colorSpace);
   const layer = await renderPrintFrame(null, plan, stale, {
     omitPhoto: true,
     colorSpace,
@@ -56,4 +60,87 @@ export async function renderPrintFrame16(
     height: layer.height,
     colorSpace,
   };
+}
+
+// 135 exposed to its edges, drawn without a developed strip: the photograph laid on the rebate's
+// colour at its place, then lettered and punched as a developed strip is.
+async function exposedStrip16(pixels, width, height, plan, stale, colorSpace) {
+  const p = plan.placement,
+    r = p.image;
+  if (r.width !== width || r.height !== height)
+    throw new Error("Print frame dimensions do not match the photograph.");
+  const base = framePalette(plan, colorSpace).base.map((v) => Math.round(v * 65535));
+  const W = p.size.width,
+    H = p.size.height,
+    top = H - r.y - r.height;
+  const strip = new Uint16Array(W * H * 4);
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++) {
+      const o = (y * W + x) * 4,
+        px = x - r.x,
+        py = y - top;
+      const inside = px >= 0 && px < width && py >= 0 && py < height;
+      const from = (py * width + px) * 4;
+      for (let c = 0; c < 3; c++) strip[o + c] = inside ? pixels[from + c] : base[c];
+      strip[o + 3] = 65535;
+    }
+  if (stale()) return null;
+  return developedStrip16(strip, W, H, plan, stale, colorSpace, { lifted: true });
+}
+
+// A Film Border's developed strip, already the frame's size: its letters and holes blended into
+// the strip's own 16-bit samples as the 8-bit compositor blends them (multiply for a negative's
+// denser letters, screen for lighter ones; over a picture exposed to the edges, the denser of
+// the two), and an inverted scan's rebate lifted off black unless it is `lifted` already.
+async function developedStrip16(pixels, width, height, plan, stale, colorSpace, { lifted = false } = {}) {
+  const p = plan.placement;
+  if (p.size.width !== width || p.size.height !== height)
+    throw new Error("Print frame dimensions do not match the developed film.");
+  const palette = framePalette(plan, colorSpace),
+    c = plan.configuration;
+  const { letters, bars, holes } = stripMasks(plan);
+  const transmission = palette.edgeTransmission,
+    ink = transmission || palette.edge,
+    barTransmission = palette.barcodeTransmission,
+    barInk = barTransmission || palette.barcode,
+    cutout = palette.cutout,
+    lift = c.frame === "filmPositive" && !lifted ? palette.base : null,
+    exposed = c.geometry?.exposesEdges === true;
+  const r = p.image,
+    top = height - r.y - r.height;
+  const output = new Uint16Array(pixels.length);
+  for (let y = 0; y < height; y++) {
+    if (y % 64 === 0) {
+      await yieldToBrowser();
+      if (stale()) return null;
+    }
+    const inPhotoRow = y >= top && y < top + r.height;
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      const rebate = !(inPhotoRow && x >= r.x && x < r.x + r.width);
+      const letter = letters[i + 3] / 255,
+        bar = bars[i + 3] / 255,
+        hole = holes[i + 3] / 255;
+      for (let ch = 0; ch < 3; ch++) {
+        let v = pixels[i + ch] / 65535;
+        if (lift && rebate) v = 1 - (1 - v) * (1 - lift[ch]);
+        if (letter > 0) {
+          const marked = exposed
+            ? (transmission ? Math.min : Math.max)(v, palette.edge[ch])
+            : transmission ? v * ink[ch] : 1 - (1 - v) * (1 - ink[ch]);
+          v += (marked - v) * letter;
+        }
+        if (bar > 0) {
+          const marked = exposed
+            ? (barTransmission ? Math.min : Math.max)(v, (palette.barcode || [0, 0, 0])[ch])
+            : barTransmission ? v * barInk[ch] : 1 - (1 - v) * (1 - barInk[ch]);
+          v += (marked - v) * bar;
+        }
+        if (hole > 0) v += (cutout[ch] - v) * hole;
+        output[i + ch] = Math.round(Math.min(1, Math.max(0, v)) * 65535);
+      }
+      output[i + 3] = 65535;
+    }
+  }
+  return { pixels: output, width, height, colorSpace };
 }

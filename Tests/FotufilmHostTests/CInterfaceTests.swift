@@ -534,6 +534,61 @@ extension CInterfaceTests {
             as? [String: Any])
         XCTAssertGreaterThan(framed.json["width"] as? Int ?? 0, 120)
         XCTAssertEqual(((placement["size"] as? [String: Any])?["width"] as? Int), framed.json["width"] as? Int)
+        // Its strip is developed with the photograph: the rail outside the perforations carries
+        // the film's grain, where a drawn rebate would be one colour.
+        let railRange = try XCTUnwrap((framed.json["payloads"] as? [String: [Int]])?["preview"])
+        let railImage = try XCTUnwrap(CGImageSourceCreateWithData(
+            framed.payload.subdata(in: railRange[0]..<(railRange[0] + railRange[1])) as CFData, nil)
+            .flatMap { CGImageSourceCreateImageAtIndex($0, 0, nil) })
+        let railData = try XCTUnwrap(railImage.dataProvider?.data as Data?)
+        let perMM = Double(railImage.width) / (4.75 * 8)
+        var rail = Set<[UInt8]>()
+        for y in (railImage.height - Int(1.8 * perMM))..<railImage.height {
+            for x in 0..<Int(8 * perMM) {
+                let i = y * railImage.bytesPerRow + x * (railImage.bitsPerPixel / 8)
+                rail.insert([railData[i], railData[i + 1], railData[i + 2]])
+            }
+        }
+        XCTAssertGreaterThan(rail.count, 3)
+
+        // On a square crop it shows the part its aperture fills, where the framing puts it.
+        func cut(_ framing: [Double]) throws -> (json: [String: Any], payload: Data) {
+            try call("render", """
+            {"handle": \(handle), "maxEdge": null,
+             "printFrame": {"kind": "print-frame", "stock": "gold200", "frame": "film", "width": 1, "height": 1,
+                            "framing": \(framing)},
+             "edit": {"stock": "gold200", "params": {}, "crop": [[0, 0], [0.5, 0], [0.5, 1], [0, 1]]},
+             "profileRequest": {"controls": {}}}
+            """)
+        }
+        let left = try cut([-1, 0]), right = try cut([1, 0])
+        let leftCrop = try XCTUnwrap((left.json["framePlan"] as? [String: Any])?["crop"] as? [String: Any])
+        let rightCrop = try XCTUnwrap((right.json["framePlan"] as? [String: Any])?["crop"] as? [String: Any])
+        XCTAssertEqual(leftCrop["x"] as? Double, 0)
+        XCTAssertGreaterThan(rightCrop["x"] as? Double ?? 0, 0)
+        XCTAssertEqual(leftCrop["width"] as? Double, rightCrop["width"] as? Double)
+        XCTAssertEqual(left.json["width"] as? Int, right.json["width"] as? Int)
+        let leftPreview = try XCTUnwrap((left.json["payloads"] as? [String: [Int]])?["preview"])
+        let rightPreview = try XCTUnwrap((right.json["payloads"] as? [String: [Int]])?["preview"])
+        XCTAssertNotEqual(left.payload.subdata(in: leftPreview[0]..<(leftPreview[0] + leftPreview[1])),
+                          right.payload.subdata(in: rightPreview[0]..<(rightPreview[0] + rightPreview[1])))
+
+        // A panorama across three frames' length is one long exposure: the whole photograph's
+        // width in the aperture, cropped to 112 by 24 mm, in a strip 114 mm long at the scale the
+        // crop's 26 rows set.
+        let panorama = try call("render", """
+        {"handle": \(handle), "maxEdge": null,
+         "printFrame": {"kind": "print-frame", "stock": "gold200", "frame": "film", "width": 1, "height": 1,
+                        "frames": 3},
+         "edit": {"stock": "gold200", "params": {}}, "profileRequest": {"controls": {}}}
+        """)
+        let run = try XCTUnwrap(panorama.json["framePlan"] as? [String: Any])
+        let runCrop = try XCTUnwrap(run["crop"] as? [String: Any])
+        XCTAssertEqual(runCrop["width"] as? Double, 120)
+        XCTAssertEqual(runCrop["height"] as? Double, 26)
+        let runSize = try XCTUnwrap((run["placement"] as? [String: Any])?["size"] as? [String: Any])
+        XCTAssertEqual(panorama.json["width"] as? Int, runSize["width"] as? Int)
+        XCTAssertEqual(runSize["width"] as? Int, 124)
 
         // Lens sliders plan a correction without a profile, and it reaches the develop.
         let lens = #""lens": {"enabled": true, "amount": 1, "profileID": null, "distortion": -0.5, "vignetting": 0.5, "redCyan": 0, "blueYellow": 0}"#

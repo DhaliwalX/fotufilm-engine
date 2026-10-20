@@ -27,13 +27,16 @@ public enum PrintFrameRenderer {
                       pixelsPerMM: p.scale, rotated: p.rotated)
     }
 
-    /// Every frame but the Emulsion Border takes the developed photograph. The Emulsion Border
-    /// takes the developed piece of film larger than the aperture (`UnexposedEdge`) and how far it
-    /// reaches beyond the photograph on each side, `edge`, which it requires.
+    /// Every frame takes the developed photograph, or a developed piece of film larger than the
+    /// aperture (`UnexposedEdge`) and how far it reaches beyond the photograph on each side,
+    /// `edge`. The Emulsion Border requires that piece. A Film Border given one takes its whole
+    /// developed strip (`PrintFramePlacement.filmStrip`) and punches and letters it; without one
+    /// it draws the rebate in the stock's colours.
     public static func render(_ image: CGImage, configuration: PrintFrameConfiguration,
                               edge: UnexposedEdge.Margins? = nil) -> CGImage? {
         guard configuration.frame != .none else { return image }
-        let band = configuration.frame == .emulsion ? edge : nil
+        let strip = configuration.frame.showsFilmStrip ? edge : nil
+        let band = configuration.frame == .emulsion ? edge : strip
         if configuration.frame == .emulsion, band == nil { return nil }
         let film = band ?? UnexposedEdge.Margins(left: 0, right: 0, top: 0, bottom: 0)
         let photoWidth = image.width - film.left - film.right
@@ -41,6 +44,10 @@ public enum PrintFrameRenderer {
         guard photoWidth > 0, photoHeight > 0 else { return nil }
         let placement = layout(width: photoWidth, height: photoHeight, configuration: configuration,
                                edge: band)
+        // The developed strip is the frame's whole canvas.
+        if strip != nil, image.width != Int(placement.size.width) || image.height != Int(placement.size.height) {
+            return nil
+        }
         guard let space = image.colorSpace, space.model == .rgb,
               let context = CGContext(data: nil, width: Int(placement.size.width),
                                       height: Int(placement.size.height), bitsPerComponent: 16,
@@ -59,6 +66,24 @@ public enum PrintFrameRenderer {
             context.setFillColor(configuration.slideMount == nil ? baseColor(configuration.baseRGB) : cardColor)
         }
         context.fill(CGRect(origin: .zero, size: placement.size))
+        // 135 exposed to its edges in a medium-format camera: the picture lies under the edge
+        // printing and is punched with the perforations, so it goes down first.
+        let exposed = configuration.geometry?.exposesEdges == true
+        if strip == nil, exposed { drawDeveloped(image, into: context, at: placement.imageRect, film: film) }
+        if strip != nil {
+            drawDeveloped(image, into: context, at: placement.imageRect, film: film)
+            if configuration.frame == .filmPositive {
+                // The inverted scan's black point sits just past the developed base, so the rebate
+                // stands a little above the open holes, its grain kept.
+                context.saveGState()
+                context.setBlendMode(.screen)
+                context.setFillColor(baseColor(configuration.baseRGB))
+                context.addRect(CGRect(origin: .zero, size: placement.size))
+                context.addRect(placement.imageRect)
+                context.fillPath(using: .evenOdd)
+                context.restoreGState()
+            }
+        }
         context.saveGState()
         context.scaleBy(x: placement.pixelsPerMM, y: placement.pixelsPerMM)
         if placement.rotated {
@@ -82,27 +107,46 @@ public enum PrintFrameRenderer {
                            excluding: photo.insetBy(dx: -CGFloat(sheet.rebateMM), dy: -CGFloat(sheet.rebateMM)))
             }
         } else if let geometry = configuration.geometry {
-            if let printing = configuration.edgePrinting {
-                drawEdgePrinting(in: context, geometry: geometry, printing: printing,
-                                 color: baseColor(configuration.edgeRGB))
+            // On a developed strip a negative's letters pass a share of the rebate's light, grain
+            // and glow included; lighter letters are laid over the dark rebate. Over a picture
+            // exposed to the edges the edge printer's exposure adds to the camera's, and the denser
+            // of the two develops, nearly: a negative's letters darken it, lighter letters lighten.
+            func marking(_ rgb: SIMD3<Float>, _ transmission: SIMD3<Float>?) -> (CGColor, CGBlendMode) {
+                if exposed { return (baseColor(rgb), transmission == nil ? .lighten : .darken) }
+                let shared = strip == nil ? nil : transmission
+                return (baseColor(shared ?? rgb), strip == nil ? .normal : shared == nil ? .screen : .multiply)
             }
-            drawPerforations(in: context, geometry: geometry)
+            if let printing = configuration.edgePrinting {
+                let (color, blend) = marking(configuration.edgeRGB, configuration.edgeTransmission)
+                drawEdgePrinting(in: context, geometry: geometry, printing: printing, color: color, blend: blend)
+            }
+            if !configuration.edgeBars.isEmpty {
+                let (color, blend) = marking(configuration.barcodeRGB, configuration.barcodeTransmission)
+                drawEdgeBars(in: context, geometry: geometry, bars: configuration.edgeBars,
+                             color: color, blend: blend)
+            }
+            let cutout = baseColor(configuration.cutoutRGB)
+            drawPerforations(in: context, geometry: geometry, cutout: cutout)
             if geometry.isSheet, let code = configuration.sheetNotches {
-                drawNotches(in: context, size: material.size, code: code)
+                drawNotches(in: context, size: material.size, code: code, cutout: cutout)
             }
         }
         context.restoreGState()
-        // Copy at integer pixel coordinates. The original profile, 16-bit depth and every
-        // developed pixel survive, including P3 and HLG delivery.
+        if strip == nil, !exposed { drawDeveloped(image, into: context, at: placement.imageRect, film: film) }
+        return context.makeImage()
+    }
+
+    /// Copies the develop at integer pixel coordinates, the photograph at `photo`. The original
+    /// profile, 16-bit depth and every developed pixel survive, including P3 and HLG delivery.
+    private static func drawDeveloped(_ image: CGImage, into context: CGContext, at photo: CGRect,
+                                      film: UnexposedEdge.Margins) {
         context.saveGState()
         context.interpolationQuality = .none
         context.setBlendMode(.copy)
-        let photo = placement.imageRect
         context.draw(image, in: CGRect(x: photo.minX - CGFloat(film.left),
                                        y: photo.minY - CGFloat(film.bottom),
                                        width: CGFloat(image.width), height: CGFloat(image.height)))
         context.restoreGState()
-        return context.makeImage()
     }
 
     private static func materialGeometry(_ configuration: PrintFrameConfiguration)
@@ -149,9 +193,6 @@ public enum PrintFrameRenderer {
                 components: [CGFloat(rgb.x), CGFloat(rgb.y), CGFloat(rgb.z), 1])!
     }
 
-    /// The neutral scan-bed visible through the physical holes.
-    private static var cutoutColor: CGColor { baseColor(SIMD3(repeating: 0.96)) }
-
     /// The edge printer's lettering for `text`: glyph outlines in font units, the baseline at
     /// zero. Stretching its bounding box to a mark's millimetre box letters the way the rebate is.
     ///
@@ -181,8 +222,12 @@ public enum PrintFrameRenderer {
     }
 
     private static func drawEdgePrinting(in context: CGContext, geometry g: FilmBorderGeometry,
-                                         printing: FilmEdgePrinting, color: CGColor) {
+                                         printing: FilmEdgePrinting, color: CGColor,
+                                         blend: CGBlendMode = .normal) {
         context.saveGState()
+        // Blending in the delivery's encoding stands in for blending light: for a power-law
+        // transfer a product of encoded values is the encoded product of the light.
+        context.setBlendMode(blend)
         // In the reference strip x is transport and y is across. Turn that strip with its
         // perforations when the camera transports vertically; portrait rotation is outside.
         if !g.horizontalTransport {
@@ -208,7 +253,25 @@ public enum PrintFrameRenderer {
         context.restoreGState()
     }
 
-    private static func drawPerforations(in context: CGContext, geometry g: FilmBorderGeometry) {
+    /// The DX barcode's bars, in the edge printing's coordinates.
+    private static func drawEdgeBars(in context: CGContext, geometry g: FilmBorderGeometry,
+                                     bars: [FilmEdgePrinting.Bar], color: CGColor, blend: CGBlendMode) {
+        context.saveGState()
+        context.setBlendMode(blend)
+        if !g.horizontalTransport {
+            context.translateBy(x: g.widthMM, y: 0)
+            context.rotate(by: .pi / 2)
+        }
+        let along = g.horizontalTransport ? g.widthMM : g.heightMM
+        let across = g.horizontalTransport ? g.heightMM : g.widthMM
+        context.clip(to: CGRect(x: 0, y: 0, width: along, height: across))
+        context.setFillColor(color)
+        context.fill(bars.map { CGRect(x: $0.xMM, y: $0.yMM, width: $0.widthMM, height: $0.heightMM) })
+        context.restoreGState()
+    }
+
+    private static func drawPerforations(in context: CGContext, geometry g: FilmBorderGeometry,
+                                         cutout: CGColor) {
         guard let type = g.perforation else { return }
         let hole = type.dimensions
         let width = CGFloat(hole.width), height = CGFloat(hole.height)
@@ -226,36 +289,116 @@ public enum PrintFrameRenderer {
         // 16 mm holes align with the frame line; Super 8 holes align with the frame centre.
         let first: CGFloat = type == .sixteen ? 0 : pitch / 2
         let rows: [CGFloat] = g.rows == 2 ? [edge, across - edge - width] : [edge]
-        context.setFillColor(cutoutColor)
-        for x in rows {
+        context.setFillColor(cutout)
+        for (row, x) in rows.enumerated() {
             var centre = first
+            var index = 0
             while centre <= along {
-                let rect = CGRect(x: x, y: centre - height / 2, width: width, height: height)
-                if type == .bellHowell {
-                    // BH is a circle clipped by two parallel flats, not a rounded KS rectangle.
-                    context.saveGState()
-                    context.clip(to: rect)
-                    context.fillEllipse(in: CGRect(x: x, y: centre - width / 2,
-                                                   width: width, height: width))
-                    context.restoreGState()
-                } else {
-                    context.addPath(CGPath(roundedRect: rect, cornerWidth: radius,
-                                           cornerHeight: radius, transform: nil))
-                    context.fillPath()
-                }
+                let outline = perforationOutline(x: Double(x), centre: Double(centre),
+                                                 width: Double(width), height: Double(height),
+                                                 radius: Double(radius), bellHowell: type == .bellHowell,
+                                                 hole: row * 4096 + index)
+                context.addLines(between: outline.map { CGPoint(x: $0.x, y: $0.y) })
+                context.closePath()
+                context.fillPath()
                 centre += pitch
+                index += 1
             }
         }
         context.restoreGState()
     }
 
-    private static func drawNotches(in context: CGContext, size: CGSize, code: SheetFilmNotchCode) {
+    /// One punched hole's edge, in the millimetres across and along the film that
+    /// `drawPerforations` draws in: the die's shape — a rounded KS rectangle, or BH's circle
+    /// clipped by two flats — traced every 0.04 mm, each point moved along its outward normal.
+    /// Perforators cut to about a hundredth of a millimetre, but the edge a scan shows is burred,
+    /// chipped and torn: 0.04 mm of wander over about half a millimetre and 0.015 mm over a
+    /// tenth, closing on itself, and each hole sits up to 0.015 mm off its pitch and cuts up to
+    /// 0.012 mm wider or narrower. Representative amplitudes, not measured. `hole` numbers the
+    /// hole along its row, rows 4096 apart, so every hole has its own; web/src/print-frame-renderer.js
+    /// traces the same outline from the same noise.
+    public static func perforationOutline(x: Double, centre: Double, width: Double, height: Double,
+                                          radius: Double, bellHowell: Bool,
+                                          hole: Int) -> [SIMD2<Double>] {
+        enum Piece {
+            case line(SIMD2<Double>, SIMD2<Double>, normal: SIMD2<Double>)
+            case arc(SIMD2<Double>, radius: Double, from: Double, to: Double)
+            var length: Double {
+                switch self {
+                case let .line(a, b, _): return ((b - a) * (b - a)).sum().squareRoot()
+                case let .arc(_, r, a0, a1): return r * abs(a1 - a0)
+                }
+            }
+            func point(_ t: Double) -> (SIMD2<Double>, SIMD2<Double>) {
+                switch self {
+                case let .line(a, b, n): return (a + (b - a) * t, n)
+                case let .arc(c, r, a0, a1):
+                    let angle = a0 + (a1 - a0) * t
+                    let n = SIMD2(cos(angle), sin(angle))
+                    return (c + n * r, n)
+                }
+            }
+        }
+        let y = centre - height / 2
+        var pieces: [Piece]
+        if bellHowell {
+            let r = width / 2, half = height / 2
+            let c = SIMD2(x + r, centre)
+            let flat = asin(min(1, half / r)), run = r * cos(flat)
+            pieces = [.line(SIMD2(c.x - run, c.y - half), SIMD2(c.x + run, c.y - half), normal: SIMD2(0, -1)),
+                      .arc(c, radius: r, from: -flat, to: flat),
+                      .line(SIMD2(c.x + run, c.y + half), SIMD2(c.x - run, c.y + half), normal: SIMD2(0, 1)),
+                      .arc(c, radius: r, from: .pi - flat, to: .pi + flat)]
+        } else {
+            let r = min(radius, width / 2, height / 2)
+            pieces = [.line(SIMD2(x + r, y), SIMD2(x + width - r, y), normal: SIMD2(0, -1)),
+                      .arc(SIMD2(x + width - r, y + r), radius: r, from: -.pi / 2, to: 0),
+                      .line(SIMD2(x + width, y + r), SIMD2(x + width, y + height - r), normal: SIMD2(1, 0)),
+                      .arc(SIMD2(x + width - r, y + height - r), radius: r, from: 0, to: .pi / 2),
+                      .line(SIMD2(x + width - r, y + height), SIMD2(x + r, y + height), normal: SIMD2(0, 1)),
+                      .arc(SIMD2(x + r, y + height - r), radius: r, from: .pi / 2, to: .pi),
+                      .line(SIMD2(x, y + height - r), SIMD2(x, y + r), normal: SIMD2(-1, 0)),
+                      .arc(SIMD2(x + r, y + r), radius: r, from: .pi, to: 3 * .pi / 2)]
+        }
+        let perimeter = pieces.reduce(0) { $0 + $1.length }
+        // Each hole's own noise is its seed, so the coordinates stay small and exact.
+        let own = UInt32(truncatingIfNeeded: hole) &* 3
+        func noise(_ x: Float, _ y: Float, _ seed: UInt32) -> Double {
+            Double(filingNoise(x, y, seed: seed &+ own))
+        }
+        let shift = SIMD2(0.015 * noise(0.5, 0.5, 401), 0.015 * noise(1.5, 0.5, 401))
+        let grow = 0.012 * noise(2.5, 0.5, 401)
+        // Around a circle in the noise, so the wander closes where the trace began.
+        func wander(_ s: Double) -> Double {
+            let turn = 2 * Double.pi * s / perimeter
+            func ring(_ wavelength: Double, _ seed: UInt32) -> Double {
+                let r = perimeter / (2 * .pi * wavelength)
+                return noise(Float(r * cos(turn)), Float(r * sin(turn)), seed)
+            }
+            return 0.04 * ring(0.5, 211) + 0.015 * ring(0.1, 307)
+        }
+        var outline: [SIMD2<Double>] = []
+        var travelled = 0.0
+        for piece in pieces where piece.length > 0 {
+            let steps = max(1, Int((piece.length / 0.04).rounded(.up)))
+            for step in 0..<steps {
+                let t = Double(step) / Double(steps)
+                let (point, normal) = piece.point(t)
+                outline.append(point + shift + normal * (grow + wander(travelled + piece.length * t)))
+            }
+            travelled += piece.length
+        }
+        return outline
+    }
+
+    private static func drawNotches(in context: CGContext, size: CGSize, code: SheetFilmNotchCode,
+                                    cutout: CGColor) {
         // The code occupies the upper right edge when the sheet is upright, emulsion facing us.
         // Manufacturer diagrams specify shapes/order, not absolute dimensions: a 20 mm code
         // span and 10 mm corner setback are presentation conventions, documented as such.
         let span: CGFloat = 20
         let start = size.width - 10 - span
-        context.setFillColor(cutoutColor)
+        context.setFillColor(cutout)
         for notch in code.notches {
             let rect = CGRect(x: start + CGFloat(notch.position) * span,
                               y: size.height - CGFloat(notch.depth) * span,

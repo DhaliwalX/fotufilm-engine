@@ -35,6 +35,9 @@ struct HostStill {
     var hlg: [UInt16]?
     /// A print frame drawn around the picture.
     var frame: PrintFrameConfiguration?
+    /// Where the picture is a developed piece of film larger than the photograph, how far it
+    /// reaches beyond it (`PrintFramePlacement.filmStrip`).
+    var frameEdge: UnexposedEdge.Margins?
     /// The source file's capture records, in the decoder's own form; the encoder that read them
     /// knows how to write them back.
     var capture: [String: Any]?

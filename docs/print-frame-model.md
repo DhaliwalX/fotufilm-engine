@@ -1,6 +1,6 @@
 # Print borders
 
-The iPhone photo editor offers None, Film Border, Slide Mount, Paper Border at 4 × 6, 5 × 7,
+The iPhone photo editor offers None, Film Border, Film Border Positive, Slide Mount, Paper Border at 4 × 6, 5 × 7,
 8 × 10 and 5 × 5 inches, Carrier Border, Emulsion Border, White Mount, Black Mount and three posting
 canvases — Square Post, Portrait Post and Story — on a horizontally scrolled strip of framed
 previews in the print deck. Film Border
@@ -23,8 +23,57 @@ texture, while geometry and spectral material colours share the native model.
 ## Film geometry
 
 An automatic border uses the stock's native format. An explicit Film Gauge overrides it. Camera
-sensor metadata does not select a different border. A crop that differs from the physical camera
-aperture is centred inside it; the film and holes are never stretched to the crop.
+sensor metadata does not select a different border. A photograph of another shape than the camera
+aperture is cropped to fill it, as a frame exposed in that camera would be; the film and holes are
+never stretched to the photograph.
+
+### Framing
+
+Film Border and Film Border Positive show the largest rectangle of the aperture's shape that fits
+the photograph, turned with it (`PrintFramePlacement.photoCrop`). Where it is placed is the
+framing (`PrintFrameConfiguration.framing`, `framing` in the frame request): -1 to 1 across and
+down, from the photograph's left or top edge to its right or bottom, 0 centred. The plan returns the
+crop in the photograph's pixels (`crop`) and as fractions of it (`cropFraction`), and lays the frame
+out around the crop, so every surface crops the photograph's light first and develops, frames and
+compares that part. A photograph already within a pixel of the aperture's shape is shown whole,
+so a cropped picture asks for no second crop. A subject selection's point stays on the whole
+photograph and is moved onto the crop for the develop. In the desktop and browser editors a drag
+on the fitted picture moves the photograph under the aperture, as far as its edges; the framing
+is saved with the edit and undone in one step. Every other frame shows the whole photograph.
+
+Choosing Film Border or Film Border Positive in the desktop and browser editors also turns RAW
+Corrections off, so a camera RAW in the film's frame shows the capture as the sensor recorded it:
+Core Image's lens distortion and vignetting correction is left out (`HostImage.uncorrected`,
+`RawDecode.Recipe.correctsLens`), and on Linux LibRaw delivers the whole visible sensor area
+rather than the camera's default crop (`FFC_DECODE_SENSOR_AREA`). Core Image always delivers the
+camera's crop; the browser's LibRaw decode corrects nothing and already shows the whole area.
+
+### Frames
+
+Frames (`frames` in the frame request, 1 to 4) exposes one photograph across several frames'
+length of a 135 or 120 roll (`FilmBorderGeometry.spanning`), as a panoramic camera's wide gate
+does, or 135 run through a medium-format camera. The cut runs on by the gauge's frame advance for
+each frame, 38 mm on 135 and 60 mm on 6 × 6, and its aperture runs on with it unbroken: 74, 112 and
+150 mm by 24 on 135, 116 and 176 mm by 56 on 120. The photograph is cropped and framed to that
+aperture like any other (`photoCrop`), and the strip is developed around it as one exposure. The
+roll's edge printing is exposed at the factory, so it runs along regardless: each frame's length
+carries its own numbers and DX code, numbered on from Frame Number (`FilmEdgePrinting.run`,
+`barcodeRun`). Motion-picture gauges, whose frame is a fixed gate, sheets and instant film keep one
+frame.
+
+### Camera
+
+Camera (`camera` in the frame request) says what a 135 cut was exposed in. A 35mm or panoramic
+camera (`panoramic`, the default) has its gate between the perforation rows, 24 mm across. A
+medium-format camera loaded with 135 (`mediumFormatBack`) has a gate taller than the film is wide,
+so the picture runs across all 35 mm to both cut edges (`FilmBorderGeometry.exposingEdges`): the
+photograph is cropped to that, the strip has no rebate across the film, the perforations, punched
+before exposure, show the scan bed through the picture, and the factory's latent edge printing
+lies over it. Where both exposed the film, the denser of the two is drawn, darken for a negative's
+letters and lighten for lighter ones, an approximation of the two exposures adding on the
+characteristic curve. The exposed length still follows Frames rather than a particular camera's
+gate; 120 fills a medium-format gate already and offers no choice. The plan's `camera` says whether
+the gauge offers it.
 
 | Format | Image aperture, mm | Film segment, mm | Edge construction |
 | --- | --- | --- | --- |
@@ -49,6 +98,15 @@ hole and 4.234 mm long pitch. Instax image and outer dimensions follow
 Fujifilm's specifications for [Mini](https://www.instax.com/mini_link/en/spec.html),
 [Square](https://www.instax.com/sq1/en/) and
 [Wide](https://asset.fujifilm.com/master/apac/files/2020-06/acf110878e2c263a1a0c13b762fb1cbe/instax_datasheet.pdf).
+
+No two holes are cut alike (`PrintFrameRenderer.perforationOutline`, `perforationOutline` in
+web/src/print-frame-renderer.js). Each is traced from its die shape every 0.04 mm and every point
+moved along the outward normal: 0.04 mm of wander over about half a millimetre and 0.015 mm over
+a tenth, closing on itself, with the hole up to 0.015 mm off its pitch and up to 0.012 mm wider or
+narrower. Perforators hold about a hundredth of a millimetre, but a scanned edge shows burrs,
+chips and tears; these amplitudes are representative, not measured. The wander is seeded value
+noise in physical millimetres with each hole's own seed, so a strip looks the same on every
+renderer and at every size, and the developed strip punches the same holes.
 
 The chosen 120 frame-to-frame spacing, sheet-film camera aperture, and instant border's top/bottom
 allocation are representative presentation conventions: cameras, holders and product revisions
@@ -83,13 +141,37 @@ up for notch identification; sheet lettering has not been verified and is omitte
 | --- | --- | --- |
 | Portra 400 | 135, 120 | KODAK PORTRA 400 |
 | Ektar 100 | 135, 120 | KODAK EKTAR 100 |
+| Gold 200 | 135, 120 | KODAK GB 200-7 on 135; KODAK 200 on 120 |
+| UltraMax 400 | 135 | KODAK GC 400 |
+| Kodacolor 100 | 135 | KODAK 100-8 |
+| Ektachrome E100 | 135, 120 | KODAK E100 |
+| Kodachrome 64 | 135 | KODAK 5032 / KR 64 |
+| Kodachrome 25, 200 | 135 | KODAK 5073 / KM 25; KODAK 5001 / KL 200 (see below) |
 | Tri-X 400 | 135, 120 | KODAK 400TX |
 | T-Max 100 | 135, 120 | KODAK 100TMX |
 | HP5 Plus | 135 | ILFORD HP5 PLUS |
+| FP4 Plus | 135, 120 | ILFORD FP4 PLUS |
+| Delta 3200 | 135, 120 | ILFORD / DELTA 3200 PROFESSIONAL on 135; ILFORD DELTA 3200 PRO on 120 |
+| Harman Phoenix 200 | 135, 120 | HARMAN PHOENIX 200 |
 | Velvia 50 | 135, 120 | FUJI / RVP50 |
+| Provia 100F | 135, 120 | FUJI / RDPIII |
+| Astia 100F | 135, 120 | FUJI / RAP100F |
+| PRO 400H | 135, 120 | PRO400H / FUJI |
+| PRO 160NS | 120 | FUJI / PN160NS |
+| C200 | 135 | 200 / FUJI / CA24 |
+| Superia X-TRA 400 | 135 | S-400 / FUJI / CH23 |
+| Superia 200 | 135 | S-200 / FUJI |
+| Reala 100 | 135, 120 | REALA / FUJI |
+| Agfachrome RSX II 100 | 135, 120 | AGFA RSX II 100 on 135; RSX II 100 / AGFA on 120 |
+| Agfachrome RSX II 200 | 120 | RSX II 200 / AGFA |
+| LomoChrome Metropolis, Purple, Turquoise | 135 | LOMO♥ frame METROPOLIS, PURPLE or TURQUOISE, on both edges |
+| Lomography Color Negative 100 | 135, 120 | 100-2 on 135; LOMO♥ frame ◄ CN 100 on 120 |
 | Vision3 250D | 35 mm still, Super 35, Super 16 | 5207 / EN |
 | Vision3 500T | 35 mm still, Super 35, Super 16 | 5219 / EJ |
 | Double-X | 35 mm still, Super 35, Super 16 | 5222 / KE |
+| VERITA 200D | 35 mm still, Super 35, Super 16 | 5206 / ET |
+| Eterna 500, Eterna Vivid 500, F-64D, Reala 500D | 35 mm still, Super 35, Super 16 | FN73 / FUJI 500, FN47 / FUJI V500, FN22 / FUJI F-64D, FN92 / FUJI 500D |
+| CineStill 800T | 135 | EJ (2021 rolls) |
 
 Sources:
 
@@ -110,11 +192,83 @@ Sources:
   and [16 mm KEYKODE guide](https://www.kodak.com/content/products-brochures/Film/post-production-16mm-keykode-diagram.pdf),
   PDF p. 2: gauge-specific production inscriptions. A single cinema frame shows only a stock-code
   fragment, not an entire foot of KEYKODE data squeezed into one frame.
+- Fujifilm datasheets with rebate diagrams:
+  [Provia 100F, AF3-036E](https://asset.fujifilm.com/www/za/files/2019-09/4ca5dfc19ecbea6b26c635b5079d6ff3/films_provia-100f_datasheet_01.pdf) p. 4,
+  [PRO 400H, AF3-176E](https://asset.fujifilm.com/www/za/files/2019-09/d68b00b13f1b6234629342317be9cf2b/films_pro-400h_datasheet_01.pdf) p. 6,
+  [PRO 160NS](https://asset.fujifilm.com/www/jp/files/2024-04/6b75b1c1cb4253623fb2cd7a56ff7443/datasheet_pro160ns_01.pdf) p. 6,
+  [C200](https://asset.fujifilm.com/master/emea/files/2020-10/98c3d5087c253f51c132a5d46059f131/films_c200_datasheet_01.pdf) p. 4 and
+  [Superia X-TRA 400](https://asset.fujifilm.com/master/emea/files/2020-10/9a958fdcc6bd1442a06f71e134b811f6/films_superia-xtra400_datasheet_01.pdf) p. 4.
+  The [Professional Film Data Guide](https://asset.fujifilm.com/www/ca/files/2020-04/9cdee030ab7fc76bbcfddbcd38650038/ProfessionalFilmDataGuide.pdf),
+  PDF pp. 9–10, gives the RAP100F strip and the abbreviated edge names REALA and S-200; those two
+  stocks have no rebate diagram of their own, so their generation codes are omitted.
+- [Kodak Gold 120](https://www.kodakprofessional.com/photographers/film/color/kodak-professional-gold-film-120-format/514)
+  and [Ektachrome E100](https://www.kodakprofessional.com/photographers/film/color/kodak-professional-ektachrome-film-e100/531)
+  specifications give their edge prints. Gold 200 135, UltraMax 400, Kodacolor 100, Kodachrome 64,
+  the Ilford, Harman, Agfa and Lomography stocks and CineStill 800T follow legible photographs of
+  developed film listed in each stock's `edgePrinting.sources`.
+- Kodachrome 25 and 200 use the Kodachrome 64 layout with Kodak's K-14 product codes 5073/KM and
+  5001/KL from a [Kodak process table](https://www.dagiebrundert.de/alle%20Bilder/Kodachromemagicbath.pdf);
+  no legible developed edge of either has been found.
+- Fujifilm's [Motion Picture Film Manual KB-0707E](https://www.theodoropoulos.info/attachments/076_fujifilm_motion_picture_film_manual.pdf),
+  PDF pp. 2, 13–19 and 31–34 (KB-1101E for Eterna Vivid 500), gives the FN identification mark
+  and film name on 35 mm and 16 mm. Key numbers, emulsion and roll numbers are omitted.
+  [VERITA 200D, H-1-5206](https://www.kodak.com/content/pdfs/motion/KODAK-VERITA-200D-5206-7206-technical-information.pdf),
+  p. 2, gives 5206/7206 and identification code ET; its manufacturer word is not documented and is omitted.
+- CineStill 800T rolls photographed in 2021 carry the 5219 KEYKODE prefix EJ. CineStill states
+  that current rolls carry only frame numbers, so this is one batch, not every roll.
+
+Stocks without a documented developed edge stay unlettered: Acros 100 II, Agfachrome RSX II 50,
+RSX II 200 on 135, CineStill 400D, Aerochrome 1443 and Infrared Color. Respooled Aerocolor IV
+2460 is sold without edge printing or frame numbers, so its border is blank by design.
 
 These are reference cuts, not reproductions of an identified manufactured roll. The still-film
 numbers select a representative position; they are not the imported photograph's original frame
-number. Production batch, emulsion/roll serials, year and machine-readable barcodes are omitted.
-Unknown stock/gauge pairs, sheet film, Super 8, instant masks and paper fronts stay unlettered.
+number. The stock data records each cut at frame 1: its marks reading `1` and `1A` are the frame
+and half-frame numbers. Frame Number (`frameNumber` in the frame request, 0 to 38) renumbers those
+marks at their recorded positions, widening them by the character pitch, and the DX barcode encodes
+the same frame; every other mark stays. A cut without those marks, such as a motion-picture code,
+offers no Frame Number. Edge Printing off (`edgePrinting: false`) drops the letters, numbers and
+barcode and leaves the developed rebate blank; the plan's `edgePrinting` and `frameNumber` say
+whether the stock and gauge offer either setting. Production batch, emulsion/roll serials and year are omitted, and so are barcodes that
+would encode them: KEYKODE's key number is a roll serial. Unknown stock/gauge pairs, sheet film,
+Super 8, instant masks and paper fronts stay unlettered.
+
+### DX edge barcode
+
+135 negatives with a documented DX number (`FilmEdgePrinting.dx`) also carry the DX film edge
+barcode (ISO 1007, ANSI PH1.14) on the rail below the lower perforations, between the printed frame
+numbers. It encodes only the stock's DX number and the frame, so nothing about a particular roll is
+invented. Each code is 31 cells of 0.381 mm, the standard's minimum bar width, on two tracks: a
+data track 0.25–0.76 mm from the film's edge and a clock track 1.30–1.80 mm from it. The data
+track holds the entry pattern 101010, the DX number's part 1 (7 bits) and part 2 (4 bits) either
+side of a blank cell, the frame number (6 bits), the half-frame flag, a blank, even parity over the
+18 data bits and the exit 0101; the clock track is 1111101010101010101010101010111 in every code.
+A mark is an exposed bar. Codes repeat every half frame, so this cut shows the frame after its
+printed number and the half frame after its A number, a quarter millimetre past it, the second
+running off the cut. The cell layout follows Kodak's
+[US 4,965,628](https://patents.google.com/patent/US4965628A/en); track positions and the 0.5
+density above base follow the ANSI PH1.14-1990 figures quoted in
+[US 5,448,049](https://patents.google.com/patent/US5448049A/en). The encoder reproduces the worked
+examples of [Wikipedia's DX number article](https://en.wikipedia.org/wiki/DX_number) (79-15, frame
+23) and [the zxing-cpp DX edge reader](https://github.com/zxing-cpp/zxing-cpp/blob/master/core/src/oned/ODDXFilmEdgeReader.cpp)'s rules.
+
+| Stock | DX number | Source |
+| --- | --- | --- |
+| C200 | 39-1 | Fujifilm datasheet, p. 4 |
+| Superia X-TRA 400 | 39-2 | Fujifilm EMEA datasheet, p. 4 |
+| PRO 400H | 36-8 | Fujifilm AF3-176E, p. 6 |
+| Reala 100 | 36-7 | I3A DX code list (2009) |
+| UltraMax 400 | 96-1 | I3A DX code list (2009), MAX 400 |
+| HP5 Plus, FP4 Plus, Delta 3200 | 109-9, 109-12, 108-10 | I3A DX code list (2009) |
+| Portra 400, Kodacolor 100, Phoenix 200 | 95-13, 91-1, 105-1 | Community Big Film Database |
+
+The [I3A list](https://mips.di.unimi.it/photofire/archive/additional_material/IIIA_DX_Codes_for_135-size_film_2009.pdf)
+assigns cartridge numbers; the edge code carries the same two parts. The
+[Big Film Database](https://github.com/Merinorus/Open-source-film-database) is a community record,
+not a manufacturer's. Gold 200 (conflicting numbers), Ektar 100 (two generations), Tri-X 400 and
+T-Max 100 (no evidence of a printed barcode), Superia 200 and Color Negative 100 have no barcode
+here. Transparencies carry none. The barcode develops with the strip like the lettering, at 0.5
+density above the base.
 
 The published diagrams and scans establish text and layout families but do not provide precise
 printer font outlines, exposure spectra or tolerances. System vector lettering and its millimetre
@@ -125,9 +279,26 @@ letters dark and reversal letters light without a universal painted amber colour
 not claim to measure the particular roll or follow its lab development. No source images or fonts
 are embedded. Image pixels, profiles and bit depth remain unchanged by the compositor.
 
+## Film Border Positive
+
+Film Border Positive is the same strip as Film Border, as a scanner shows it after inverting the
+negative. The geometry, perforations, sheet notches and edge printing are identical. The scanner
+sets its black point just past the clear base and removes the colour mask, so the rebate is a
+neutral dark 0.02 display-linear P3; that level is a presentation choice, not a measured scanner.
+The open perforations and notches passed more light than the base and clip to black. The lettering
+is the Film Border edge exposure (72% of the stock's density span) normalised on the clear base
+under the reference lamp and inverted, so each stock's letters come out near white, by how little
+light they passed. It is offered for negative stocks in roll and sheet gauges; a reversal
+transparency's Film Border is already positive and integral instant film has no rebate.
+
+The photograph keeps the selected output medium, retaining its paper or screen look; with
+Negative selected it is delivered as Lab Scan, the positive of a scanned negative. It follows
+physical dimensions and ignores Border Width.
+
 ## Film colour
 
-Film Border depicts the material surrounding the image. Colour-negative borders use the stock's
+Film Border depicts the material surrounding the image. Where the strip is drawn rather than
+developed (a scanned negative), colour-negative borders use the stock's
 minimum-density records and dye spectra, retaining its base-plus-fog and orange mask. Monochrome
 negative borders retain their modelled clear-base tint. A common light-box gain is used for negatives,
 so it does not neutralise their colours. Reversal borders use the stock's maximum-density records:
@@ -139,6 +310,33 @@ that output. Integral instant film keeps its attached white mask, separate from 
 These colours follow the existing spectral stock models; they are not separately measured samples of
 individual roll edges. The photograph inside the aperture retains the stock's development,
 grain and exposure; its density is viewed through the film instead of printed to paper.
+
+## Developed strip
+
+Film Border and Film Border Positive develop their whole strip with the photograph, as the
+Emulsion Border develops its band (`PrintFramePlacement.filmStrip`, `UnexposedEdge`). The piece
+of film is the frame's canvas: the photograph in the camera aperture and the film out to its cut
+edges on every side, across the perforation rows. The photograph's light, continued past its
+edges, passes the gate at the photograph's edge, which framing puts at the aperture's. Beyond
+the gate the film is base plus fog on a negative and maximum density on a transparency, with the
+stock's grain running unbroken from the picture, and the frame's halation and emulsion scatter
+spread into the rebate in that stock's colour and reach.
+The develop prints on the photograph's own Auto Levels readings. There is no enlarger carrier:
+the strip is viewed whole, on the light box for Film Border and through the selected medium for
+Film Border Positive. With no lens aperture recorded the gate's shadow is drawn at f/2.
+
+The perforations and sheet notches are punched after development and show the scan bed (black
+in the inverted scan). The edge printing is not exposed with the frame. A negative's letters pass
+the share of the rebate’s light that the edge exposure leaves them (`edgeTransmission`, the
+lettering's colour over the base's), so the rebate's grain and glow continue through them; a
+transparency's or an inverted scan's lighter letters are laid over the dark rebate. Blending the
+delivery's encoded values stands in for blending light, which is exact for a power-law transfer
+and close for sRGB. The inverted scan lifts the developed rebate by its 0.02 black point so the
+holes stand below it. Letters therefore carry no halation of their own.
+
+A scanned negative already shows its own film: its Film Border is drawn around the scan, as is
+integral instant film's mask. The iPhone, iPad and Mac editors, the desktop app and the browser
+develop the strip alike; the browser prepares a profile at the strip's size for it.
 
 ## Paper construction
 

@@ -87,6 +87,14 @@ public extension FilmStockDefinition {
                       }), !printing.marks.isEmpty, printing.marks.count <= 12 else {
                     throw fail("edgePrinting", "requires a roll gauge, source URLs and one to twelve inscriptions")
                 }
+                if let dx = printing.dx {
+                    // A DX number's two parts, on 135 film, with a documented source.
+                    guard printing.formatID == "35mm", (1...127).contains(dx.part1),
+                          (0...15).contains(dx.part2), dx.source.count <= 512,
+                          let url = URL(string: dx.source), url.scheme == "https", url.host != nil else {
+                        throw fail("edgePrinting.dx", "requires 135 film, a DX number and a source URL")
+                    }
+                }
                 let along = g.horizontalTransport ? g.widthMM : g.heightMM
                 let across = g.horizontalTransport ? g.heightMM : g.widthMM
                 // Text lives outside the perforations (or in the unperforated 120 rebate).

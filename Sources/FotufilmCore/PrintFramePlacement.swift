@@ -8,6 +8,9 @@ public struct PrintFramePlacement: Codable, Equatable, Sendable {
     public struct Rect: Codable, Equatable, Sendable {
         public let x: Double; public let y: Double; public let width: Double; public let height: Double
         var midX: Double { x + width / 2 }; var midY: Double { y + height / 2 }
+        public init(x: Double, y: Double, width: Double, height: Double) {
+            self.x = x; self.y = y; self.width = width; self.height = height
+        }
     }
     public let size: Size
     public let image: Rect
@@ -70,6 +73,64 @@ public struct PrintFramePlacement: Codable, Equatable, Sendable {
                                         y: (centre.y - Double(height) / 2).rounded(),
                                         width: Double(width), height: Double(height)),
                       scale: scale, rotated: rotated)
+    }
+
+    /// The film a Film Border develops around a photograph of this size, in pixels of its
+    /// placement: from the gate, which is the photograph's edge, out to the film's cut edges on
+    /// every side and across the perforation rows, which are punched after development. The
+    /// developed piece is the frame's whole canvas. Nil for every other frame and for integral
+    /// instant film, whose mask is not emulsion.
+    public static func filmStrip(width: Int, height: Int,
+                                 configuration: PrintFrameConfiguration) -> UnexposedEdge.Margins? {
+        guard configuration.frame.showsFilmStrip, let film = configuration.geometry, !film.isInstant
+        else { return nil }
+        let placement = layout(width: width, height: height, configuration: configuration)
+        let left = Int(placement.image.x), bottom = Int(placement.image.y)
+        let right = Int(placement.size.width) - left - width
+        let top = Int(placement.size.height) - bottom - height
+        guard min(left, right, top, bottom) >= 0 else { return nil }
+        return UnexposedEdge.Margins(left: left, right: right, top: top, bottom: bottom)
+    }
+
+    /// The part of a `width` × `height` photograph a film border shows: the largest rectangle of
+    /// its aperture's shape, in the photograph's orientation, placed by the configuration's
+    /// `framing`. In photograph pixels from the top left. Nil for every other frame, and when the
+    /// photograph already has the aperture's shape to within a pixel, so a cropped picture asks
+    /// for no second crop. The frame is laid out around the crop.
+    public static func photoCrop(width: Int, height: Int,
+                                 configuration: PrintFrameConfiguration) -> Rect? {
+        guard width > 0, height > 0, let framing = configuration.framing,
+              let film = configuration.geometry else { return nil }
+        let across = film.apertureWidth, down = film.apertureHeight
+        // The aperture turns with the photograph, as `layout` turns the film.
+        let rotated = across != down && (width > height) != (across > down)
+        let aspect = rotated ? down / across : across / down
+        var cropWidth = width, cropHeight = height
+        if Double(width) / Double(height) > aspect {
+            cropWidth = min(width, max(1, Int((Double(height) * aspect).rounded())))
+        } else {
+            cropHeight = min(height, max(1, Int((Double(width) / aspect).rounded())))
+        }
+        guard width - cropWidth > 1 || height - cropHeight > 1 else { return nil }
+        let x = (Double(width - cropWidth) * (framing.x + 1) / 2).rounded()
+        let y = (Double(height - cropHeight) * (framing.y + 1) / 2).rounded()
+        return Rect(x: x, y: y, width: Double(cropWidth), height: Double(cropHeight))
+    }
+
+    /// `crop` of a plane of `channels` floats a pixel, `width` pixels wide, rows from the top.
+    public static func cropped(_ plane: [Float], width: Int, channels: Int = 4, to crop: Rect) -> [Float] {
+        let x = Int(crop.x), y = Int(crop.y), w = Int(crop.width), h = Int(crop.height)
+        var out = [Float](repeating: 0, count: w * h * channels)
+        plane.withUnsafeBufferPointer { source in
+            out.withUnsafeMutableBufferPointer { target in
+                for row in 0..<h {
+                    let from = ((y + row) * width + x) * channels
+                    target.baseAddress!.advanced(by: row * w * channels)
+                        .update(from: source.baseAddress!.advanced(by: from), count: w * channels)
+                }
+            }
+        }
+        return out
     }
 
     public static func materialGeometry(_ configuration: PrintFrameConfiguration) -> (size: Size, aperture: Rect) {

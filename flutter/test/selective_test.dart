@@ -43,6 +43,13 @@ void main() {
     expect(middle[0], closeTo(0.5, 1e-9));
     expect(middle[1], closeTo(0.5, 1e-9));
     expect(frameSamplePoint([0.05, 0.5], plan), isNull);
+    // A film border showing the lower half of a photograph twice as tall: back on the whole of it.
+    final cropped = frameSamplePoint([0.5, 0.4375], {
+      ...plan,
+      'cropFraction': {'x': 0, 'y': 0.5, 'width': 1, 'height': 0.5},
+    })!;
+    expect(cropped[0], closeTo(0.5, 1e-9));
+    expect(cropped[1], closeTo(0.75, 1e-9));
   });
 
   test('the subjects are told as the catalogue words them', () {

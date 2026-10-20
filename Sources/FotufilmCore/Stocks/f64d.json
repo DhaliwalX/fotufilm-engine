@@ -12012,6 +12012,61 @@
     "sourcePage": 27,
     "temperatureC": 41.1
   },
+  "edgePrinting": [
+    {
+      "formatID": "35mm",
+      "marks": [
+        {
+          "heightMM": 0.75,
+          "text": "FN22",
+          "widthMM": 4.4,
+          "xMM": 1,
+          "yMM": 0.55
+        },
+        {
+          "heightMM": 0.75,
+          "text": "FUJI F-64D",
+          "widthMM": 11.0,
+          "xMM": 17,
+          "yMM": 0.55
+        }
+      ],
+      "sources": [
+        "https://www.theodoropoulos.info/attachments/076_fujifilm_motion_picture_film_manual.pdf",
+        "https://cinematography.net/Files-2/F-64D_product_information.pdf"
+      ]
+    },
+    {
+      "formatID": "super35",
+      "marks": [
+        {
+          "heightMM": 0.75,
+          "text": "FN22",
+          "widthMM": 4.4,
+          "xMM": 1,
+          "yMM": 0.55
+        }
+      ],
+      "sources": [
+        "https://www.theodoropoulos.info/attachments/076_fujifilm_motion_picture_film_manual.pdf"
+      ]
+    },
+    {
+      "formatID": "16mm",
+      "marks": [
+        {
+          "heightMM": 0.8,
+          "text": "FN22",
+          "widthMM": 2.8,
+          "xMM": 1.3,
+          "yMM": 14.2
+        }
+      ],
+      "sources": [
+        "https://www.theodoropoulos.info/attachments/076_fujifilm_motion_picture_film_manual.pdf"
+      ]
+    }
+  ],
   "emulsionDiffusionMM": [
     0.011118,
     0.011118,

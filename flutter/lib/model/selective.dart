@@ -39,7 +39,7 @@ Json newSelection(Json edit) => {
 
 /// A point on the shown picture as a point on the photograph inside its print frame, or null on
 /// the frame's border (print-frame.js `frameSamplePoint`). The plan's image is placed from the
-/// bottom.
+/// bottom; a film border's crop of the photograph is undone.
 List<double>? frameSamplePoint(List<double> point, Map? plan) {
   final placement = plan?['placement'] as Map?;
   if (placement == null) return point;
@@ -49,7 +49,11 @@ List<double>? frameSamplePoint(List<double> point, Map? plan) {
   final y = (point[1] * n(size, 'height') -
           (n(size, 'height') - n(image, 'y') - n(image, 'height'))) /
       n(image, 'height');
-  return x >= 0 && x <= 1 && y >= 0 && y <= 1 ? [x, y] : null;
+  if (!(x >= 0 && x <= 1 && y >= 0 && y <= 1)) return null;
+  // On the whole photograph, of which a film border shows a part.
+  final crop = plan?['cropFraction'] as Map?;
+  if (crop == null) return [x, y];
+  return [n(crop, 'x') + x * n(crop, 'width'), n(crop, 'y') + y * n(crop, 'height')];
 }
 
 /// What the inspector says of a subject selection's subjects: still looking, none, one or many

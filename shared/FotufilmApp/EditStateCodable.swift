@@ -29,7 +29,7 @@ extension EditState: Codable {
     static let bespokeKeys: [String] = [
         "stockID", "chosenFormatID", "captureIlluminantKelvin",
         "filmLightKelvin", "sourceLightIndex", "halationReturnRatio", "grainMottleShare", "grainModel", "couplerGapReach", "paper", "paperFollowsStock",
-        "seed", "shutterSeconds", "printLightKelvin", "printFrame", "negativeViewing", "digitalReference", "enlarger", "printerProfile", "rotation", "crop", "cornerCrop", "framingZoom",
+        "seed", "shutterSeconds", "printLightKelvin", "printFrame", "printFrameNumber", "printFrameFraming", "printFrameCount", "printFrameCamera", "negativeViewing", "digitalReference", "enlarger", "printerProfile", "rotation", "crop", "cornerCrop", "framingZoom",
         "grade", "lensProfileID", "lensAdjustment", "lensFilterIDs", "lensFilterMetering", "selective", "negative",
     ]
 
@@ -94,6 +94,17 @@ extension EditState: Codable {
             .flatMap(PrintPaper.preset(id:)) ?? .ektacolorEdge
         paperFollowsStock = try c.decodeIfPresent(Bool.self, forKey: EditKey("paperFollowsStock")) ?? false
         printFrame = try c.decodeIfPresent(PrintFrame.self, forKey: EditKey("printFrame")) ?? .none
+        printFrameNumber = try c.decodeIfPresent(Int.self, forKey: EditKey("printFrameNumber"))
+            .flatMap { FilmEdgePrinting.frameNumberRange.contains($0) ? $0 : nil }
+            ?? FilmEdgePrinting.recordedFrameNumber
+        if let framing = try c.decodeIfPresent([Double].self, forKey: EditKey("printFrameFraming")),
+           framing.count == 2, framing.allSatisfy({ $0.isFinite && abs($0) <= 1 }) {
+            printFrameFraming = SIMD2(framing[0], framing[1])
+        }
+        printFrameCount = try c.decodeIfPresent(Int.self, forKey: EditKey("printFrameCount"))
+            .flatMap { FilmBorderGeometry.frameCountRange.contains($0) ? $0 : nil } ?? 1
+        printFrameCamera = try c.decodeIfPresent(String.self, forKey: EditKey("printFrameCamera"))
+            .flatMap(FilmBorderCamera.init(rawValue:)) ?? .panoramic
         negativeViewing = try c.decodeIfPresent(String.self, forKey: EditKey("negativeViewing"))
             .flatMap(NegativeViewing.init(rawValue:)) ?? .lightBox
         seed = try c.decodeIfPresent(UInt64.self, forKey: EditKey("seed")) ?? seed
@@ -152,6 +163,14 @@ extension EditState: Codable {
         try c.encode(paper.id, forKey: EditKey("paper"))
         try c.encode(paperFollowsStock, forKey: EditKey("paperFollowsStock"))
         try c.encode(printFrame, forKey: EditKey("printFrame"))
+        try c.encode(printFrameNumber, forKey: EditKey("printFrameNumber"))
+        if printFrameCount != 1 { try c.encode(printFrameCount, forKey: EditKey("printFrameCount")) }
+        if printFrameCamera != .panoramic {
+            try c.encode(printFrameCamera.rawValue, forKey: EditKey("printFrameCamera"))
+        }
+        if printFrameFraming != .zero {
+            try c.encode([printFrameFraming.x, printFrameFraming.y], forKey: EditKey("printFrameFraming"))
+        }
         try c.encode(negativeViewing.rawValue, forKey: EditKey("negativeViewing"))
         try c.encode(seed, forKey: EditKey("seed"))
         try c.encodeIfPresent(shutterSeconds, forKey: EditKey("shutterSeconds"))

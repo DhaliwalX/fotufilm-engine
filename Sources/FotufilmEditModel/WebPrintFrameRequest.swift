@@ -13,17 +13,45 @@ public struct WebPrintFrameRequest: Decodable {
     public let viewingKelvin: Float?
     /// Border Width, as a multiple of the frame's preset margin; absent keeps the preset.
     public let margin: Double?
+    /// The frame number a Film Border's edge printing and DX barcode show; absent is frame 1.
+    public let frameNumber: Int?
+    /// Whether a Film Border shows the stock's edge printing; absent shows it.
+    public let edgePrinting: Bool?
+    /// Where a film border's aperture sits on a photograph of another shape, [across, down] from
+    /// -1 to 1; absent centres it.
+    public let framing: [Double]?
+    /// How many frames' length of the roll a Film Border's picture is exposed across; absent is one.
+    public let frames: Int?
+    /// The camera a 135 Film Border's picture was exposed in; absent is a 35mm or panoramic camera.
+    public let camera: FilmBorderCamera?
     public let width: Int
     public let height: Int
 
     public struct Result: Codable {
         public let configuration: PrintFrameConfiguration
+        /// The part of the photograph the frame shows (`PrintFramePlacement.photoCrop`), in
+        /// pixels of the requested size from the top left; nil shows all of it. Everything
+        /// else describes the frame around the crop.
+        public let crop: PrintFramePlacement.Rect?
+        /// `crop` as fractions of the photograph, for points on the whole of it.
+        public let cropFraction: PrintFramePlacement.Rect?
         public let placement: PrintFramePlacement
         public let perforation: FilmBorderGeometry.PerforationDimensions?
         public let materialSize: PrintFramePlacement.Size
         /// A frame can change the delivered medium without replacing the saved paper selection.
         public let renderMedium: String?
         public let available: [PrintFrame]
+        /// The film a Film Border develops with the photograph, beyond it on each side, at this
+        /// size (`PrintFramePlacement.filmStrip`); nil draws the rebate around the photograph.
+        public let strip: UnexposedEdge.Margins?
+        /// Whether this frame shows the stock's edge printing for the gauge when it is not hidden,
+        /// and whether that printing carries a frame number or DX barcode to set.
+        public let edgePrinting: Bool
+        public let frameNumber: Bool
+        /// Whether this frame's gauge can run a picture across several frames (Frames).
+        public let spansFrames: Bool
+        /// Whether this frame's gauge can be exposed to its edges in a medium-format camera (Camera).
+        public let camera: Bool
         /// Encoded sRGB material colours for the current browser delivery boundary.
         public let palette: [String: [Float]]
     }
@@ -37,6 +65,15 @@ public struct WebPrintFrameRequest: Decodable {
         guard margin == nil || PrintFrameConfiguration.marginRange.contains(margin!) else {
             throw WebProfileRequest.Failure(description: "Invalid print frame border width.")
         }
+        guard framing == nil || (framing!.count == 2 && framing!.allSatisfy { $0.isFinite && abs($0) <= 1 }) else {
+            throw WebProfileRequest.Failure(description: "Invalid film border framing.")
+        }
+        guard frameNumber == nil || FilmEdgePrinting.frameNumberRange.contains(frameNumber!) else {
+            throw WebProfileRequest.Failure(description: "Invalid film border frame number.")
+        }
+        guard frames == nil || FilmBorderGeometry.frameCountRange.contains(frames!) else {
+            throw WebProfileRequest.Failure(description: "Invalid film border frame count.")
+        }
         let definition = try stock?.validated()
         let film = definition?.stock
         let format = format ?? definition?.nativeFormatID ?? FilmFormat.houseDefaultID
@@ -48,14 +85,34 @@ public struct WebPrintFrameRequest: Decodable {
         let paper = film.map { requestedPaper.resolved(for: $0) } ?? requestedPaper
         // Emulsion Border develops a piece of film larger than the aperture, which the browser's
         // host does not build.
-        func configuration(_ choice: PrintFrame) -> PrintFrameConfiguration {
+        func configuration(_ choice: PrintFrame, recorded: Bool = false) -> PrintFrameConfiguration {
             PrintFrameConfiguration(frame: choice == .emulsion ? .none : choice, formatID: format,
                 definition: definition,
                 paper: paper, viewingKelvin: choice.viewsTransparency ? nil : viewingKelvin,
-                negativeViewing: .lightBox, margin: margin ?? 1)
+                negativeViewing: .lightBox, margin: margin ?? 1,
+                frameNumber: recorded ? FilmEdgePrinting.recordedFrameNumber
+                    : frameNumber ?? FilmEdgePrinting.recordedFrameNumber,
+                showsEdgePrinting: recorded || edgePrinting ?? true,
+                framing: framing.map { SIMD2($0[0], $0[1]) } ?? .zero,
+                frames: recorded ? 1 : frames ?? 1,
+                camera: recorded ? .panoramic : camera ?? .panoramic)
         }
         let config = configuration(frame)
-        let placement = PrintFramePlacement.layout(width: width, height: height, configuration: config)
+        let crop = PrintFramePlacement.photoCrop(width: width, height: height, configuration: config)
+        let cropFraction = crop.map {
+            PrintFramePlacement.Rect(x: $0.x / Double(width), y: $0.y / Double(height),
+                                     width: $0.width / Double(width), height: $0.height / Double(height))
+        }
+        // The frame is laid out around the part of the photograph it shows.
+        let (shownWidth, shownHeight) = crop.map { (Int($0.width), Int($0.height)) } ?? (width, height)
+        // The stock's own cut, at its recorded frame number, says which settings apply.
+        let recorded = configuration(frame, recorded: true)
+        let numbers = [String(FilmEdgePrinting.recordedFrameNumber),
+                       "\(FilmEdgePrinting.recordedFrameNumber)A"]
+        let numbered = !recorded.edgeBars.isEmpty
+            || recorded.edgePrinting?.marks.contains { numbers.contains($0.text) } == true
+        let placement = PrintFramePlacement.layout(width: shownWidth, height: shownHeight,
+                                                   configuration: config)
         guard placement.size.width <= 32768, placement.size.height <= 32768,
               placement.size.width * placement.size.height <= 120_000_000 else {
             throw WebProfileRequest.Failure(description: "The framed image is too large. Choose a smaller export size.")
@@ -63,6 +120,9 @@ public struct WebPrintFrameRequest: Decodable {
         let renderMedium: String?
         if config.frame == .film, film?.isReversal == false, config.geometry?.isInstant == false {
             renderMedium = PrintPaper.negative.id
+        } else if config.frame == .filmPositive, paper.isNegative {
+            // The inverted scan's photograph is a positive; the negative itself is scanned.
+            renderMedium = PrintPaper.labScan.id
         } else if config.frame.viewsTransparency, film?.isReversal == true, paper.isPositivePaper {
             renderMedium = PrintPaper.screen.id
         } else { renderMedium = nil }
@@ -72,11 +132,21 @@ public struct WebPrintFrameRequest: Decodable {
         }
         let palette = ["base": encoded(config.baseRGB), "edge": encoded(config.edgeRGB),
                        "rebate": encoded(config.rebateRGB), "card": encoded(SIMD3(repeating: 0.86)),
-                       "cutout": encoded(SIMD3(repeating: 0.96))]
-        return try JSONEncoder().encode(Result(configuration: config, placement: placement,
+                       "cutout": encoded(config.cutoutRGB)]
+            .merging(config.edgeTransmission.map { ["edgeTransmission": encoded($0)] } ?? [:]) { $1 }
+            .merging(["barcode": encoded(config.barcodeRGB)]) { $1 }
+            .merging(config.barcodeTransmission.map { ["barcodeTransmission": encoded($0)] } ?? [:]) { $1 }
+        return try JSONEncoder().encode(Result(configuration: config, crop: crop, cropFraction: cropFraction,
+            placement: placement,
             perforation: config.geometry?.perforation?.dimensions,
             materialSize: PrintFramePlacement.materialGeometry(config).size,
             renderMedium: renderMedium,
-            available: PrintFrame.allCases.filter { configuration($0).frame == $0 }, palette: palette))
+            available: PrintFrame.allCases.filter { configuration($0).frame == $0 },
+            strip: PrintFramePlacement.filmStrip(width: shownWidth, height: shownHeight,
+                                                 configuration: config),
+            edgePrinting: recorded.edgePrinting != nil, frameNumber: numbered,
+            spansFrames: recorded.geometry?.spansFrames == true,
+            camera: recorded.camera != nil,
+            palette: palette))
     }
 }

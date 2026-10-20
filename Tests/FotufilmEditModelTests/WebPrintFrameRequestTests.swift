@@ -5,10 +5,17 @@ import FotufilmCore
 final class WebPrintFrameRequestTests: XCTestCase {
     private func request(_ frame: PrintFrame, stock: String? = "gold200", format: String = "35mm",
                          medium: String = "ektacolor-edge", width: Int = 300, height: Int = 200,
-                         margin: Double? = nil) throws -> Data {
+                         margin: Double? = nil, frameNumber: Int? = nil,
+                         edgePrinting: Bool? = nil, framing: [Double]? = nil,
+                         frames: Int? = nil, camera: String? = nil) throws -> Data {
         var value: [String: Any] = ["kind": "print-frame", "frame": frame.rawValue,
             "format": format, "medium": medium, "width": width, "height": height]
         if let margin { value["margin"] = margin }
+        if let frameNumber { value["frameNumber"] = frameNumber }
+        if let edgePrinting { value["edgePrinting"] = edgePrinting }
+        if let framing { value["framing"] = framing }
+        if let frames { value["frames"] = frames }
+        if let camera { value["camera"] = camera }
         if let stock {
             value["stock"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(
                 XCTUnwrap(FilmStock.presetDefinitions[stock])))
@@ -28,12 +35,17 @@ final class WebPrintFrameRequestTests: XCTestCase {
                 let expected = PrintFrameConfiguration(frame: frame, formatID: "35mm", stockID: stock,
                                                        paper: PrintPaper.preset(id: paper)!)
                 XCTAssertEqual(actual.configuration, expected)
-                XCTAssertEqual(actual.placement, PrintFramePlacement.layout(width: size.0, height: size.1, configuration: expected))
+                // A film border lays its frame around the part of the photograph it shows.
+                let crop = PrintFramePlacement.photoCrop(width: size.0, height: size.1, configuration: expected)
+                XCTAssertEqual(actual.crop, crop)
+                XCTAssertEqual(crop != nil, frame.showsFilmStrip && size.0 == size.1) // 3:2 and 2:3 fit
+                let shown = crop.map { (Int($0.width), Int($0.height)) } ?? size
+                XCTAssertEqual(actual.placement, PrintFramePlacement.layout(width: shown.0, height: shown.1, configuration: expected))
                 XCTAssertTrue(actual.available.contains(frame))
-                XCTAssertEqual(actual.placement.image.width, Double(size.0))
-                XCTAssertEqual(actual.placement.image.height, Double(size.1))
-                XCTAssertGreaterThanOrEqual(actual.placement.size.width, Double(size.0))
-                XCTAssertGreaterThanOrEqual(actual.placement.size.height, Double(size.1))
+                XCTAssertEqual(actual.placement.image.width, Double(shown.0))
+                XCTAssertEqual(actual.placement.image.height, Double(shown.1))
+                XCTAssertGreaterThanOrEqual(actual.placement.size.width, Double(shown.0))
+                XCTAssertGreaterThanOrEqual(actual.placement.size.height, Double(shown.1))
             }
         }
     }
@@ -44,6 +56,22 @@ final class WebPrintFrameRequestTests: XCTestCase {
         XCTAssertFalse(negative.available.contains(.slideMount))
         let slide = try result(request(.slideMount, stock: "ektachromee100", medium: "ilfochrome-cps-1k"))
         XCTAssertEqual(slide.renderMedium, "screen")
+        // The inverted scan keeps a positive medium and scans a negative one.
+        XCTAssertNil(try result(request(.filmPositive)).renderMedium)
+        XCTAssertEqual(try result(request(.filmPositive, medium: "negative")).renderMedium, "lab-scan")
+        let positiveSlide = try result(request(.filmPositive, stock: "ektachromee100", medium: "ilfochrome-cps-1k"))
+        XCTAssertEqual(positiveSlide.configuration.frame, .none)
+        XCTAssertFalse(positiveSlide.available.contains(.filmPositive))
+        XCTAssertEqual(try result(request(.filmPositive)).palette["cutout"], [0, 0, 0])
+        // A Film Border's strip is the frame's whole canvas around the photograph.
+        let strip = try result(request(.film, width: 300, height: 200))
+        let margins = try XCTUnwrap(strip.strip)
+        XCTAssertEqual(Double(300 + margins.left + margins.right), strip.placement.size.width)
+        XCTAssertEqual(Double(200 + margins.top + margins.bottom), strip.placement.size.height)
+        XCTAssertEqual(Double(margins.left), strip.placement.image.x)
+        XCTAssertNotNil(strip.palette["edgeTransmission"])
+        XCTAssertNil(try result(request(.paper)).strip)
+        XCTAssertNil(try result(request(.filmPositive)).palette["edgeTransmission"])
         let unavailable = try result(request(.slideMount))
         XCTAssertEqual(unavailable.configuration.frame, .none)
         XCTAssertNil(unavailable.renderMedium)
@@ -101,6 +129,91 @@ final class WebPrintFrameRequestTests: XCTestCase {
         }
         for margin in [-0.1, 3.1] {
             XCTAssertThrowsError(try result(request(.mount, margin: margin)))
+        }
+    }
+
+    func testFrameNumberAndEdgePrintingTravelInTheRequest() throws {
+        let numbered = try result(request(.film, stock: "portra400", frameNumber: 12))
+        XCTAssertEqual(numbered.configuration.frameNumber, 12)
+        XCTAssertEqual(numbered.configuration, PrintFrameConfiguration(frame: .film, formatID: "35mm",
+            stockID: "portra400", paper: .ektacolorEdge, frameNumber: 12))
+        XCTAssertTrue(numbered.edgePrinting)
+        XCTAssertTrue(numbered.frameNumber)
+        // Hidden, the plan still says the stock has edge printing to show.
+        let hidden = try result(request(.filmPositive, stock: "portra400", edgePrinting: false))
+        XCTAssertNil(hidden.configuration.edgePrinting)
+        XCTAssertTrue(hidden.edgePrinting)
+        XCTAssertTrue(hidden.frameNumber)
+        // A motion-picture cut has codes but no frame numbers; an unlettered stock has neither.
+        let motion = try result(request(.film, stock: "vision500t", format: "super35"))
+        XCTAssertTrue(motion.edgePrinting)
+        XCTAssertFalse(motion.frameNumber)
+        let blank = try result(request(.film, stock: "acros100"))
+        XCTAssertFalse(blank.edgePrinting)
+        XCTAssertFalse(blank.frameNumber)
+        let paper = try result(request(.paper, stock: "portra400"))
+        XCTAssertFalse(paper.edgePrinting)
+        for number in [-1, 39] {
+            XCTAssertThrowsError(try WebRenderRequest.prepare(request(.film, frameNumber: number)))
+        }
+    }
+
+    func testAFilmBorderPlansTheCropItShowsAndTheFrameAroundIt() throws {
+        let plan = try result(request(.film, stock: "portra400", width: 400, height: 300, framing: [0, 1]))
+        let crop = try XCTUnwrap(plan.crop)
+        XCTAssertEqual([crop.x, crop.y, crop.width, crop.height], [0, 33, 400, 267])
+        let fraction = try XCTUnwrap(plan.cropFraction)
+        XCTAssertEqual(fraction.y, 33 / 300.0, accuracy: 1e-12)
+        XCTAssertEqual(fraction.height, 267 / 300.0, accuracy: 1e-12)
+        XCTAssertEqual(plan.configuration.framing, SIMD2(0, 1))
+        // Everything else is the frame around the crop, as though it were the photograph.
+        let around = try result(request(.film, stock: "portra400", width: 400, height: 267, framing: [0, 1]))
+        XCTAssertNil(around.crop)
+        XCTAssertEqual(plan.placement, around.placement)
+        XCTAssertEqual(plan.strip, around.strip)
+        XCTAssertEqual(plan.placement.image.width, 400)
+        XCTAssertEqual(plan.placement.image.height, 267)
+        // Other frames show the whole photograph.
+        XCTAssertNil(try result(request(.paper, stock: "portra400", width: 400, height: 300)).crop)
+        for framing in [[0.0], [0, 1.5], [-1.01, 0]] {
+            XCTAssertThrowsError(try WebRenderRequest.prepare(request(.film, framing: framing)))
+        }
+    }
+
+    func testAPanoramaPlansOneLongApertureAcrossItsFrames() throws {
+        let plan = try result(request(.film, stock: "portra400", width: 6000, height: 4000, frames: 3))
+        XCTAssertTrue(plan.spansFrames)
+        XCTAssertEqual(plan.configuration.geometry?.frames, 3)
+        let crop = try XCTUnwrap(plan.crop)
+        XCTAssertEqual([crop.width, crop.height], [6000, 1286])
+        // The frame is laid out around the long aperture.
+        XCTAssertEqual(plan.placement.image.width, 6000)
+        XCTAssertEqual(plan.materialSize.width, 114, accuracy: 1e-9)
+        XCTAssertNotNil(plan.strip)
+        // The positive offers it too, and 120 runs along its length.
+        XCTAssertTrue(try result(request(.filmPositive, stock: "portra400", frames: 2)).spansFrames)
+        let medium = try result(request(.film, stock: "portra400", format: "120", width: 1160, height: 560,
+                                        frames: 2))
+        XCTAssertTrue(medium.spansFrames)
+        XCTAssertNil(medium.crop)
+        XCTAssertTrue(medium.placement.rotated)
+        // A motion-picture gate and every other frame offer none.
+        XCTAssertTrue(try result(request(.film, stock: "portra400")).spansFrames)
+        let motion = try result(request(.film, stock: "vision500t", format: "super35", frames: 3))
+        XCTAssertFalse(motion.spansFrames)
+        XCTAssertEqual(motion.configuration.geometry?.frames, 1)
+        XCTAssertFalse(try result(request(.paper, stock: "portra400", frames: 3)).spansFrames)
+        // A medium-format back exposes 135 to its edges; 120 offers no choice.
+        let back = try result(request(.film, stock: "portra400", width: 6000, height: 4000, frames: 3,
+                                      camera: "mediumFormatBack"))
+        XCTAssertTrue(back.camera)
+        XCTAssertEqual(back.configuration.camera, .mediumFormatBack)
+        XCTAssertEqual(back.crop.map { [$0.width, $0.height] }, [6000, 1875])
+        XCTAssertEqual(back.strip.map { [$0.top, $0.bottom] }, [0, 0])
+        XCTAssertFalse(medium.camera)
+        XCTAssertThrowsError(try WebRenderRequest.prepare(request(.film, camera: "box")))
+        for frames in [0, 5] {
+            XCTAssertThrowsError(try WebRenderRequest.prepare(request(.film, frames: frames)))
         }
     }
 

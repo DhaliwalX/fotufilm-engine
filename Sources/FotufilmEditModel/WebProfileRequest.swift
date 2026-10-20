@@ -21,6 +21,10 @@ public struct WebProfileRequest: Decodable {
     /// film and prints it (`NegativeScanPrint.Reading`), metered on the frame's highlights. The
     /// scan stays in the rendering worker; the kernels read its pixels.
     public let negative: Negative?
+    /// Set for a piece of film larger than the photograph, which the request's size includes: how
+    /// far the film reaches beyond the photograph on each side (`UnexposedEdge`). The scene's
+    /// measurements are the photograph's own.
+    public let unexposedEdge: UnexposedEdge.Margins?
 
     public struct Negative: Decodable {
         /// Clear film as linear Rec. 2020 scan RGB.
@@ -109,6 +113,16 @@ public struct WebProfileRequest: Decodable {
                 throw Failure(description: "Invalid scene measurement.")
             }
             options.sceneToneStops = SIMD3(sceneToneStops[0], sceneToneStops[1], sceneToneStops[2])
+        }
+        if let edge = unexposedEdge {
+            guard negative == nil, min(edge.left, edge.right, edge.top, edge.bottom, edge.carrier) >= 0,
+                  edge.left + edge.right < width, edge.top + edge.bottom < height else {
+                throw Failure(description: "Invalid film beyond the photograph.")
+            }
+            options.unexposedEdge = UnexposedEdge.Develop(
+                margins: edge, sceneHighlightStops: options.sceneHighlightStops,
+                sceneChannelMedians: options.sceneChannelMedians,
+                sceneToneStops: options.sceneToneStops)
         }
         if let negative {
             stock = try NegativeScanPrint.film(stock)

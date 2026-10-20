@@ -9088,6 +9088,11 @@
   },
   "edgePrinting": [
     {
+      "dx": {
+        "part1": 95,
+        "part2": 13,
+        "source": "https://github.com/Merinorus/Open-source-film-database"
+      },
       "formatID": "35mm",
       "marks": [
         {

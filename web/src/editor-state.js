@@ -1,4 +1,12 @@
-import { parsePrintFrame, parsePrintFrameMargin } from "./print-frame.js";
+import {
+  parsePrintFrame,
+  parsePrintFrameCamera,
+  parsePrintFrameCount,
+  parsePrintFrameEdgePrinting,
+  parsePrintFrameFraming,
+  parsePrintFrameMargin,
+  parsePrintFrameNumber,
+} from "./print-frame.js";
 import { defaultLens, parseLensCorrection } from "./lens-correction.js";
 import { parseLensFilters } from "./lens-filters.js";
 import { parseProfileSettings } from "./profile-settings.js";
@@ -113,8 +121,15 @@ export const defaultEdit = (stock = null) => ({
   medium: null,
   // Match Film: the medium follows the film, to each film's own, as the Mac app's does.
   mediumFollowsFilm: false,
+  // RAW Corrections, which the native decoders apply; the browser's decoder corrects nothing.
+  rawCorrections: true,
   printFrame: "none",
   printFrameMargin: 1,
+  printFrameEdgePrinting: true,
+  printFrameNumber: 1,
+  printFrameFraming: [0, 0],
+  printFrameCount: 1,
+  printFrameCamera: "panoramic",
   digitalReference: "auto-levels",
   // `frameRate` is the clip's cadence, the rate it exports at; null keeps the source's.
   video: { encoding: "standard", trimStart: 0, trimEnd: null, audio: true, frameRate: null },
@@ -387,8 +402,14 @@ export function parseEdit(json, stockIDs) {
     cropShape: edit.cropShape ?? "corners",
     medium: edit.medium ?? null,
     mediumFollowsFilm: edit.mediumFollowsFilm === true,
+    rawCorrections: edit.rawCorrections !== false,
     printFrame: parsePrintFrame(edit.printFrame),
     printFrameMargin: parsePrintFrameMargin(edit.printFrameMargin),
+    printFrameEdgePrinting: parsePrintFrameEdgePrinting(edit.printFrameEdgePrinting),
+    printFrameNumber: parsePrintFrameNumber(edit.printFrameNumber),
+    printFrameFraming: parsePrintFrameFraming(edit.printFrameFraming),
+    printFrameCount: parsePrintFrameCount(edit.printFrameCount),
+    printFrameCamera: parsePrintFrameCamera(edit.printFrameCamera),
     digitalReference: edit.digitalReference ?? "auto-levels",
     video: edit.video ? { ...base.video, ...edit.video } : base.video,
     halationModel: edit.halationModel ?? "legacy",

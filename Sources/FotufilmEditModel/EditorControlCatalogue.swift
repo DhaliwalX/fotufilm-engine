@@ -1256,6 +1256,16 @@ public enum EditorControlCatalogue {
                                          generic: false)),
 
         EditorControl(
+            .rawCorrections, title: "RAW Corrections",
+            detail: "Apply the camera's lens and sensor-edge corrections to a RAW photograph.",
+            section: .lensCorrection, kind: .toggle(restingOn: true),
+            surfaces: [.app, .desktop],
+            omitted: hostsOwnIt.filter { $0.key != .web }.merging([
+                .android: "Android decodes RAW with LibRaw, which applies no lens correction.",
+                .web: "The browser decodes RAW with LibRaw, which applies no lens correction and shows the whole sensor area.",
+            ]) { $1 },
+            documentation: "On, a camera RAW decodes as the camera's maker intends: Apple's decoder corrects the lens's distortion and vignetting where it knows the lens, and the picture is the camera's default crop. Off shows the capture as the sensor recorded it — the lens's own distortion and dark corners, and on Linux the whole sensor area with its edges — so the true flaws of the capture print. Choosing Film Border or Film Border Positive turns it off. On the Mac and iPhone Core Image always delivers the camera's crop. Lens Correction's own correction still applies when it is on. Included in saved edits and exports."),
+        EditorControl(
             .lensCorrection, title: "Lens Correction",
             detail: "Correct lens distortion, dark corners, and color fringing.",
             section: .lensCorrection, kind: .toggle(restingOn: false),
@@ -1571,7 +1581,7 @@ public enum EditorControlCatalogue {
                       .finalcut: "The host owns output framing.",
                       .cli: "Frame finishing is offered in the iPhone, iPad and Mac photo editors."],
             web: .runtime,
-            documentation: "Choose Film Border for the selected film gauge, Slide Mount for a transparency in a 2 × 2 inch card mount, a Paper Border cut at 4 × 6, 5 × 7, 8 × 10 or 5 × 5 inches, Carrier Border for a negative's rebate printed through a filed-out carrier, Emulsion Border for the film's unexposed edge outside the camera gate — the stock's own tone, halation glow and grain — printed with the photograph inside a paper margin, a plain White or Black Mount, or a Square, Portrait or Story posting canvas with the photograph inside a white margin. Film perforations follow physical geometry; verified sheet-notch codes follow the stock. Included in saved edits and exports."),
+            documentation: "Choose Film Border for the selected film gauge, Film Border Positive for a negative's film border scanned and inverted around the positive photograph — a dark rebate, light edge printing and black perforations — Slide Mount for a transparency in a 2 × 2 inch card mount, a Paper Border cut at 4 × 6, 5 × 7, 8 × 10 or 5 × 5 inches, Carrier Border for a negative's rebate printed through a filed-out carrier, Emulsion Border for the film's unexposed edge outside the camera gate — the stock's own tone, halation glow and grain — printed with the photograph inside a paper margin, a plain White or Black Mount, or a Square, Portrait or Story posting canvas with the photograph inside a white margin. Film perforations follow physical geometry; documented edge printing and verified sheet-notch codes follow the stock. Included in saved edits and exports."),
         EditorControl(
             .printFrameMargin, title: "Border Width",
             detail: "Widen or narrow the margin around the photograph.",
@@ -1583,7 +1593,61 @@ public enum EditorControlCatalogue {
                       .finalcut: "The host owns output framing.",
                       .cli: "Frame finishing is offered in the iPhone, iPad and Mac photo editors."],
             web: .runtime,
-            documentation: "Scales the margin of a Paper Border, Carrier Border, White or Black Mount, or posting canvas, from none at 0% to three times the preset at 300%. A paper sheet keeps its size, so a wider easel margin prints a smaller picture; a mount or canvas grows around the photograph. Film Border and Slide Mount follow physical dimensions and have no Border Width. Included in saved edits and exports."),
+            documentation: "Scales the margin of a Paper Border, Carrier Border, White or Black Mount, or posting canvas, from none at 0% to three times the preset at 300%. A paper sheet keeps its size, so a wider easel margin prints a smaller picture; a mount or canvas grows around the photograph. Film Border, Film Border Positive and Slide Mount follow physical dimensions and have no Border Width. Included in saved edits and exports."),
+        EditorControl(
+            .printFrameEdgePrinting, title: "Edge Printing",
+            detail: "Show the film's lettering, frame numbers and barcode along a Film Border.",
+            section: .printPaper, kind: .toggle(restingOn: true),
+            surfaces: [.app, .desktop, .web],
+            omitted: [.android: "Frame finishing is offered in the iPhone, iPad and Mac photo editors.",
+                      .resolve: "The host owns output framing.",
+                      .finalcut: "The host owns output framing.",
+                      .cli: "Frame finishing is offered in the iPhone, iPad and Mac photo editors."],
+            web: .runtime,
+            documentation: "On, a Film Border or Film Border Positive carries the stock's documented edge printing for the gauge — its name and codes, the frame numbers and, on 135 negatives with a DX number, the DX barcode. Off leaves the rebate blank, as on film sold without edge printing; the developed rebate keeps its fog, grain and glow either way. Offered only for stocks with documented edge printing. Included in saved edits and exports."),
+        EditorControl(
+            .printFrameNumber, title: "Frame Number",
+            detail: "Choose the frame number printed along a Film Border.",
+            section: .printPaper,
+            kind: .menu(.fixed(FilmEdgePrinting.frameNumberRange.map {
+                EditorMenuChoice(Double($0), String($0), id: String($0))
+            })),
+            surfaces: [.app, .desktop, .web],
+            omitted: [.android: "Frame finishing is offered in the iPhone, iPad and Mac photo editors.",
+                      .resolve: "The host owns output framing.",
+                      .finalcut: "The host owns output framing.",
+                      .cli: "Frame finishing is offered in the iPhone, iPad and Mac photo editors."],
+            web: .runtime,
+            documentation: "Sets which frame of the roll a Film Border or Film Border Positive is cut from, 0 to 38: the printed frame number and half-frame number (12 and 12A) and the frame encoded in a 135 negative's DX barcode follow it. The stock's name and codes stay. Offered for stocks whose edge printing numbers its frames; the default is frame 1. Included in saved edits and exports."),
+        EditorControl(
+            .printFrameCount, title: "Frames",
+            detail: "Expose the photograph across several frames' length of a Film Border, as a panorama.",
+            section: .printPaper,
+            kind: .menu(.fixed(FilmBorderGeometry.frameCountRange.map {
+                EditorMenuChoice(Double($0), $0 == 1 ? "1 frame" : "\($0) frames", id: String($0))
+            })),
+            surfaces: [.app, .desktop, .web],
+            omitted: [.android: "Frame finishing is offered in the iPhone, iPad and Mac photo editors.",
+                      .resolve: "The host owns output framing.",
+                      .finalcut: "The host owns output framing.",
+                      .cli: "Frame finishing is offered in the iPhone, iPad and Mac photo editors."],
+            web: .runtime,
+            documentation: "Exposes one photograph across up to four frames' length of a 135 or 120 Film Border or Film Border Positive, as a panoramic camera or 135 in a medium-format camera does: one unbroken picture, its aperture running on by the gauge's frame advance for each frame. The photograph is cropped to that long aperture and placed by Framing. The roll's edge printing runs along with it, each frame's length carrying its own numbers and DX code, counting on from Frame Number. Motion-picture gauges, sheet film and instant film keep one frame. Included in saved edits and exports."),
+        EditorControl(
+            .printFrameCamera, title: "Camera",
+            detail: "Choose the camera a 135 Film Border's picture was exposed in.",
+            section: .printPaper,
+            kind: .menu(.fixed(FilmBorderCamera.allCases.enumerated().map {
+                EditorMenuChoice(Double($0.offset), $0.element.name,
+                                 detail: $0.element.detail, id: $0.element.id)
+            })),
+            surfaces: [.app, .desktop, .web],
+            omitted: [.android: "Frame finishing is offered in the iPhone, iPad and Mac photo editors.",
+                      .resolve: "The host owns output framing.",
+                      .finalcut: "The host owns output framing.",
+                      .cli: "Frame finishing is offered in the iPhone, iPad and Mac photo editors."],
+            web: .runtime,
+            documentation: "Sets the camera a 135 Film Border or Film Border Positive was exposed in. 35mm or Panoramic Camera, the default, keeps the picture between the perforation rows, as a 35mm camera's gate or a panoramic camera's wider one does. Medium-Format Back runs it across the whole width of the film, as 135 loaded in a medium-format camera is exposed: the perforations are punched through the picture and the edge printing lies over it, the denser of the two showing. With Frames, the picture is as long as that many frames of the roll. Included in saved edits and exports."),
         EditorControl(
             .paper, title: "Output Medium",
             detail: "Choose how the film is printed, scanned, or viewed.",
