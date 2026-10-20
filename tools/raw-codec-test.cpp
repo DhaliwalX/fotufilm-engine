@@ -75,6 +75,15 @@ int main(int argc, char **argv) {
                 1e-6f, "orientation/default crop");
         }
     }
+    // Asked for the sensor area, the decode keeps the whole visible area past the default crop.
+    {
+        Image whole;
+        decode("crop-1", whole, 0, FFC_DECODE_SENSOR_AREA);
+        require(whole.value.width == 320 && whole.value.height == 192 && whole.sourceWidth == 320 &&
+                whole.sourceHeight == 192, "sensor area dimensions");
+        for (size_t i = 0; i < size_t(320) * 192 * 4; i += 4 * 37)
+            close(whole.value.rgba[i], original.value.rgba[i], 1e-6f, "sensor area radiance");
+    }
     for (bool mosaic : {false, true}) for (int exposure : {-2, 0, 2}) for (bool scan : {false, true}) {
         Image image;
         decode(std::string("neutral-") + (mosaic ? "true-" : "false-") + std::to_string(exposure), image, 0,
@@ -140,7 +149,8 @@ int main(int argc, char **argv) {
         if (kind == 7) path = root + "/bad-crop";
         if (kind == 9) budget.max_working_bytes = 37ull << 20; // linear DNG cannot demosaic at half size
         char error[128];
-        int status = ffc_decode_raw(path.c_str(), kind == 8 ? 8 : 0, kind == 9 ? 64 : 0, &budget, &image.value,
+        // Kind 8 asks for an option no decode has.
+        int status = ffc_decode_raw(path.c_str(), kind == 8 ? 16 : 0, kind == 9 ? 64 : 0, &budget, &image.value,
                                     &image.sourceWidth, &image.sourceHeight, error, sizeof error);
         require(status == (kind == 6 ? FFC_RAW_UNSUPPORTED : FFC_RAW_ERROR), "rejected request " + std::to_string(kind));
         require(error[0] && !image.value.rgba && !image.value.capture.exif && !image.value.width &&
