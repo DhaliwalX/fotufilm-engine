@@ -248,5 +248,8 @@ List<String> folderItems(String path, List<FileRow> rows) {
   return [for (final e in sortedPhotos([entries], const {}, 'name')) e.file];
 }
 
-/// Where a photo came from, for the strip's caption, with a home folder written as "~".
-String stripPath(String path) => path.replaceFirst(RegExp(r'^/(?:Users|home)/[^/]+(?=/)'), '~');
+/// Where a photo came from, for the strip's caption, with a home folder written as "~" and a
+/// browser's library folder by its name alone (library_files_web.dart).
+String stripPath(String path) => path
+    .replaceFirst(RegExp(r'^/(?:Users|home)/[^/]+(?=/)'), '~')
+    .replaceFirst(RegExp(r'^/folders/[^/]+/'), '');

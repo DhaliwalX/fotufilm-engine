@@ -83,7 +83,7 @@ class _LibraryFoldersState extends State<LibraryFolders> {
       rows.add(_FolderRow(
         icon: 'folder',
         name: folder.name,
-        tooltip: [folder.path, if (folder.negative) 'scanned negatives'].join(' · '),
+        tooltip: [stripPath(folder.path), if (folder.negative) 'scanned negatives'].join(' · '),
         trailing: _FolderStatus(folder),
         current: scope.folderId == folder.id && scope.path.isEmpty,
         nested: nested,

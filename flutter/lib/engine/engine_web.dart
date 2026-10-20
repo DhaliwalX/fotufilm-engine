@@ -37,6 +37,10 @@ Future<EngineConnection> connect() async {
   return engine;
 }
 
+/// A call to the bridge outside the editor's engine connection (the library's folders).
+Future<EngineReply> callBridge(String method, [Map<String, dynamic> params = const {}]) =>
+    WebEngine._(_bridge!).call(method, params);
+
 class WebEngine implements EngineConnection {
   WebEngine._(this._engine);
   final _Bridge _engine;

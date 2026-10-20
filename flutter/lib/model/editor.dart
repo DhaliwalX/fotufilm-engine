@@ -373,8 +373,9 @@ class EditorModel extends ChangeNotifier implements RenderHost {
       try {
         final answer = engine.opensPaths && file.path != null
             ? await engine.call('importPath', {'path': file.path, 'negative': asNegative})
-            : await engine.call(
-                'importFile', {'name': file.name, 'negative': asNegative}, await file.read!());
+            // A library photo in a browser has a path and no bytes: the bridge reads it.
+            : await engine.call('importFile', {'name': file.name, 'path': file.path, 'negative': asNegative},
+                file.read == null ? null : await file.read!());
         final json = answer.json;
         if (cancelled()) {
           await engine.call('release', {'handle': (json['handle'] as num).toInt()});
