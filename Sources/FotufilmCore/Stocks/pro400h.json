@@ -3109,6 +3109,11 @@
   ],
   "edgePrinting": [
     {
+      "dx": {
+        "part1": 36,
+        "part2": 8,
+        "source": "https://asset.fujifilm.com/www/za/files/2019-09/d68b00b13f1b6234629342317be9cf2b/films_pro-400h_datasheet_01.pdf"
+      },
       "formatID": "35mm",
       "marks": [
         {

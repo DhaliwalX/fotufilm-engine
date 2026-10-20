@@ -494,6 +494,61 @@ final class PrintFrameTests: XCTestCase {
         XCTAssertNil(PrintFrameRenderer.render(try fixture(), configuration: config, edge: margins))
     }
 
+    func testDXEdgeBarcodeEncodesTheStocksNumberAndFrame() throws {
+        func string(_ cells: [Bool]) -> String { String(cells.map { $0 ? "1" : "0" }) }
+        // The worked examples of the published decoders: 79-15 at frame 23, 95-14 at frame 5.
+        let wiki = DXEdgeCode(part1: 79, part2: 15, source: "https://en.wikipedia.org/wiki/DX_number")
+        XCTAssertEqual(string(wiki.cells(frame: 23, half: false).data), "1010101001111011110101110010101")
+        let portra160 = DXEdgeCode(part1: 95, part2: 14, source: "https://example.com")
+        XCTAssertEqual(string(portra160.cells(frame: 5, half: false).data), "1010101011111011100001010010101")
+        XCTAssertEqual(string(portra160.cells(frame: 5, half: true).clock), "1111101010101010101010101010111")
+        // The half-frame flag flips the even parity over the data bits.
+        let half = portra160.cells(frame: 5, half: true).data
+        XCTAssertEqual(half.count, 31)
+        XCTAssertTrue(half[24])
+        XCTAssertFalse(half[26])
+
+        let config = configuration(.film, stock: "portra400")
+        XCTAssertEqual(config.edgePrinting?.dx?.part1, 95)
+        XCTAssertFalse(config.edgeBars.isEmpty)
+        let printing = try XCTUnwrap(config.edgePrinting)
+        for bar in config.edgeBars {
+            // The bars stay on the rail outside the lower perforations, clear of its numbers.
+            XCTAssertLessThanOrEqual(bar.yMM + bar.heightMM, 2.01)
+            for mark in printing.marks where mark.yMM < 2.01 {
+                XCTAssertTrue(bar.xMM >= mark.xMM + mark.widthMM || bar.xMM + bar.widthMM <= mark.xMM,
+                              "\(bar) crosses \(mark.text)")
+            }
+        }
+        XCTAssertNotNil(config.barcodeTransmission)
+        XCTAssertFalse(configuration(.filmPositive, stock: "portra400").edgeBars.isEmpty)
+        // Only 135 negatives with a documented number carry one.
+        XCTAssertTrue(configuration(.film, format: "120", stock: "portra400").edgeBars.isEmpty)
+        XCTAssertTrue(configuration(.film, stock: "velvia50").edgeBars.isEmpty)
+        XCTAssertTrue(configuration(.film, stock: "trix400").edgeBars.isEmpty)
+        XCTAssertTrue(configuration(.paper, stock: "portra400").edgeBars.isEmpty)
+
+        var invalid = try XCTUnwrap(FilmStock.presetDefinitions["portra400"])
+        try invalid.validate()
+        invalid.edgePrinting?[0].dx?.part1 = 128
+        XCTAssertThrowsError(try invalid.validate())
+        invalid = try XCTUnwrap(FilmStock.presetDefinitions["portra400"])
+        invalid.edgePrinting?[1].dx = DXEdgeCode(part1: 95, part2: 13, source: "https://example.com")
+        XCTAssertThrowsError(try invalid.validate()) // 120 carries no DX barcode
+
+        // The bars are drawn on the rail.
+        let photo = try fixture()
+        let layout = PrintFrameRenderer.layout(width: photo.width, height: photo.height, configuration: config)
+        let framed = try XCTUnwrap(PrintFrameRenderer.render(photo, configuration: config))
+        let bar = try XCTUnwrap(config.edgeBars.max { $0.widthMM < $1.widthMM })
+        let box = CGRect(x: (bar.xMM + bar.widthMM / 2) * layout.pixelsPerMM,
+                         y: layout.size.height - (bar.yMM + bar.heightMM / 2) * layout.pixelsPerMM,
+                         width: 1, height: 1)
+        let base = CGRect(x: 1, y: layout.size.height - 1.0 * layout.pixelsPerMM, width: 1, height: 1)
+        XCTAssertLessThan(try pixels(XCTUnwrap(framed.cropping(to: box)))[3],
+                          try pixels(XCTUnwrap(framed.cropping(to: base)))[3])
+    }
+
     func testEdgeExposureUsesNegativeAndReversalDensityWithTheSameViewingLamp() {
         for id in ["portra400", "hp5plus400", "vision500t"] {
             let config = configuration(.film, stock: id)

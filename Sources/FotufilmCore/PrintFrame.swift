@@ -191,6 +191,87 @@ public struct FilmEdgePrinting: Codable, Equatable, Sendable {
     public var formatID: String
     public var sources: [String]
     public var marks: [Mark]
+    /// The DX film edge barcode, on 135 negatives that carry one.
+    public var dx: DXEdgeCode?
+
+    /// One exposed bar of a machine-readable code, in the same millimetres as `marks`.
+    public struct Bar: Codable, Equatable, Sendable {
+        public var xMM: Double
+        public var yMM: Double
+        public var widthMM: Double
+        public var heightMM: Double
+    }
+
+    /// The DX codes along this cut of 135 film, on the rail below the lower perforations between
+    /// its printed frame numbers: frame 1 and its half frame 1A, half a frame apart. The second
+    /// runs off the cut, as a strip cut at a frame line does.
+    public var barcode: [Bar] {
+        guard formatID == "35mm", let dx else { return [] }
+        return [(10.2, false), (29.7, true)].flatMap { start, half in
+            dx.bars(frame: 1, half: half, startMM: start)
+        }
+    }
+}
+
+/// The DX film edge barcode (ISO 1007, ANSI PH1.14), printed as a latent image along 135
+/// negative film: a clock track and a data track of 31 cells, the data being the stock's DX
+/// number and the frame number, repeated every half frame. Only the DX number is stock data;
+/// no batch or roll serial is encoded. Cell layout follows Kodak's US 4,965,628; positions
+/// follow the ANSI PH1.14 figures quoted in US 5,448,049. See docs/print-frame-model.md.
+public struct DXEdgeCode: Codable, Equatable, Sendable {
+    /// The product class, 1 to 127.
+    public var part1: Int
+    /// The specifier within the class, 0 to 15.
+    public var part2: Int
+    /// Where the number is documented.
+    public var source: String
+
+    public init(part1: Int, part2: Int, source: String) {
+        self.part1 = part1; self.part2 = part2; self.source = source
+    }
+
+    /// Width of one cell along the film: the standard's minimum bar width.
+    public static let cellMM = 0.381
+    /// The data track, next to the film's edge, and the clock track nearer the perforations,
+    /// as distances from the edge.
+    public static let dataTrackMM = 0.25...0.76
+    public static let clockTrackMM = 1.30...1.80
+
+    /// The 31 cells of the code for `frame` (0 to 63) and its half frame: entry, part 1, a
+    /// blank, part 2, frame number, half-frame flag, a blank, even parity over the 18 data bits,
+    /// exit. True is an exposed mark.
+    public func cells(frame: Int, half: Bool) -> (data: [Bool], clock: [Bool]) {
+        func bits(_ value: Int, _ count: Int) -> [Bool] {
+            (0..<count).map { value >> (count - 1 - $0) & 1 == 1 }
+        }
+        let payload = bits(part1, 7) + bits(part2, 4) + bits(frame & 63, 6) + [half]
+        let parity = payload.filter { $0 }.count % 2 == 1
+        let data = [true, false, true, false, true, false] + bits(part1, 7) + [false]
+            + bits(part2, 4) + bits(frame & 63, 6) + [half, false, parity]
+            + [false, true, false, true]
+        // The clock track is the same in every code.
+        let clock = "1111101010101010101010101010111".map { $0 == "1" }
+        return (data, clock)
+    }
+
+    /// The code's exposed bars from `startMM` along the film, adjacent marks run together.
+    func bars(frame: Int, half: Bool, startMM: Double) -> [FilmEdgePrinting.Bar] {
+        let (data, clock) = cells(frame: frame, half: half)
+        func runs(_ cells: [Bool], _ track: ClosedRange<Double>) -> [FilmEdgePrinting.Bar] {
+            var result: [FilmEdgePrinting.Bar] = []
+            var index = 0
+            while index < cells.count {
+                guard cells[index] else { index += 1; continue }
+                let first = index
+                while index < cells.count, cells[index] { index += 1 }
+                result.append(.init(xMM: startMM + Double(first) * Self.cellMM, yMM: track.lowerBound,
+                                    widthMM: Double(index - first) * Self.cellMM,
+                                    heightMM: track.upperBound - track.lowerBound))
+            }
+            return result
+        }
+        return runs(data, Self.dataTrackMM) + runs(clock, Self.clockTrackMM)
+    }
 }
 
 /// Millimetre geometry before the finished photograph is fitted into the camera aperture.
@@ -311,6 +392,12 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
     /// letters are lighter than the rebate — a transparency or an inverted scan — and are laid
     /// over it in `edgeRGB`.
     public let edgeTransmission: SIMD3<Float>?
+    /// The DX barcode's bars on this cut of film, in `edgePrinting` millimetres; empty without one.
+    public let edgeBars: [FilmEdgePrinting.Bar]
+    /// The barcode's exposure seen like `edgeRGB`.
+    public let barcodeRGB: SIMD3<Float>
+    /// The barcode laid on a developed negative strip, like `edgeTransmission`.
+    public let barcodeTransmission: SIMD3<Float>?
 
     public init(frame: PrintFrame, formatID: String?, stockID: String,
                 paper: PrintPaper, viewingKelvin: Float? = nil,
@@ -374,39 +461,51 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
         edgePrinting = self.frame.showsFilmStrip
             ? definition?.edgePrinting?.first { $0.formatID == formatID } : nil
         cutoutRGB = self.frame == .filmPositive ? .zero : Self.scanBedRGB
+        // The DX barcode is printed on negatives only; a transparency's edge carries none.
+        edgeBars = definition?.stock.isReversal == false ? edgePrinting?.barcode ?? [] : []
+        // The edge printer's two exposures: lettering at a representative 72% of the density
+        // span, and the barcode at the standard's 0.5 above base. Not measured edge-printer
+        // calibrations. Reversal clears exposed letters; negatives darken.
+        func edgeDensities(_ stock: FilmStock) -> (letters: [Float], bars: [Float]) {
+            (stock.curves.map { $0.dMin + ($0.dMax - $0.dMin) * (stock.isReversal ? 0.08 : 0.72) },
+             stock.curves.map { $0.dMin + 0.5 })
+        }
         if self.frame == .filmPositive, let stock = definition?.stock {
             // The scan is normalised on the clear base under the reference lamp, then inverted:
-            // the dense lettering comes out light, by how little light it passed.
+            // the dense marks come out light, by how little light they passed.
             let clear = SpectralRuntime.transmissionRGB(density: stock.curves.map(\.dMin),
                                                         stock: stock, illuminant: nil)
-            let density = stock.curves.map { $0.dMin + ($0.dMax - $0.dMin) * 0.72 }
-            let exposed = SpectralRuntime.transmissionRGB(density: density, stock: stock, illuminant: nil)
-            let passed = exposed / SIMD3(max(clear.x, 1e-6), max(clear.y, 1e-6), max(clear.z, 1e-6))
             let one = SIMD3<Float>(repeating: 1)
-            edgeRGB = Self.invertedBaseRGB + (one - Self.invertedBaseRGB)
-                * (one - passed.clamped(lowerBound: .zero, upperBound: one))
+            func inverted(_ density: [Float]) -> SIMD3<Float> {
+                let exposed = SpectralRuntime.transmissionRGB(density: density, stock: stock, illuminant: nil)
+                let passed = exposed / SIMD3(max(clear.x, 1e-6), max(clear.y, 1e-6), max(clear.z, 1e-6))
+                return Self.invertedBaseRGB + (one - Self.invertedBaseRGB)
+                    * (one - passed.clamped(lowerBound: .zero, upperBound: one))
+            }
+            let densities = edgeDensities(stock)
+            edgeRGB = inverted(densities.letters)
+            barcodeRGB = inverted(densities.bars)
         } else if self.frame == .film, let stock = definition?.stock, film?.isInstant == false {
             let light = viewingKelvin.map(SpectralRuntime.printLightSPD)
             let basis = stock.isReversal ? SpectralRuntime.neutralDensityBasis(for: stock) : nil
             let clear = SpectralRuntime.transmissionRGB(
                 density: basis?(stock.curves.map(\.dMin)) ?? stock.curves.map(\.dMin),
                 stock: stock, illuminant: light)
-            // A representative developed edge exposure, not a measured manufacturer's
-            // edge-printer calibration. Reversal clears exposed letters; negatives darken.
-            let density = stock.curves.map { curve in
-                curve.dMin + (curve.dMax - curve.dMin) * (stock.isReversal ? 0.08 : 0.72)
+            func viewed(_ density: [Float]) -> SIMD3<Float> {
+                let exposed = SpectralRuntime.transmissionRGB(density: basis?(density) ?? density,
+                                                              stock: stock, illuminant: light)
+                if stock.isReversal { return exposed }
+                if paper.isNegative && negativeViewing == .scanner {
+                    return exposed / SIMD3(max(clear.x, 1e-6), max(clear.y, 1e-6), max(clear.z, 1e-6))
+                }
+                return exposed * (SpectralRuntime.lightBoxBaseLevel / max(clear.x, clear.y, clear.z, 1e-6))
             }
-            let exposed = SpectralRuntime.transmissionRGB(density: basis?(density) ?? density,
-                                                          stock: stock, illuminant: light)
-            if stock.isReversal {
-                edgeRGB = exposed
-            } else if paper.isNegative && negativeViewing == .scanner {
-                edgeRGB = exposed / SIMD3(max(clear.x, 1e-6), max(clear.y, 1e-6), max(clear.z, 1e-6))
-            } else {
-                edgeRGB = exposed * (SpectralRuntime.lightBoxBaseLevel / max(clear.x, clear.y, clear.z, 1e-6))
-            }
+            let densities = edgeDensities(stock)
+            edgeRGB = viewed(densities.letters)
+            barcodeRGB = edgeBars.isEmpty ? .zero : viewed(densities.bars)
         } else {
             edgeRGB = .zero
+            barcodeRGB = .zero
         }
         rebateRGB = self.frame == .carrier ? paper.frameDenseRGB(viewingKelvin: viewingKelvin) ?? .zero : .zero
         switch frame {
@@ -499,8 +598,10 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
         if self.frame == .film, edgePrinting != nil, baseRGB.min() > 0,
            edgeRGB.x <= baseRGB.x, edgeRGB.y <= baseRGB.y, edgeRGB.z <= baseRGB.z {
             edgeTransmission = edgeRGB / baseRGB
+            barcodeTransmission = edgeBars.isEmpty ? nil : barcodeRGB / baseRGB
         } else {
             edgeTransmission = nil
+            barcodeTransmission = nil
         }
     }
 }

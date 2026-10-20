@@ -9209,6 +9209,11 @@
   ],
   "edgePrinting": [
     {
+      "dx": {
+        "part1": 39,
+        "part2": 2,
+        "source": "https://asset.fujifilm.com/master/emea/files/2020-10/9a958fdcc6bd1442a06f71e134b811f6/films_superia-xtra400_datasheet_01.pdf"
+      },
       "formatID": "35mm",
       "marks": [
         {

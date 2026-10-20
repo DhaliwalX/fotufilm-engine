@@ -23434,6 +23434,11 @@
   },
   "edgePrinting": [
     {
+      "dx": {
+        "part1": 108,
+        "part2": 10,
+        "source": "https://mips.di.unimi.it/photofire/archive/additional_material/IIIA_DX_Codes_for_135-size_film_2009.pdf"
+      },
       "formatID": "35mm",
       "marks": [
         {

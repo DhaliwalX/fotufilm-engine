@@ -9166,6 +9166,11 @@
   ],
   "edgePrinting": [
     {
+      "dx": {
+        "part1": 39,
+        "part2": 1,
+        "source": "https://asset.fujifilm.com/master/emea/files/2020-10/98c3d5087c253f51c132a5d46059f131/films_c200_datasheet_01.pdf"
+      },
       "formatID": "35mm",
       "marks": [
         {

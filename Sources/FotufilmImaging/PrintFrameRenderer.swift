@@ -111,6 +111,12 @@ public enum PrintFrameRenderer {
                                  color: baseColor(transmission ?? configuration.edgeRGB),
                                  blend: strip == nil ? .normal : transmission == nil ? .screen : .multiply)
             }
+            if !configuration.edgeBars.isEmpty {
+                let transmission = strip == nil ? nil : configuration.barcodeTransmission
+                drawEdgeBars(in: context, geometry: geometry, bars: configuration.edgeBars,
+                             color: baseColor(transmission ?? configuration.barcodeRGB),
+                             blend: strip == nil ? .normal : transmission == nil ? .screen : .multiply)
+            }
             let cutout = baseColor(configuration.cutoutRGB)
             drawPerforations(in: context, geometry: geometry, cutout: cutout)
             if geometry.isSheet, let code = configuration.sheetNotches {
@@ -236,6 +242,23 @@ public enum PrintFrameRenderer {
             context.fillPath()
             context.restoreGState()
         }
+        context.restoreGState()
+    }
+
+    /// The DX barcode's bars, in the edge printing's coordinates.
+    private static func drawEdgeBars(in context: CGContext, geometry g: FilmBorderGeometry,
+                                     bars: [FilmEdgePrinting.Bar], color: CGColor, blend: CGBlendMode) {
+        context.saveGState()
+        context.setBlendMode(blend)
+        if !g.horizontalTransport {
+            context.translateBy(x: g.widthMM, y: 0)
+            context.rotate(by: .pi / 2)
+        }
+        let along = g.horizontalTransport ? g.widthMM : g.heightMM
+        let across = g.horizontalTransport ? g.heightMM : g.widthMM
+        context.clip(to: CGRect(x: 0, y: 0, width: along, height: across))
+        context.setFillColor(color)
+        context.fill(bars.map { CGRect(x: $0.xMM, y: $0.yMM, width: $0.widthMM, height: $0.heightMM) })
         context.restoreGState()
     }
 

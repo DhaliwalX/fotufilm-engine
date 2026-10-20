@@ -69,9 +69,11 @@ async function developedStrip16(pixels, width, height, plan, stale, colorSpace) 
     throw new Error("Print frame dimensions do not match the developed film.");
   const palette = framePalette(plan, colorSpace),
     c = plan.configuration;
-  const { letters, holes } = stripMasks(plan);
+  const { letters, bars, holes } = stripMasks(plan);
   const transmission = palette.edgeTransmission,
     ink = transmission || palette.edge,
+    barTransmission = palette.barcodeTransmission,
+    barInk = barTransmission || palette.barcode,
     cutout = palette.cutout,
     lift = c.frame === "filmPositive" ? palette.base : null;
   const r = p.image,
@@ -87,6 +89,7 @@ async function developedStrip16(pixels, width, height, plan, stale, colorSpace) 
       const i = (y * width + x) * 4;
       const rebate = !(inPhotoRow && x >= r.x && x < r.x + r.width);
       const letter = letters[i + 3] / 255,
+        bar = bars[i + 3] / 255,
         hole = holes[i + 3] / 255;
       for (let ch = 0; ch < 3; ch++) {
         let v = pixels[i + ch] / 65535;
@@ -94,6 +97,10 @@ async function developedStrip16(pixels, width, height, plan, stale, colorSpace) 
         if (letter > 0) {
           const marked = transmission ? v * ink[ch] : 1 - (1 - v) * (1 - ink[ch]);
           v += (marked - v) * letter;
+        }
+        if (bar > 0) {
+          const marked = barTransmission ? v * barInk[ch] : 1 - (1 - v) * (1 - barInk[ch]);
+          v += (marked - v) * bar;
         }
         if (hole > 0) v += (cutout[ch] - v) * hole;
         output[i + ch] = Math.round(Math.min(1, Math.max(0, v)) * 65535);

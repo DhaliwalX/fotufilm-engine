@@ -80,6 +80,8 @@ public struct WebPrintFrameRequest: Decodable {
                        "rebate": encoded(config.rebateRGB), "card": encoded(SIMD3(repeating: 0.86)),
                        "cutout": encoded(config.cutoutRGB)]
             .merging(config.edgeTransmission.map { ["edgeTransmission": encoded($0)] } ?? [:]) { $1 }
+            .merging(["barcode": encoded(config.barcodeRGB)]) { $1 }
+            .merging(config.barcodeTransmission.map { ["barcodeTransmission": encoded($0)] } ?? [:]) { $1 }
         return try JSONEncoder().encode(Result(configuration: config, placement: placement,
             perforation: config.geometry?.perforation?.dimensions,
             materialSize: PrintFramePlacement.materialGeometry(config).size,

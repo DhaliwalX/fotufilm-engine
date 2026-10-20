@@ -165,8 +165,45 @@ RSX II 200 on 135, CineStill 400D, Aerochrome 1443 and Infrared Color. Respooled
 
 These are reference cuts, not reproductions of an identified manufactured roll. The still-film
 numbers select a representative position; they are not the imported photograph's original frame
-number. Production batch, emulsion/roll serials, year and machine-readable barcodes are omitted.
-Unknown stock/gauge pairs, sheet film, Super 8, instant masks and paper fronts stay unlettered.
+number. Production batch, emulsion/roll serials and year are omitted, and so are barcodes that
+would encode them: KEYKODE's key number is a roll serial. Unknown stock/gauge pairs, sheet film,
+Super 8, instant masks and paper fronts stay unlettered.
+
+### DX edge barcode
+
+135 negatives with a documented DX number (`FilmEdgePrinting.dx`) also carry the DX film edge
+barcode (ISO 1007, ANSI PH1.14) on the rail below the lower perforations, between the printed frame
+numbers. It encodes only the stock's DX number and the frame, so nothing about a particular roll is
+invented. Each code is 31 cells of 0.381 mm, the standard's minimum bar width, on two tracks: a
+data track 0.25–0.76 mm from the film's edge and a clock track 1.30–1.80 mm from it. The data
+track holds the entry pattern 101010, the DX number's part 1 (7 bits) and part 2 (4 bits) either
+side of a blank cell, the frame number (6 bits), the half-frame flag, a blank, even parity over the
+18 data bits and the exit 0101; the clock track is 1111101010101010101010101010111 in every code.
+A mark is an exposed bar. Codes repeat every half frame, so this cut shows frame 1 after the
+printed 1 and frame 1A after 1A, the second running off the cut. The cell layout follows Kodak's
+[US 4,965,628](https://patents.google.com/patent/US4965628A/en); track positions and the 0.5
+density above base follow the ANSI PH1.14-1990 figures quoted in
+[US 5,448,049](https://patents.google.com/patent/US5448049A/en). The encoder reproduces the worked
+examples of [Wikipedia's DX number article](https://en.wikipedia.org/wiki/DX_number) (79-15, frame
+23) and [the zxing-cpp DX edge reader](https://github.com/zxing-cpp/zxing-cpp/blob/master/core/src/oned/ODDXFilmEdgeReader.cpp)'s rules.
+
+| Stock | DX number | Source |
+| --- | --- | --- |
+| C200 | 39-1 | Fujifilm datasheet, p. 4 |
+| Superia X-TRA 400 | 39-2 | Fujifilm EMEA datasheet, p. 4 |
+| PRO 400H | 36-8 | Fujifilm AF3-176E, p. 6 |
+| Reala 100 | 36-7 | I3A DX code list (2009) |
+| UltraMax 400 | 96-1 | I3A DX code list (2009), MAX 400 |
+| HP5 Plus, FP4 Plus, Delta 3200 | 109-9, 109-12, 108-10 | I3A DX code list (2009) |
+| Portra 400, Kodacolor 100, Phoenix 200 | 95-13, 91-1, 105-1 | Community Big Film Database |
+
+The [I3A list](https://mips.di.unimi.it/photofire/archive/additional_material/IIIA_DX_Codes_for_135-size_film_2009.pdf)
+assigns cartridge numbers; the edge code carries the same two parts. The
+[Big Film Database](https://github.com/Merinorus/Open-source-film-database) is a community record,
+not a manufacturer's. Gold 200 (conflicting numbers), Ektar 100 (two generations), Tri-X 400 and
+T-Max 100 (no evidence of a printed barcode), Superia 200 and Color Negative 100 have no barcode
+here. Transparencies carry none. The barcode develops with the strip like the lettering, at 0.5
+density above the base.
 
 The published diagrams and scans establish text and layout families but do not provide precise
 printer font outlines, exposure spectra or tolerances. System vector lettering and its millimetre

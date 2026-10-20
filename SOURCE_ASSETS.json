@@ -364,8 +364,8 @@
     "sha256": "5ad67e62ad6d4c5977f80614eb8d32757ad4282488e56ea85a5b157736c96f26"
   },
   "Sources/FotufilmCore/Stocks/c200.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-0249E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer documents and developed-film photographs in edgePrinting.sources; see docs/print-frame-model.md.",
-    "sha256": "9030b8f9b09d1ca68e38cd941488f2292bd680034637a2551324add8b02935d5"
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-0249E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer documents and developed-film photographs in edgePrinting.sources; see docs/print-frame-model.md. The DX edge barcode encodes the DX number cited in edgePrinting.dx.source.",
+    "sha256": "efebc59eb3d0f750fdec3440d2d748a8522817501270ff849f7584d28330d54f"
   },
   "Sources/FotufilmCore/Stocks/cinestill400d.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
@@ -376,8 +376,8 @@
     "sha256": "2509b7cadcc5db478a74bfb995887255f3d055e0038184b8ea3339c398481226"
   },
   "Sources/FotufilmCore/Stocks/delta3200.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Ilford Delta 3200 TI (2002), DD-X 9-minute vector trace density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer documents and developed-film photographs in edgePrinting.sources; see docs/print-frame-model.md.",
-    "sha256": "02942574642471ca1f7ba4aad8ed5d8cacf06c09aa1f43d3db6119606f408822"
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Ilford Delta 3200 TI (2002), DD-X 9-minute vector trace density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer documents and developed-film photographs in edgePrinting.sources; see docs/print-frame-model.md. The DX edge barcode encodes the DX number cited in edgePrinting.dx.source.",
+    "sha256": "19d6913321d32cf8fe2c68f376278232595db9fee8ee126f809960bee5fd7d75"
   },
   "Sources/FotufilmCore/Stocks/doublex5222.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak H-1-5222 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer references in edgePrinting.sources; see docs/print-frame-model.md.",
@@ -404,12 +404,12 @@
     "sha256": "918b963db6bc206c40874ff3ebcaffd837f81332c0af7057b12bb8a54c419f44"
   },
   "Sources/FotufilmCore/Stocks/fp4plus125.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt. Sheet-notch metadata follows Ilford Notch Codes Guide; see sheetNotches.source. Edge inscriptions and approximate physical placement follow the manufacturer documents and developed-film photographs in edgePrinting.sources; see docs/print-frame-model.md.",
-    "sha256": "123d5c5e68614af56cd5abf96d6a9a6df7212c0369cefa3a92e1ad03a74593a3"
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt. Sheet-notch metadata follows Ilford Notch Codes Guide; see sheetNotches.source. Edge inscriptions and approximate physical placement follow the manufacturer documents and developed-film photographs in edgePrinting.sources; see docs/print-frame-model.md. The DX edge barcode encodes the DX number cited in edgePrinting.dx.source.",
+    "sha256": "74c290df23889fbfaf118d161f4ec61665d4626a0f43812f3bf62d3dabeba0f1"
   },
   "Sources/FotufilmCore/Stocks/hp5plus400.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Ilford HP5 Plus TI (Nov 2018) density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer references in edgePrinting.sources; see docs/print-frame-model.md. Sheet-notch metadata follows Ilford Notch Codes Guide; see sheetNotches.source.",
-    "sha256": "ad24baff296ef58fbd1cfeb77c2efe963b46104bded410588a9fa68771a18b9d"
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Ilford HP5 Plus TI (Nov 2018) density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer references in edgePrinting.sources; see docs/print-frame-model.md. Sheet-notch metadata follows Ilford Notch Codes Guide; see sheetNotches.source. The DX edge barcode encodes the DX number cited in edgePrinting.dx.source.",
+    "sha256": "c6a9db0f138409eccc86f2fd019bafd3df57e491e43eaff54f84b828b03f8cec"
   },
   "Sources/FotufilmCore/Stocks/instaxmini.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-076E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
@@ -432,28 +432,28 @@
     "sha256": "5a5c491c469249e4e2f40b0b8f793eada29398d7f455aa5732870903b967591b"
   },
   "Sources/FotufilmCore/Stocks/kodacolor100.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak E-7022 (2016), shared Gold 200 curve retained by Kodacolor 100 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer documents and developed-film photographs in edgePrinting.sources; see docs/print-frame-model.md.",
-    "sha256": "cbd26f130f3d1928469cb03fd750c14dd0e85431279dabca809733767eab1d6b"
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak E-7022 (2016), shared Gold 200 curve retained by Kodacolor 100 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer documents and developed-film photographs in edgePrinting.sources; see docs/print-frame-model.md. The DX edge barcode encodes the DX number cited in edgePrinting.dx.source.",
+    "sha256": "c434ae9ed05a559e4e764d6a0308ef13c11d9e51c63705d7426b21f0c561b7c0"
   },
   "Sources/FotufilmCore/Stocks/lomocolor100.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer documents and developed-film photographs in edgePrinting.sources; see docs/print-frame-model.md.",
     "sha256": "e4f4dceb7059b7cdb357d0a27fb6125e1799899c56605d3abbe78341b4dac6c6"
   },
   "Sources/FotufilmCore/Stocks/portra400.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak E-4050 density records with C1 interpolation. Above +1.6 log E the normal-development records follow a measured highlight response up to +2.6 log E, then approach D-max exponentially; the toe keeps the datasheet's monotonic extrapolation. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer references in edgePrinting.sources; see docs/print-frame-model.md.",
-    "sha256": "2868a843b602e386642e07db302659e713c46e9d86bff205a91ce44946a2f063"
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak E-4050 density records with C1 interpolation. Above +1.6 log E the normal-development records follow a measured highlight response up to +2.6 log E, then approach D-max exponentially; the toe keeps the datasheet's monotonic extrapolation. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer references in edgePrinting.sources; see docs/print-frame-model.md. The DX edge barcode encodes the DX number cited in edgePrinting.dx.source.",
+    "sha256": "6a98433bc13fb36b6bf33968506ffaea055c00179c0b90b33d63f97d8ac8cafc"
   },
   "Sources/FotufilmCore/Stocks/pro160ns.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-0232E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer documents and developed-film photographs in edgePrinting.sources; see docs/print-frame-model.md.",
     "sha256": "900c37fb0ac3b53648dcb71fcdbb2009863e31db109a5ea6e770c5b86ee96080"
   },
   "Sources/FotufilmCore/Stocks/pro400h.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-176E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer documents and developed-film photographs in edgePrinting.sources; see docs/print-frame-model.md.",
-    "sha256": "29befbdf7db9a3c7ba4bbad315254811cb2cf42855bb86d8e6724d4030bc6ddd"
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-176E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer documents and developed-film photographs in edgePrinting.sources; see docs/print-frame-model.md. The DX edge barcode encodes the DX number cited in edgePrinting.dx.source.",
+    "sha256": "1aa10323f30c17b97572fcd63e68ec5b6ca38076782b7f1bb2f051b78a5eb28f"
   },
   "Sources/FotufilmCore/Stocks/reala100.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-967E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer documents and developed-film photographs in edgePrinting.sources; see docs/print-frame-model.md.",
-    "sha256": "303711728577432123fe1b8ed4e37a4f82332dcdfe0cab513c3732d282a0471b"
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-967E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer documents and developed-film photographs in edgePrinting.sources; see docs/print-frame-model.md. The DX edge barcode encodes the DX number cited in edgePrinting.dx.source.",
+    "sha256": "495e9739c2a5deab52f248f38f12a525b0dfb4a572ef1344fada535d37793a63"
   },
   "Sources/FotufilmCore/Stocks/reala500d.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm KB-111E3 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer documents and developed-film photographs in edgePrinting.sources; see docs/print-frame-model.md.",
@@ -464,16 +464,16 @@
     "sha256": "97dab32f8615faaaa79295bd73ba3623e9894c4bd4b34cc3f9f1a5e29b53037c"
   },
   "Sources/FotufilmCore/Stocks/superia400.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-0217E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer documents and developed-film photographs in edgePrinting.sources; see docs/print-frame-model.md.",
-    "sha256": "9f0b80188533647e38dd296bb0f5727cd148908df63e36310b60d1c3b24f22ad"
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-0217E density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer documents and developed-film photographs in edgePrinting.sources; see docs/print-frame-model.md. The DX edge barcode encodes the DX number cited in edgePrinting.dx.source.",
+    "sha256": "22c94c05bf1b21b80b1c612fdb0b6bb33734ab878032a0d151d2cc570bce71a0"
   },
   "Sources/FotufilmCore/Stocks/tmax100.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer references in edgePrinting.sources; see docs/print-frame-model.md.",
     "sha256": "d777edb0b43ed11b5b88c13e75ebc8d23975db8b84ea3ac4de617e6b141a2bd3"
   },
   "Sources/FotufilmCore/Stocks/ultramax400.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak E-7023 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer documents and developed-film photographs in edgePrinting.sources; see docs/print-frame-model.md.",
-    "sha256": "f8a74e6ad89be01436fcaf112d2a8b30dc3e45a2ffa14e41ebf8e836d5a678e8"
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak E-7023 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer documents and developed-film photographs in edgePrinting.sources; see docs/print-frame-model.md. The DX edge barcode encodes the DX number cited in edgePrinting.dx.source.",
+    "sha256": "17a8169c3a9accb276f2ea88f99c0c9b0dfb8604e9f80f6f0b788b5d432846ad"
   },
   "Sources/FotufilmCore/Stocks/velvia50.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Fujifilm AF3-0221E2 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer references in edgePrinting.sources; see docs/print-frame-model.md.",
@@ -512,8 +512,8 @@
     "sha256": "e68934ea1db87bb3169f87ed35e34ed252921099ac2b570a5eeb2c2f3efb286f"
   },
   "Sources/FotufilmCore/Stocks/phoenix200.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer documents and developed-film photographs in edgePrinting.sources; see docs/print-frame-model.md.",
-    "sha256": "b7e55843108bb06c1a270231e208ba8a36f30f471633e58c99b1005b7459f40e"
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer documents and developed-film photographs in edgePrinting.sources; see docs/print-frame-model.md. The DX edge barcode encodes the DX number cited in edgePrinting.dx.source.",
+    "sha256": "b2f0a46222d88d0fe7361cc3c55e06caf2390c26b224eb2cf9ecdd3919cde5e9"
   },
   "web/src/assets/fotufilm-wordmark.svg": {
     "provenance": "Project-authored Fotufilm wordmark; no photography or manufacturer artwork.",

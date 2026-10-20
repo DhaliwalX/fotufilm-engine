@@ -16,6 +16,10 @@ export function framePalette(plan, colorSpace) {
       card: [0.86, 0.86, 0.86],
       cutout: c.cutoutRGB ?? [0.96, 0.96, 0.96],
       ...(c.edgeTransmission ? { edgeTransmission: c.edgeTransmission } : {}),
+      barcode: c.barcodeRGB ?? [0, 0, 0],
+      ...(c.barcodeTransmission
+        ? { barcodeTransmission: c.barcodeTransmission }
+        : {}),
     }).map(([key, rgb]) => [key, rgb.map(encode)]),
   );
 }
@@ -105,6 +109,25 @@ function edgePrinting(ctx, g, printing) {
     ctx.fillText(mark.text, m.actualBoundingBoxLeft, m.actualBoundingBoxAscent);
     ctx.restore();
   }
+  ctx.restore();
+}
+// The DX barcode's bars, in the edge printing's coordinates (FilmEdgePrinting.barcode).
+function edgeBars(ctx, g, bars) {
+  if (!bars?.length) return;
+  ctx.save();
+  if (!g.horizontalTransport) {
+    ctx.translate(g.widthMM, 0);
+    ctx.rotate(Math.PI / 2);
+  }
+  ctx.beginPath();
+  ctx.rect(
+    0,
+    0,
+    g.horizontalTransport ? g.widthMM : g.heightMM,
+    g.horizontalTransport ? g.heightMM : g.widthMM,
+  );
+  ctx.clip();
+  for (const bar of bars) ctx.fillRect(bar.xMM, bar.yMM, bar.widthMM, bar.heightMM);
   ctx.restore();
 }
 function carrier(ctx, photo, width) {
@@ -199,6 +222,7 @@ export function stripMasks(plan) {
   };
   return {
     letters: mask((ctx) => edgePrinting(ctx, c.geometry, c.edgePrinting)),
+    bars: mask((ctx) => edgeBars(ctx, c.geometry, c.edgeBars)),
     holes: mask((ctx) => {
       perforations(ctx, c.geometry, plan.perforation);
       for (const notch of c.sheetNotches?.notches || [])
@@ -318,6 +342,14 @@ export async function renderPrintFrame(
         ? "multiply"
         : "screen";
     edgePrinting(ctx, c.geometry, c.edgePrinting);
+    const barTransmission = developed ? palette.barcodeTransmission : null;
+    ctx.fillStyle = color(barTransmission || palette.barcode || [0, 0, 0]);
+    ctx.globalCompositeOperation = !developed
+      ? "source-over"
+      : barTransmission
+        ? "multiply"
+        : "screen";
+    edgeBars(ctx, c.geometry, c.edgeBars);
     ctx.globalCompositeOperation = "source-over";
     ctx.fillStyle = color(palette.cutout);
     perforations(ctx, c.geometry, plan.perforation);
