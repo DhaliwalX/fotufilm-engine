@@ -61,8 +61,8 @@ const p3To2020 = [
 ]
 function standardTransfer(code, transfer) {
   const v = Math.max(0, code)
-  if (transfer === 'arib-std-b67') return hlg(Math.min(1, v)) / hlg(0.75)
-  if (transfer === 'smpte2084') {
+  if (transfer === 'hlg') return hlg(Math.min(1, v)) / hlg(0.75)
+  if (transfer === 'pq') {
     const p = Math.min(1, v) ** (32 / 2523)
     return (
       ((Math.max(p - 3424 / 4096, 0) /
@@ -111,7 +111,7 @@ export function videoTransform(encoding, colorSpace = {}) {
   return {
     matrix,
     decode: (v) => standardTransfer(v, colorSpace.transfer),
-    displayLight: colorSpace.transfer === 'smpte2084',
+    displayLight: colorSpace.transfer === 'pq',
   }
 }
 

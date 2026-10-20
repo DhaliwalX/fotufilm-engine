@@ -130,12 +130,12 @@ test('NV12 legal black/white and full-range RGB use their declared transfer', ()
 })
 test('PQ display light returns to the scene: BT.2408 grey at 26 nits is 0.18', () => {
   assert.equal(
-    videoTransform('standard', { transfer: 'smpte2084', primaries: 'bt2020' })
+    videoTransform('standard', { transfer: 'pq', primaries: 'bt2020' })
       .displayLight,
     true,
   )
   assert.equal(
-    videoTransform('standard', { transfer: 'arib-std-b67', primaries: 'bt2020' })
+    videoTransform('standard', { transfer: 'hlg', primaries: 'bt2020' })
       .displayLight,
     false,
   )
@@ -149,7 +149,7 @@ test('standard HDR white is normalized and unsupported color contracts fail expl
   assert.ok(
     Math.abs(
       videoTransform('standard', {
-        transfer: 'arib-std-b67',
+        transfer: 'hlg',
         primaries: 'bt2020',
       }).decode(0.75) - 1,
     ) < 1e-12,
@@ -157,7 +157,7 @@ test('standard HDR white is normalized and unsupported color contracts fail expl
   assert.ok(
     Math.abs(
       videoTransform('standard', {
-        transfer: 'smpte2084',
+        transfer: 'pq',
         primaries: 'bt2020',
       }).decode(0.580688881) - 1,
     ) < 1e-6,
