@@ -112,16 +112,16 @@ final class PrintFrameTests: XCTestCase {
         let picture = rgb(framed, data, middle, margins.top + height / 2)
         for channel in 0..<3 {
             XCTAssertEqual(unexposed[channel], rebate[channel], accuracy: 2 / 65535)
-            // Linear 0.02 in Display P3's curve.
-            XCTAssertEqual(rebate[channel], 0.155, accuracy: 0.01)
-            // A mid-grey moves by a linear 0.02 of what it lacks of white, not the base's encoding.
+            // Linear 0.004 in Display P3's curve: near-black, about 13 of 255.
+            XCTAssertEqual(rebate[channel], 0.051, accuracy: 0.005)
+            // A mid-grey moves by a linear 0.004 of what it lacks of white, not the base's encoding.
             XCTAssertGreaterThan(picture[channel], 0.5)
             XCTAssertLessThan(picture[channel], 0.53)
         }
         // The lower perforations' row, 3.4 mm in from the edge: its open holes are the darkest.
         let row = stripHeight - 1 - Int(3.4 * pixelsPerMM)
         let hole = (0..<stripWidth).map { rgb(framed, data, $0, row) }.min { $0.max() < $1.max() }!
-        XCTAssertLessThan(hole.max(), rebate.min() - 0.1)
+        XCTAssertLessThan(hole.max(), rebate.min() - 0.04)
     }
 
     func testNoneIsTheOriginalImage() throws {

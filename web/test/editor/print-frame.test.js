@@ -225,8 +225,8 @@ test("a film border's camera survives save/load and reaches the frame plan", () 
 });
 
 test("a positive scan's black point lifts unexposed film to the base and barely moves mid-tones", () => {
-  // Linear 0.02, the native invertedBaseRGB, in the sRGB curve.
-  const base = 1.055 * 0.02 ** (1 / 2.4) - 0.055;
+  // Linear 0.004, the native invertedBaseRGB, in the sRGB curve.
+  const base = 1.055 * 0.004 ** (1 / 2.4) - 0.055;
   const levels = liftedLevels(base, 65536);
   // Film that saw no light reads as the rebate, wherever it lies; white stays white.
   assert.ok(Math.abs(levels[0] - base) < 1e-6);
