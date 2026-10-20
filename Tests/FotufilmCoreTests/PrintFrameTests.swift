@@ -849,32 +849,35 @@ final class PrintFrameTests: XCTestCase {
         XCTAssertTrue(zip(bar, picture).allSatisfy { $0 <= $1 })
     }
 
-    func testPerforationsAreCutWithTheirOwnSmallImperfections() {
-        func outline(_ hole: Int, bellHowell: Bool = false) -> [SIMD2<Double>] {
-            PrintFrameRenderer.perforationOutline(x: 2, centre: 7.125, width: 1.98, height: 2.794,
-                                                  radius: 0.5, bellHowell: bellHowell, hole: hole)
-        }
+    func testPerforationsAreCutClean() {
         // The browser traces the same edge (web/test/editor/print-frame.test.js).
-        let ks = outline(3), bh = outline(4097, bellHowell: true)
+        let ks = PrintFrameRenderer.perforationOutline(x: 2, centre: 7.125, width: 1.98, height: 2.794,
+                                                       radius: 0.5, bellHowell: false)
         XCTAssertEqual(ks.count, 220)
-        XCTAssertEqual(ks[0].x, 2.494434539, accuracy: 1e-6)
-        XCTAssertEqual(ks[100].y, 8.380326384, accuracy: 1e-6)
-        XCTAssertEqual(bh.count, 156)
-        XCTAssertEqual(bh[100].x, 2.238402747, accuracy: 1e-6)
-        XCTAssertEqual(outline(3), ks)
-        for hole in [0, 1, 2, 4096, 4097] {
-            let points = outline(hole)
-            // Within a tenth of a millimetre of the die, and closing on itself.
-            for p in points {
-                XCTAssertTrue((1.9...4.08).contains(p.x) && (5.63...8.62).contains(p.y), "\(hole): \(p)")
-            }
-            let close = points[0] - points[points.count - 1]
-            XCTAssertLessThan((close * close).sum().squareRoot(), 0.08)
-            // Each hole its own: not the last one moved.
-            let other = outline(hole + 1)
-            let offset = points[0] - other[0]
-            let moved = zip(points, other).map { (($0 - $1 - offset) * ($0 - $1 - offset)).sum().squareRoot() }
-            XCTAssertGreaterThan(moved.max() ?? 0, 0.01)
+        // Every point on the die's rounded rectangle: no burr, chip or wander.
+        let centre = SIMD2(2.99, 7.125), half = SIMD2(0.99, 1.397)
+        for p in ks {
+            let q = SIMD2(abs(p.x - centre.x), abs(p.y - centre.y)) - (half - 0.5)
+            let outside = SIMD2(max(q.x, 0), max(q.y, 0))
+            XCTAssertEqual((outside * outside).sum().squareRoot() + min(max(q.x, q.y), 0) - 0.5, 0,
+                           accuracy: 1e-9, "\(p)")
+        }
+        // The next hole along is the same cut, a pitch on.
+        let next = PrintFrameRenderer.perforationOutline(x: 2, centre: 7.125 + 4.75, width: 1.98,
+                                                         height: 2.794, radius: 0.5, bellHowell: false)
+        for (a, b) in zip(ks, next) {
+            XCTAssertEqual(b.x, a.x, accuracy: 1e-12)
+            XCTAssertEqual(b.y - a.y, 4.75, accuracy: 1e-12)
+        }
+        // Bell & Howell: a circle clipped by two flats.
+        let bh = PrintFrameRenderer.perforationOutline(x: 2, centre: 7.125, width: 2.794, height: 1.854,
+                                                       radius: 0, bellHowell: true)
+        XCTAssertEqual(bh.count, 208)
+        for p in bh {
+            let d = p - SIMD2(3.397, 7.125)
+            let onArc = abs((d * d).sum().squareRoot() - 1.397) < 1e-9
+            let onFlat = abs(abs(d.y) - 0.927) < 1e-9 && abs(d.x) <= 1.397
+            XCTAssertTrue(onArc || onFlat, "\(p)")
         }
     }
 
