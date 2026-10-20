@@ -6,12 +6,13 @@ final class WebPrintFrameRequestTests: XCTestCase {
     private func request(_ frame: PrintFrame, stock: String? = "gold200", format: String = "35mm",
                          medium: String = "ektacolor-edge", width: Int = 300, height: Int = 200,
                          margin: Double? = nil, frameNumber: Int? = nil,
-                         edgePrinting: Bool? = nil) throws -> Data {
+                         edgePrinting: Bool? = nil, framing: [Double]? = nil) throws -> Data {
         var value: [String: Any] = ["kind": "print-frame", "frame": frame.rawValue,
             "format": format, "medium": medium, "width": width, "height": height]
         if let margin { value["margin"] = margin }
         if let frameNumber { value["frameNumber"] = frameNumber }
         if let edgePrinting { value["edgePrinting"] = edgePrinting }
+        if let framing { value["framing"] = framing }
         if let stock {
             value["stock"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(
                 XCTUnwrap(FilmStock.presetDefinitions[stock])))
@@ -31,12 +32,17 @@ final class WebPrintFrameRequestTests: XCTestCase {
                 let expected = PrintFrameConfiguration(frame: frame, formatID: "35mm", stockID: stock,
                                                        paper: PrintPaper.preset(id: paper)!)
                 XCTAssertEqual(actual.configuration, expected)
-                XCTAssertEqual(actual.placement, PrintFramePlacement.layout(width: size.0, height: size.1, configuration: expected))
+                // A film border lays its frame around the part of the photograph it shows.
+                let crop = PrintFramePlacement.photoCrop(width: size.0, height: size.1, configuration: expected)
+                XCTAssertEqual(actual.crop, crop)
+                XCTAssertEqual(crop != nil, frame.showsFilmStrip && size.0 == size.1) // 3:2 and 2:3 fit
+                let shown = crop.map { (Int($0.width), Int($0.height)) } ?? size
+                XCTAssertEqual(actual.placement, PrintFramePlacement.layout(width: shown.0, height: shown.1, configuration: expected))
                 XCTAssertTrue(actual.available.contains(frame))
-                XCTAssertEqual(actual.placement.image.width, Double(size.0))
-                XCTAssertEqual(actual.placement.image.height, Double(size.1))
-                XCTAssertGreaterThanOrEqual(actual.placement.size.width, Double(size.0))
-                XCTAssertGreaterThanOrEqual(actual.placement.size.height, Double(size.1))
+                XCTAssertEqual(actual.placement.image.width, Double(shown.0))
+                XCTAssertEqual(actual.placement.image.height, Double(shown.1))
+                XCTAssertGreaterThanOrEqual(actual.placement.size.width, Double(shown.0))
+                XCTAssertGreaterThanOrEqual(actual.placement.size.height, Double(shown.1))
             }
         }
     }
@@ -146,6 +152,28 @@ final class WebPrintFrameRequestTests: XCTestCase {
         XCTAssertFalse(paper.edgePrinting)
         for number in [-1, 39] {
             XCTAssertThrowsError(try WebRenderRequest.prepare(request(.film, frameNumber: number)))
+        }
+    }
+
+    func testAFilmBorderPlansTheCropItShowsAndTheFrameAroundIt() throws {
+        let plan = try result(request(.film, stock: "portra400", width: 400, height: 300, framing: [0, 1]))
+        let crop = try XCTUnwrap(plan.crop)
+        XCTAssertEqual([crop.x, crop.y, crop.width, crop.height], [0, 33, 400, 267])
+        let fraction = try XCTUnwrap(plan.cropFraction)
+        XCTAssertEqual(fraction.y, 33 / 300.0, accuracy: 1e-12)
+        XCTAssertEqual(fraction.height, 267 / 300.0, accuracy: 1e-12)
+        XCTAssertEqual(plan.configuration.framing, SIMD2(0, 1))
+        // Everything else is the frame around the crop, as though it were the photograph.
+        let around = try result(request(.film, stock: "portra400", width: 400, height: 267, framing: [0, 1]))
+        XCTAssertNil(around.crop)
+        XCTAssertEqual(plan.placement, around.placement)
+        XCTAssertEqual(plan.strip, around.strip)
+        XCTAssertEqual(plan.placement.image.width, 400)
+        XCTAssertEqual(plan.placement.image.height, 267)
+        // Other frames show the whole photograph.
+        XCTAssertNil(try result(request(.paper, stock: "portra400", width: 400, height: 300)).crop)
+        for framing in [[0.0], [0, 1.5], [-1.01, 0]] {
+            XCTAssertThrowsError(try WebRenderRequest.prepare(request(.film, framing: framing)))
         }
     }
 

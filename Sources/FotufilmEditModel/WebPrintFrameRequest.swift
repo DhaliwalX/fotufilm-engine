@@ -17,11 +17,20 @@ public struct WebPrintFrameRequest: Decodable {
     public let frameNumber: Int?
     /// Whether a Film Border shows the stock's edge printing; absent shows it.
     public let edgePrinting: Bool?
+    /// Where a film border's aperture sits on a photograph of another shape, [across, down] from
+    /// -1 to 1; absent centres it.
+    public let framing: [Double]?
     public let width: Int
     public let height: Int
 
     public struct Result: Codable {
         public let configuration: PrintFrameConfiguration
+        /// The part of the photograph the frame shows (`PrintFramePlacement.photoCrop`), in
+        /// pixels of the requested size from the top left; nil shows all of it. Everything
+        /// else describes the frame around the crop.
+        public let crop: PrintFramePlacement.Rect?
+        /// `crop` as fractions of the photograph, for points on the whole of it.
+        public let cropFraction: PrintFramePlacement.Rect?
         public let placement: PrintFramePlacement
         public let perforation: FilmBorderGeometry.PerforationDimensions?
         public let materialSize: PrintFramePlacement.Size
@@ -48,6 +57,9 @@ public struct WebPrintFrameRequest: Decodable {
         guard margin == nil || PrintFrameConfiguration.marginRange.contains(margin!) else {
             throw WebProfileRequest.Failure(description: "Invalid print frame border width.")
         }
+        guard framing == nil || (framing!.count == 2 && framing!.allSatisfy { $0.isFinite && abs($0) <= 1 }) else {
+            throw WebProfileRequest.Failure(description: "Invalid film border framing.")
+        }
         guard frameNumber == nil || FilmEdgePrinting.frameNumberRange.contains(frameNumber!) else {
             throw WebProfileRequest.Failure(description: "Invalid film border frame number.")
         }
@@ -69,16 +81,25 @@ public struct WebPrintFrameRequest: Decodable {
                 negativeViewing: .lightBox, margin: margin ?? 1,
                 frameNumber: recorded ? FilmEdgePrinting.recordedFrameNumber
                     : frameNumber ?? FilmEdgePrinting.recordedFrameNumber,
-                showsEdgePrinting: recorded || edgePrinting ?? true)
+                showsEdgePrinting: recorded || edgePrinting ?? true,
+                framing: framing.map { SIMD2($0[0], $0[1]) } ?? .zero)
         }
         let config = configuration(frame)
+        let crop = PrintFramePlacement.photoCrop(width: width, height: height, configuration: config)
+        let cropFraction = crop.map {
+            PrintFramePlacement.Rect(x: $0.x / Double(width), y: $0.y / Double(height),
+                                     width: $0.width / Double(width), height: $0.height / Double(height))
+        }
+        // The frame is laid out around the part of the photograph it shows.
+        let (shownWidth, shownHeight) = crop.map { (Int($0.width), Int($0.height)) } ?? (width, height)
         // The stock's own cut, at its recorded frame number, says which settings apply.
         let recorded = configuration(frame, recorded: true)
         let numbers = [String(FilmEdgePrinting.recordedFrameNumber),
                        "\(FilmEdgePrinting.recordedFrameNumber)A"]
         let numbered = !recorded.edgeBars.isEmpty
             || recorded.edgePrinting?.marks.contains { numbers.contains($0.text) } == true
-        let placement = PrintFramePlacement.layout(width: width, height: height, configuration: config)
+        let placement = PrintFramePlacement.layout(width: shownWidth, height: shownHeight,
+                                                   configuration: config)
         guard placement.size.width <= 32768, placement.size.height <= 32768,
               placement.size.width * placement.size.height <= 120_000_000 else {
             throw WebProfileRequest.Failure(description: "The framed image is too large. Choose a smaller export size.")
@@ -102,12 +123,14 @@ public struct WebPrintFrameRequest: Decodable {
             .merging(config.edgeTransmission.map { ["edgeTransmission": encoded($0)] } ?? [:]) { $1 }
             .merging(["barcode": encoded(config.barcodeRGB)]) { $1 }
             .merging(config.barcodeTransmission.map { ["barcodeTransmission": encoded($0)] } ?? [:]) { $1 }
-        return try JSONEncoder().encode(Result(configuration: config, placement: placement,
+        return try JSONEncoder().encode(Result(configuration: config, crop: crop, cropFraction: cropFraction,
+            placement: placement,
             perforation: config.geometry?.perforation?.dimensions,
             materialSize: PrintFramePlacement.materialGeometry(config).size,
             renderMedium: renderMedium,
             available: PrintFrame.allCases.filter { configuration($0).frame == $0 },
-            strip: PrintFramePlacement.filmStrip(width: width, height: height, configuration: config),
+            strip: PrintFramePlacement.filmStrip(width: shownWidth, height: shownHeight,
+                                                 configuration: config),
             edgePrinting: recorded.edgePrinting != nil, frameNumber: numbered,
             palette: palette))
     }

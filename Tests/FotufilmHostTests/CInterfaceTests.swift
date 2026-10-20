@@ -551,6 +551,28 @@ extension CInterfaceTests {
         }
         XCTAssertGreaterThan(rail.count, 3)
 
+        // On a square crop it shows the part its aperture fills, where the framing puts it.
+        func cut(_ framing: [Double]) throws -> (json: [String: Any], payload: Data) {
+            try call("render", """
+            {"handle": \(handle), "maxEdge": null,
+             "printFrame": {"kind": "print-frame", "stock": "gold200", "frame": "film", "width": 1, "height": 1,
+                            "framing": \(framing)},
+             "edit": {"stock": "gold200", "params": {}, "crop": [[0, 0], [0.5, 0], [0.5, 1], [0, 1]]},
+             "profileRequest": {"controls": {}}}
+            """)
+        }
+        let left = try cut([-1, 0]), right = try cut([1, 0])
+        let leftCrop = try XCTUnwrap((left.json["framePlan"] as? [String: Any])?["crop"] as? [String: Any])
+        let rightCrop = try XCTUnwrap((right.json["framePlan"] as? [String: Any])?["crop"] as? [String: Any])
+        XCTAssertEqual(leftCrop["x"] as? Double, 0)
+        XCTAssertGreaterThan(rightCrop["x"] as? Double ?? 0, 0)
+        XCTAssertEqual(leftCrop["width"] as? Double, rightCrop["width"] as? Double)
+        XCTAssertEqual(left.json["width"] as? Int, right.json["width"] as? Int)
+        let leftPreview = try XCTUnwrap((left.json["payloads"] as? [String: [Int]])?["preview"])
+        let rightPreview = try XCTUnwrap((right.json["payloads"] as? [String: [Int]])?["preview"])
+        XCTAssertNotEqual(left.payload.subdata(in: leftPreview[0]..<(leftPreview[0] + leftPreview[1])),
+                          right.payload.subdata(in: rightPreview[0]..<(rightPreview[0] + rightPreview[1])))
+
         // Lens sliders plan a correction without a profile, and it reaches the develop.
         let lens = #""lens": {"enabled": true, "amount": 1, "profileID": null, "distortion": -0.5, "vignetting": 0.5, "redCyan": 0, "blueYellow": 0}"#
         let plan = try call("lensPlan", #"{"handle": \#(handle), \#(lens)}"#)

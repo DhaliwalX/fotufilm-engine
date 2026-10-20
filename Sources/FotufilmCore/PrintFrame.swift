@@ -399,6 +399,10 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
     public let frame: PrintFrame
     /// The margin multiple for a frame with an adjustable margin; nil for every other frame.
     public let margin: Double?
+    /// Where a film border's aperture sits on a photograph of another shape, which it crops to
+    /// fill: -1 to 1 across and down, from the left or top edge to the right or bottom, 0 centred
+    /// (`PrintFramePlacement.photoCrop`). Nil for every other frame.
+    public let framing: SIMD2<Double>?
     public let geometry: FilmBorderGeometry?
     public let sheet: PaperSheetGeometry?
     public let slideMount: SlideMountGeometry?
@@ -438,17 +442,20 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
     public init(frame: PrintFrame, formatID: String?, stockID: String,
                 paper: PrintPaper, viewingKelvin: Float? = nil,
                 negativeViewing: NegativeViewing = .lightBox, margin: Double = 1,
-                frameNumber: Int = FilmEdgePrinting.recordedFrameNumber, showsEdgePrinting: Bool = true) {
+                frameNumber: Int = FilmEdgePrinting.recordedFrameNumber, showsEdgePrinting: Bool = true,
+                framing: SIMD2<Double> = .zero) {
         self.init(frame: frame, formatID: formatID, definition: FilmStock.presetDefinitions[stockID],
                   paper: paper, viewingKelvin: viewingKelvin, negativeViewing: negativeViewing,
-                  margin: margin, frameNumber: frameNumber, showsEdgePrinting: showsEdgePrinting)
+                  margin: margin, frameNumber: frameNumber, showsEdgePrinting: showsEdgePrinting,
+                  framing: framing)
     }
 
     /// Explicit stock metadata also supports isolated runtimes without a process-wide pack registry.
     public init(frame: PrintFrame, formatID: String?, definition: FilmStockDefinition?,
                 paper: PrintPaper, viewingKelvin: Float? = nil,
                 negativeViewing: NegativeViewing = .lightBox, margin: Double = 1,
-                frameNumber: Int = FilmEdgePrinting.recordedFrameNumber, showsEdgePrinting: Bool = true) {
+                frameNumber: Int = FilmEdgePrinting.recordedFrameNumber, showsEdgePrinting: Bool = true,
+                framing: SIMD2<Double> = .zero) {
         let nativeID = definition?.nativeFormatID
         let motionStock = nativeID.flatMap(FilmFormat.preset(id:))?.isMotionPicture == true
         let nativeInstant = nativeID.flatMap { FilmBorderGeometry.preset($0) }?.isInstant == true
@@ -486,6 +493,9 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
             ? min(max(margin, Self.marginRange.lowerBound), Self.marginRange.upperBound) : 1
         self.margin = self.frame.hasAdjustableMargin ? scale : nil
         geometry = self.frame.showsFilmStrip ? film : nil
+        self.framing = geometry == nil ? nil : SIMD2(
+            framing.x.isFinite ? min(max(framing.x, -1), 1) : 0,
+            framing.y.isFinite ? min(max(framing.y, -1), 1) : 0)
         sheet = PaperSheetGeometry.preset(for: self.frame).map {
             PaperSheetGeometry(widthMM: $0.widthMM, heightMM: $0.heightMM,
                                marginMM: $0.marginMM * scale, rebateMM: $0.rebateMM)

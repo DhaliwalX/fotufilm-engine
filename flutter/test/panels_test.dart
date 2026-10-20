@@ -98,6 +98,7 @@ void main() {
       'medium': 'screen',
       'frameNumber': 1,
       'edgePrinting': true,
+      'framing': [0, 0],
       'viewingKelvin': 2856,
       'width': 300,
       'height': 200,
@@ -108,6 +109,24 @@ void main() {
     final request = frameRequest(film, lights);
     expect(request['frameNumber'], 23);
     expect(request['edgePrinting'], isFalse);
+    expect(request['framing'], [0, 0]);
+    expect(frameRequest({...film, 'printFrameFraming': [0.5, -1]}, lights)['framing'], [0.5, -1]);
+  });
+
+  test('a drag moves a film border over the photograph with the pointer, as far as its edges', () {
+    // A 400 × 300 photograph cropped to 400 × 267 and shown in a frame 500 wide on 250 points.
+    final plan = {
+      'crop': {'x': 0, 'y': 17, 'width': 400, 'height': 267},
+      'cropFraction': {'x': 0, 'y': 17 / 300, 'width': 1, 'height': 267 / 300},
+      'placement': {
+        'size': {'width': 500, 'height': 400},
+      },
+    };
+    // Down 8 points is 16 photograph pixels: the aperture moves up by 16 of the 33 spare.
+    final down = framingAfterDrag([0, 0], const Offset(30, 8), plan, 250);
+    expect(down[0], 0); // nothing spare across
+    expect(down[1], closeTo(-2 * 16 / 33, 1e-9));
+    expect(framingAfterDrag([0, 0], const Offset(0, -100), plan, 250)[1], 1);
     expect(framesPicture({'printFrame': 'none'}), isFalse);
   });
 }

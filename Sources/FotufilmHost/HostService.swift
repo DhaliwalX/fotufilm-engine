@@ -443,7 +443,7 @@ public final class HostService {
         let prepared = try prepare(params)
         let (request, image, geometry) = (prepared.request, prepared.image, prepared.geometry)
         let (maxEdge, sizes) = (prepared.maxEdge, prepared.sizes)
-        let (width, height) = sizes.output
+        var (width, height) = sizes.output
         var body = (try? JSONSerialization.jsonObject(with: params)) as? [String: Any] ?? [:]
 
         // A frame surrounds the whole picture, never a tile of it, and changes how it develops.
@@ -452,6 +452,13 @@ public final class HostService {
                 try HostFrames.plan($0, width: width, height: height)
             }
             : nil
+        // A film border shows the part of the photograph its aperture fills, and the rest of
+        // the render is of that part.
+        let crop = plan?.crop
+        if let crop {
+            HostFrames.cropped(&body, to: crop, width: width, height: height)
+            (width, height) = (Int(crop.width), Int(crop.height))
+        }
         var edit = prepared.edit
         if let plan {
             HostFrames.settings(&body, for: plan)
@@ -481,13 +488,15 @@ public final class HostService {
             + (ceiling.map { "|edr \($0)" } ?? "")
         let draft = body["draft"] as? Bool == true
         let frameKey = sceneKey + "|" + String(describing: plan?.json["placement"] ?? "")
+            + (crop.map { "|crop \($0)" } ?? "")
             + (draft ? "|draft" : "")
 
         // Made only when something below needs it: a played frame may need no light at all.
         var framedScene: [Float]?
         func scene() throws -> [Float] {
             if let framedScene { return framedScene }
-            let made = try sceneFor(image, geometry: geometry, sizes: sizes, draft: draft)
+            var made = try sceneFor(image, geometry: geometry, sizes: sizes, draft: draft)
+            if let crop { made = PrintFramePlacement.cropped(made, width: sizes.output.0, to: crop) }
             framedScene = made
             return made
         }
@@ -1048,9 +1057,15 @@ public final class HostService {
 
     func stillJob(_ prepared: Prepared, scene: [Float], body: [String: Any]) throws -> StillJob {
         var body = body
-        let (width, height) = prepared.sizes.output
+        var (width, height) = prepared.sizes.output
         let plan = try (body["printFrame"] as? [String: Any]).flatMap {
             try HostFrames.plan($0, width: width, height: height)
+        }
+        var scene = scene
+        if let crop = plan?.crop {
+            HostFrames.cropped(&body, to: crop, width: width, height: height)
+            scene = PrintFramePlacement.cropped(scene, width: width, to: crop)
+            (width, height) = (Int(crop.width), Int(crop.height))
         }
         var edit = prepared.edit
         if let plan {

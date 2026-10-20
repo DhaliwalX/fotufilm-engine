@@ -7,11 +7,13 @@ import {
   initialHistory,
 } from "../../src/editor-state.js";
 import {
+  cropSource,
   frameRenderEdit,
   frameSamplePoint,
   frameRequest,
   parsePrintFrame,
   parsePrintFrameEdgePrinting,
+  parsePrintFrameFraming,
   parsePrintFrameMargin,
   parsePrintFrameNumber,
   stripSource,
@@ -108,6 +110,31 @@ test("sampling converts the bordered canvas to photo coordinates and ignores mar
   assert.equal(frameSamplePoint([0.5, 0.05], plan), null);
   assert.equal(frameSamplePoint([0.01, 0.4], plan), null);
   assert.deepEqual(frameSamplePoint([0.5, 0.4], null), [0.5, 0.4]);
+  // A film border showing the lower half of a photograph twice as tall: back on the whole of it.
+  assert.deepEqual(
+    frameSamplePoint([0.5, 0.4], {
+      ...plan,
+      cropFraction: { x: 0, y: 0.5, width: 1, height: 0.5 },
+    }),
+    [0.5, 0.75],
+  );
+});
+test("a film border's framing reaches the plan, and its crop reads the part it shows", async () => {
+  const edit = { ...defaultEdit(), printFrame: "film", printFrameFraming: [0.25, -1] };
+  const loaded = parseEdit(JSON.stringify({ version: 1, edit }), []);
+  assert.deepEqual(loaded.printFrameFraming, [0.25, -1]);
+  assert.deepEqual(frameRequest(loaded).framing, [0.25, -1]);
+  delete edit.printFrameFraming;
+  assert.deepEqual(parseEdit(JSON.stringify({ version: 1, edit }), []).printFrameFraming, [0, 0]);
+  for (const value of [[0], [0, 1.5], [NaN, 0], "0,0"])
+    assert.throws(() => parsePrintFrameFraming(value), /Invalid film border framing/);
+  const reads = [];
+  const source = { width: 10, height: 8, read: (x, y, w, h) => (reads.push([x, y, w, h]), "rows") };
+  const part = cropSource(source, { x: 2, y: 3, width: 6, height: 4 });
+  assert.equal(part.width, 6);
+  assert.equal(part.height, 4);
+  assert.equal(part.read(1, 0, 5, 2), "rows");
+  assert.deepEqual(reads, [[3, 3, 5, 2]]);
 });
 test("material noise is stable and bounded across negative and positive coordinates", () => {
   for (let x = -50; x < 50; x += 0.7) {

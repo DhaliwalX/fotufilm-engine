@@ -23,8 +23,23 @@ texture, while geometry and spectral material colours share the native model.
 ## Film geometry
 
 An automatic border uses the stock's native format. An explicit Film Gauge overrides it. Camera
-sensor metadata does not select a different border. A crop that differs from the physical camera
-aperture is centred inside it; the film and holes are never stretched to the crop.
+sensor metadata does not select a different border. A photograph of another shape than the camera
+aperture is cropped to fill it, as a frame exposed in that camera would be; the film and holes are
+never stretched to the photograph.
+
+### Framing
+
+Film Border and Film Border Positive show the largest rectangle of the aperture's shape that fits
+the photograph, turned with it (`PrintFramePlacement.photoCrop`). Where it is placed is the
+framing (`PrintFrameConfiguration.framing`, `framing` in the frame request): -1 to 1 across and
+down, from the photograph's left or top edge to its right or bottom, 0 centred. The plan returns the
+crop in the photograph's pixels (`crop`) and as fractions of it (`cropFraction`), and lays the frame
+out around the crop, so every surface crops the photograph's light first and develops, frames and
+compares that part. A photograph already within a pixel of the aperture's shape is shown whole,
+so a cropped picture asks for no second crop. A subject selection's point stays on the whole
+photograph and is moved onto the crop for the develop. In the desktop and browser editors a drag
+on the fitted picture moves the photograph under the aperture, as far as its edges; the framing
+is saved with the edit and undone in one step. Every other frame shows the whole photograph.
 
 | Format | Image aperture, mm | Film segment, mm | Edge construction |
 | --- | --- | --- | --- |
@@ -259,10 +274,10 @@ Film Border and Film Border Positive develop their whole strip with the photogra
 Emulsion Border develops its band (`PrintFramePlacement.filmStrip`, `UnexposedEdge`). The piece
 of film is the frame's canvas: the photograph in the camera aperture and the film out to its cut
 edges on every side, across the perforation rows. The photograph's light, continued past its
-edges, passes the gate at the photograph's edge, so a crop narrower than the camera aperture
-leaves unexposed film beside it. Beyond the gate the film is base plus fog on a negative and
-maximum density on a transparency, with the stock's grain running unbroken from the picture, and
-the frame's halation and emulsion scatter spread into the rebate in that stock's colour and reach.
+edges, passes the gate at the photograph's edge, which framing puts at the aperture's. Beyond
+the gate the film is base plus fog on a negative and maximum density on a transparency, with the
+stock's grain running unbroken from the picture, and the frame's halation and emulsion scatter
+spread into the rebate in that stock's colour and reach.
 The develop prints on the photograph's own Auto Levels readings. There is no enlarger carrier:
 the strip is viewed whole, on the light box for Film Border and through the selected medium for
 Film Border Positive. With no lens aperture recorded the gate's shadow is drawn at f/2.

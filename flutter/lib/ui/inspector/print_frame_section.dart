@@ -66,6 +66,7 @@ class PrintFrameSection extends StatelessWidget {
             onChanged: (number) => editor.change({'printFrameNumber': number}),
           ),
       ],
+      if (frames.framable) const Note('Drag the picture to choose the part the film shows.'),
       if (error != null || frames.pending) Note(error ?? 'Loading frame options…'),
       if (plan != null && shown != value) const Note('Shown once the film and medium support it.'),
       if (renderMedium != null)

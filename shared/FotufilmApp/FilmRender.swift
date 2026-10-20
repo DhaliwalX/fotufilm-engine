@@ -246,6 +246,29 @@ enum FilmRender {
             return withPixelsWhileFilling(body)
         }
 
+        /// The part of the scene `crop` keeps, in its pixels from the top left: what a film
+        /// border shows of a photograph of another shape (`PrintFramePlacement.photoCrop`).
+        func cropped(to crop: PrintFramePlacement.Rect) -> Scene? {
+            let x = Int(crop.x), y = Int(crop.y), w = Int(crop.width), h = Int(crop.height)
+            guard x >= 0, y >= 0, w > 0, h > 0, x + w <= width, y + h <= height,
+                  let buffer = MappedBuffer(byteCount: w * h * 4 * MemoryLayout<Float>.size)
+            else { return nil }
+            let target = buffer.bound(to: Float.self)
+            withPixels { source in
+                for row in 0..<h {
+                    target.baseAddress!.advanced(by: row * w * 4)
+                        .update(from: source.baseAddress!.advanced(by: ((y + row) * width + x) * 4),
+                                count: w * 4)
+                }
+            }
+            var part = self
+            part.pixels = buffer
+            part.width = w
+            part.height = h
+            part.ready = nil
+            return part
+        }
+
         /// The same buffer without the wait, for the one caller that reads it in step with the
         /// rasterise and waits per strip for the rows it is about to touch.
         func withPixelsWhileFilling<R>(
@@ -785,11 +808,18 @@ enum FilmRender {
         // The develop reads the frame top-down in strips and the rasterise lays it down top-down
         // in bands, so the two need not take turns: the scene comes back as soon as its geometry
         // is settled and the film model waits per strip for the rows it is about to read.
-        guard let scene = scene(source: source, state: state,
+        guard var scene = scene(source: source, state: state,
                                 longEdge: longEdge, upright: upright,
                                 usesSourceFrame: usesSourceFrame,
                                 streaming: !serialScene,
                                 report: report) else { return nil }
+        // A film border shows the part of the photograph its aperture fills, and the rest of
+        // the render is of that part.
+        if let frame, let crop = PrintFramePlacement.photoCrop(width: scene.width, height: scene.height,
+                                                               configuration: frame) {
+            guard let part = scene.cropped(to: crop) else { return nil }
+            scene = part
+        }
         #if os(iOS)
         // The phone has a few hundred megabytes for the whole export; the tile staging the
         // develop keeps for the next frame is worth more to the encode that follows it.

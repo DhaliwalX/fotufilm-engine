@@ -388,6 +388,9 @@ struct EditState: Equatable {
     /// and the frame number it and the DX barcode read.
     var printFrameEdgePrinting = true
     var printFrameNumber = FilmEdgePrinting.recordedFrameNumber
+    /// Where a film border's aperture sits on a photograph of another shape, across and down
+    /// from -1 to 1 (`PrintFrameConfiguration.framing`).
+    var printFrameFraming = SIMD2<Double>.zero
     /// How the developed negative is read when it is the output: on the light box with its
     /// orange base, or through a scanner that divides the base out.
     var negativeViewing = NegativeViewing.lightBox
@@ -595,7 +598,8 @@ struct EditState: Equatable {
                                 viewingKelvin: printFrame.viewsTransparency ? nil : printLightKelvin.map(Float.init),
                                 negativeViewing: .lightBox, margin: printFrameMargin,
                                 frameNumber: printFrameNumber,
-                                showsEdgePrinting: printFrameEdgePrinting)
+                                showsEdgePrinting: printFrameEdgePrinting,
+                                framing: printFrameFraming)
     }
 
     /// A negative stock is seen by transmission on the same reference light box as its rebate.

@@ -21,10 +21,31 @@ Json frameRequest(Json edit, List<Json> printLights, {int width = 1, int height 
     'medium': edit['medium'],
     'frameNumber': edit['printFrameNumber'] ?? 1,
     'edgePrinting': edit['printFrameEdgePrinting'] ?? true,
+    'framing': edit['printFrameFraming'] ?? const [0, 0],
     'viewingKelvin': printLights.where((c) => c['id'] == light).firstOrNull?['value'],
     'width': width,
     'height': height,
   };
+}
+
+/// A film border's framing after the picture is dragged `drag` screen points from `start`, where
+/// `plan`'s framed picture is shown `shown` points wide: the photograph follows the pointer under
+/// the aperture, as far as its edges.
+List<double> framingAfterDrag(List<double> start, ui.Offset drag, Map plan, double shown) {
+  double n(Map m, String key) => (m[key] as num).toDouble();
+  final crop = plan['crop'] as Map, fraction = plan['cropFraction'] as Map;
+  final size = (plan['placement'] as Map)['size'] as Map;
+  // Screen points to photograph pixels; the crop is the photograph's pixels inside the frame.
+  final pixels = drag * (n(size, 'width') / shown);
+  double moved(double from, double by, double cropped, double share) {
+    final spare = cropped / share - cropped;
+    return spare < 1 ? from : (from - 2 * by / spare).clamp(-1.0, 1.0);
+  }
+
+  return [
+    moved(start[0], pixels.dx, n(crop, 'width'), n(fraction, 'width')),
+    moved(start[1], pixels.dy, n(crop, 'height'), n(fraction, 'height')),
+  ];
 }
 
 /// Whether an edit asks for a frame around its picture.
@@ -104,6 +125,43 @@ class PrintFrame extends ChangeNotifier {
     notifyListeners();
     // The framed picture is a different shape: the viewer lays it out again.
     editor.rendered();
+  }
+
+  // ── Framing ───────────────────────────────────────────────────────────────────────────────
+
+  /// Whether the shown frame shows only part of the photograph — a film border on a photograph
+  /// of another shape — so a drag on the picture moves the part it shows.
+  bool get framable {
+    final doc = editor.active, plan = this.plan;
+    return doc != null && plan?['crop'] != null && plan?['cropFraction'] != null &&
+        (plan?['configuration'] as Map?)?['frame'] == doc.edit['printFrame'];
+  }
+
+  List<double>? _framingStart;
+  ui.Offset _framingDrag = ui.Offset.zero;
+
+  /// A drag on the framed picture begins: the framing it moves from.
+  void beginFraming() {
+    final framing = (editor.edit['printFrameFraming'] as List?) ?? const [0, 0];
+    _framingStart = [for (final v in framing) (v as num).toDouble()];
+    _framingDrag = ui.Offset.zero;
+  }
+
+  /// The picture dragged by `delta` on the screen, where the framed picture is `shown` wide: the
+  /// photograph moves under the aperture with the pointer, as far as its edges.
+  void dragFraming(ui.Offset delta, ui.Size shown) {
+    final start = _framingStart, plan = this.plan;
+    if (start == null || plan == null || !framable || shown.width <= 0) return;
+    _framingDrag += delta;
+    editor.patch({'printFrameFraming': framingAfterDrag(start, _framingDrag, plan, shown.width)},
+        group: 'printFrameFraming');
+  }
+
+  /// The drag ends, and the picture develops at full size.
+  void endFraming() {
+    if (_framingStart == null) return;
+    _framingStart = null;
+    editor.endEdit();
   }
 
   /// The shown picture's size: `photo` itself, or with a frame around the finished picture, the

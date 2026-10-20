@@ -610,6 +610,55 @@ final class PrintFrameTests: XCTestCase {
         XCTAssertNotEqual(try pixels(framed), try pixels(printed))
     }
 
+    func testFilmBorderCropsAPhotographOfAnotherShapeToFillItsAperture() throws {
+        func crop(_ width: Int, _ height: Int, frame: PrintFrame = .film, format: String = "35mm",
+                  framing: SIMD2<Double> = .zero) -> PrintFramePlacement.Rect? {
+            let config = PrintFrameConfiguration(frame: frame, formatID: format, stockID: "portra400",
+                                                 paper: .ektacolorEdge, framing: framing)
+            return PrintFramePlacement.photoCrop(width: width, height: height, configuration: config)
+        }
+        // A 4:3 photograph keeps its width and loses height to the 3:2 aperture, centred.
+        let centred = try XCTUnwrap(crop(400, 300))
+        XCTAssertEqual([centred.x, centred.y, centred.width, centred.height], [0, 17, 400, 267])
+        XCTAssertEqual(crop(400, 300, framing: SIMD2(0, -1))?.y, 0)
+        XCTAssertEqual(crop(400, 300, framing: SIMD2(0, 1))?.y, 33)
+        // Across has nowhere to go; the framing is clamped.
+        XCTAssertEqual(crop(400, 300, framing: SIMD2(1, 5))?.x, 0)
+        XCTAssertEqual(crop(400, 300, framing: SIMD2(1, 5))?.y, 33)
+        // A portrait photograph turns the aperture with it; a panorama loses width.
+        XCTAssertEqual(crop(300, 400).map { [$0.width, $0.height] }, [267, 400])
+        let wide = try XCTUnwrap(crop(1600, 900, framing: SIMD2(-1, 0)))
+        XCTAssertEqual([wide.x, wide.y, wide.width, wide.height], [0, 0, 1350, 900])
+        XCTAssertEqual(crop(1600, 900, framing: SIMD2(1, 0))?.x, 250)
+        // A square gauge crops to a square; the positive variant crops the same way.
+        XCTAssertEqual(crop(400, 300, format: "120").map { [$0.width, $0.height] }, [300, 300])
+        XCTAssertEqual(crop(400, 300, frame: .filmPositive), centred)
+        // A photograph already of the aperture's shape, and every other frame, show it whole.
+        XCTAssertNil(crop(300, 200))
+        XCTAssertNil(crop(301, 200))
+        XCTAssertNil(crop(400, 300, frame: .paper))
+        XCTAssertNil(crop(400, 300, frame: .mount))
+        XCTAssertNil(PrintFrameConfiguration(frame: .paper, formatID: "35mm", stockID: "portra400",
+                                             paper: .ektacolorEdge, framing: SIMD2(1, 1)).framing)
+
+        // The crop fills the aperture of the frame laid out around it.
+        let config = PrintFrameConfiguration(frame: .film, formatID: "35mm", stockID: "portra400",
+                                             paper: .ektacolorEdge)
+        let layout = PrintFramePlacement.layout(width: Int(centred.width), height: Int(centred.height),
+                                                configuration: config)
+        let aperture = PrintFramePlacement.materialGeometry(config).aperture
+        XCTAssertEqual(aperture.width * layout.scale, centred.width, accuracy: 1)
+        XCTAssertEqual(aperture.height * layout.scale, centred.height, accuracy: 1)
+        XCTAssertNil(PrintFramePlacement.photoCrop(width: Int(centred.width), height: Int(centred.height),
+                                                   configuration: config))
+
+        // Cropping a plane keeps the rows and columns asked for.
+        let plane = (0..<(4 * 3 * 4)).map(Float.init)
+        let part = PrintFramePlacement.cropped(plane, width: 4,
+                                               to: PrintFramePlacement.Rect(x: 1, y: 1, width: 2, height: 2))
+        XCTAssertEqual(part, [20, 21, 22, 23, 24, 25, 26, 27, 36, 37, 38, 39, 40, 41, 42, 43])
+    }
+
     func testEdgeExposureUsesNegativeAndReversalDensityWithTheSameViewingLamp() {
         for id in ["portra400", "hp5plus400", "vision500t"] {
             let config = configuration(.film, stock: id)

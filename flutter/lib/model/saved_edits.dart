@@ -100,6 +100,13 @@ Json parseEdit(String text, Catalogue catalogue, Iterable<String?> stocks) {
           !frameNumbers.any((c) => c['value'] == edit['printFrameNumber']))) {
     throw const EditProblem('Invalid film border settings.');
   }
+  final framing = edit['printFrameFraming'];
+  if (framing != null &&
+      (framing is! List ||
+          framing.length != 2 ||
+          !framing.every((v) => _finite(v) && (v as num).abs() <= 1))) {
+    throw const EditProblem('Invalid film border framing.');
+  }
   if (edit['halationModel'] != null && !const ['legacy', 'layered'].contains(edit['halationModel'])) {
     throw const EditProblem('Invalid halation model.');
   }

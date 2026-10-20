@@ -29,6 +29,18 @@ export function parsePrintFrameEdgePrinting(value) {
   if (typeof value !== "boolean") throw new Error("Invalid film border edge printing.");
   return value;
 }
+// Where a film border's aperture sits on a photograph of another shape, [across, down] from -1
+// to 1 (Framing); older edits have none and centre it.
+export function parsePrintFrameFraming(value) {
+  if (value == null) return [0, 0];
+  if (
+    !Array.isArray(value) ||
+    value.length !== 2 ||
+    !value.every((v) => Number.isFinite(v) && Math.abs(v) <= 1)
+  )
+    throw new Error("Invalid film border framing.");
+  return value;
+}
 export function frameRequest(edit, width = 1, height = 1) {
   return {
     kind: "print-frame",
@@ -39,6 +51,7 @@ export function frameRequest(edit, width = 1, height = 1) {
     margin: edit.printFrameMargin ?? 1,
     frameNumber: edit.printFrameNumber ?? 1,
     edgePrinting: edit.printFrameEdgePrinting ?? true,
+    framing: edit.printFrameFraming ?? [0, 0],
     viewingKelvin:
       PROFILE_MENUS.printLight.find((c) => c.id === edit.profile?.printLight)
         ?.value ?? null,
@@ -72,7 +85,19 @@ export function frameSamplePoint(point, plan) {
   const y =
     (point[1] * size.height - (size.height - image.y - image.height)) /
     image.height;
-  return x >= 0 && x <= 1 && y >= 0 && y <= 1 ? [x, y] : null;
+  if (!(x >= 0 && x <= 1 && y >= 0 && y <= 1)) return null;
+  // On the whole photograph, of which a film border shows a part.
+  const crop = plan.cropFraction;
+  return crop ? [crop.x + x * crop.width, crop.y + y * crop.height] : [x, y];
+}
+// The part of a source a film border shows (`plan.crop`, from PrintFramePlacement.photoCrop), in
+// its pixels from the top left.
+export function cropSource(source, crop) {
+  return {
+    width: crop.width,
+    height: crop.height,
+    read: (x, y, w, h) => source.read(x + crop.x, y + crop.y, w, h),
+  };
 }
 // A Film Border develops its whole strip with the photograph (`plan.strip`, from
 // PrintFramePlacement.filmStrip): the photograph continued past its edges over the larger piece
