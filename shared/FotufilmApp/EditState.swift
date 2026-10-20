@@ -384,6 +384,10 @@ struct EditState: Equatable {
     var printFrame = PrintFrame.none
     /// Border Width: the frame's margin as a multiple of its preset, for the frames that have one.
     var printFrameMargin = 1.0
+    /// Edge Printing and Frame Number: whether a film border shows the stock's edge printing,
+    /// and the frame number it and the DX barcode read.
+    var printFrameEdgePrinting = true
+    var printFrameNumber = FilmEdgePrinting.recordedFrameNumber
     /// How the developed negative is read when it is the output: on the light box with its
     /// orange base, or through a scanner that divides the base out.
     var negativeViewing = NegativeViewing.lightBox
@@ -589,7 +593,9 @@ struct EditState: Equatable {
         PrintFrameConfiguration(frame: printFrame, formatID: formatID,
                                 stockID: stockID, paper: resolvedPaper,
                                 viewingKelvin: printFrame.viewsTransparency ? nil : printLightKelvin.map(Float.init),
-                                negativeViewing: .lightBox, margin: printFrameMargin)
+                                negativeViewing: .lightBox, margin: printFrameMargin,
+                                frameNumber: printFrameNumber,
+                                showsEdgePrinting: printFrameEdgePrinting)
     }
 
     /// A negative stock is seen by transmission on the same reference light box as its rebate.

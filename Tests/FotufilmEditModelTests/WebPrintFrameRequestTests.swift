@@ -5,10 +5,13 @@ import FotufilmCore
 final class WebPrintFrameRequestTests: XCTestCase {
     private func request(_ frame: PrintFrame, stock: String? = "gold200", format: String = "35mm",
                          medium: String = "ektacolor-edge", width: Int = 300, height: Int = 200,
-                         margin: Double? = nil) throws -> Data {
+                         margin: Double? = nil, frameNumber: Int? = nil,
+                         edgePrinting: Bool? = nil) throws -> Data {
         var value: [String: Any] = ["kind": "print-frame", "frame": frame.rawValue,
             "format": format, "medium": medium, "width": width, "height": height]
         if let margin { value["margin"] = margin }
+        if let frameNumber { value["frameNumber"] = frameNumber }
+        if let edgePrinting { value["edgePrinting"] = edgePrinting }
         if let stock {
             value["stock"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(
                 XCTUnwrap(FilmStock.presetDefinitions[stock])))
@@ -117,6 +120,32 @@ final class WebPrintFrameRequestTests: XCTestCase {
         }
         for margin in [-0.1, 3.1] {
             XCTAssertThrowsError(try result(request(.mount, margin: margin)))
+        }
+    }
+
+    func testFrameNumberAndEdgePrintingTravelInTheRequest() throws {
+        let numbered = try result(request(.film, stock: "portra400", frameNumber: 12))
+        XCTAssertEqual(numbered.configuration.frameNumber, 12)
+        XCTAssertEqual(numbered.configuration, PrintFrameConfiguration(frame: .film, formatID: "35mm",
+            stockID: "portra400", paper: .ektacolorEdge, frameNumber: 12))
+        XCTAssertTrue(numbered.edgePrinting)
+        XCTAssertTrue(numbered.frameNumber)
+        // Hidden, the plan still says the stock has edge printing to show.
+        let hidden = try result(request(.filmPositive, stock: "portra400", edgePrinting: false))
+        XCTAssertNil(hidden.configuration.edgePrinting)
+        XCTAssertTrue(hidden.edgePrinting)
+        XCTAssertTrue(hidden.frameNumber)
+        // A motion-picture cut has codes but no frame numbers; an unlettered stock has neither.
+        let motion = try result(request(.film, stock: "vision500t", format: "super35"))
+        XCTAssertTrue(motion.edgePrinting)
+        XCTAssertFalse(motion.frameNumber)
+        let blank = try result(request(.film, stock: "acros100"))
+        XCTAssertFalse(blank.edgePrinting)
+        XCTAssertFalse(blank.frameNumber)
+        let paper = try result(request(.paper, stock: "portra400"))
+        XCTAssertFalse(paper.edgePrinting)
+        for number in [-1, 39] {
+            XCTAssertThrowsError(try WebRenderRequest.prepare(request(.film, frameNumber: number)))
         }
     }
 

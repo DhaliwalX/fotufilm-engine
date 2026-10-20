@@ -29,7 +29,7 @@ extension EditState: Codable {
     static let bespokeKeys: [String] = [
         "stockID", "chosenFormatID", "captureIlluminantKelvin",
         "filmLightKelvin", "sourceLightIndex", "halationReturnRatio", "grainMottleShare", "grainModel", "couplerGapReach", "paper", "paperFollowsStock",
-        "seed", "shutterSeconds", "printLightKelvin", "printFrame", "negativeViewing", "digitalReference", "enlarger", "printerProfile", "rotation", "crop", "cornerCrop", "framingZoom",
+        "seed", "shutterSeconds", "printLightKelvin", "printFrame", "printFrameNumber", "negativeViewing", "digitalReference", "enlarger", "printerProfile", "rotation", "crop", "cornerCrop", "framingZoom",
         "grade", "lensProfileID", "lensAdjustment", "lensFilterIDs", "lensFilterMetering", "selective", "negative",
     ]
 
@@ -94,6 +94,9 @@ extension EditState: Codable {
             .flatMap(PrintPaper.preset(id:)) ?? .ektacolorEdge
         paperFollowsStock = try c.decodeIfPresent(Bool.self, forKey: EditKey("paperFollowsStock")) ?? false
         printFrame = try c.decodeIfPresent(PrintFrame.self, forKey: EditKey("printFrame")) ?? .none
+        printFrameNumber = try c.decodeIfPresent(Int.self, forKey: EditKey("printFrameNumber"))
+            .flatMap { FilmEdgePrinting.frameNumberRange.contains($0) ? $0 : nil }
+            ?? FilmEdgePrinting.recordedFrameNumber
         negativeViewing = try c.decodeIfPresent(String.self, forKey: EditKey("negativeViewing"))
             .flatMap(NegativeViewing.init(rawValue:)) ?? .lightBox
         seed = try c.decodeIfPresent(UInt64.self, forKey: EditKey("seed")) ?? seed
@@ -152,6 +155,7 @@ extension EditState: Codable {
         try c.encode(paper.id, forKey: EditKey("paper"))
         try c.encode(paperFollowsStock, forKey: EditKey("paperFollowsStock"))
         try c.encode(printFrame, forKey: EditKey("printFrame"))
+        try c.encode(printFrameNumber, forKey: EditKey("printFrameNumber"))
         try c.encode(negativeViewing.rawValue, forKey: EditKey("negativeViewing"))
         try c.encode(seed, forKey: EditKey("seed"))
         try c.encodeIfPresent(shutterSeconds, forKey: EditKey("shutterSeconds"))

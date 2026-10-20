@@ -96,11 +96,18 @@ void main() {
       'frame': 'mount',
       'format': null,
       'medium': 'screen',
+      'frameNumber': 1,
+      'edgePrinting': true,
       'viewingKelvin': 2856,
       'width': 300,
       'height': 200,
     });
     expect(framesPicture(edit), isTrue);
+    // A film border's frame number and edge printing travel with it.
+    final film = {...edit, 'printFrame': 'film', 'printFrameNumber': 23, 'printFrameEdgePrinting': false};
+    final request = frameRequest(film, lights);
+    expect(request['frameNumber'], 23);
+    expect(request['edgePrinting'], isFalse);
     expect(framesPicture({'printFrame': 'none'}), isFalse);
   });
 }

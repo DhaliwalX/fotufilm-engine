@@ -165,7 +165,13 @@ RSX II 200 on 135, CineStill 400D, Aerochrome 1443 and Infrared Color. Respooled
 
 These are reference cuts, not reproductions of an identified manufactured roll. The still-film
 numbers select a representative position; they are not the imported photograph's original frame
-number. Production batch, emulsion/roll serials and year are omitted, and so are barcodes that
+number. The stock data records each cut at frame 1: its marks reading `1` and `1A` are the frame
+and half-frame numbers. Frame Number (`frameNumber` in the frame request, 0 to 38) renumbers those
+marks at their recorded positions, widening them by the character pitch, and the DX barcode encodes
+the same frame; every other mark stays. A cut without those marks, such as a motion-picture code,
+offers no Frame Number. Edge Printing off (`edgePrinting: false`) drops the letters, numbers and
+barcode and leaves the developed rebate blank; the plan's `edgePrinting` and `frameNumber` say
+whether the stock and gauge offer either setting. Production batch, emulsion/roll serials and year are omitted, and so are barcodes that
 would encode them: KEYKODE's key number is a roll serial. Unknown stock/gauge pairs, sheet film,
 Super 8, instant masks and paper fronts stay unlettered.
 
@@ -179,8 +185,9 @@ data track 0.25–0.76 mm from the film's edge and a clock track 1.30–1.80 mm 
 track holds the entry pattern 101010, the DX number's part 1 (7 bits) and part 2 (4 bits) either
 side of a blank cell, the frame number (6 bits), the half-frame flag, a blank, even parity over the
 18 data bits and the exit 0101; the clock track is 1111101010101010101010101010111 in every code.
-A mark is an exposed bar. Codes repeat every half frame, so this cut shows frame 1 after the
-printed 1 and frame 1A after 1A, the second running off the cut. The cell layout follows Kodak's
+A mark is an exposed bar. Codes repeat every half frame, so this cut shows the frame after its
+printed number and the half frame after its A number, a quarter millimetre past it, the second
+running off the cut. The cell layout follows Kodak's
 [US 4,965,628](https://patents.google.com/patent/US4965628A/en); track positions and the 0.5
 density above base follow the ANSI PH1.14-1990 figures quoted in
 [US 5,448,049](https://patents.google.com/patent/US5448049A/en). The encoder reproduces the worked

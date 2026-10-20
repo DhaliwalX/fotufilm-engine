@@ -202,14 +202,46 @@ public struct FilmEdgePrinting: Codable, Equatable, Sendable {
         public var heightMM: Double
     }
 
+    /// The frame numbers a still cut can show: 0 before the first exposure, through the 38
+    /// that a long-loaded 36-exposure roll reaches.
+    public static let frameNumberRange: ClosedRange<Int> = 0...38
+    /// The frame number the stock data is recorded at: its marks reading "1" and "1A" are the
+    /// cut's frame number and half-frame number.
+    public static let recordedFrameNumber = 1
+
     /// The DX codes along this cut of 135 film, on the rail below the lower perforations between
-    /// its printed frame numbers: frame 1 and its half frame 1A, half a frame apart. The second
-    /// runs off the cut, as a strip cut at a frame line does.
-    public var barcode: [Bar] {
+    /// its printed frame numbers: the frame and its half frame, half a frame apart. The second
+    /// runs off the cut, as a strip cut at a frame line does. A code starts a quarter millimetre
+    /// past the number printed before it, so a wider number moves it along.
+    public func barcode(frame: Int = recordedFrameNumber) -> [Bar] {
         guard formatID == "35mm", let dx else { return [] }
+        let rail = marks.filter { $0.yMM < DXEdgeCode.clockTrackMM.upperBound }
         return [(10.2, false), (29.7, true)].flatMap { start, half in
-            dx.bars(frame: 1, half: half, startMM: start)
+            let number = rail.filter { $0.xMM < start }.max { $0.xMM < $1.xMM }
+            let after = number.map { max(start, $0.xMM + $0.widthMM + 0.25) } ?? start
+            return dx.bars(frame: frame, half: half, startMM: after)
         }
+    }
+
+    /// This cut renumbered as `frame`: its frame and half-frame numbers read `frame` and
+    /// `frame`A, at their recorded positions and character pitch. Every other mark is the
+    /// stock's own and stays.
+    public func numbered(_ frame: Int) -> FilmEdgePrinting {
+        let recorded = String(Self.recordedFrameNumber)
+        var copy = self
+        copy.marks = marks.map { mark in
+            let text: String
+            switch mark.text {
+            case recorded: text = String(frame)
+            case recorded + "A": text = "\(frame)A"
+            default: return mark
+            }
+            var renumbered = mark
+            renumbered.widthMM = mark.widthMM * Double(text.count) / Double(mark.text.count)
+            renumbered.text = text
+            return renumbered
+        }
+        return copy
     }
 }
 
@@ -372,7 +404,11 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
     public let slideMount: SlideMountGeometry?
     public let canvas: SocialCanvasGeometry?
     public let sheetNotches: SheetFilmNotchCode?
+    /// The stock's edge printing for this gauge, renumbered as `frameNumber`; nil without any,
+    /// or when the edge printing is hidden.
     public let edgePrinting: FilmEdgePrinting?
+    /// The frame number the edge printing and DX barcode show; nil without edge printing.
+    public let frameNumber: Int?
     /// The edge exposure viewed through the same stock and lamp as its rebate.
     public let edgeRGB: SIMD3<Float>
     /// Display-linear P3, converted into the photograph's output profile by the compositor.
@@ -401,16 +437,18 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
 
     public init(frame: PrintFrame, formatID: String?, stockID: String,
                 paper: PrintPaper, viewingKelvin: Float? = nil,
-                negativeViewing: NegativeViewing = .lightBox, margin: Double = 1) {
+                negativeViewing: NegativeViewing = .lightBox, margin: Double = 1,
+                frameNumber: Int = FilmEdgePrinting.recordedFrameNumber, showsEdgePrinting: Bool = true) {
         self.init(frame: frame, formatID: formatID, definition: FilmStock.presetDefinitions[stockID],
                   paper: paper, viewingKelvin: viewingKelvin, negativeViewing: negativeViewing,
-                  margin: margin)
+                  margin: margin, frameNumber: frameNumber, showsEdgePrinting: showsEdgePrinting)
     }
 
     /// Explicit stock metadata also supports isolated runtimes without a process-wide pack registry.
     public init(frame: PrintFrame, formatID: String?, definition: FilmStockDefinition?,
                 paper: PrintPaper, viewingKelvin: Float? = nil,
-                negativeViewing: NegativeViewing = .lightBox, margin: Double = 1) {
+                negativeViewing: NegativeViewing = .lightBox, margin: Double = 1,
+                frameNumber: Int = FilmEdgePrinting.recordedFrameNumber, showsEdgePrinting: Bool = true) {
         let nativeID = definition?.nativeFormatID
         let motionStock = nativeID.flatMap(FilmFormat.preset(id:))?.isMotionPicture == true
         let nativeInstant = nativeID.flatMap { FilmBorderGeometry.preset($0) }?.isInstant == true
@@ -458,11 +496,16 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
                                  margin: $0.margin * scale)
         }
         sheetNotches = geometry?.isSheet == true ? definition?.sheetNotches : nil
-        edgePrinting = self.frame.showsFilmStrip
+        let number = min(max(frameNumber, FilmEdgePrinting.frameNumberRange.lowerBound),
+                         FilmEdgePrinting.frameNumberRange.upperBound)
+        let printing = self.frame.showsFilmStrip
             ? definition?.edgePrinting?.first { $0.formatID == formatID } : nil
+        edgePrinting = showsEdgePrinting ? printing?.numbered(number) : nil
+        self.frameNumber = edgePrinting == nil ? nil : number
         cutoutRGB = self.frame == .filmPositive ? .zero : Self.scanBedRGB
         // The DX barcode is printed on negatives only; a transparency's edge carries none.
-        edgeBars = definition?.stock.isReversal == false ? edgePrinting?.barcode ?? [] : []
+        edgeBars = definition?.stock.isReversal == false
+            ? edgePrinting?.barcode(frame: number) ?? [] : []
         // The edge printer's two exposures: lettering at a representative 72% of the density
         // span, and the barcode at the standard's 0.5 above base. Not measured edge-printer
         // calibrations. Reversal clears exposed letters; negatives darken.

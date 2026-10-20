@@ -16,6 +16,19 @@ export function parsePrintFrameMargin(value) {
     throw new Error("Invalid print frame border width.");
   return value;
 }
+// A Film Border's frame number, 0 to 38 (Frame Number); older edits have none and show frame 1.
+export function parsePrintFrameNumber(value) {
+  if (value == null) return 1;
+  if (!editorControl("printFrameNumber").choices.some((c) => c.value === value))
+    throw new Error("Invalid film border frame number.");
+  return value;
+}
+// Whether a Film Border shows the stock's edge printing (Edge Printing); older edits show it.
+export function parsePrintFrameEdgePrinting(value) {
+  if (value == null) return true;
+  if (typeof value !== "boolean") throw new Error("Invalid film border edge printing.");
+  return value;
+}
 export function frameRequest(edit, width = 1, height = 1) {
   return {
     kind: "print-frame",
@@ -24,6 +37,8 @@ export function frameRequest(edit, width = 1, height = 1) {
     format: edit.format || null,
     medium: edit.medium || null,
     margin: edit.printFrameMargin ?? 1,
+    frameNumber: edit.printFrameNumber ?? 1,
+    edgePrinting: edit.printFrameEdgePrinting ?? true,
     viewingKelvin:
       PROFILE_MENUS.printLight.find((c) => c.id === edit.profile?.printLight)
         ?.value ?? null,

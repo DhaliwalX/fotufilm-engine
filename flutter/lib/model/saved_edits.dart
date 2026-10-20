@@ -94,6 +94,12 @@ Json parseEdit(String text, Catalogue catalogue, Iterable<String?> stocks) {
   if (edit['mediumFollowsFilm'] != null && edit['mediumFollowsFilm'] is! bool) {
     throw const EditProblem('Invalid output medium.');
   }
+  final frameNumbers = (catalogue.control('printFrameNumber')['choices'] as List).cast<Json>();
+  if ((edit['printFrameEdgePrinting'] != null && edit['printFrameEdgePrinting'] is! bool) ||
+      (edit['printFrameNumber'] != null &&
+          !frameNumbers.any((c) => c['value'] == edit['printFrameNumber']))) {
+    throw const EditProblem('Invalid film border settings.');
+  }
   if (edit['halationModel'] != null && !const ['legacy', 'layered'].contains(edit['halationModel'])) {
     throw const EditProblem('Invalid halation model.');
   }

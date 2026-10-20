@@ -1585,6 +1585,31 @@ public enum EditorControlCatalogue {
             web: .runtime,
             documentation: "Scales the margin of a Paper Border, Carrier Border, White or Black Mount, or posting canvas, from none at 0% to three times the preset at 300%. A paper sheet keeps its size, so a wider easel margin prints a smaller picture; a mount or canvas grows around the photograph. Film Border, Film Border Positive and Slide Mount follow physical dimensions and have no Border Width. Included in saved edits and exports."),
         EditorControl(
+            .printFrameEdgePrinting, title: "Edge Printing",
+            detail: "Show the film's lettering, frame numbers and barcode along a Film Border.",
+            section: .printPaper, kind: .toggle(restingOn: true),
+            surfaces: [.app, .desktop, .web],
+            omitted: [.android: "Frame finishing is offered in the iPhone, iPad and Mac photo editors.",
+                      .resolve: "The host owns output framing.",
+                      .finalcut: "The host owns output framing.",
+                      .cli: "Frame finishing is offered in the iPhone, iPad and Mac photo editors."],
+            web: .runtime,
+            documentation: "On, a Film Border or Film Border Positive carries the stock's documented edge printing for the gauge — its name and codes, the frame numbers and, on 135 negatives with a DX number, the DX barcode. Off leaves the rebate blank, as on film sold without edge printing; the developed rebate keeps its fog, grain and glow either way. Offered only for stocks with documented edge printing. Included in saved edits and exports."),
+        EditorControl(
+            .printFrameNumber, title: "Frame Number",
+            detail: "Choose the frame number printed along a Film Border.",
+            section: .printPaper,
+            kind: .menu(.fixed(FilmEdgePrinting.frameNumberRange.map {
+                EditorMenuChoice(Double($0), String($0), id: String($0))
+            })),
+            surfaces: [.app, .desktop, .web],
+            omitted: [.android: "Frame finishing is offered in the iPhone, iPad and Mac photo editors.",
+                      .resolve: "The host owns output framing.",
+                      .finalcut: "The host owns output framing.",
+                      .cli: "Frame finishing is offered in the iPhone, iPad and Mac photo editors."],
+            web: .runtime,
+            documentation: "Sets which frame of the roll a Film Border or Film Border Positive is cut from, 0 to 38: the printed frame number and half-frame number (12 and 12A) and the frame encoded in a 135 negative's DX barcode follow it. The stock's name and codes stay. Offered for stocks whose edge printing numbers its frames; the default is frame 1. Included in saved edits and exports."),
+        EditorControl(
             .paper, title: "Output Medium",
             detail: "Choose how the film is printed, scanned, or viewed.",
             section: .printPaper, kind: .menu(.dynamic(.papers)), availability: .printStage,

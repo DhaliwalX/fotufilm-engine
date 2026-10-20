@@ -24,6 +24,9 @@ class PrintFrameSection extends StatelessWidget {
     final error = frames.error;
     final shown = (plan?['configuration'] as Map?)?['frame'];
     final renderMedium = plan?['renderMedium'] as String?;
+    final edgePrinting = editor.catalogue.control('printFrameEdgePrinting');
+    final frameNumber = editor.catalogue.control('printFrameNumber');
+    final printsEdge = editor.edit['printFrameEdgePrinting'] as bool? ?? true;
     return Section(title: 'Frame', children: [
       PickerField<String>(
         label: control['title'] as String,
@@ -41,6 +44,28 @@ class PrintFrameSection extends StatelessWidget {
           if (frame == 'film' || frame == 'slideMount') 'halationModel': 'legacy',
         }),
       ),
+      // The stock's edge printing on a film border, and the frame of the roll it is cut from.
+      if (plan?['edgePrinting'] == true && (shown == 'film' || shown == 'filmPositive')) ...[
+        SwitchRow(
+          label: edgePrinting['title'] as String,
+          detail: edgePrinting['detail'] as String?,
+          value: printsEdge,
+          enabled: !frames.pending,
+          onChanged: (on) => editor.change({'printFrameEdgePrinting': on}),
+        ),
+        if (printsEdge && plan?['frameNumber'] == true)
+          PickerField<int>(
+            label: frameNumber['title'] as String,
+            detail: frameNumber['detail'] as String?,
+            value: (editor.edit['printFrameNumber'] as num? ?? 1).toInt(),
+            enabled: !frames.pending,
+            options: [
+              for (final c in (frameNumber['choices'] as List).cast<Json>())
+                PickerOption((c['value'] as num).toInt(), c['label'] as String),
+            ],
+            onChanged: (number) => editor.change({'printFrameNumber': number}),
+          ),
+      ],
       if (error != null || frames.pending) Note(error ?? 'Loading frame options…'),
       if (plan != null && shown != value) const Note('Shown once the film and medium support it.'),
       if (renderMedium != null)

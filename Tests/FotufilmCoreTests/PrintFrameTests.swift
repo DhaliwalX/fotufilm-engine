@@ -549,6 +549,67 @@ final class PrintFrameTests: XCTestCase {
                           try pixels(XCTUnwrap(framed.cropping(to: base)))[3])
     }
 
+    func testFrameNumberRenumbersTheCutAndItsBarcodeAndEdgePrintingCanBeHidden() throws {
+        let recorded = configuration(.film, stock: "portra400")
+        XCTAssertEqual(recorded.frameNumber, 1)
+        let twelve = PrintFrameConfiguration(frame: .film, formatID: "35mm", stockID: "portra400",
+                                             paper: .ektacolorEdge, frameNumber: 12)
+        XCTAssertEqual(twelve.frameNumber, 12)
+        let before = try XCTUnwrap(recorded.edgePrinting?.marks)
+        let after = try XCTUnwrap(twelve.edgePrinting?.marks)
+        XCTAssertEqual(after.map(\.text), before.map {
+            switch $0.text { case "1": "12"; case "1A": "12A"; default: $0.text }
+        })
+        for (old, new) in zip(before, after) {
+            XCTAssertEqual(new.xMM, old.xMM)
+            XCTAssertEqual(new.yMM, old.yMM)
+            XCTAssertEqual(new.widthMM, old.widthMM * Double(new.text.count) / Double(old.text.count),
+                           accuracy: 1e-9)
+        }
+        // The DX barcode encodes the same frame.
+        let dx = try XCTUnwrap(twelve.edgePrinting?.dx)
+        XCTAssertEqual(twelve.edgeBars, twelve.edgePrinting?.barcode(frame: 12))
+        XCTAssertNotEqual(twelve.edgeBars, recorded.edgeBars)
+        XCTAssertEqual(dx.cells(frame: 12, half: false).data[18..<24].map { $0 ? 1 : 0 }, [0, 0, 1, 1, 0, 0])
+        // Wider numbers push their codes along instead of running into them.
+        for number in [12, 23, 38] {
+            let config = PrintFrameConfiguration(frame: .film, formatID: "35mm", stockID: "portra400",
+                                                 paper: .ektacolorEdge, frameNumber: number)
+            let marks = try XCTUnwrap(config.edgePrinting?.marks)
+            for bar in config.edgeBars {
+                for mark in marks where mark.yMM < 2.01 {
+                    XCTAssertTrue(bar.xMM >= mark.xMM + mark.widthMM || bar.xMM + bar.widthMM <= mark.xMM,
+                                  "frame \(number): \(bar) crosses \(mark.text)")
+                }
+            }
+        }
+        // The range is clamped; frame 0 reads 0 and 0A.
+        XCTAssertEqual(PrintFrameConfiguration(frame: .film, formatID: "35mm", stockID: "portra400",
+                                               paper: .ektacolorEdge, frameNumber: 99).frameNumber, 38)
+        let zero = PrintFrameConfiguration(frame: .filmPositive, formatID: "35mm", stockID: "portra400",
+                                           paper: .ektacolorEdge, frameNumber: 0)
+        XCTAssertTrue(zero.edgePrinting?.marks.contains { $0.text == "0A" } == true)
+        // Motion-picture codes carry no frame number and stay as they are.
+        let motion = PrintFrameConfiguration(frame: .film, formatID: "super35", stockID: "vision500t",
+                                             paper: .ektacolorEdge, frameNumber: 7)
+        XCTAssertEqual(motion.edgePrinting?.marks,
+                       configuration(.film, format: "super35", stock: "vision500t").edgePrinting?.marks)
+
+        // Hidden, the rebate is blank: no letters, numbers or barcode.
+        let blank = PrintFrameConfiguration(frame: .film, formatID: "35mm", stockID: "portra400",
+                                            paper: .ektacolorEdge, showsEdgePrinting: false)
+        XCTAssertNil(blank.edgePrinting)
+        XCTAssertNil(blank.frameNumber)
+        XCTAssertTrue(blank.edgeBars.isEmpty)
+        XCTAssertNil(blank.edgeTransmission)
+        XCTAssertEqual(blank.geometry, recorded.geometry)
+        XCTAssertEqual(blank.baseRGB, recorded.baseRGB)
+        let photo = try fixture()
+        let framed = try XCTUnwrap(PrintFrameRenderer.render(photo, configuration: blank))
+        let printed = try XCTUnwrap(PrintFrameRenderer.render(photo, configuration: recorded))
+        XCTAssertNotEqual(try pixels(framed), try pixels(printed))
+    }
+
     func testEdgeExposureUsesNegativeAndReversalDensityWithTheSameViewingLamp() {
         for id in ["portra400", "hp5plus400", "vision500t"] {
             let config = configuration(.film, stock: id)

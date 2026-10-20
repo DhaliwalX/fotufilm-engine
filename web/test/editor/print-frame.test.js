@@ -11,7 +11,9 @@ import {
   frameSamplePoint,
   frameRequest,
   parsePrintFrame,
+  parsePrintFrameEdgePrinting,
   parsePrintFrameMargin,
+  parsePrintFrameNumber,
   stripSource,
 } from "../../src/print-frame.js";
 import { frameNoise } from "../../src/frame-texture.js";
@@ -54,6 +56,25 @@ test("border width survives save/load/undo, reaches the frame plan and rejects o
   assert.equal(widened.present.printFrameMargin, 0);
   assert.equal(historyReducer(widened, { type: "undo" }).present.printFrameMargin, 1);
 });
+test("film border frame number and edge printing survive save/load and reach the frame plan", () => {
+  const edit = { ...defaultEdit(), printFrame: "film", printFrameNumber: 23, printFrameEdgePrinting: false };
+  const loaded = parseEdit(JSON.stringify({ version: 1, edit }), []);
+  assert.equal(loaded.printFrameNumber, 23);
+  assert.equal(loaded.printFrameEdgePrinting, false);
+  assert.equal(frameRequest(loaded).frameNumber, 23);
+  assert.equal(frameRequest(loaded).edgePrinting, false);
+  delete edit.printFrameNumber;
+  delete edit.printFrameEdgePrinting;
+  const older = parseEdit(JSON.stringify({ version: 1, edit }), []);
+  assert.equal(older.printFrameNumber, 1);
+  assert.equal(older.printFrameEdgePrinting, true);
+  assert.equal(frameRequest(defaultEdit()).frameNumber, 1);
+  assert.equal(frameRequest(defaultEdit()).edgePrinting, true);
+  for (const value of [-1, 39, 1.5, "2"])
+    assert.throws(() => parsePrintFrameNumber(value), /Invalid film border frame number/);
+  assert.throws(() => parsePrintFrameEdgePrinting(1), /Invalid film border edge printing/);
+});
+
 test("transmission frame follows native medium override and retains the saved edit", () => {
   const edit = {
     ...defaultEdit("gold200"),

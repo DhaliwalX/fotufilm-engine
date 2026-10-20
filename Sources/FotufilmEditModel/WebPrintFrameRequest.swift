@@ -13,6 +13,10 @@ public struct WebPrintFrameRequest: Decodable {
     public let viewingKelvin: Float?
     /// Border Width, as a multiple of the frame's preset margin; absent keeps the preset.
     public let margin: Double?
+    /// The frame number a Film Border's edge printing and DX barcode show; absent is frame 1.
+    public let frameNumber: Int?
+    /// Whether a Film Border shows the stock's edge printing; absent shows it.
+    public let edgePrinting: Bool?
     public let width: Int
     public let height: Int
 
@@ -27,6 +31,10 @@ public struct WebPrintFrameRequest: Decodable {
         /// The film a Film Border develops with the photograph, beyond it on each side, at this
         /// size (`PrintFramePlacement.filmStrip`); nil draws the rebate around the photograph.
         public let strip: UnexposedEdge.Margins?
+        /// Whether this frame shows the stock's edge printing for the gauge when it is not hidden,
+        /// and whether that printing carries a frame number or DX barcode to set.
+        public let edgePrinting: Bool
+        public let frameNumber: Bool
         /// Encoded sRGB material colours for the current browser delivery boundary.
         public let palette: [String: [Float]]
     }
@@ -40,6 +48,9 @@ public struct WebPrintFrameRequest: Decodable {
         guard margin == nil || PrintFrameConfiguration.marginRange.contains(margin!) else {
             throw WebProfileRequest.Failure(description: "Invalid print frame border width.")
         }
+        guard frameNumber == nil || FilmEdgePrinting.frameNumberRange.contains(frameNumber!) else {
+            throw WebProfileRequest.Failure(description: "Invalid film border frame number.")
+        }
         let definition = try stock?.validated()
         let film = definition?.stock
         let format = format ?? definition?.nativeFormatID ?? FilmFormat.houseDefaultID
@@ -51,13 +62,22 @@ public struct WebPrintFrameRequest: Decodable {
         let paper = film.map { requestedPaper.resolved(for: $0) } ?? requestedPaper
         // Emulsion Border develops a piece of film larger than the aperture, which the browser's
         // host does not build.
-        func configuration(_ choice: PrintFrame) -> PrintFrameConfiguration {
+        func configuration(_ choice: PrintFrame, recorded: Bool = false) -> PrintFrameConfiguration {
             PrintFrameConfiguration(frame: choice == .emulsion ? .none : choice, formatID: format,
                 definition: definition,
                 paper: paper, viewingKelvin: choice.viewsTransparency ? nil : viewingKelvin,
-                negativeViewing: .lightBox, margin: margin ?? 1)
+                negativeViewing: .lightBox, margin: margin ?? 1,
+                frameNumber: recorded ? FilmEdgePrinting.recordedFrameNumber
+                    : frameNumber ?? FilmEdgePrinting.recordedFrameNumber,
+                showsEdgePrinting: recorded || edgePrinting ?? true)
         }
         let config = configuration(frame)
+        // The stock's own cut, at its recorded frame number, says which settings apply.
+        let recorded = configuration(frame, recorded: true)
+        let numbers = [String(FilmEdgePrinting.recordedFrameNumber),
+                       "\(FilmEdgePrinting.recordedFrameNumber)A"]
+        let numbered = !recorded.edgeBars.isEmpty
+            || recorded.edgePrinting?.marks.contains { numbers.contains($0.text) } == true
         let placement = PrintFramePlacement.layout(width: width, height: height, configuration: config)
         guard placement.size.width <= 32768, placement.size.height <= 32768,
               placement.size.width * placement.size.height <= 120_000_000 else {
@@ -88,6 +108,7 @@ public struct WebPrintFrameRequest: Decodable {
             renderMedium: renderMedium,
             available: PrintFrame.allCases.filter { configuration($0).frame == $0 },
             strip: PrintFramePlacement.filmStrip(width: width, height: height, configuration: config),
+            edgePrinting: recorded.edgePrinting != nil, frameNumber: numbered,
             palette: palette))
     }
 }

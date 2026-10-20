@@ -1,4 +1,9 @@
-import { parsePrintFrame, parsePrintFrameMargin } from "./print-frame.js";
+import {
+  parsePrintFrame,
+  parsePrintFrameEdgePrinting,
+  parsePrintFrameMargin,
+  parsePrintFrameNumber,
+} from "./print-frame.js";
 import { defaultLens, parseLensCorrection } from "./lens-correction.js";
 import { parseLensFilters } from "./lens-filters.js";
 import { parseProfileSettings } from "./profile-settings.js";
@@ -115,6 +120,8 @@ export const defaultEdit = (stock = null) => ({
   mediumFollowsFilm: false,
   printFrame: "none",
   printFrameMargin: 1,
+  printFrameEdgePrinting: true,
+  printFrameNumber: 1,
   digitalReference: "auto-levels",
   // `frameRate` is the clip's cadence, the rate it exports at; null keeps the source's.
   video: { encoding: "standard", trimStart: 0, trimEnd: null, audio: true, frameRate: null },
@@ -389,6 +396,8 @@ export function parseEdit(json, stockIDs) {
     mediumFollowsFilm: edit.mediumFollowsFilm === true,
     printFrame: parsePrintFrame(edit.printFrame),
     printFrameMargin: parsePrintFrameMargin(edit.printFrameMargin),
+    printFrameEdgePrinting: parsePrintFrameEdgePrinting(edit.printFrameEdgePrinting),
+    printFrameNumber: parsePrintFrameNumber(edit.printFrameNumber),
     digitalReference: edit.digitalReference ?? "auto-levels",
     video: edit.video ? { ...base.video, ...edit.video } : base.video,
     halationModel: edit.halationModel ?? "legacy",
