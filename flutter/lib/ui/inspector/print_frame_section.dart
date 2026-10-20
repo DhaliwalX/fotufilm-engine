@@ -44,7 +44,11 @@ class PrintFrameSection extends StatelessWidget {
       if (error != null || frames.pending) Note(error ?? 'Loading frame options…'),
       if (plan != null && shown != value) const Note('Shown once the film and medium support it.'),
       if (renderMedium != null)
-        Note(renderMedium == 'negative' ? 'Viewed on a light box.' : 'Viewed by transmission.'),
+        Note(switch (renderMedium) {
+          'negative' => 'Viewed on a light box.',
+          'lab-scan' => 'Photograph shown as a lab scan.',
+          _ => 'Viewed by transmission.',
+        }),
     ]);
   }
 }

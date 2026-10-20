@@ -86,9 +86,10 @@ public enum PrintFrameRenderer {
                 drawEdgePrinting(in: context, geometry: geometry, printing: printing,
                                  color: baseColor(configuration.edgeRGB))
             }
-            drawPerforations(in: context, geometry: geometry)
+            let cutout = baseColor(configuration.cutoutRGB)
+            drawPerforations(in: context, geometry: geometry, cutout: cutout)
             if geometry.isSheet, let code = configuration.sheetNotches {
-                drawNotches(in: context, size: material.size, code: code)
+                drawNotches(in: context, size: material.size, code: code, cutout: cutout)
             }
         }
         context.restoreGState()
@@ -149,9 +150,6 @@ public enum PrintFrameRenderer {
                 components: [CGFloat(rgb.x), CGFloat(rgb.y), CGFloat(rgb.z), 1])!
     }
 
-    /// The neutral scan-bed visible through the physical holes.
-    private static var cutoutColor: CGColor { baseColor(SIMD3(repeating: 0.96)) }
-
     /// The edge printer's lettering for `text`: glyph outlines in font units, the baseline at
     /// zero. Stretching its bounding box to a mark's millimetre box letters the way the rebate is.
     ///
@@ -208,7 +206,8 @@ public enum PrintFrameRenderer {
         context.restoreGState()
     }
 
-    private static func drawPerforations(in context: CGContext, geometry g: FilmBorderGeometry) {
+    private static func drawPerforations(in context: CGContext, geometry g: FilmBorderGeometry,
+                                         cutout: CGColor) {
         guard let type = g.perforation else { return }
         let hole = type.dimensions
         let width = CGFloat(hole.width), height = CGFloat(hole.height)
@@ -226,7 +225,7 @@ public enum PrintFrameRenderer {
         // 16 mm holes align with the frame line; Super 8 holes align with the frame centre.
         let first: CGFloat = type == .sixteen ? 0 : pitch / 2
         let rows: [CGFloat] = g.rows == 2 ? [edge, across - edge - width] : [edge]
-        context.setFillColor(cutoutColor)
+        context.setFillColor(cutout)
         for x in rows {
             var centre = first
             while centre <= along {
@@ -249,13 +248,14 @@ public enum PrintFrameRenderer {
         context.restoreGState()
     }
 
-    private static func drawNotches(in context: CGContext, size: CGSize, code: SheetFilmNotchCode) {
+    private static func drawNotches(in context: CGContext, size: CGSize, code: SheetFilmNotchCode,
+                                    cutout: CGColor) {
         // The code occupies the upper right edge when the sheet is upright, emulsion facing us.
         // Manufacturer diagrams specify shapes/order, not absolute dimensions: a 20 mm code
         // span and 10 mm corner setback are presentation conventions, documented as such.
         let span: CGFloat = 20
         let start = size.width - 10 - span
-        context.setFillColor(cutoutColor)
+        context.setFillColor(cutout)
         for notch in code.notches {
             let rect = CGRect(x: start + CGFloat(notch.position) * span,
                               y: size.height - CGFloat(notch.depth) * span,

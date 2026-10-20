@@ -121,7 +121,7 @@
 <h3>Print</h3>
 <p>In the iPhone photo editor, open <strong>Print → Output → Frame</strong>; on iPad and Mac, use the
               <strong>Frame</strong> menu under <strong>Print</strong> in the inspector. Choose
-              <strong>None</strong>, <strong>Film Border</strong>, <strong>Slide Mount</strong>, a <strong>Paper Border</strong>
+              <strong>None</strong>, <strong>Film Border</strong>, <strong>Film Border Positive</strong>, <strong>Slide Mount</strong>, a <strong>Paper Border</strong>
               at 4 × 6, 5 × 7, 8 × 10, or 5 × 5 inches, <strong>Carrier Border</strong>, <strong>Emulsion Border</strong>,
               <strong>White Mount</strong>, <strong>Black Mount</strong>, or a <strong>Square Post</strong>,
               <strong>Portrait Post</strong>, or <strong>Story</strong> canvas. On iPhone the frames stand on a
@@ -134,6 +134,9 @@
               dark lettering on negatives and light lettering on reversal film. The typeface and edge
               exposure are approximations; frame numbers represent a sample position, not capture metadata.
               Unknown markings and production serials are omitted. Paper fronts remain unlettered.
+              Film Border Positive shows a negative's border as an inverted scan: a dark rebate, light
+              edge printing and black perforations around the positive photograph, which keeps the
+              selected output medium; Negative output is shown as Lab Scan.
               Sheet film uses the stock’s documented
               notch pattern where available; unknown codes are omitted. Paper Border uses the selected
               Ektacolor Edge, ENDURA Premier, or Crystal Archive paper as a 4 × 6, 5 × 7, 8 × 10, or
@@ -177,8 +180,8 @@
 <table>
 <thead><tr><th>Control</th><th>Description</th><th>Default</th></tr></thead>
 <tbody data-controls="print">
-  <tr><td>Frame</td><td>Choose Film Border for the selected film gauge, Slide Mount for a transparency in a 2 × 2 inch card mount, a Paper Border cut at 4 × 6, 5 × 7, 8 × 10 or 5 × 5 inches, Carrier Border for a negative's rebate printed through a filed-out carrier, Emulsion Border for the film's unexposed edge outside the camera gate — the stock's own tone, halation glow and grain — printed with the photograph inside a paper margin, a plain White or Black Mount, or a Square, Portrait or Story posting canvas with the photograph inside a white margin. Film perforations follow physical geometry; verified sheet-notch codes follow the stock. Included in saved edits and exports.</td><td>None</td></tr>
-  <tr><td>Border Width</td><td>Scales the margin of a Paper Border, Carrier Border, White or Black Mount, or posting canvas, from none at 0% to three times the preset at 300%. A paper sheet keeps its size, so a wider easel margin prints a smaller picture; a mount or canvas grows around the photograph. Film Border and Slide Mount follow physical dimensions and have no Border Width. Included in saved edits and exports.</td><td>100%</td></tr>
+  <tr><td>Frame</td><td>Choose Film Border for the selected film gauge, Film Border Positive for a negative's film border scanned and inverted around the positive photograph — a dark rebate, light edge printing and black perforations — Slide Mount for a transparency in a 2 × 2 inch card mount, a Paper Border cut at 4 × 6, 5 × 7, 8 × 10 or 5 × 5 inches, Carrier Border for a negative's rebate printed through a filed-out carrier, Emulsion Border for the film's unexposed edge outside the camera gate — the stock's own tone, halation glow and grain — printed with the photograph inside a paper margin, a plain White or Black Mount, or a Square, Portrait or Story posting canvas with the photograph inside a white margin. Film perforations follow physical geometry; documented edge printing and verified sheet-notch codes follow the stock. Included in saved edits and exports.</td><td>None</td></tr>
+  <tr><td>Border Width</td><td>Scales the margin of a Paper Border, Carrier Border, White or Black Mount, or posting canvas, from none at 0% to three times the preset at 300%. A paper sheet keeps its size, so a wider easel margin prints a smaller picture; a mount or canvas grows around the photograph. Film Border, Film Border Positive and Slide Mount follow physical dimensions and have no Border Width. Included in saved edits and exports.</td><td>100%</td></tr>
   <tr><td>Output Medium</td><td>Selects the print paper, projection print, scan, display reference or the negative itself.</td><td>Digital Reference</td></tr>
   <tr><td>Viewing Illuminant</td><td>Changes the viewing lamp without re-timing the developed print; digital media ignore it.</td><td>Medium reference</td></tr>
   <tr><td>Channel Contrast Match</td><td>Optional digital channel-contrast correction. Off by default to preserve measured slopes; this is not a physical printer-light control.</td><td>0%</td></tr>

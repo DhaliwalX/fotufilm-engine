@@ -605,9 +605,11 @@ struct EditState: Equatable {
     var frameRenderState: EditState {
         let slideInFilmFrame = stock?.isReversal == true && resolvedPaper.isPositivePaper
             && frameConfiguration.frame.viewsTransparency
-        guard filmFrameNegative != nil || slideInFilmFrame else { return self }
+        // The inverted scan's photograph is a positive: a negative output is scanned instead.
+        let scannedPositive = frameConfiguration.frame == .filmPositive && resolvedPaper.isNegative
+        guard filmFrameNegative != nil || slideInFilmFrame || scannedPositive else { return self }
         var rendered = self
-        rendered.paper = slideInFilmFrame ? .screen : .negative
+        rendered.paper = scannedPositive ? .labScan : slideInFilmFrame ? .screen : .negative
         rendered.paperFollowsStock = false
         return rendered
     }

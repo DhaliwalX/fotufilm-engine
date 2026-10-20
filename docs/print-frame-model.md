@@ -1,6 +1,6 @@
 # Print borders
 
-The iPhone photo editor offers None, Film Border, Slide Mount, Paper Border at 4 × 6, 5 × 7,
+The iPhone photo editor offers None, Film Border, Film Border Positive, Slide Mount, Paper Border at 4 × 6, 5 × 7,
 8 × 10 and 5 × 5 inches, Carrier Border, Emulsion Border, White Mount, Black Mount and three posting
 canvases — Square Post, Portrait Post and Story — on a horizontally scrolled strip of framed
 previews in the print deck. Film Border
@@ -176,6 +176,22 @@ stock dye spectra, light-box gain and lamp produce the resulting letter colour. 
 letters dark and reversal letters light without a universal painted amber colour. Edge density does
 not claim to measure the particular roll or follow its lab development. No source images or fonts
 are embedded. Image pixels, profiles and bit depth remain unchanged by the compositor.
+
+## Film Border Positive
+
+Film Border Positive is the same strip as Film Border, as a scanner shows it after inverting the
+negative. The geometry, perforations, sheet notches and edge printing are identical. The scanner
+sets its black point just past the clear base and removes the colour mask, so the rebate is a
+neutral dark 0.02 display-linear P3; that level is a presentation choice, not a measured scanner.
+The open perforations and notches passed more light than the base and clip to black. The lettering
+is the Film Border edge exposure (72% of the stock's density span) normalised on the clear base
+under the reference lamp and inverted, so each stock's letters come out near white, by how little
+light they passed. It is offered for negative stocks in roll and sheet gauges; a reversal
+transparency's Film Border is already positive and integral instant film has no rebate.
+
+The photograph keeps the selected output medium, retaining its paper or screen look; with
+Negative selected it is delivered as Lab Scan, the positive of a scanned negative. It follows
+physical dimensions and ignores Border Width.
 
 ## Film colour
 

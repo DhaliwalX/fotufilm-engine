@@ -2,13 +2,14 @@ import Foundation
 
 /// Physical film/paper finishing, mounts, and the film's unexposed edge printed with the picture.
 public enum PrintFrame: String, CaseIterable, Codable, Sendable, Identifiable {
-    case none, film, slideMount, paper, paper5x7, paper8x10, paper5x5, carrier, emulsion, mount, darkMount,
+    case none, film, filmPositive, slideMount, paper, paper5x7, paper8x10, paper5x5, carrier, emulsion, mount, darkMount,
          socialSquare, socialPortrait, socialStory
     public var id: String { rawValue }
     public var name: String {
         switch self {
         case .none: return "None"
         case .film: return "Film Border"
+        case .filmPositive: return "Film Border Positive"
         case .slideMount: return "Slide Mount"
         case .paper: return "Paper Border 4 × 6"
         case .paper5x7: return "Paper Border 5 × 7"
@@ -27,6 +28,7 @@ public enum PrintFrame: String, CaseIterable, Codable, Sendable, Identifiable {
         switch self {
         case .none: return "The photograph without a border."
         case .film: return "The selected film gauge, with its physical edges and perforations."
+        case .filmPositive: return "The negative's film border scanned and inverted: a dark rebate, light edge printing and black perforations around the positive photograph."
         case .slideMount: return "The developed transparency in a card slide mount."
         case .paper: return "The selected photographic paper, in a 4 × 6 inch print."
         case .paper5x7: return "The selected photographic paper, in a 5 × 7 inch print."
@@ -64,11 +66,14 @@ public enum PrintFrame: String, CaseIterable, Codable, Sendable, Identifiable {
     /// The developed film is seen by transmission, not printed to the chosen paper.
     public var viewsTransparency: Bool { self == .film || self == .slideMount }
 
+    /// The physical film strip around the aperture, as the negative or as its inverted scan.
+    public var showsFilmStrip: Bool { self == .film || self == .filmPositive }
+
     /// A margin that is a presentation or easel choice, which the editor lets the user widen
     /// or narrow. Film borders and slide mounts follow physical dimensions and keep theirs.
     public var hasAdjustableMargin: Bool {
         switch self {
-        case .none, .film, .slideMount: return false
+        case .none, .film, .filmPositive, .slideMount: return false
         default: return true
         }
     }
@@ -272,6 +277,11 @@ public struct FilmBorderGeometry: Codable, Equatable, Sendable {
 public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
     /// Border Width: the frame's margin as a multiple of its preset, from none to three times.
     public static let marginRange: ClosedRange<Double> = 0...3
+    /// The neutral scan bed seen through the physical holes of a film border.
+    public static let scanBedRGB = SIMD3<Float>(repeating: 0.96)
+    /// An inverted scan's rebate: the scanner sets its black point just past the clear base,
+    /// removing the colour mask. A representative presentation level, not a measured scanner.
+    public static let invertedBaseRGB = SIMD3<Float>(repeating: 0.02)
 
     public let frame: PrintFrame
     /// The margin multiple for a frame with an adjustable margin; nil for every other frame.
@@ -288,6 +298,9 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
     public let baseRGB: SIMD3<Float>
     /// The clear film rebate printed to the paper's maximum density through a filed carrier.
     public let rebateRGB: SIMD3<Float>
+    /// What shows through perforations and notches: the scan bed, or black in an inverted scan,
+    /// where the open holes are brighter than the film base the scanner set as its black point.
+    public let cutoutRGB: SIMD3<Float>
     public let detail: String
     /// Positive polyester media are smooth; the existing RC papers use a lustre approximation.
     public let hasLustre: Bool
@@ -314,6 +327,9 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
         let filmAvailable = definition != nil && film != nil
             && ((film?.isInstant != true && !nativeInstant) || nativeID == formatID)
         let mount = formatID.flatMap(SlideMountGeometry.preset)
+        // The inverted scan turns a negative's strip positive; a transparency's is already.
+        let positiveAvailable = filmAvailable && definition?.stock.isReversal == false
+            && film?.isInstant == false
         let slideAvailable = definition?.stock.isReversal == true && mount != nil && !nativeInstant
         // A filed carrier prints the clear rebate of a negative; on positive paper the dark
         // rebate of a transparency prints the same as the unexposed margin and shows nothing.
@@ -328,6 +344,7 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
         case .none, .mount, .darkMount, .socialSquare, .socialPortrait, .socialStory: available = true
         case .emulsion: available = edgeAvailable
         case .film: available = filmAvailable
+        case .filmPositive: available = positiveAvailable
         case .slideMount: available = slideAvailable
         case .carrier: available = carrierAvailable
         case .paper, .paper5x7, .paper8x10, .paper5x5: available = reflective
@@ -336,7 +353,7 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
         let scale = margin.isFinite
             ? min(max(margin, Self.marginRange.lowerBound), Self.marginRange.upperBound) : 1
         self.margin = self.frame.hasAdjustableMargin ? scale : nil
-        geometry = self.frame == .film ? film : nil
+        geometry = self.frame.showsFilmStrip ? film : nil
         sheet = PaperSheetGeometry.preset(for: self.frame).map {
             PaperSheetGeometry(widthMM: $0.widthMM, heightMM: $0.heightMM,
                                marginMM: $0.marginMM * scale, rebateMM: $0.rebateMM)
@@ -347,9 +364,21 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
                                  margin: $0.margin * scale)
         }
         sheetNotches = geometry?.isSheet == true ? definition?.sheetNotches : nil
-        edgePrinting = self.frame == .film
+        edgePrinting = self.frame.showsFilmStrip
             ? definition?.edgePrinting?.first { $0.formatID == formatID } : nil
-        if self.frame == .film, let stock = definition?.stock, film?.isInstant == false {
+        cutoutRGB = self.frame == .filmPositive ? .zero : Self.scanBedRGB
+        if self.frame == .filmPositive, let stock = definition?.stock {
+            // The scan is normalised on the clear base under the reference lamp, then inverted:
+            // the dense lettering comes out light, by how little light it passed.
+            let clear = SpectralRuntime.transmissionRGB(density: stock.curves.map(\.dMin),
+                                                        stock: stock, illuminant: nil)
+            let density = stock.curves.map { $0.dMin + ($0.dMax - $0.dMin) * 0.72 }
+            let exposed = SpectralRuntime.transmissionRGB(density: density, stock: stock, illuminant: nil)
+            let passed = exposed / SIMD3(max(clear.x, 1e-6), max(clear.y, 1e-6), max(clear.z, 1e-6))
+            let one = SIMD3<Float>(repeating: 1)
+            edgeRGB = Self.invertedBaseRGB + (one - Self.invertedBaseRGB)
+                * (one - passed.clamped(lowerBound: .zero, upperBound: one))
+        } else if self.frame == .film, let stock = definition?.stock, film?.isInstant == false {
             let light = viewingKelvin.map(SpectralRuntime.printLightSPD)
             let basis = stock.isReversal ? SpectralRuntime.neutralDensityBasis(for: stock) : nil
             let clear = SpectralRuntime.transmissionRGB(
@@ -407,6 +436,15 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
                 detail = "\(name) sheet film · notch code not documented for this stock"
             } else {
                 detail = "\(name) · \(definition?.name ?? "Film")"
+            }
+        case .filmPositive:
+            baseRGB = positiveAvailable ? Self.invertedBaseRGB : .zero
+            if !positiveAvailable {
+                detail = "Choose a negative film and a matching roll or sheet film format."
+            } else if film?.isSheet == true && sheetNotches == nil {
+                detail = "\(name) sheet film · inverted scan · notch code not documented for this stock"
+            } else {
+                detail = "\(name) · \(definition?.name ?? "Film") · inverted scan"
             }
         case .slideMount:
             // The rebate seen through the aperture around a nonmatching crop is the

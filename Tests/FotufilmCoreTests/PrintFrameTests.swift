@@ -376,6 +376,50 @@ final class PrintFrameTests: XCTestCase {
         XCTAssertNil(configuration(.film, format: "instaxmini", stock: "instaxmini").edgePrinting)
     }
 
+    func testPositiveFilmBorderIsTheInvertedScanOfANegativeStrip() throws {
+        for id in ["portra400", "hp5plus400", "vision500t", "gold200"] {
+            let negative = configuration(.film, stock: id)
+            let positive = configuration(.filmPositive, stock: id)
+            XCTAssertEqual(positive.frame, .filmPositive, id)
+            XCTAssertEqual(positive.geometry, negative.geometry)
+            XCTAssertEqual(positive.edgePrinting, negative.edgePrinting)
+            XCTAssertNil(positive.margin)
+            // A dark neutral rebate, near-white lettering and holes clipped to black.
+            XCTAssertEqual(positive.baseRGB, PrintFrameConfiguration.invertedBaseRGB)
+            XCTAssertEqual(positive.cutoutRGB, .zero)
+            XCTAssertEqual(negative.cutoutRGB, PrintFrameConfiguration.scanBedRGB)
+            for channel in 0..<3 {
+                XCTAssertGreaterThan(positive.edgeRGB[channel], 0.8, id)
+                XCTAssertLessThanOrEqual(positive.edgeRGB[channel], 1, id)
+            }
+            XCTAssertTrue(positive.detail.contains("inverted scan"))
+        }
+        // A transparency's Film Border is already positive; instant film has no rebate.
+        XCTAssertEqual(configuration(.filmPositive, stock: "velvia50").frame, .none)
+        XCTAssertEqual(configuration(.filmPositive, format: "instaxmini", stock: "instaxmini").frame, .none)
+        XCTAssertEqual(configuration(.filmPositive, stock: "no-film").frame, .none)
+        XCTAssertEqual(configuration(.filmPositive, format: "120", stock: "portra400").frame, .filmPositive)
+        XCTAssertNotNil(configuration(.filmPositive, format: "4x5", stock: "hp5plus400").sheetNotches)
+        // The scan does not follow the paper's viewing lamp.
+        let warm = PrintFrameConfiguration(frame: .filmPositive, formatID: "35mm", stockID: "portra400",
+                                           paper: .ektacolorEdge, viewingKelvin: 2856)
+        XCTAssertEqual(warm.edgeRGB, configuration(.filmPositive, stock: "portra400").edgeRGB)
+
+        let config = configuration(.filmPositive, stock: "portra400")
+        let photo = try fixture()
+        let layout = PrintFrameRenderer.layout(width: photo.width, height: photo.height, configuration: config)
+        let result = try XCTUnwrap(PrintFrameRenderer.render(photo, configuration: config))
+        let crop = CGRect(x: layout.imageRect.minX, y: layout.size.height - layout.imageRect.maxY,
+                          width: CGFloat(photo.width), height: CGFloat(photo.height))
+        XCTAssertEqual(try pixels(XCTUnwrap(result.cropping(to: crop))), try pixels(photo))
+        let g = try XCTUnwrap(config.geometry)
+        let hole = try XCTUnwrap(g.perforation?.dimensions)
+        // The middle of the first lower perforation, in image pixels from the top left.
+        let x = (g.pitchMM / 2) * layout.pixelsPerMM, y = layout.size.height - (hole.edge + hole.height / 2) * layout.pixelsPerMM
+        let holePixel = try pixels(XCTUnwrap(result.cropping(to: CGRect(x: x, y: y, width: 1, height: 1))))
+        XCTAssertEqual(holePixel.prefix(6), Data(repeating: 0, count: 6))
+    }
+
     func testEdgeExposureUsesNegativeAndReversalDensityWithTheSameViewingLamp() {
         for id in ["portra400", "hp5plus400", "vision500t"] {
             let config = configuration(.film, stock: id)

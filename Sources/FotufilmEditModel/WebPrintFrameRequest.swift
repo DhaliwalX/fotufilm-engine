@@ -63,6 +63,9 @@ public struct WebPrintFrameRequest: Decodable {
         let renderMedium: String?
         if config.frame == .film, film?.isReversal == false, config.geometry?.isInstant == false {
             renderMedium = PrintPaper.negative.id
+        } else if config.frame == .filmPositive, paper.isNegative {
+            // The inverted scan's photograph is a positive; the negative itself is scanned.
+            renderMedium = PrintPaper.labScan.id
         } else if config.frame.viewsTransparency, film?.isReversal == true, paper.isPositivePaper {
             renderMedium = PrintPaper.screen.id
         } else { renderMedium = nil }
@@ -72,7 +75,7 @@ public struct WebPrintFrameRequest: Decodable {
         }
         let palette = ["base": encoded(config.baseRGB), "edge": encoded(config.edgeRGB),
                        "rebate": encoded(config.rebateRGB), "card": encoded(SIMD3(repeating: 0.86)),
-                       "cutout": encoded(SIMD3(repeating: 0.96))]
+                       "cutout": encoded(config.cutoutRGB)]
         return try JSONEncoder().encode(Result(configuration: config, placement: placement,
             perforation: config.geometry?.perforation?.dimensions,
             materialSize: PrintFramePlacement.materialGeometry(config).size,

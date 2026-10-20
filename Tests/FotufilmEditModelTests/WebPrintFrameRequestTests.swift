@@ -44,6 +44,13 @@ final class WebPrintFrameRequestTests: XCTestCase {
         XCTAssertFalse(negative.available.contains(.slideMount))
         let slide = try result(request(.slideMount, stock: "ektachromee100", medium: "ilfochrome-cps-1k"))
         XCTAssertEqual(slide.renderMedium, "screen")
+        // The inverted scan keeps a positive medium and scans a negative one.
+        XCTAssertNil(try result(request(.filmPositive)).renderMedium)
+        XCTAssertEqual(try result(request(.filmPositive, medium: "negative")).renderMedium, "lab-scan")
+        let positiveSlide = try result(request(.filmPositive, stock: "ektachromee100", medium: "ilfochrome-cps-1k"))
+        XCTAssertEqual(positiveSlide.configuration.frame, .none)
+        XCTAssertFalse(positiveSlide.available.contains(.filmPositive))
+        XCTAssertEqual(try result(request(.filmPositive)).palette["cutout"], [0, 0, 0])
         let unavailable = try result(request(.slideMount))
         XCTAssertEqual(unavailable.configuration.frame, .none)
         XCTAssertNil(unavailable.renderMedium)

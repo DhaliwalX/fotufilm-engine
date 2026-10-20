@@ -4709,80 +4709,86 @@
           "value" : 1
         },
         {
+          "detail" : "The negative's film border scanned and inverted: a dark rebate, light edge printing and black perforations around the positive photograph.",
+          "id" : "filmPositive",
+          "label" : "Film Border Positive",
+          "value" : 2
+        },
+        {
           "detail" : "The developed transparency in a card slide mount.",
           "id" : "slideMount",
           "label" : "Slide Mount",
-          "value" : 2
+          "value" : 3
         },
         {
           "detail" : "The selected photographic paper, in a 4 × 6 inch print.",
           "id" : "paper",
           "label" : "Paper Border 4 × 6",
-          "value" : 3
+          "value" : 4
         },
         {
           "detail" : "The selected photographic paper, in a 5 × 7 inch print.",
           "id" : "paper5x7",
           "label" : "Paper Border 5 × 7",
-          "value" : 4
+          "value" : 5
         },
         {
           "detail" : "The selected photographic paper, in an 8 × 10 inch print.",
           "id" : "paper8x10",
           "label" : "Paper Border 8 × 10",
-          "value" : 5
+          "value" : 6
         },
         {
           "detail" : "The selected photographic paper, in a 5 × 5 inch print.",
           "id" : "paper5x5",
           "label" : "Paper Border 5 × 5",
-          "value" : 6
+          "value" : 7
         },
         {
           "detail" : "The film rebate printed through a filed-out negative carrier: a black line inside the paper margin.",
           "id" : "carrier",
           "label" : "Carrier Border",
-          "value" : 7
+          "value" : 8
         },
         {
           "detail" : "The film just outside the camera gate, printed with the photograph: the stock's own unexposed tone, glow and grain, inside a paper margin.",
           "id" : "emulsion",
           "label" : "Emulsion Border",
-          "value" : 8
+          "value" : 9
         },
         {
           "detail" : "A clean white margin around the photograph.",
           "id" : "mount",
           "label" : "White Mount",
-          "value" : 9
+          "value" : 10
         },
         {
           "detail" : "A clean black margin around the photograph.",
           "id" : "darkMount",
           "label" : "Black Mount",
-          "value" : 10
+          "value" : 11
         },
         {
           "detail" : "A square 1 : 1 canvas for posting, the photograph inside a white margin.",
           "id" : "socialSquare",
           "label" : "Square Post",
-          "value" : 11
+          "value" : 12
         },
         {
           "detail" : "A 4 : 5 portrait canvas for posting, the photograph inside a white margin.",
           "id" : "socialPortrait",
           "label" : "Portrait Post",
-          "value" : 12
+          "value" : 13
         },
         {
           "detail" : "A 9 : 16 story canvas, the photograph inside a white margin.",
           "id" : "socialStory",
           "label" : "Story",
-          "value" : 13
+          "value" : 14
         }
       ],
       "detail" : "Choose a film, slide mount, paper, carrier, emulsion, plain mount, or posting canvas.",
-      "documentation" : "Choose Film Border for the selected film gauge, Slide Mount for a transparency in a 2 × 2 inch card mount, a Paper Border cut at 4 × 6, 5 × 7, 8 × 10 or 5 × 5 inches, Carrier Border for a negative's rebate printed through a filed-out carrier, Emulsion Border for the film's unexposed edge outside the camera gate — the stock's own tone, halation glow and grain — printed with the photograph inside a paper margin, a plain White or Black Mount, or a Square, Portrait or Story posting canvas with the photograph inside a white margin. Film perforations follow physical geometry; verified sheet-notch codes follow the stock. Included in saved edits and exports.",
+      "documentation" : "Choose Film Border for the selected film gauge, Film Border Positive for a negative's film border scanned and inverted around the positive photograph — a dark rebate, light edge printing and black perforations — Slide Mount for a transparency in a 2 × 2 inch card mount, a Paper Border cut at 4 × 6, 5 × 7, 8 × 10 or 5 × 5 inches, Carrier Border for a negative's rebate printed through a filed-out carrier, Emulsion Border for the film's unexposed edge outside the camera gate — the stock's own tone, halation glow and grain — printed with the photograph inside a paper margin, a plain White or Black Mount, or a Square, Portrait or Story posting canvas with the photograph inside a white margin. Film perforations follow physical geometry; documented edge printing and verified sheet-notch codes follow the stock. Included in saved edits and exports.",
       "drives" : [
 
       ],
@@ -4808,7 +4814,7 @@
     {
       "availability" : "always",
       "detail" : "Widen or narrow the margin around the photograph.",
-      "documentation" : "Scales the margin of a Paper Border, Carrier Border, White or Black Mount, or posting canvas, from none at 0% to three times the preset at 300%. A paper sheet keeps its size, so a wider easel margin prints a smaller picture; a mount or canvas grows around the photograph. Film Border and Slide Mount follow physical dimensions and have no Border Width. Included in saved edits and exports.",
+      "documentation" : "Scales the margin of a Paper Border, Carrier Border, White or Black Mount, or posting canvas, from none at 0% to three times the preset at 300%. A paper sheet keeps its size, so a wider easel margin prints a smaller picture; a mount or canvas grows around the photograph. Film Border, Film Border Positive and Slide Mount follow physical dimensions and have no Border Width. Included in saved edits and exports.",
       "drives" : [
 
       ],
