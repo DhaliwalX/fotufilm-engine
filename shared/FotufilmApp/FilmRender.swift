@@ -808,6 +808,7 @@ enum FilmRender {
                                       dynamicRange: dynamicRange, exact: exact,
                                       negative: negative) else { return nil }
             rendered = framed.rendered
+            rendered.photoRect = framed.layout.imageRect
         } else {
             guard let print else { return nil }
             rendered = print
@@ -2133,6 +2134,11 @@ struct Rendered {
     /// Which way the print's rows stand, written into the file the way the
     /// camera's own photographs carry it.
     var orientation = CGImagePropertyOrientation.up
+
+    /// Where the photograph sits when the print is framed, in Core Graphics coordinates with the
+    /// origin at the lower left; nil when the print is the photograph alone. A mark meant for the
+    /// picture rather than its border goes inside this.
+    var photoRect: CGRect? = nil
 
     var pixelSize: CGSize {
         CGSize(width: image.width, height: image.height)
