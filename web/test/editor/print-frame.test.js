@@ -21,7 +21,7 @@ import {
   stripSource,
 } from "../../src/print-frame.js";
 import { frameNoise } from "../../src/frame-texture.js";
-import { perforationOutline } from "../../src/print-frame-renderer.js";
+import { liftedLevels, perforationOutline } from "../../src/print-frame-renderer.js";
 
 test("frames survive save/load/undo, old edits default to none, unknown frames are rejected", () => {
   const edit = { ...defaultEdit(), printFrame: "socialStory" };
@@ -207,4 +207,17 @@ test("a film border's camera survives save/load and reaches the frame plan", () 
   assert.equal(parseEdit(JSON.stringify({ version: 1, edit }), []).printFrameCamera, "panoramic");
   assert.equal(frameRequest(defaultEdit()).camera, "panoramic");
   for (const value of ["box", 1]) assert.throws(() => parsePrintFrameCamera(value), /Invalid film border camera/);
+});
+
+test("a positive scan's black point lifts unexposed film to the base and barely moves mid-tones", () => {
+  // Linear 0.02, the native invertedBaseRGB, in the sRGB curve.
+  const base = 1.055 * 0.02 ** (1 / 2.4) - 0.055;
+  const levels = liftedLevels(base, 65536);
+  // Film that saw no light reads as the rebate, wherever it lies; white stays white.
+  assert.ok(Math.abs(levels[0] - base) < 1e-6);
+  assert.ok(Math.abs(levels[65535] - 1) < 1e-6);
+  // As PrintFrameTests.testFilmPositiveUnexposedPictureMatchesTheRebate: mid-grey stays close.
+  const mid = levels[Math.round(0.5 * 65535)];
+  assert.ok(mid > 0.5 && mid < 0.53, `mid-grey ${mid}`);
+  for (let i = 1; i < levels.length; i++) assert.ok(levels[i] >= levels[i - 1]);
 });
