@@ -1,5 +1,6 @@
 // The inspector, compact: "Darkroom" and its help, the four panels as a segmented control, and the
-// chosen panel's sections. Collapsed, it is a rail of the panels' buttons.
+// chosen panel's sections; in the phone's dock, the sections alone. Collapsed, it is a rail of the
+// panels' buttons.
 import 'package:flutter/widgets.dart';
 
 import '../../model/editor.dart';
@@ -45,40 +46,46 @@ class _EditorInspectorState extends State<EditorInspector> {
   Widget build(BuildContext context) {
     final editor = widget.editor;
     final scroll = _scrolls[editor.panel]!;
+    // In the compact dock the rail below names the panel and switches it; a canvas tool, which
+    // has no button there, keeps its heading and close button.
+    final compact = editor.layout.compact;
+    final heading = !compact || editor.panel.isTool;
     return ColoredBox(
       color: Palette.of(context).panel,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Padding(
-          padding: Metrics.headingPadding,
-          child: Row(children: [
-            Text(
-                switch (editor.panel) {
-                  Panel.crop => 'Crop',
-                  Panel.selective => 'Selective',
-                  _ => 'Darkroom',
-                },
-                style: editorText(context, size: TextSizes.heading, weight: FontWeight.w700)),
-            const SizedBox(width: 2),
-            HelpButton(detail: _help[editor.panel], size: 16),
-            if (editor.panel == Panel.crop || editor.panel == Panel.selective) ...[
-              const SizedBox(width: 6),
-              Text('Canvas tool',
-                  style: editorText(context,
-                      size: TextSizes.label, color: Palette.of(context).muted)),
-            ],
-            const Spacer(),
-            PanelDismissButton(editor: editor, side: PanelSide.inspector),
-          ]),
-        ),
-        Padding(
-          padding: Metrics.tabsPadding,
-          child: SegmentedControl<Panel>(
-            items: [for (final p in editor.inspectorTabs) (p, p.title)],
-            // A canvas tool takes the inspector over; no tab is chosen while it does.
-            selected: editor.inspectorTabs.contains(editor.panel) ? editor.panel : null,
-            onChanged: editor.setPanel,
+        if (heading)
+          Padding(
+            padding: Metrics.headingPadding,
+            child: Row(children: [
+              Text(
+                  switch (editor.panel) {
+                    Panel.crop => 'Crop',
+                    Panel.selective => 'Selective',
+                    _ => 'Darkroom',
+                  },
+                  style: editorText(context, size: TextSizes.heading, weight: FontWeight.w700)),
+              const SizedBox(width: 2),
+              HelpButton(detail: _help[editor.panel], size: 16),
+              if (editor.panel == Panel.crop || editor.panel == Panel.selective) ...[
+                const SizedBox(width: 6),
+                Text('Canvas tool',
+                    style: editorText(context,
+                        size: TextSizes.label, color: Palette.of(context).muted)),
+              ],
+              const Spacer(),
+              PanelDismissButton(editor: editor, side: PanelSide.inspector),
+            ]),
           ),
-        ),
+        if (!compact)
+          Padding(
+            padding: Metrics.tabsPadding,
+            child: SegmentedControl<Panel>(
+              items: [for (final p in editor.inspectorTabs) (p, p.title)],
+              // A canvas tool takes the inspector over; no tab is chosen while it does.
+              selected: editor.inspectorTabs.contains(editor.panel) ? editor.panel : null,
+              onChanged: editor.setPanel,
+            ),
+          ),
         Expanded(
           child: ThinScroll(
             controller: scroll,

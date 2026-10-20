@@ -299,7 +299,8 @@ class _ExportDialogState extends State<ExportDialog> {
       a.length == b.length && a.entries.every((e) => b[e.key] == e.value);
 }
 
-/// A name on the left and its picker on the right (`[role=dialog] .select-row`).
+/// A name on the left and its picker on the right (`[role=dialog] .select-row`); in a narrow
+/// dialog the picker gives way so the name keeps a line of its own.
 class _SelectRow extends StatelessWidget {
   const _SelectRow(this.label, this.control);
   final String label;
@@ -308,11 +309,14 @@ class _SelectRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Row(children: [
-          Expanded(child: Text(label)),
-          const SizedBox(width: 12),
-          SizedBox(width: 260, child: control),
-        ]),
+        child: LayoutBuilder(
+          builder: (context, constraints) => Row(children: [
+            Expanded(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis)),
+            const SizedBox(width: 12),
+            SizedBox(
+                width: (constraints.maxWidth - 96).clamp(120, 260).toDouble(), child: control),
+          ]),
+        ),
       );
 }
 

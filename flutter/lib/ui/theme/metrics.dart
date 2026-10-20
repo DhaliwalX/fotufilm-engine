@@ -23,14 +23,16 @@ abstract final class Metrics {
   static const resizerHit = 8.0;
 
   // ── Compact layout ─────────────────────────────────────────────────────────────────────────
-  static const compactToolbarRow = 48.0;
-  static const compactTouch = 44.0;
-  static const compactRail = 60.0;
-  static const compactRailButton = 52.0;
-  static const compactFilmDock = 196.0;
+  // A phone draws these 1.25 times larger (app/touch_scale.dart): 50 px rows, 45 px buttons.
+  static const compactToolbarRow = 40.0;
+  static const compactTouch = 36.0;
+  static const compactRail = 48.0;
+  static const compactRailButton = 42.0;
 
   /// The inspector's dock: 44% of the window's height, within these.
-  static const compactDockMin = 220.0, compactDockMax = 400.0;
+  static const compactDockMin = 180.0, compactDockMax = 340.0;
+  /// The compact dock's grabber, and the least picture left above the tallest dock.
+  static const compactGrabber = 16.0, compactPictureMin = 120.0;
 
   // ── Controls (Spectrum size S) ─────────────────────────────────────────────────────────────
   static const control = 24.0;
@@ -73,6 +75,11 @@ abstract final class Metrics {
   static const normalRowGap = 6.0;
   static const stockThumb = Size(42, 32);
   static const stockThumbCollapsed = Size(40, 40);
+
+  /// The phone's strip of films: a tile's picture and name, and the dock that holds them.
+  static const filmStripTile = 76.0, filmStripGap = 8.0, filmStripThumb = 57.0;
+  static const filmStripPadding = EdgeInsets.fromLTRB(10, 2, 10, 8);
+  static const compactFilmStrip = 188.0;
 
   // ── Video controls ─────────────────────────────────────────────────────────────────────────
   static const videoPadding = EdgeInsets.fromLTRB(18, 10, 18, 6);

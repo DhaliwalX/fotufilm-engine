@@ -7,8 +7,10 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../app/commands.dart';
 import '../../app/editor_shortcuts.dart' show shortcutLabel;
 import '../../app/host_window.dart';
+import '../../app/touch_scale.dart' show mobilePlatform;
 import '../../model/app_dialogs.dart';
 import '../../model/editor.dart';
+import '../../model/library_files.dart' show libraryFilesAvailable;
 import '../../model/presets.dart' show pasteTitle;
 import '../kit/kit.dart';
 import '../theme/theme.dart';
@@ -44,7 +46,8 @@ class EditorToolbar extends StatelessWidget {
             const SizedBox(width: 7),
             const FotufilmBrand(),
             const SizedBox(width: 8),
-            _LibraryButton(editor: editor),
+            // A browser reads no folders, so it has no library.
+            if (libraryFilesAvailable) _LibraryButton(editor: editor),
             ImportMenu(editor: editor, onImage: commands.actions.open),
           ]),
         ),
@@ -78,28 +81,20 @@ class EditorToolbar extends StatelessWidget {
       child: child);
 }
 
-/// The compact layout's toolbar: the brand, the library and Add media on one row, and the edit
-/// buttons spread across the next; zoom gives way.
+/// The compact layout's toolbar, one row: the library (where folders can be read) and Add media,
+/// then history, export and More. Zoom gives way to pinching, the panels to the rail below, and the histogram and Reset go
+/// into More.
 extension on EditorToolbar {
   Widget _compact(Color? colour, bool titlebar) => Container(
+        height: Metrics.compactToolbarRow,
         color: colour,
-        padding: const EdgeInsets.fromLTRB(6, 0, 6, 4),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          SizedBox(
-            height: Metrics.compactToolbarRow,
-            child: Row(children: [
-              if (titlebar) const SizedBox(width: Metrics.trafficLightInset),
-              const FotufilmBrand(),
-              const Spacer(),
-              _LibraryButton(editor: editor, size: Metrics.compactTouch),
-              const SizedBox(width: 8),
-              ImportMenu(editor: editor, onImage: commands.actions.open, size: Metrics.compactTouch),
-            ]),
-          ),
-          SizedBox(
-            height: Metrics.compactToolbarRow,
-            child: _EditGroup(commands: commands, compact: true),
-          ),
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Row(children: [
+          if (titlebar) const SizedBox(width: Metrics.trafficLightInset),
+          if (libraryFilesAvailable) _LibraryButton(editor: editor, size: Metrics.compactTouch),
+          ImportMenu(editor: editor, onImage: commands.actions.open, size: Metrics.compactTouch),
+          const Spacer(),
+          _whileEditing(_EditGroup(commands: commands, compact: true)),
         ]),
       );
 }
@@ -184,7 +179,7 @@ class _EditGroup extends StatelessWidget {
   const _EditGroup({required this.commands, this.compact = false});
   final EditorCommands commands;
 
-  /// Spread across the compact toolbar's second row, at touch size.
+  /// The compact toolbar's buttons, at touch size.
   final bool compact;
 
   EditorModel get editor => commands.editor;
@@ -194,54 +189,73 @@ class _EditGroup extends StatelessWidget {
     final doc = editor.active;
     final exporting = editor.exporting;
     final history = doc?.history;
-    const gap = SizedBox(width: Metrics.toolbarGap);
-    final row = Row(children: [
-      QuietButton(
-        icon: 'histogram',
-        tooltip: 'Histogram (H)',
-        selected: editor.histogramOpen,
-        onPressed: doc != null ? editor.toggleHistogram : null,
+    final size = compact ? Metrics.compactTouch : Metrics.control;
+    final gap = SizedBox(width: compact ? 0 : Metrics.toolbarGap);
+    final histogram = QuietButton(
+      icon: 'histogram',
+      tooltip: 'Histogram (H)',
+      selected: editor.histogramOpen,
+      onPressed: doc != null ? editor.toggleHistogram : null,
+    );
+    // What Undo and Redo will change, as the Edit menu names it.
+    final undo = QuietButton(
+        icon: 'undo',
+        tooltip: '${editor.history.undo} (${shortcutLabel('⌘Z')})',
+        size: size,
+        onPressed: (history?.past.isNotEmpty ?? false) && !exporting ? editor.undo : null);
+    final redo = QuietButton(
+        icon: 'redo',
+        tooltip: '${editor.history.redo} (${shortcutLabel('⇧⌘Z')})',
+        size: size,
+        onPressed: (history?.future.isNotEmpty ?? false) && !exporting ? editor.redo : null);
+    final reset = QuietButton(
+        icon: 'reset',
+        tooltip: 'Reset all edits',
+        onPressed: doc != null && !exporting ? editor.resetEdit : null);
+    // Exports running in the background (export_progress.dart).
+    final progress = [
+      if (editor.exporter.busy) ...[ExportProgressButton(editor: editor, size: size), gap],
+    ];
+    final export = QuietButton(
+        icon: 'export',
+        tooltip: 'Export (${shortcutLabel('⌘E')})',
+        size: size,
+        onPressed: doc != null && editor.stocks.isNotEmpty && !exporting
+            ? commands.actions.export
+            : null);
+    final more = Builder(
+      key: moreOptionsKey,
+      builder: (anchor) => QuietButton(
+        icon: 'more',
+        tooltip: 'More options',
+        opensMenu: true,
+        size: size,
+        onPressed: () => showMoreOptions(anchor, commands),
       ),
+    );
+    // The compact row keeps what a phone reaches for; More holds the histogram and Reset, and
+    // the rail below opens the panels.
+    if (compact) {
+      return Row(mainAxisSize: MainAxisSize.min, children: [undo, redo, ...progress, export, more]);
+    }
+    return Row(children: [
+      histogram,
       Container(
         width: 1,
         height: 16,
         margin: const EdgeInsets.symmetric(horizontal: 3),
         color: Palette.of(context).border,
       ),
-      // What Undo and Redo will change, as the Edit menu names it.
-      QuietButton(
-          icon: 'undo',
-          tooltip: '${editor.history.undo} (${shortcutLabel('⌘Z')})',
-          onPressed: (history?.past.isNotEmpty ?? false) && !exporting ? editor.undo : null),
+      undo,
       gap,
-      QuietButton(
-          icon: 'redo',
-          tooltip: '${editor.history.redo} (${shortcutLabel('⇧⌘Z')})',
-          onPressed: (history?.future.isNotEmpty ?? false) && !exporting ? editor.redo : null),
+      redo,
       gap,
-      QuietButton(
-          icon: 'reset',
-          tooltip: 'Reset all edits',
-          onPressed: doc != null && !exporting ? editor.resetEdit : null),
+      reset,
       gap,
-      // Exports running in the background (export_progress.dart).
-      if (editor.exporter.busy) ...[ExportProgressButton(editor: editor), gap],
-      QuietButton(
-          icon: 'export',
-          tooltip: 'Export (${shortcutLabel('⌘E')})',
-          onPressed: doc != null && editor.stocks.isNotEmpty && !exporting
-              ? commands.actions.export
-              : null),
+      ...progress,
+      export,
       gap,
-      Builder(
-        key: moreOptionsKey,
-        builder: (anchor) => QuietButton(
-          icon: 'more',
-          tooltip: 'More options',
-          opensMenu: true,
-          onPressed: () => showMoreOptions(anchor, commands),
-        ),
-      ),
+      more,
       gap,
       QuietButton(
         icon: 'inspector',
@@ -250,29 +264,7 @@ class _EditGroup extends StatelessWidget {
         onPressed: editor.layout.toggleInspector,
       ),
     ]);
-    if (!compact) return row;
-    // The compact row: no divider, the buttons spread at touch size.
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        for (final child in row.children)
-          if (child is QuietButton)
-            _touch(child)
-          else if (child is Builder)
-            Builder(builder: (anchor) => _touch(child.builder(anchor) as QuietButton))
-          else if (child is ExportProgressButton)
-            ExportProgressButton(editor: editor, size: Metrics.compactTouch),
-      ],
-    );
   }
-
-  static Widget _touch(QuietButton b) => QuietButton(
-        icon: b.icon,
-        tooltip: b.tooltip,
-        selected: b.selected,
-        onPressed: b.onPressed,
-        size: Metrics.compactTouch,
-      );
 }
 
 /// The More button, for the driver to open its menu.
@@ -290,6 +282,22 @@ void showMoreOptions(BuildContext anchor, EditorCommands commands) {
   final steps = editor.history.timeline;
   void open(Panel panel) => editor.layout.choosePanel(panel);
   final sections = <List<MenuItem>>[
+    // The compact toolbar's histogram and Reset.
+    if (editor.layout.compact)
+      [
+        MenuItem(
+          label: 'Histogram',
+          icon: 'histogram',
+          selection: MenuSelection.multiple,
+          checked: editor.histogramOpen,
+          onSelected: doc != null ? editor.toggleHistogram : null,
+        ),
+        MenuItem(
+          label: 'Reset All Edits',
+          icon: 'reset',
+          onSelected: noPhoto ? null : editor.resetEdit,
+        ),
+      ],
     [
       MenuItem(
         label: 'Import Scanned Negative…',
@@ -344,13 +352,13 @@ void showMoreOptions(BuildContext anchor, EditorCommands commands) {
       MenuItem(
         label: 'Copy Settings…',
         icon: 'copySettings',
-        description: shortcutLabel('⌥⌘C'),
+        description: mobilePlatform ? null : shortcutLabel('⌥⌘C'),
         onSelected: noPhoto ? null : commands.actions.copySettings,
       ),
       MenuItem(
         label: pasteTitle(editor.selection.chosen.length),
         icon: 'pasteSettings',
-        description: shortcutLabel('⌥⌘V'),
+        description: mobilePlatform ? null : shortcutLabel('⌥⌘V'),
         onSelected: noPhoto || presets.copied == null ? null : presets.paste,
       ),
       MenuItem(label: 'Presets', icon: 'presets', submenu: [
@@ -401,11 +409,12 @@ void showMoreOptions(BuildContext anchor, EditorCommands commands) {
           icon: 'export',
           onSelected: exporting ? null : () => editor.dialogs.request(AppDialog.plugins),
         ),
-      MenuItem(
-        label: 'Keyboard shortcuts',
-        icon: 'shortcuts',
-        onSelected: () => editor.dialogs.request(AppDialog.shortcuts),
-      ),
+      if (!mobilePlatform)
+        MenuItem(
+          label: 'Keyboard shortcuts',
+          icon: 'shortcuts',
+          onSelected: () => editor.dialogs.request(AppDialog.shortcuts),
+        ),
       MenuItem(
         label: 'Browser support',
         icon: 'help',
