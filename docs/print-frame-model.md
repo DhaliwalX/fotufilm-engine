@@ -65,6 +65,15 @@ Fujifilm's specifications for [Mini](https://www.instax.com/mini_link/en/spec.ht
 [Square](https://www.instax.com/sq1/en/) and
 [Wide](https://asset.fujifilm.com/master/apac/files/2020-06/acf110878e2c263a1a0c13b762fb1cbe/instax_datasheet.pdf).
 
+No two holes are cut alike (`PrintFrameRenderer.perforationOutline`, `perforationOutline` in
+web/src/print-frame-renderer.js). Each is traced from its die shape every 0.04 mm and every point
+moved along the outward normal: 0.04 mm of wander over about half a millimetre and 0.015 mm over
+a tenth, closing on itself, with the hole up to 0.015 mm off its pitch and up to 0.012 mm wider or
+narrower. Perforators hold about a hundredth of a millimetre, but a scanned edge shows burrs,
+chips and tears; these amplitudes are representative, not measured. The wander is seeded value
+noise in physical millimetres with each hole's own seed, so a strip looks the same on every
+renderer and at every size, and the developed strip punches the same holes.
+
 The chosen 120 frame-to-frame spacing, sheet-film camera aperture, and instant border's top/bottom
 allocation are representative presentation conventions: cameras, holders and product revisions
 can differ. Instant borders require the matching instant-film stock. A gauge chosen for a stock

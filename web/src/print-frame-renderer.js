@@ -58,27 +58,103 @@ function perforations(ctx, g, dimensions) {
   ctx.beginPath();
   ctx.rect(0, 0, across, along);
   ctx.clip();
-  for (const x of g.rows === 2 ? [edge, across - edge - width] : [edge]) {
+  const rows = g.rows === 2 ? [edge, across - edge - width] : [edge];
+  rows.forEach((x, row) => {
+    let index = 0;
     for (
       let centre = g.perforation === "sixteen" ? 0 : g.pitchMM / 2;
       centre <= along;
-      centre += g.pitchMM
+      centre += g.pitchMM, index++
     ) {
-      if (g.perforation === "bellHowell") {
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(x, centre - height / 2, width, height);
-        ctx.clip();
-        ellipse(ctx, x, centre - width / 2, width, width);
-        ctx.restore();
-      } else {
-        ctx.beginPath();
-        ctx.roundRect(x, centre - height / 2, width, height, radius);
-        ctx.fill();
-      }
+      const outline = perforationOutline(
+        x,
+        centre,
+        width,
+        height,
+        radius,
+        g.perforation === "bellHowell",
+        row * 4096 + index,
+      );
+      ctx.beginPath();
+      outline.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)));
+      ctx.closePath();
+      ctx.fill();
     }
-  }
+  });
   ctx.restore();
+}
+// One punched hole's edge, as PrintFrameRenderer.perforationOutline traces it: the die's shape
+// every 0.04 mm, each point moved along its outward normal by the hole's own wander, shift and
+// size, from the same noise.
+export function perforationOutline(x, centre, width, height, radius, bellHowell, hole) {
+  const line = (a, b, normal) => ({
+    length: Math.hypot(b[0] - a[0], b[1] - a[1]),
+    point: (t) => [[a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t], normal],
+  });
+  const arc = (c, r, a0, a1) => ({
+    length: r * Math.abs(a1 - a0),
+    point: (t) => {
+      const angle = a0 + (a1 - a0) * t,
+        n = [Math.cos(angle), Math.sin(angle)];
+      return [[c[0] + n[0] * r, c[1] + n[1] * r], n];
+    },
+  });
+  const y = centre - height / 2;
+  let pieces;
+  if (bellHowell) {
+    const r = width / 2,
+      half = height / 2,
+      c = [x + r, centre];
+    const flat = Math.asin(Math.min(1, half / r)),
+      run = r * Math.cos(flat);
+    pieces = [
+      line([c[0] - run, c[1] - half], [c[0] + run, c[1] - half], [0, -1]),
+      arc(c, r, -flat, flat),
+      line([c[0] + run, c[1] + half], [c[0] - run, c[1] + half], [0, 1]),
+      arc(c, r, Math.PI - flat, Math.PI + flat),
+    ];
+  } else {
+    const r = Math.min(radius, width / 2, height / 2);
+    pieces = [
+      line([x + r, y], [x + width - r, y], [0, -1]),
+      arc([x + width - r, y + r], r, -Math.PI / 2, 0),
+      line([x + width, y + r], [x + width, y + height - r], [1, 0]),
+      arc([x + width - r, y + height - r], r, 0, Math.PI / 2),
+      line([x + width - r, y + height], [x + r, y + height], [0, 1]),
+      arc([x + r, y + height - r], r, Math.PI / 2, Math.PI),
+      line([x, y + height - r], [x, y + r], [-1, 0]),
+      arc([x + r, y + r], r, Math.PI, (3 * Math.PI) / 2),
+    ];
+  }
+  const perimeter = pieces.reduce((sum, piece) => sum + piece.length, 0);
+  // Each hole's own noise is its seed, so the coordinates stay small and exact.
+  const own = Math.imul(hole, 3) >>> 0;
+  const noise = (x, y, seed) => frameNoise(x, y, (seed + own) >>> 0);
+  const shift = [0.015 * noise(0.5, 0.5, 401), 0.015 * noise(1.5, 0.5, 401)];
+  const grow = 0.012 * noise(2.5, 0.5, 401);
+  // Around a circle in the noise, so the wander closes where the trace began.
+  const wander = (s) => {
+    const turn = (2 * Math.PI * s) / perimeter;
+    const ring = (wavelength, seed) => {
+      const r = perimeter / (2 * Math.PI * wavelength);
+      return noise(r * Math.cos(turn), r * Math.sin(turn), seed);
+    };
+    return 0.04 * ring(0.5, 211) + 0.015 * ring(0.1, 307);
+  };
+  const outline = [];
+  let travelled = 0;
+  for (const piece of pieces) {
+    if (!(piece.length > 0)) continue;
+    const steps = Math.max(1, Math.ceil(piece.length / 0.04));
+    for (let step = 0; step < steps; step++) {
+      const t = step / steps;
+      const [point, normal] = piece.point(t);
+      const d = grow + wander(travelled + piece.length * t);
+      outline.push([point[0] + shift[0] + normal[0] * d, point[1] + shift[1] + normal[1] * d]);
+    }
+    travelled += piece.length;
+  }
+  return outline;
 }
 function edgePrinting(ctx, g, printing) {
   if (!printing) return;

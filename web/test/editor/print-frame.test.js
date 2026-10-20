@@ -19,6 +19,7 @@ import {
   stripSource,
 } from "../../src/print-frame.js";
 import { frameNoise } from "../../src/frame-texture.js";
+import { perforationOutline } from "../../src/print-frame-renderer.js";
 
 test("frames survive save/load/undo, old edits default to none, unknown frames are rejected", () => {
   const edit = { ...defaultEdit(), printFrame: "socialStory" };
@@ -172,3 +173,14 @@ test('a film border strip continues the photograph past its edges', async () => 
     { left: 1, right: 0, top: 0, bottom: 0 }).read(0, 0, 3, 1)
   assert.deepEqual([promised[0], promised[4], promised[8]], [0, 0, 1])
 })
+test("perforations trace the native renderer's imperfect edges", () => {
+  // The same points PrintFrameTests checks natively.
+  const ks = perforationOutline(2, 7.125, 1.98, 2.794, 0.5, false, 3);
+  const bh = perforationOutline(2, 7.125, 1.98, 2.794, 0.5, true, 4097);
+  assert.equal(ks.length, 220);
+  assert.ok(Math.abs(ks[0][0] - 2.494434539) < 1e-6);
+  assert.ok(Math.abs(ks[100][1] - 8.380326384) < 1e-6);
+  assert.equal(bh.length, 156);
+  assert.ok(Math.abs(bh[100][0] - 2.238402747) < 1e-6);
+  assert.notDeepEqual(perforationOutline(2, 7.125, 1.98, 2.794, 0.5, false, 4), ks);
+});

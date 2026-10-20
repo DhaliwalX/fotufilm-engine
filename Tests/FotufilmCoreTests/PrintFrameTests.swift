@@ -659,6 +659,35 @@ final class PrintFrameTests: XCTestCase {
         XCTAssertEqual(part, [20, 21, 22, 23, 24, 25, 26, 27, 36, 37, 38, 39, 40, 41, 42, 43])
     }
 
+    func testPerforationsAreCutWithTheirOwnSmallImperfections() {
+        func outline(_ hole: Int, bellHowell: Bool = false) -> [SIMD2<Double>] {
+            PrintFrameRenderer.perforationOutline(x: 2, centre: 7.125, width: 1.98, height: 2.794,
+                                                  radius: 0.5, bellHowell: bellHowell, hole: hole)
+        }
+        // The browser traces the same edge (web/test/editor/print-frame.test.js).
+        let ks = outline(3), bh = outline(4097, bellHowell: true)
+        XCTAssertEqual(ks.count, 220)
+        XCTAssertEqual(ks[0].x, 2.494434539, accuracy: 1e-6)
+        XCTAssertEqual(ks[100].y, 8.380326384, accuracy: 1e-6)
+        XCTAssertEqual(bh.count, 156)
+        XCTAssertEqual(bh[100].x, 2.238402747, accuracy: 1e-6)
+        XCTAssertEqual(outline(3), ks)
+        for hole in [0, 1, 2, 4096, 4097] {
+            let points = outline(hole)
+            // Within a tenth of a millimetre of the die, and closing on itself.
+            for p in points {
+                XCTAssertTrue((1.9...4.08).contains(p.x) && (5.63...8.62).contains(p.y), "\(hole): \(p)")
+            }
+            let close = points[0] - points[points.count - 1]
+            XCTAssertLessThan((close * close).sum().squareRoot(), 0.08)
+            // Each hole its own: not the last one moved.
+            let other = outline(hole + 1)
+            let offset = points[0] - other[0]
+            let moved = zip(points, other).map { (($0 - $1 - offset) * ($0 - $1 - offset)).sum().squareRoot() }
+            XCTAssertGreaterThan(moved.max() ?? 0, 0.01)
+        }
+    }
+
     func testEdgeExposureUsesNegativeAndReversalDensityWithTheSameViewingLamp() {
         for id in ["portra400", "hp5plus400", "vision500t"] {
             let config = configuration(.film, stock: id)

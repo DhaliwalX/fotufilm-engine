@@ -282,26 +282,105 @@ public enum PrintFrameRenderer {
         let first: CGFloat = type == .sixteen ? 0 : pitch / 2
         let rows: [CGFloat] = g.rows == 2 ? [edge, across - edge - width] : [edge]
         context.setFillColor(cutout)
-        for x in rows {
+        for (row, x) in rows.enumerated() {
             var centre = first
+            var index = 0
             while centre <= along {
-                let rect = CGRect(x: x, y: centre - height / 2, width: width, height: height)
-                if type == .bellHowell {
-                    // BH is a circle clipped by two parallel flats, not a rounded KS rectangle.
-                    context.saveGState()
-                    context.clip(to: rect)
-                    context.fillEllipse(in: CGRect(x: x, y: centre - width / 2,
-                                                   width: width, height: width))
-                    context.restoreGState()
-                } else {
-                    context.addPath(CGPath(roundedRect: rect, cornerWidth: radius,
-                                           cornerHeight: radius, transform: nil))
-                    context.fillPath()
-                }
+                let outline = perforationOutline(x: Double(x), centre: Double(centre),
+                                                 width: Double(width), height: Double(height),
+                                                 radius: Double(radius), bellHowell: type == .bellHowell,
+                                                 hole: row * 4096 + index)
+                context.addLines(between: outline.map { CGPoint(x: $0.x, y: $0.y) })
+                context.closePath()
+                context.fillPath()
                 centre += pitch
+                index += 1
             }
         }
         context.restoreGState()
+    }
+
+    /// One punched hole's edge, in the millimetres across and along the film that
+    /// `drawPerforations` draws in: the die's shape — a rounded KS rectangle, or BH's circle
+    /// clipped by two flats — traced every 0.04 mm, each point moved along its outward normal.
+    /// Perforators cut to about a hundredth of a millimetre, but the edge a scan shows is burred,
+    /// chipped and torn: 0.04 mm of wander over about half a millimetre and 0.015 mm over a
+    /// tenth, closing on itself, and each hole sits up to 0.015 mm off its pitch and cuts up to
+    /// 0.012 mm wider or narrower. Representative amplitudes, not measured. `hole` numbers the
+    /// hole along its row, rows 4096 apart, so every hole has its own; web/src/print-frame-renderer.js
+    /// traces the same outline from the same noise.
+    public static func perforationOutline(x: Double, centre: Double, width: Double, height: Double,
+                                          radius: Double, bellHowell: Bool,
+                                          hole: Int) -> [SIMD2<Double>] {
+        enum Piece {
+            case line(SIMD2<Double>, SIMD2<Double>, normal: SIMD2<Double>)
+            case arc(SIMD2<Double>, radius: Double, from: Double, to: Double)
+            var length: Double {
+                switch self {
+                case let .line(a, b, _): return ((b - a) * (b - a)).sum().squareRoot()
+                case let .arc(_, r, a0, a1): return r * abs(a1 - a0)
+                }
+            }
+            func point(_ t: Double) -> (SIMD2<Double>, SIMD2<Double>) {
+                switch self {
+                case let .line(a, b, n): return (a + (b - a) * t, n)
+                case let .arc(c, r, a0, a1):
+                    let angle = a0 + (a1 - a0) * t
+                    let n = SIMD2(cos(angle), sin(angle))
+                    return (c + n * r, n)
+                }
+            }
+        }
+        let y = centre - height / 2
+        var pieces: [Piece]
+        if bellHowell {
+            let r = width / 2, half = height / 2
+            let c = SIMD2(x + r, centre)
+            let flat = asin(min(1, half / r)), run = r * cos(flat)
+            pieces = [.line(SIMD2(c.x - run, c.y - half), SIMD2(c.x + run, c.y - half), normal: SIMD2(0, -1)),
+                      .arc(c, radius: r, from: -flat, to: flat),
+                      .line(SIMD2(c.x + run, c.y + half), SIMD2(c.x - run, c.y + half), normal: SIMD2(0, 1)),
+                      .arc(c, radius: r, from: .pi - flat, to: .pi + flat)]
+        } else {
+            let r = min(radius, width / 2, height / 2)
+            pieces = [.line(SIMD2(x + r, y), SIMD2(x + width - r, y), normal: SIMD2(0, -1)),
+                      .arc(SIMD2(x + width - r, y + r), radius: r, from: -.pi / 2, to: 0),
+                      .line(SIMD2(x + width, y + r), SIMD2(x + width, y + height - r), normal: SIMD2(1, 0)),
+                      .arc(SIMD2(x + width - r, y + height - r), radius: r, from: 0, to: .pi / 2),
+                      .line(SIMD2(x + width - r, y + height), SIMD2(x + r, y + height), normal: SIMD2(0, 1)),
+                      .arc(SIMD2(x + r, y + height - r), radius: r, from: .pi / 2, to: .pi),
+                      .line(SIMD2(x, y + height - r), SIMD2(x, y + r), normal: SIMD2(-1, 0)),
+                      .arc(SIMD2(x + r, y + r), radius: r, from: .pi, to: 3 * .pi / 2)]
+        }
+        let perimeter = pieces.reduce(0) { $0 + $1.length }
+        // Each hole's own noise is its seed, so the coordinates stay small and exact.
+        let own = UInt32(truncatingIfNeeded: hole) &* 3
+        func noise(_ x: Float, _ y: Float, _ seed: UInt32) -> Double {
+            Double(filingNoise(x, y, seed: seed &+ own))
+        }
+        let shift = SIMD2(0.015 * noise(0.5, 0.5, 401), 0.015 * noise(1.5, 0.5, 401))
+        let grow = 0.012 * noise(2.5, 0.5, 401)
+        // Around a circle in the noise, so the wander closes where the trace began.
+        func wander(_ s: Double) -> Double {
+            let turn = 2 * Double.pi * s / perimeter
+            func ring(_ wavelength: Double, _ seed: UInt32) -> Double {
+                let r = perimeter / (2 * .pi * wavelength)
+                return noise(Float(r * cos(turn)), Float(r * sin(turn)), seed)
+            }
+            return 0.04 * ring(0.5, 211) + 0.015 * ring(0.1, 307)
+        }
+        var outline: [SIMD2<Double>] = []
+        var travelled = 0.0
+        for piece in pieces where piece.length > 0 {
+            let steps = max(1, Int((piece.length / 0.04).rounded(.up)))
+            for step in 0..<steps {
+                let t = Double(step) / Double(steps)
+                let (point, normal) = piece.point(t)
+                outline.append(point + shift + normal * (grow + wander(travelled + piece.length * t)))
+            }
+            travelled += piece.length
+        }
+        return outline
     }
 
     private static func drawNotches(in context: CGContext, size: CGSize, code: SheetFilmNotchCode,
