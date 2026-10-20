@@ -73,15 +73,11 @@ public enum PrintFrameRenderer {
         if strip != nil {
             drawDeveloped(image, into: context, at: placement.imageRect, film: film)
             if configuration.frame == .filmPositive {
-                // The inverted scan's black point sits just past the developed base, so the rebate
-                // stands a little above the open holes, its grain kept.
-                context.saveGState()
-                context.setBlendMode(.screen)
-                context.setFillColor(baseColor(configuration.baseRGB))
-                context.addRect(CGRect(origin: .zero, size: placement.size))
-                context.addRect(placement.imageRect)
-                context.fillPath(using: .evenOdd)
-                context.restoreGState()
+                // The inverted scan's black point sits just past the developed base, so the film
+                // stands a little above the open holes, its grain kept. The scan sets it once for
+                // the whole strip: film that saw no light reads as the rebate inside the gate too,
+                // and the gate's own soft, rounded edge stays the only edge.
+                liftBlackPoint(context, by: configuration.baseRGB)
             }
         }
         context.saveGState()
@@ -147,6 +143,70 @@ public enum PrintFrameRenderer {
                                        y: photo.minY - CGFloat(film.bottom),
                                        width: CGFloat(image.width), height: CGFloat(image.height)))
         context.restoreGState()
+    }
+
+    /// Raises every sample of an opaque 16-bit `context` by `lift` in linear light, screened so
+    /// white stays white: the black point of an inverted scan set a little below its film.
+    private static func liftBlackPoint(_ context: CGContext, by lift: SIMD3<Float>) {
+        guard context.bitsPerComponent == 16, context.bitsPerPixel == 64,
+              let data = context.data, let space = context.colorSpace,
+              let table = liftTable(space: space, lift: lift) else { return }
+        let row = context.bytesPerRow
+        table.withUnsafeBufferPointer { table in
+            for y in 0..<context.height {
+                let line = (data + y * row).assumingMemoryBound(to: UInt16.self)
+                for x in 0..<context.width {
+                    let pixel = line + x * 4
+                    // Premultiplied samples: only an opaque one is its own colour.
+                    guard UInt16(littleEndian: pixel[3]) == .max else { continue }
+                    for channel in 0..<3 {
+                        let level = Int(UInt16(littleEndian: pixel[channel]))
+                        pixel[channel] = table[channel << 16 | level].littleEndian
+                    }
+                }
+            }
+        }
+    }
+
+    private struct LiftKey: Hashable {
+        let space: CGColorSpace
+        let lift: SIMD3<Float>
+    }
+    private static let liftLock = NSLock()
+    nonisolated(unsafe) private static var liftTables: [LiftKey: [UInt16]] = [:]
+
+    /// Each channel's 16-bit level in `space` mapped to its lifted level: three tables of 65536,
+    /// read off greys converted to and from linear Display P3, where `lift` is stated.
+    private static func liftTable(space: CGColorSpace, lift: SIMD3<Float>) -> [UInt16]? {
+        let key = LiftKey(space: space, lift: lift)
+        if let kept = liftLock.withLock({ liftTables[key] }) { return kept }
+        guard let linear = CGColorSpace(name: CGColorSpace.extendedLinearDisplayP3) else { return nil }
+        func convert(_ value: CGFloat, _ from: CGColorSpace, _ to: CGColorSpace) -> [CGFloat]? {
+            CGColor(colorSpace: from, components: [value, value, value, 1])?
+                .converted(to: to, intent: .relativeColorimetric, options: nil)?.components
+        }
+        let samples = 1024
+        var knots = [[Float]](repeating: [Float](repeating: 0, count: samples + 1), count: 3)
+        for i in 0...samples {
+            guard let light = convert(CGFloat(i) / CGFloat(samples), space, linear) else { return nil }
+            for channel in 0..<3 {
+                let l = max(0, Float(light[channel]))
+                let lifted = l + lift[channel] * max(0, 1 - l)
+                guard let level = convert(CGFloat(lifted), linear, space) else { return nil }
+                knots[channel][i] = min(1, max(0, Float(level[channel])))
+            }
+        }
+        var table = [UInt16](repeating: 0, count: 3 << 16)
+        for channel in 0..<3 {
+            for level in 0..<65536 {
+                let at = Float(level) * Float(samples) / 65535
+                let i = min(samples - 1, Int(at))
+                let value = knots[channel][i] + (knots[channel][i + 1] - knots[channel][i]) * (at - Float(i))
+                table[channel << 16 | level] = UInt16((value * 65535).rounded())
+            }
+        }
+        liftLock.withLock { liftTables[key] = table }
+        return table
     }
 
     private static func materialGeometry(_ configuration: PrintFrameConfiguration)

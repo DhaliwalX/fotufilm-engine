@@ -5,6 +5,19 @@ const encode = (v) =>
   v <= 0.0031308
     ? Math.max(0, v) * 12.92
     : 1.055 * Math.min(1, v) ** (1 / 2.4) - 0.055;
+const decode = (v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+// Film Border Positive's inverted scan sets its black point a little below the developed base,
+// once for the whole strip (PrintFrameRenderer.liftBlackPoint): each of `levels` encoded levels
+// of a channel raised by the encoded `base` in linear light, screened so white stays white.
+export function liftedLevels(base, levels) {
+  const lift = decode(base),
+    table = new Float32Array(levels);
+  for (let i = 0; i < levels; i++) {
+    const light = decode(i / (levels - 1));
+    table[i] = encode(light + lift * Math.max(0, 1 - light));
+  }
+  return table;
+}
 export function framePalette(plan, colorSpace) {
   if (colorSpace !== "display-p3") return plan.palette;
   const c = plan.configuration;
@@ -347,17 +360,21 @@ export async function renderPrintFrame(
   if (developed && image) {
     ctx.drawImage(image, 0, 0);
     if (c.frame === "filmPositive") {
-      // The inverted scan's black point sits just past the developed base, so the rebate
-      // stands a little above the open holes, its grain kept.
-      const r = p.image;
-      ctx.save();
-      ctx.globalCompositeOperation = "screen";
-      ctx.fillStyle = color(palette.base);
-      ctx.beginPath();
-      ctx.rect(0, 0, canvas.width, canvas.height);
-      ctx.rect(r.x, canvas.height - r.y - r.height, r.width, r.height);
-      ctx.fill("evenodd");
-      ctx.restore();
+      // The inverted scan's black point sits just past the developed base, so the film stands
+      // a little above the open holes, its grain kept. The scan sets it once for the whole
+      // strip: film that saw no light reads as the rebate inside the gate too, and the gate's
+      // own soft, rounded edge stays the only edge.
+      const tables = palette.base.map((base) => liftedLevels(base, 256));
+      const rows = Math.max(1, Math.floor(262144 / canvas.width));
+      for (let y = 0; y < canvas.height; y += rows) {
+        const count = Math.min(rows, canvas.height - y),
+          band = ctx.getImageData(0, y, canvas.width, count),
+          data = band.data;
+        for (let i = 0; i < data.length; i += 4)
+          for (let ch = 0; ch < 3; ch++)
+            data[i + ch] = Math.round(tables[ch][data[i + ch]] * 255);
+        ctx.putImageData(band, 0, y);
+      }
     }
   } else {
     ctx.fillStyle = color(c.slideMount ? palette.card : palette.base);

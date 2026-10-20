@@ -1,4 +1,4 @@
-import { framePalette, renderPrintFrame, stripMasks } from "./print-frame-renderer.js";
+import { framePalette, liftedLevels, renderPrintFrame, stripMasks } from "./print-frame-renderer.js";
 import { yieldToBrowser } from "./yield.js";
 
 // Reuse the exact native placement and material drawing. The photo aperture stays
@@ -104,26 +104,25 @@ async function developedStrip16(pixels, width, height, plan, stale, colorSpace, 
     barTransmission = palette.barcodeTransmission,
     barInk = barTransmission || palette.barcode,
     cutout = palette.cutout,
-    lift = c.frame === "filmPositive" && !lifted ? palette.base : null,
+    // The inverted scan's black point, set once for the whole strip (liftedLevels).
+    lift =
+      c.frame === "filmPositive" && !lifted
+        ? palette.base.map((base) => liftedLevels(base, 65536))
+        : null,
     exposed = c.geometry?.exposesEdges === true;
-  const r = p.image,
-    top = height - r.y - r.height;
   const output = new Uint16Array(pixels.length);
   for (let y = 0; y < height; y++) {
     if (y % 64 === 0) {
       await yieldToBrowser();
       if (stale()) return null;
     }
-    const inPhotoRow = y >= top && y < top + r.height;
     for (let x = 0; x < width; x++) {
       const i = (y * width + x) * 4;
-      const rebate = !(inPhotoRow && x >= r.x && x < r.x + r.width);
       const letter = letters[i + 3] / 255,
         bar = bars[i + 3] / 255,
         hole = holes[i + 3] / 255;
       for (let ch = 0; ch < 3; ch++) {
-        let v = pixels[i + ch] / 65535;
-        if (lift && rebate) v = 1 - (1 - v) * (1 - lift[ch]);
+        let v = lift ? lift[ch][pixels[i + ch]] : pixels[i + ch] / 65535;
         if (letter > 0) {
           const marked = exposed
             ? (transmission ? Math.min : Math.max)(v, palette.edge[ch])

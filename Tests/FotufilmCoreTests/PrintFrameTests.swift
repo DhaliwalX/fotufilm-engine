@@ -81,6 +81,49 @@ final class PrintFrameTests: XCTestCase {
         })
     }
 
+    /// Film Border Positive's inverted scan sets one black point for the whole strip: film that
+    /// saw no light inside the gate reads as the rebate beside it, with no step at the picture's
+    /// rectangle, and the open perforations stay below both.
+    func testFilmPositiveUnexposedPictureMatchesTheRebate() throws {
+        let config = configuration(.filmPositive, stock: "portra400")
+        let space = try XCTUnwrap(CGColorSpace(name: CGColorSpace.displayP3))
+        let (width, height) = (360, 240)
+        let margins = try XCTUnwrap(PrintFramePlacement.filmStrip(width: width, height: height,
+                                                                  configuration: config))
+        let stripWidth = width + margins.left + margins.right
+        let stripHeight = height + margins.top + margins.bottom
+        let context = try XCTUnwrap(CGContext(data: nil, width: stripWidth, height: stripHeight,
+            bitsPerComponent: 16, bytesPerRow: 0, space: space,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder16Little.rawValue))
+        // The developed strip: no light beyond the gate, and none on the picture's lowest rows.
+        context.setFillColor(try XCTUnwrap(CGColor(colorSpace: space, components: [0, 0, 0, 1])))
+        context.fill(CGRect(x: 0, y: 0, width: stripWidth, height: stripHeight))
+        context.setFillColor(try XCTUnwrap(CGColor(colorSpace: space, components: [0.5, 0.5, 0.5, 1])))
+        context.fill(CGRect(x: margins.left, y: margins.bottom + 20, width: width, height: height - 20))
+        let strip = try XCTUnwrap(context.makeImage())
+        let framed = try XCTUnwrap(PrintFrameRenderer.render(strip, configuration: config, edge: margins))
+        XCTAssertEqual(framed.width, stripWidth)
+        let data = try XCTUnwrap(framed.dataProvider?.data as Data?)
+        let middle = margins.left + width / 2
+        let pixelsPerMM = Float(height) / 24
+        let unexposed = rgb(framed, data, middle, margins.top + height - 1)
+        // 0.3 mm past the gate, short of the perforations 0.7 mm away.
+        let rebate = rgb(framed, data, middle, margins.top + height + Int(0.3 * pixelsPerMM))
+        let picture = rgb(framed, data, middle, margins.top + height / 2)
+        for channel in 0..<3 {
+            XCTAssertEqual(unexposed[channel], rebate[channel], accuracy: 2 / 65535)
+            // Linear 0.02 in Display P3's curve.
+            XCTAssertEqual(rebate[channel], 0.155, accuracy: 0.01)
+            // A mid-grey moves by a linear 0.02 of what it lacks of white, not the base's encoding.
+            XCTAssertGreaterThan(picture[channel], 0.5)
+            XCTAssertLessThan(picture[channel], 0.53)
+        }
+        // The lower perforations' row, 3.4 mm in from the edge: its open holes are the darkest.
+        let row = stripHeight - 1 - Int(3.4 * pixelsPerMM)
+        let hole = (0..<stripWidth).map { rgb(framed, data, $0, row) }.min { $0.max() < $1.max() }!
+        XCTAssertLessThan(hole.max(), rebate.min() - 0.1)
+    }
+
     func testNoneIsTheOriginalImage() throws {
         let source = try fixture()
         XCTAssertTrue(PrintFrameRenderer.render(source, configuration: configuration(.none)) === source)
