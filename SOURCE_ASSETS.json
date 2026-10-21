@@ -368,8 +368,8 @@
     "sha256": "efebc59eb3d0f750fdec3440d2d748a8522817501270ff849f7584d28330d54f"
   },
   "Sources/FotufilmCore/Stocks/cinestill400d.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "814a7d8253abc0dc3471ae1bd778a6e3991d042de52bf40c02563b0924841f3f"
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Its characteristic curves are fitted to Kodak H-1-5207's (Vision3 250D) Status M records as a stated proxy: no sensitometry is published for this film. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",
+    "sha256": "237bcba277f68594651452432c1487f440088a99b960f6b96716c30b25008ba0"
   },
   "Sources/FotufilmCore/Stocks/cinestill800t.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer documents and developed-film photographs in edgePrinting.sources; see docs/print-frame-model.md.",
@@ -484,8 +484,8 @@
     "sha256": "08cb8a23e07e42e8dd2a712e828a9537264daf341dcec5d65fe74cf97b95b871"
   },
   "Sources/FotufilmCore/Stocks/vision250d.json": {
-    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer references in edgePrinting.sources; see docs/print-frame-model.md.",
-    "sha256": "88398b18fdc5b7bb246f7c5cf1613dc8a33eeae0bc6cd7e02f45daef81b770cb"
+    "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves are dye-formation records solved to reproduce the digitized Kodak H-1-5207 Status M density records; push and pull conditions apply the ECN-2 push response to them. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer references in edgePrinting.sources; see docs/print-frame-model.md.",
+    "sha256": "73fa4a6313b977812bbdad63fcaa4758420bed0eb5af6e58066c6089ae6c4217"
   },
   "Sources/FotufilmCore/Stocks/vision500t.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer references in edgePrinting.sources; see docs/print-frame-model.md.",
