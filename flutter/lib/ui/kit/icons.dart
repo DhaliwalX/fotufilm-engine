@@ -38,12 +38,13 @@ class IconLibrary {
           '<svg xmlns="http://www.w3.org/2000/svg" viewBox="${value['viewBox']}" fill="currentColor">$paths</svg>';
     }
     final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
-    final glyphs = <String, String>{};
-    for (final asset in manifest.listAssets()) {
-      if (!asset.startsWith('assets/generated/glyphs/')) continue;
-      final name = asset.split('/').last.replaceAll(RegExp(r'\.svg$'), '');
-      glyphs[name] = await rootBundle.loadString(asset);
-    }
+    // All at once: in a browser each is a request, and the editor shows nothing until they are in.
+    final glyphs = Map.fromEntries(await Future.wait([
+      for (final asset in manifest.listAssets())
+        if (asset.startsWith('assets/generated/glyphs/'))
+          rootBundle.loadString(asset).then((svg) =>
+              MapEntry(asset.split('/').last.replaceAll(RegExp(r'\.svg$'), ''), svg)),
+    ]));
     shared = IconLibrary._(svgs, glyphs);
   }
 

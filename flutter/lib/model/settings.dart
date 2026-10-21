@@ -53,18 +53,26 @@ class AppSettings extends ChangeNotifier {
     'pluginOfferDeclined': null,
   };
 
-  /// A value: the stored one, else the default.
+  /// A value: the stored one, else the default. One of another type reads as the default.
   T? get<T>(String key) {
-    if (_memory.containsKey(key)) return _memory[key] as T?;
-    final text = _prefs?.getString('$prefix$key');
-    Object? value = defaults[key];
-    if (text != null) {
-      try {
-        value = jsonDecode(text);
-      } catch (_) {}
+    if (!_memory.containsKey(key)) _memory[key] = _stored(key);
+    return switch (_memory[key]) {
+      final T value => value,
+      _ => defaults[key] is T ? defaults[key] as T : null,
+    };
+  }
+
+  /// What is kept under `key`: JSON text, as [set] writes it. The browser editor before this one
+  /// kept the same keys in localStorage as plain JSON, which the web store hands back decoded: a
+  /// map, a number, or a string that is not JSON.
+  Object? _stored(String key) {
+    final stored = _prefs?.get('$prefix$key');
+    if (stored is! String) return stored ?? defaults[key];
+    try {
+      return jsonDecode(stored);
+    } on FormatException {
+      return stored;
     }
-    _memory[key] = value;
-    return value as T?;
   }
 
   /// Whether `key` holds a value of its own rather than its default.
