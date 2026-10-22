@@ -4,6 +4,7 @@
 // offers, as the native host's capabilities do. Each answer is {json, payload?}: the payload's named byte ranges are listed
 // under json.payloads, as the native host's are. Pictures come back as sRGB, which Flutter draws
 // as it is.
+import { DPX_TYPE } from "./dpx.js";
 import { createBrowserBackend } from "./backend/browser.js";
 import { defaultEdit } from "./editor-state.js";
 import { loadFilmProfile } from "./film-profile.js";
@@ -40,7 +41,7 @@ async function prepare() {
 function capabilities() {
   return {
     json: {
-      imageExportTypes: ["image/png", "image/tiff", "image/jpeg", "image/webp"],
+      imageExportTypes: ["image/png", "image/tiff", "image/jpeg", "image/webp", DPX_TYPE],
       video: true,
       videoExportTypes: ["mp4", "webm"].map((id) => ({
         id,
@@ -232,9 +233,11 @@ async function lensPlan({ handle, lens }) {
   return { json: plan };
 }
 
-/// The browser writes no metadata and no HDR, and has no memory limit of its own to report.
-function exportOptions() {
-  return { json: { metadata: null, hdr: false, unavailable: [] } };
+/// The browser writes no metadata and no HDR, and has no memory limit of its own to report. A
+/// Cineon Log scan exports as DPX; the medium is offered only to negatives, which keep it.
+function exportOptions(params) {
+  const dpx = params?.edit?.medium === "cineon-log";
+  return { json: { metadata: null, hdr: false, unavailable: [], dpx } };
 }
 
 async function exportImage(params) {

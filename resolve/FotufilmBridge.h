@@ -248,6 +248,11 @@ int32_t fotufilm_bridge_negative_viewing_name(int32_t index, char *out, int32_t 
 /// for the same reason the texture masks are.
 int32_t fotufilm_bridge_paper_is_negative(int32_t index);
 
+/// Whether `paper`, as `stock` resolves it, delivers Cineon code values (code value / 1023) rather
+/// than light. The host must pass them through untouched — no matrix, transfer or gamut fit — and
+/// tag them Raw, so the grade reads them as Cineon Film Log.
+int32_t fotufilm_bridge_delivers_code_values(int32_t stock, int32_t paper);
+
 /// Compile the schedule and upload the stock's spectral tables without rendering.
 int32_t fotufilm_bridge_prepare(FotufilmBridgeContext context,
                                int32_t stock, int32_t format, int32_t paper,

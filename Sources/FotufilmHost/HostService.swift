@@ -974,6 +974,9 @@ public final class HostService {
             throw HostEngine.Failure(description: "No destination was chosen.")
         }
         try refuseOriginal(URL(fileURLWithPath: path))
+        if parameters["type"] as? String == CineonDPX.mimeType {
+            return try exportDPX(parameters, to: URL(fileURLWithPath: path))
+        }
         guard let encoder = HostPlatform.current.encoder else {
             throw HostEngine.Failure(description: "This build has no image encoder.")
         }
@@ -989,6 +992,48 @@ public final class HostService {
         return ["filename": URL(fileURLWithPath: path).lastPathComponent, "path": path,
                 "width": written.width,
                 "height": written.height, "hdr": still.hlg != nil]
+    }
+
+    /// A Cineon Log edit as a 10-bit DPX negative scan for grading: the engine's code values
+    /// written as they leave it, with no print frame, no shoulder and no transfer. Needs no
+    /// platform encoder, so every host writes it.
+    private func exportDPX(_ parameters: [String: Any], to url: URL) throws -> [String: Any] {
+        var body = parameters
+        body["viewport"] = nil
+        body["printFrame"] = nil
+        let prepared = try prepare(JSONSerialization.data(withJSONObject: body))
+        guard deliversCodeValues(prepared.edit), let stock = engine.stock(prepared.edit.edit.stock)
+        else {
+            throw HostEngine.Failure(
+                description: "DPX carries a Cineon Log scan. Choose Cineon Log as the output medium.")
+        }
+        let scene = try sceneFor(prepared.image, geometry: prepared.geometry, sizes: prepared.sizes)
+        let job = try stillJob(prepared, scene: scene, body: body)
+        var signals = [Float](repeating: 0, count: job.width * job.height * 4)
+        try signals.withUnsafeMutableBytes { buffer in
+            try engine.develop(job.scene, width: job.width, height: job.height,
+                               contentHeadroom: job.contentHeadroom, edit: job.edit,
+                               exactMath: parameters["photoQuality"] as? String != "fast",
+                               unexposedEdge: nil,
+                               into: .init(maxEdge: 0, format: .rgba32FloatLinearP3,
+                                           pixels: buffer.baseAddress!,
+                                           rowBytes: job.width * 16, capacity: buffer.count))
+        }
+        let format = try? engine.options(job.edit, stock: stock, contentHeadroom: 1).format.name
+        let data = signals.withUnsafeBufferPointer {
+            CineonDPX.encode(signals: $0, width: job.width, height: job.height,
+                             film: .init(format: format, stock: stock.name))
+        }
+        try data.write(to: url, options: .atomic)
+        return ["filename": url.lastPathComponent, "path": url.path,
+                "width": job.width, "height": job.height, "hdr": false]
+    }
+
+    /// Whether the edit's medium delivers Cineon code values, which only a DPX carries.
+    func deliversCodeValues(_ edit: WebNativeEdit) -> Bool {
+        guard let stock = engine.stock(edit.edit.stock) else { return false }
+        return (try? engine.options(edit, stock: stock, contentHeadroom: 1))?
+            .paper(for: stock).deliversCodeValues ?? false
     }
 
     /// The developed picture on the clipboard, as the Mac app's Copy Photo puts it: the print as
@@ -1024,6 +1069,8 @@ public final class HostService {
                 && parameters["printFrame"] as? [String: Any] == nil
                 && deliversHDR(prepared.edit),
             "unavailable": unavailable,
+            // A Cineon Log edit is a negative scan in code values: it exports as DPX.
+            "dpx": deliversCodeValues(prepared.edit),
         ]
     }
 
@@ -1116,10 +1163,13 @@ public final class HostService {
         let linear = deep || wantsHDR
             ? try develop(.rgba32FloatLinearP3).withUnsafeBytes { Array($0.bindMemory(to: Float.self)) }
             : nil
+        let deepPixels = linear.map {
+            deliversCodeValues(job.edit)
+                ? HostExport.signal16($0, width: width, height: height)
+                : HostExport.display16(linear: $0, width: width, height: height, knee: knee)
+        }
         var still = HostStill(
-            pixels: deep ? .display16(HostExport.display16(linear: linear!, width: width,
-                                                           height: height, knee: knee))
-                         : .display8(try develop(.rgba8DisplayP3)),
+            pixels: deep ? .display16(deepPixels!) : .display8(try develop(.rgba8DisplayP3)),
             width: width, height: height, frame: job.plan?.configuration, frameEdge: strip,
             capture: job.capture)
         if wantsHDR, let linear {

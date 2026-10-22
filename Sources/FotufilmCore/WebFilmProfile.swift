@@ -36,7 +36,10 @@ public enum WebFilmProfile {
         data.appendInt32(invocation.featureMask); data.appendUInt32(invocation.seed)
         data.appendInt32(Int32(invocation.configuration.count))
         data.appendInt32(Int32(spectral.exposure.dimension)); data.appendInt32(Int32(lutCount))
-        data.appendInt32(spectral.paperOutput == nil ? 0 : 1)
+        // 2: the paper table delivers Cineon code values, which the page shows and writes as
+        // they are rather than as light.
+        data.appendInt32(spectral.paperOutput == nil ? 0
+                         : options.paper(for: stock).deliversCodeValues ? 2 : 1)
         data.appendFloats(invocation.configuration)
         data.appendFloats(spectral.exposure.values)
         data.appendFloats(spectral.filmOutput.values)

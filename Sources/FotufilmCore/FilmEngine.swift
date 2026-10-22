@@ -875,6 +875,13 @@ public struct FilmEngineInvocation {
             ? PrinterProfile.resolved(options.printer, stock: stock, paper: printMedium) : nil
         let printerLights = !noFilm && options.stage.writesPrint && options.negativeViewing == nil
             ? PrinterLights.resolved(options.printerLights, stock: stock, paper: printMedium) : nil
+        // Cineon Log delivers the scan's code values: the print grade and the scan's light
+        // controls work on display light, and neither may reach them. Scene controls still do,
+        // as the light the negative was exposed to.
+        if printMedium.deliversCodeValues {
+            options.grade = .neutral
+            options.printFinish = .neutral
+        }
         // A crop keeps only `frameCoverage` of the frame's short edge, so the same buffer
         // spans fewer millimetres of emulsion and every millimetre-sized structure grows
         // in pixels. The floor keeps a degenerate sliver from asking for unbounded radii.

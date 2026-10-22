@@ -75,6 +75,18 @@ enum HostExport {
         return encoded
     }
 
+    /// 16 bits a channel of signals the engine has already encoded, as a Cineon Log scan's code
+    /// values are: no shoulder and no transfer, so a 16-bit file shows the scan the viewer does.
+    static func signal16(_ signals: [Float], width: Int, height: Int) -> [UInt16] {
+        var encoded = [UInt16](repeating: 65535, count: width * height * 4)
+        for i in 0..<(width * height) {
+            for c in 0..<3 {
+                encoded[i * 4 + c] = UInt16(clamp(signals[i * 4 + c] * 65535 + 0.5, 0, 65535))
+            }
+        }
+        return encoded
+    }
+
     /// BT.2100 HLG from the engine's developed linear Display P3, relight alpha included, with the
     /// conversion the Mac app writes its HDR stills through.
     static func hlg16(linear: [Float], width: Int, height: Int) -> [UInt16] {

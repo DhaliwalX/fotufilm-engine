@@ -2724,6 +2724,141 @@ int testPlugin() {
             setParam(instance.params, "grain", 0);
         }
 
+        // Output Medium: Cineon Log. A negative scan in code values for the grade: tagged Raw,
+        // the same numbers whatever the timeline's space, the unexposed base at code value 95,
+        // and the scene's polarity kept, since density rises with exposure.
+        std::printf("cineon log\n");
+        {
+            int colourNegative = -1;
+            for (size_t st = 0; st < stocks && colourNegative < 0; ++st) {
+                const auto index = static_cast<int32_t>(st);
+                if ((fotufilm_bridge_control_capabilities(index, 0) &
+                     FOTUFILM_CONTROL_COLOUR_NEGATIVE) != 0) {
+                    colourNegative = index;
+                }
+            }
+            int cineon = -1;
+            for (int32_t i = 0; i < fotufilm_bridge_paper_count() && cineon < 0; ++i) {
+                char id[64] = "";
+                if (fotufilm_bridge_paper_id(i, id, sizeof(id)) >= 0 &&
+                    std::strcmp(id, "cineon-log") == 0) {
+                    cineon = i;
+                }
+            }
+            check(colourNegative >= 0 && cineon >= 0,
+                  "a colour negative and the Cineon Log medium are installed");
+            if (colourNegative >= 0 && cineon >= 0) {
+                check(fotufilm_bridge_delivers_code_values(colourNegative, cineon) != 0 &&
+                          fotufilm_bridge_delivers_code_values(colourNegative, 0) == 0,
+                      "the bridge names Cineon Log, and only it, as delivering code values");
+                applyDefaults(instance.params);
+                setChoice(plugin, instanceHandle, instance.params, "stock", colourNegative);
+                setChoice(plugin, instanceHandle, instance.params, "format",
+                          static_cast<int>(fotufilm_bridge_format_count()));
+                setChoice(plugin, instanceHandle, instance.params, "stage", 0);
+                setChoice(plugin, instanceHandle, instance.params, "paper", cineon);
+                setParam(instance.params, "grain", 0);
+                const int width = 320, height = 180;
+                provision(width, height, 0, 0, true);
+                const int margin = std::max(1, width / 20);
+                for (int y = 0; y < height; ++y) {
+                    for (int x = 0; x < margin; ++x) {
+                        float *pixel =
+                            source->pixels.data() + (static_cast<size_t>(y) * width + x) * 4;
+                        pixel[0] = pixel[1] = pixel[2] = 0.0f;
+                        pixel[3] = 1.0f;
+                    }
+                }
+
+                PropertySet *outputSpace = newPropertySet();
+                plugin->mainEntry(kOfxImageEffectActionGetOutputColourspace, instanceHandle,
+                                  nullptr, handleOf(outputSpace));
+                char *declared = nullptr;
+                propGetString(handleOf(outputSpace), kOfxImageClipPropColourspace, 0, &declared);
+                check(declared && std::strcmp(declared, kOfxColourspaceRaw) == 0,
+                      "Cineon Log declares Raw, so the host does not convert the code values");
+
+                // Fotufilm colour management, the source declared linear Rec.2020 each time, so
+                // only the output space changes — and it should change nothing.
+                setParam(instance.params, "colorSpace",
+                         spaceMenuIndex(fotufilm::Encoding::LinearRec2020));
+                setChoice(plugin, instanceHandle, instance.params, "colorManagement", 1);
+                setChoice(plugin, instanceHandle, instance.params, "inputColorSpace",
+                          static_cast<int>(fotufilm::Encoding::LinearRec2020));
+                std::vector<std::vector<float>> frames;
+                for (fotufilm::Encoding space : {fotufilm::Encoding::LinearRec2020,
+                                                 fotufilm::Encoding::Rec709Gamma24,
+                                                 fotufilm::Encoding::DaVinciIntermediate}) {
+                    setChoice(plugin, instanceHandle, instance.params, "outputColorSpace",
+                              static_cast<int>(space));
+                    check(renderNow(), "renders the Cineon Log scan");
+                    frames.push_back(output->pixels);
+                }
+                // The panel says so: the output menu is dimmed, the status names Cineon log, and
+                // both come back with a printed medium.
+                auto outputEnabled = [&] {
+                    int enabled = 1;
+                    propGetInt(handleOf(instance.params.params.at("outputColorSpace")->properties),
+                               kOfxParamPropEnabled, 0, &enabled);
+                    return enabled != 0;
+                };
+                const std::string cineonStatus = getString(instance.params, "colorSpaceStatus");
+                std::printf("       status: %s\n", cineonStatus.c_str());
+                check(!outputEnabled() && cineonStatus.find("-> Cineon log") != std::string::npos,
+                      "Output Color Space is dimmed and the status names Cineon log");
+                setChoice(plugin, instanceHandle, instance.params, "paper", 0);
+                check(outputEnabled() && getString(instance.params, "colorSpaceStatus")
+                                                 .find("Cineon") == std::string::npos,
+                      "and a printed medium gives the output menu back");
+                setChoice(plugin, instanceHandle, instance.params, "paper", cineon);
+                setChoice(plugin, instanceHandle, instance.params, "colorManagement", 0);
+                const std::string timelineStatus = getString(instance.params, "colorSpaceStatus");
+                std::printf("       timeline status: %s\n", timelineStatus.c_str());
+                check(timelineStatus.find("-> Cineon log") != std::string::npos,
+                      "in Timeline mode the status keeps the decoded input and names Cineon log");
+                float spread = 0;
+                for (size_t f = 1; f < frames.size(); ++f) {
+                    for (size_t i = 0; i < frames[0].size(); ++i) {
+                        if (i % 4 != 3) spread = std::max(spread, std::abs(frames[f][i] - frames[0][i]));
+                    }
+                }
+                std::printf("       code values across output spaces differ by %.3g\n",
+                            spread * 1023);
+                check(spread * 1023 < 0.05f,
+                      "the code values are the same whatever space the output is set to");
+
+                const std::vector<float> &scan = frames[0];
+                auto edgeMean = [&](bool left, int channel) {
+                    double total = 0;
+                    int counted = 0;
+                    for (int y = 0; y < height; ++y) {
+                        for (int x = left ? 0 : width - margin; x < (left ? margin : width); ++x) {
+                            total += scan[(static_cast<size_t>(y) * width + x) * 4 + channel];
+                            ++counted;
+                        }
+                    }
+                    return total / counted * 1023;
+                };
+                bool base = true, polarity = true;
+                for (int c = 0; c < 3; ++c) {
+                    if (std::abs(edgeMean(true, c) - 95) > 4) base = false;
+                    if (edgeMean(false, c) <= edgeMean(true, c) + 100) polarity = false;
+                }
+                std::printf("       base %.1f %.1f %.1f, bright edge %.1f %.1f %.1f\n",
+                            edgeMean(true, 0), edgeMean(true, 1), edgeMean(true, 2),
+                            edgeMean(false, 0), edgeMean(false, 1), edgeMean(false, 2));
+                check(base, "the unexposed base sits at code value 95");
+                check(polarity, "exposure climbs the code values, as density does");
+            }
+            applyDefaults(instance.params);
+            setChoice(plugin, instanceHandle, instance.params, "stock", 0);
+            setChoice(plugin, instanceHandle, instance.params, "paper", 0);
+            setChoice(plugin, instanceHandle, instance.params, "stage", 0);
+            setParam(instance.params, "colorSpace",
+                     spaceMenuIndex(fotufilm::Encoding::LinearRec2020));
+            setParam(instance.params, "grain", 0);
+        }
+
         // Every control, moved from its default, has to change the developed frame — a slider
         // wired to nothing is the one failure a panel cannot show. Judged on a frame with
         // something for each to act on: a ramp that varies both ways, and a patch three stops

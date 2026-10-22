@@ -47,6 +47,14 @@ extension EditorControlCatalogue {
         case .labScanDodging, .labScanLook:
             guard let stock else { return false }
             return paper == .labScan && !stock.isReversal && !stock.isReflectionPrint
+        case .gradeShadowsWarmth, .gradeShadowsTint, .gradeShadowsLevel,
+             .gradeMidtonesWarmth, .gradeMidtonesTint, .gradeMidtonesLevel,
+             .gradeHighlightsWarmth, .gradeHighlightsTint, .gradeHighlightsLevel, .gradeSpace,
+             .printFrame, .printFrameMargin, .printFrameEdgePrinting, .printFrameNumber,
+             .printFrameCount, .printFrameCamera:
+            // Cineon code values are graded in the suite they are delivered to, and a frame
+            // drawn in display light has no density to write.
+            return !paper.deliversCodeValues
         case .screenGrade:
             // The grade shapes the graded curve, which only a negative is printed through, and
             // Reference Exposure keeps the calibrated curve without one.

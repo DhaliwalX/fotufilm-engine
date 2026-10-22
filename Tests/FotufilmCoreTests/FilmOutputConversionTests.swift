@@ -47,6 +47,7 @@ final class FilmOutputConversionTests: XCTestCase {
             (.rec709SDR, .rec709),
             (.linearRec2020, .linearRec2020),
             (.rec2020HLG, .rec2020HLG),
+            (.cineonLog, .cineonLog),
         ]
 
         XCTAssertEqual(expected.map(\.0), FilmOutputConversion.allCases)

@@ -140,7 +140,11 @@ export function parsePack(bytes) {
   const configCount = view.getInt32(24, true)
   const lutDimension = view.getInt32(28, true)
   const lutCount = view.getInt32(32, true)
-  const hasPaper = view.getInt32(36, true) !== 0
+  const paperKind = view.getInt32(36, true)
+  const hasPaper = paperKind !== 0
+  // The paper table delivers Cineon code values (code value / 1023): a flat scan for grading,
+  // shown and written as the signal it is, with no shoulder, matrix or transfer.
+  const codeValues = paperKind === 2
 
   if (lutCount !== LUT_COUNT)
     throw new Error(`pack LUT is ${lutCount}, expected ${LUT_COUNT}`)
@@ -294,6 +298,7 @@ export function parsePack(bytes) {
     seed,
     lutDimension,
     hasPaper,
+    codeValues,
     configuration,
     // The slots as the CLI sealed them. A stage replaces `configuration` with its own; the ladder
     // lays its size over whichever slots the stage left alone, and this is how it tells.
@@ -934,8 +939,11 @@ class Developer {
     const count = destination.width * destination.height * 4
     // A single encoded tile that is the whole destination is copied out in one piece below, so
     // the frame is only allocated, zeroed and assembled row by row when there is more than one.
+    // Code values leave as floats, never through the kernel's display encode.
+    const codeValues = this.pack?.codeValues === true
+    const encodes = this.encodedRegion && !codeValues
     const whole = (tile) =>
-      this.encodedRegion &&
+      encodes &&
       this.tiles.length === 1 &&
       ['x', 'y', 'width', 'height'].every(
         (k) => tile[k] === destination[k] && tile.region[k] === destination[k],
@@ -959,7 +967,7 @@ class Developer {
       )
       if (stale()) return null
       const started = performance.now()
-      const status = await this.run(region, { bitDepth, colorSpace })
+      const status = await this.run(region, codeValues ? undefined : { bitDepth, colorSpace })
       elapsed += performance.now() - started
       if (status === -2)
         throw new Error('no kernel was built for this stock at this size')
@@ -971,7 +979,7 @@ class Developer {
         pixels = new PixelArray(
           encoded.buffer.slice(encoded.byteOffset, encoded.byteOffset + encoded.byteLength),
         )
-      } else if (this.encodedRegion) {
+      } else if (encodes) {
         copyEncodedTile(
           pixels,
           this.encodedRegion(region, bitDepth),
@@ -990,6 +998,7 @@ class Developer {
           colorSpace,
           destination,
           this.configuration?.[CONFIG.OUTPUT_SHOULDER],
+          codeValues,
         )
       }
       if (t + 1 < this.tiles.length) await yieldToBrowser()

@@ -2037,7 +2037,14 @@ static NSString *FotufilmHostString(int32_t (*read)(int32_t, int32_t, char *, in
     }
     // The matrices are the choice's own; the transfer is always linear, because that is what the
     // plugin asked the host for and what it is therefore holding.
-    const fotufilm::Encoding transfer = FotufilmLinearEncoding(primaries);
+    //
+    // Cineon Log is a negative scan in code values rather than light in any space, so it leaves
+    // through the identity: linear Display P3 is the print basis itself, and needs no gamut fit.
+    // Its input is linear like every other choice, so the input decode is unchanged.
+    const bool codeValues = !writesInterchange && !deliversSceneBasis &&
+        fotufilm_bridge_delivers_code_values((int32_t)state.stock, (int32_t)state.paper) != 0;
+    const fotufilm::Encoding transfer = codeValues ? fotufilm::Encoding::LinearDisplayP3
+                                                   : FotufilmLinearEncoding(primaries);
 
     const fotufilm::Transform transform = fotufilm::transformFor(primaries);
     // The texture span hands back light that never left the scene working space, so the way out of
@@ -2045,6 +2052,10 @@ static NSString *FotufilmHostString(int32_t (*read)(int32_t, int32_t, char *, in
     fotufilm::Transform outputBasis = transform;
     if (deliversSceneBasis) {
         std::memcpy(outputBasis.fromWorking, transform.fromScene, sizeof(outputBasis.fromWorking));
+    }
+    if (codeValues) {
+        const float identity[9] = {1, 0, 0, 0, 1, 0, 0, 0, 1};
+        std::memcpy(outputBasis.fromWorking, identity, sizeof(identity));
     }
 
     // Final Cut composites premultiplied; the engine wants straight alpha, because developing a
