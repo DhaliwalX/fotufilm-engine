@@ -102,7 +102,7 @@ final class SampledCharacteristicCurveTests: XCTestCase {
     func testReleasedRecordsPassThroughEverySample() throws {
         let sampled = FilmStock.presetIDs.compactMap(FilmStock.named)
             .filter { $0.curves.contains { $0.sampled != nil } }
-        XCTAssertEqual(sampled.count, 38)
+        XCTAssertEqual(sampled.count, 39)
         var count = 0
         for stock in sampled {
             for curve in stock.curves {

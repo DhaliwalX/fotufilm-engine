@@ -48,28 +48,49 @@
   },
   "curves": [
     {
-      "dMin": 0.19,
-      "gamma": 0.5,
-      "shoulder": 1.7584,
-      "shoulderWidth": 0.6,
-      "toe": -1.7047,
-      "toeWidth": 0.2571
+      "dMin": 0.175499,
+      "gamma": 0.215131,
+      "secondary": {
+        "gamma": 0.261165,
+        "shoulder": 2.417252,
+        "shoulderWidth": 0.22414,
+        "toe": -1.197808,
+        "toeWidth": 0.110059
+      },
+      "shoulder": 1.692712,
+      "shoulderWidth": 0.274486,
+      "toe": -1.867912,
+      "toeWidth": 0.155089
     },
     {
-      "dMin": 0.58,
-      "gamma": 0.52,
-      "shoulder": 1.906,
-      "shoulderWidth": 0.6,
-      "toe": -1.9634,
-      "toeWidth": 0.3456
+      "dMin": 0.576401,
+      "gamma": 0.242528,
+      "secondary": {
+        "gamma": 0.314721,
+        "shoulder": 2.529676,
+        "shoulderWidth": 0.26288,
+        "toe": -1.193513,
+        "toeWidth": 0.106443
+      },
+      "shoulder": 1.803566,
+      "shoulderWidth": 0.269473,
+      "toe": -1.852518,
+      "toeWidth": 0.151495
     },
     {
-      "dMin": 0.86,
-      "gamma": 0.54,
-      "shoulder": 1.9862,
-      "shoulderWidth": 0.3,
-      "toe": -1.2841,
-      "toeWidth": 0.35
+      "dMin": 0.845869,
+      "gamma": 0.143518,
+      "secondary": {
+        "gamma": 0.542317,
+        "shoulder": 2.121154,
+        "shoulderWidth": 0.329898,
+        "toe": -1.151729,
+        "toeWidth": 0.180757
+      },
+      "shoulder": -0.74959,
+      "shoulderWidth": 0.05,
+      "toe": -1.924566,
+      "toeWidth": 0.05
     }
   ],
   "development": {
@@ -79,28 +100,49 @@
         "basis": "estimated",
         "curves": [
           {
-            "dMin": 0.235892,
-            "gamma": 0.583507,
-            "shoulder": 1.324229,
-            "shoulderWidth": 0.514133,
-            "toe": -1.643259,
-            "toeWidth": 0.220306
+            "dMin": 0.221391,
+            "gamma": 0.251061,
+            "secondary": {
+              "gamma": 0.304783,
+              "shoulder": 1.888791,
+              "shoulderWidth": 0.192063,
+              "toe": -1.20891,
+              "toeWidth": 0.094308
+            },
+            "shoulder": 1.267941,
+            "shoulderWidth": 0.235204,
+            "toe": -1.783114,
+            "toeWidth": 0.132894
           },
           {
-            "dMin": 0.615187,
-            "gamma": 0.606526,
-            "shoulder": 1.443004,
-            "shoulderWidth": 0.514405,
-            "toe": -1.874394,
-            "toeWidth": 0.296297
+            "dMin": 0.611588,
+            "gamma": 0.282884,
+            "secondary": {
+              "gamma": 0.367089,
+              "shoulder": 1.977707,
+              "shoulderWidth": 0.225378,
+              "toe": -1.214338,
+              "toeWidth": 0.091258
+            },
+            "shoulder": 1.355183,
+            "shoulderWidth": 0.23103,
+            "toe": -1.779331,
+            "toeWidth": 0.129883
           },
           {
-            "dMin": 0.907223,
-            "gamma": 0.612501,
-            "shoulder": 1.591977,
-            "shoulderWidth": 0.264489,
-            "toe": -1.291222,
-            "toeWidth": 0.308571
+            "dMin": 0.893092,
+            "gamma": 0.162787,
+            "secondary": {
+              "gamma": 0.615129,
+              "shoulder": 1.710957,
+              "shoulderWidth": 0.290848,
+              "toe": -1.174519,
+              "toeWidth": 0.159361
+            },
+            "shoulder": -0.819981,
+            "shoulderWidth": 0.044082,
+            "toe": -1.855876,
+            "toeWidth": 0.044082
           }
         ],
         "exposureIndex": 800,
@@ -112,28 +154,49 @@
         "basis": "estimated",
         "curves": [
           {
-            "dMin": 0.265205,
-            "gamma": 0.633791,
-            "shoulder": 1.099018,
-            "shoulderWidth": 0.473342,
-            "toe": -1.633034,
-            "toeWidth": 0.202827
+            "dMin": 0.250704,
+            "gamma": 0.272696,
+            "secondary": {
+              "gamma": 0.331048,
+              "shoulder": 1.618789,
+              "shoulderWidth": 0.176825,
+              "toe": -1.233145,
+              "toeWidth": 0.086826
+            },
+            "shoulder": 1.047197,
+            "shoulderWidth": 0.216543,
+            "toe": -1.761793,
+            "toeWidth": 0.12235
           },
           {
-            "dMin": 0.648594,
-            "gamma": 0.674108,
-            "shoulder": 1.174136,
-            "shoulderWidth": 0.462834,
-            "toe": -1.810681,
-            "toeWidth": 0.266592
+            "dMin": 0.644995,
+            "gamma": 0.314404,
+            "secondary": {
+              "gamma": 0.407992,
+              "shoulder": 1.655233,
+              "shoulderWidth": 0.202783,
+              "toe": -1.216798,
+              "toeWidth": 0.082109
+            },
+            "shoulder": 1.095119,
+            "shoulderWidth": 0.207869,
+            "toe": -1.725148,
+            "toeWidth": 0.116862
           },
           {
-            "dMin": 0.969908,
-            "gamma": 0.658493,
-            "shoulder": 1.409444,
-            "shoulderWidth": 0.246016,
-            "toe": -1.272379,
-            "toeWidth": 0.287019
+            "dMin": 0.955777,
+            "gamma": 0.17501,
+            "secondary": {
+              "gamma": 0.661319,
+              "shoulder": 1.520113,
+              "shoulderWidth": 0.270534,
+              "toe": -1.163828,
+              "toeWidth": 0.148231
+            },
+            "shoulder": -0.834052,
+            "shoulderWidth": 0.041003,
+            "toe": -1.797596,
+            "toeWidth": 0.041003
           }
         ],
         "exposureIndex": 1600,
