@@ -292,6 +292,12 @@ A sheet that publishes one characteristic curve develops all three records along
 E-7020, E-4070, 2383, 2393, ETERNA-CP, 5386, CP30 and 3521XD publish three and are carried per
 record. The lab scan and
 telecine are inversions rather than sheets, and are described in `PrintPaperTables.swift`.
+Cineon Log is a scan with no inversion: printing density above the film base, read through
+the SMPTE RP 180 bands under an equal-energy lamp, delivered as Cineon code values (base at
+95, 0.002 D a code value). It is for grading, as DaVinci Resolve's Cineon Film Log and its
+2383 and 3513 print LUTs read it. Print timing, grade and finish do not apply to it. The CLI
+writes it as a 10-bit DPX (`fotufilm in.dng out.dpx --paper cineon-log`), and the editor's
+export offers DPX · Cineon 10-bit for it.
 Lab Scan produces an editable positive and sets up each frame the way a minilab scanner
 does: the film base scans black and the frame's brightest content near white, a backlit
 subject opens up partway while the sky stays on the curve's toe, and contrast rises, at most

@@ -31,7 +31,7 @@ extension PrintPaper {
         case .screen: return bands.sensitivity
         case .negative: return SpectralGrid.paperSensitivity
         case .labScan: return SpectralGrid.labScanSensitivity
-        case .telecine: return SpectralGrid.telecineSensitivity
+        case .telecine, .cineonLog: return SpectralGrid.telecineSensitivity
         }
     }
 
@@ -57,6 +57,8 @@ extension PrintPaper {
     /// cannot move these exposures. Monochrome retains the single-record neutral convention.
     func printExposureMidpoints(for stock: FilmStock,
                                 digitalReference: DigitalReferenceStyle = .default) -> [Float] {
+        // Cineon's straight line reads the relative printing density as its own log exposure.
+        if deliversCodeValues { return [0, 0, 0] }
         let curves = printCurves(for: stock, digitalReference: digitalReference)
         if let aim = ladStatusA, !stock.isMonochrome, !stock.isReversal {
             return (0..<3).map { curves[$0].logExposure(density: aim[$0]) }
@@ -127,6 +129,8 @@ extension PrintPaper {
         case .telecine:
             return [PrintPaper.telecineCurve, PrintPaper.telecineCurve,
                     PrintPaper.telecineCurve]
+        case .cineonLog:
+            return [PrintPaper.cineonLine, PrintPaper.cineonLine, PrintPaper.cineonLine]
         }
     }
 
@@ -144,6 +148,13 @@ extension PrintPaper {
     static let telecineCurve = CharacteristicCurve(
         dMin: 0.051, gamma: 5.7,
         toe: -1.541, toeWidth: 0.16, shoulder: -1.182, shoulderWidth: 0.12)
+
+    /// Cineon Log's paper stage carries the relative printing density unchanged: unit slope
+    /// across the whole curve table (-8...8), its corners outside it, so the activation the
+    /// output table receives is linear in density and its code values interpolate exactly.
+    static let cineonLine = CharacteristicCurve(
+        dMin: 0, gamma: 1,
+        toe: -9, toeWidth: 0.01, shoulder: 9, shoulderWidth: 0.01)
 
     /// Fixed lab-scan profile solved from Portra 400. Regenerate with
     /// `fotufilm --dump-labscan-reference portra400` after changing

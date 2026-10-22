@@ -5,7 +5,7 @@ import Foundation
 /// This is the output a user chooses, and its raw value and case order are what hosts persist.
 /// Physical print materials are described by `PrintStock`; each of their cases names one in
 /// `route`, and the rest of the engine reads the stock rather than switching on the case. The
-/// other cases are outputs with no print material: two scans and two ways of viewing.
+/// other cases are outputs with no print material: three scans and two ways of viewing.
 public enum PrintPaper: String, CaseIterable, Sendable {
     /// KODAK EKTACOLOR EDGE Paper (E-7020), measured.
     case ektacolorEdge = "ektacolor-edge"
@@ -41,6 +41,9 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     case agfaCP30 = "agfa-cp30"
     /// FUJIFILM ETERNA-CP 3521XD: measured curves, with 3513DI's spectra.
     case eternaCP3521XD = "eterna-cp-3521xd"
+    /// A flat film scan for grading: each record's printing density (SMPTE RP 180) above the
+    /// film base, as Cineon code values (`CineonLog`). Nothing is timed, inverted or finished.
+    case cineonLog = "cineon-log"
 
     /// Default for engine and headless callers.
     public static let `default`: PrintPaper = .ektacolorEdge
@@ -56,6 +59,7 @@ public enum PrintPaper: String, CaseIterable, Sendable {
         case print(PrintStock)
         case labScan
         case telecine
+        case cineonLog
         case screen
         case negative
     }
@@ -76,6 +80,7 @@ public enum PrintPaper: String, CaseIterable, Sendable {
         case .eternaCP3521XD: return .print(.eternaCP3521XD)
         case .labScan: return .labScan
         case .telecine: return .telecine
+        case .cineonLog: return .cineonLog
         case .screen: return .screen
         case .negative: return .negative
         }
@@ -102,6 +107,7 @@ public enum PrintPaper: String, CaseIterable, Sendable {
         case .print(let stock): return stock.name
         case .labScan: return "Lab Scan"
         case .telecine: return "Telecine"
+        case .cineonLog: return "Cineon Log"
         case .screen: return "Digital Reference"
         case .negative: return "Negative"
         }
@@ -114,6 +120,8 @@ public enum PrintPaper: String, CaseIterable, Sendable {
             return "A minilab scan: each frame set up and finished with a deeper black, cool shadows, teal foliage and cyan-leaning blues. Choose TIFF for a 16-bit master."
         case .telecine:
             return "A Rec.709 video transfer with timed color, raised blacks and a finished contrast curve."
+        case .cineonLog:
+            return "A flat film scan for grading: printing density above the film base as 10-bit Cineon log, base at 95. Read it in DaVinci Resolve as Cineon Film Log."
         case .screen:
             return "A fixed digital receiver preserves negative-film color and tone. Reversal films are viewed directly and support HDR output."
         case .negative:
@@ -189,13 +197,13 @@ public enum PrintPaper: String, CaseIterable, Sendable {
 
     /// Preview media for the selected gauge, with an explicitly named native medium first.
     /// Reversal film offers positive paper and direct viewing. Negative film offers photo paper
-    /// on still gauges, and release print film and Telecine on motion-picture gauges.
+    /// on still gauges, and release print film, Telecine and Cineon Log on motion-picture gauges.
     public static func stripChoices(for stock: FilmStock,
                                     gauge: FilmFormat) -> [PrintPaper] {
         if stock.isReflectionPrint { return [.screen] }
         if stock.isReversal { return media(printedBy: .positivePaper) + [.screen] }
         var offered: [PrintPaper] = gauge.isMotionPicture
-            ? media(printedBy: .releasePrintFilm) + [.telecine]
+            ? media(printedBy: .releasePrintFilm) + [.telecine, .cineonLog]
             : media(printedBy: .photoPaper)
         if let native = stock.nativePrintMedium,
            let index = offered.firstIndex(of: native) {
@@ -214,11 +222,17 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     /// unspecified xenon lamp used for the manufacturer's dye measurements.
     public var isProjected: Bool { printProcess?.isProjected == true }
 
-    /// Whether this finished positive is a scanner's file rather than a physical
+    /// Whether this output is a scanner's file rather than a physical
     /// sheet: the read is a flat lamp through trichromatic sensor bands, the
-    /// output has no physical viewing dyes and no viewing lamp can fall on it. Both scan paths
-    /// characterize their receiver bands into display colour.
-    public var isScan: Bool { self == .labScan || self == .telecine }
+    /// output has no physical viewing dyes and no viewing lamp can fall on it. Lab Scan and
+    /// Telecine characterize their receiver bands into display colour; Cineon Log delivers the
+    /// bands' densities themselves.
+    public var isScan: Bool { self == .labScan || self == .telecine || self == .cineonLog }
+
+    /// Whether the output is Cineon code values rather than display light (`CineonLog`): a
+    /// host writes them as they are, with no gamut fit, shoulder or transfer, and the user's
+    /// timing, keys and grade do not reach them.
+    public var deliversCodeValues: Bool { self == .cineonLog }
 
     /// Whether a caller can replace the medium's reference viewing illuminant. Physical sheets
     /// and projected positives can be inspected under another lamp. A scan is already a digital
@@ -260,6 +274,9 @@ public enum PrintPaper: String, CaseIterable, Sendable {
         // is a 0.013 mm sample pitch on the film, and a Gaussian of half that
         // pitch carries the pixel footprint with the imaging lens on top.
         case .telecine: return 0.0065
+        // A 4K film scanner across the Super 35 aperture samples every 6.1 µm, and half that
+        // pitch carries the photosite and lens, as Telecine's figure does.
+        case .cineonLog: return 0.003
         case .screen, .negative: return 0
         }
     }
@@ -277,7 +294,8 @@ public enum PrintPaper: String, CaseIterable, Sendable {
         // the electronically crisped grain is part of what a transfer looks
         // like, and short of undoing the aperture entirely.
         case .telecine: return 0.8
-        case .print, .screen, .negative:
+        // A grading scan is delivered unsharpened.
+        case .print, .cineonLog, .screen, .negative:
             return 0
         }
     }
@@ -290,7 +308,9 @@ public enum PrintPaper: String, CaseIterable, Sendable {
 
     /// Whether timing can balance the film records while forming this output. A viewed negative
     /// has no print exposure to correct. Digital Reference preserves individual channel contrast.
-    public var acceptsPrintCorrection: Bool { self != .screen && !isNegative && !isPositivePaper }
+    public var acceptsPrintCorrection: Bool {
+        self != .screen && !isNegative && !isPositivePaper && !deliversCodeValues
+    }
 
     /// Nominal visual mid-grey, relative to clear white, used by
     /// reflection/digital outputs and the single-record monochrome convention. Colour cine

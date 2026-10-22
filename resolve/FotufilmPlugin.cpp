@@ -1051,6 +1051,17 @@ int effectiveStage(Instance *instance, OfxTime time) {
         ? resolved : FOTUFILM_BRIDGE_STAGE_FULL;
 }
 
+/// Whether the node's medium, as its film resolves it, delivers Cineon code values. Those leave
+/// untouched and tagged Raw: they are a negative scan for the grade, not light in any space.
+bool deliversCodeValues(Instance *instance, OfxTime time) {
+    int stock = 0, paper = 0;
+    if (instance->stock) gParameter->paramGetValueAtTime(instance->stock, time, &stock);
+    if (instance->paper) gParameter->paramGetValueAtTime(instance->paper, time, &paper);
+    stock = effectiveChoice(instance->stockID, gStockIDs, stock, time);
+    paper = effectiveChoice(instance->paperID, gPaperIDs, paper, time);
+    return fotufilm_bridge_delivers_code_values(stock, paper) != 0;
+}
+
 /// The film this node renders, resolved through its persisted id the way the span is. The two
 /// together are what the stage controls have to follow: which span is being performed, and which
 /// emulsion is performing it.
@@ -1435,12 +1446,16 @@ void updateColourSpaceStatus(Instance *instance) {
     const bool printOnly = stage == FOTUFILM_BRIDGE_STAGE_PRINT;
     const bool negativeOnly = stage == FOTUFILM_BRIDGE_STAGE_NEGATIVE;
     const bool managed = choiceValue(instance->colorManagement) == 1;
+    // Cineon Log leaves as code values whatever the output space says, so the output menu is
+    // dimmed and the status line names what does leave.
+    const bool cineon = !negativeOnly && stage != FOTUFILM_BRIDGE_STAGE_TEXTURE
+        && deliversCodeValues(instance, 0);
     showParameter(instance->colorSpace, !managed);
     showParameter(instance->inputColorSpace, managed);
     showParameter(instance->outputColorSpace, managed);
     enableParameter(instance->colorSpace, !managed);
     enableParameter(instance->inputColorSpace, managed && !printOnly);
-    enableParameter(instance->outputColorSpace, managed && !negativeOnly);
+    enableParameter(instance->outputColorSpace, managed && !negativeOnly && !cineon);
     OfxPropertySetHandle properties = nullptr;
     if (gParameter->paramGetPropertySet(instance->colorSpaceStatus, &properties) == kOfxStatOK) {
         gProperty->propSetString(properties, kOfxPropLabel, 0,
@@ -1458,9 +1473,12 @@ void updateColourSpaceStatus(Instance *instance) {
         else if (input >= kWorkingSpaceChoices)
             fotufilm_bridge_camera_input_name(input - kWorkingSpaceChoices, inputName, sizeof(inputName));
         const char *outputName = negativeOnly ? "Density"
+            : cineon ? "Cineon log"
             : output >= 0 && output < kWorkingSpaceChoices
                 ? compactEncodingLabel(static_cast<fotufilm::Encoding>(output)) : "Unsupported output";
         std::snprintf(text, sizeof(text), "%s -> %s", inputName, outputName);
+    } else if (cineon && printOnly) {
+        std::snprintf(text, sizeof(text), "Density -> Cineon log");
     } else if (printOnly && menuEncoding(choice) == fotufilm::Encoding::Count) {
         std::snprintf(text, sizeof(text), "Required: select Timeline Color Space");
     } else if (menuEncoding(choice) != fotufilm::Encoding::Count) {
@@ -1493,6 +1511,11 @@ void updateColourSpaceStatus(Instance *instance) {
                           "%s (assumed)",
                           compactEncodingLabel(fotufilm::Encoding::Rec709Gamma24));
         }
+    }
+    if (cineon && !managed && !printOnly) {
+        // The timeline space still decodes the input; it no longer encodes the output.
+        const std::string decoded = text;
+        std::snprintf(text, sizeof(text), "%s -> Cineon log", decoded.c_str());
     }
     gParameter->paramSetValue(instance->colorSpaceStatus, text);
 }
@@ -1550,6 +1573,7 @@ OfxStatus getClipPreferences(OfxImageEffectHandle effect, OfxPropertySetHandle o
 /// Declares output colourspace to the OFX host. Full and Texture cross-reference Source. Negative
 /// and Print declare Raw so density interchange is not transformed and Print output is not encoded twice.
 /// Fotufilm mode always declares Raw because output encoding is explicitly selected by the user.
+/// Cineon Log declares Raw too: its code values are read by the grade as Cineon Film Log.
 OfxStatus getOutputColourspace(OfxImageEffectHandle effect,
                                OfxPropertySetHandle outArgs) {
     if (!outArgs) return kOfxStatErrBadHandle;
@@ -1557,8 +1581,11 @@ OfxStatus getOutputColourspace(OfxImageEffectHandle effect,
     const int stage = instance ? effectiveStage(instance, 0) : FOTUFILM_BRIDGE_STAGE_FULL;
     const bool split = stage == FOTUFILM_BRIDGE_STAGE_NEGATIVE ||
                        stage == FOTUFILM_BRIDGE_STAGE_PRINT;
+    const bool cineon = instance && stage != FOTUFILM_BRIDGE_STAGE_TEXTURE
+        && deliversCodeValues(instance, 0);
     return gProperty->propSetString(outArgs, kOfxImageClipPropColourspace, 0,
-                                    split || (instance && choiceValue(instance->colorManagement) == 1)
+                                    split || cineon
+                                            || (instance && choiceValue(instance->colorManagement) == 1)
                                         ? kOfxColourspaceRaw : "OfxColourspace_Source");
 }
 
@@ -2472,6 +2499,10 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs) {
     const bool readsInterchange = stage == FOTUFILM_BRIDGE_STAGE_PRINT;
     const bool writesInterchange = stage == FOTUFILM_BRIDGE_STAGE_NEGATIVE;
     const bool deliversSceneBasis = stage == FOTUFILM_BRIDGE_STAGE_TEXTURE;
+    // Cineon Log is a negative scan in code values: no output space applies to it, so it leaves
+    // through the identity — linear Display P3 is the print basis itself — with no gamut fit.
+    const bool codeValues = !writesInterchange && !deliversSceneBasis
+        && fotufilm_bridge_delivers_code_values(stock, paper) != 0;
     const char *const stageLabel = stage >= 0 && stage < static_cast<int>(gStageLabels.size())
         ? gStageLabels[stage].c_str() : "this stage";
     // Texture Only on a node whose per-stage toggles were never described. The selection reads as
@@ -2513,7 +2544,8 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs) {
         post(kOfxMessageError, effect, "Unsupported Fotufilm Color Management mode");
         return kOfxStatFailed;
     }
-    if (!managed && readsInterchange && menuEncoding(space) == fotufilm::Encoding::Count) {
+    if (!managed && readsInterchange && !codeValues
+        && menuEncoding(space) == fotufilm::Encoding::Count) {
         post(kOfxMessageError, effect,
              "Fotufilm's Print Only stage needs Timeline Color Space set explicitly. What "
              "arrives at this node is a developed negative — density, not colour — so there "
@@ -2536,14 +2568,19 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs) {
                                               : static_cast<fotufilm::Encoding>(inputChoice))
         : resolveEncoding(instance, effect, source.handle, space);
     if (encoding == fotufilm::Encoding::Count) return kOfxStatFailed;
-    const fotufilm::Encoding outputEncoding = managed && !writesInterchange
-        ? static_cast<fotufilm::Encoding>(outputChoice) : encoding;
+    const fotufilm::Encoding outputEncoding = codeValues ? fotufilm::Encoding::LinearDisplayP3
+        : managed && !writesInterchange ? static_cast<fotufilm::Encoding>(outputChoice) : encoding;
     const fotufilm::Transform transform = fotufilm::transformFor(encoding);
     // Input and output may have different primaries. Texture output remains scene light.
     fotufilm::Transform outputBasis = fotufilm::transformFor(outputEncoding);
     if (deliversSceneBasis) {
         std::memcpy(outputBasis.fromWorking, outputBasis.fromScene,
                     sizeof(outputBasis.fromWorking));
+    }
+    if (codeValues) {
+        // Exactly the identity, not Display P3 inverted through itself: code values are counted.
+        const float identity[9] = {1, 0, 0, 0, 1, 0, 0, 0, 1};
+        std::memcpy(outputBasis.fromWorking, identity, sizeof(identity));
     }
     const bool premultiplied = isPremultiplied(instance->sourceClip);
 

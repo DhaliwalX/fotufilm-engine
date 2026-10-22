@@ -195,6 +195,31 @@ already finished print; disable additional output tone mapping and OOTFs after t
 even when the selected output encoding is log. Finished prints are fitted to narrower
 output primaries without changing in-gamut colors or adding another tone curve.
 
+### Cineon Log
+
+**Output Medium → Cineon Log** delivers the developed negative as a flat film scan for
+grading, the way a scanner hands film to a grading suite. Each channel holds printing density
+above the film base as Cineon code values (code value / 1023): the base sits at 95, and
+each code value is 0.002 D, read through the SMPTE RP 180 printing-density bands. The film's
+own contrast stays in the scan. No print, timing, grade, finish or display transform is
+applied.
+
+A Cineon scan has no output color space of its own: its channels are the negative's printing
+densities, not light in any set of primaries. So Output Color Space does not apply. The menu
+is dimmed, the status line reads **… -> Cineon log**, and the node declares its output Raw so
+Resolve does not convert the code values. The input side still applies: Timeline Color
+Space, or Input Color Space in Fotufilm mode, still decodes the clip arriving at the node.
+Treat what follows the node as Cineon log:
+
+- Resolve's Kodak 2383 and Fujifilm 3513 film-look LUTs expect Cineon log. Apply one after
+  the node to print the scan.
+- A Color Space Transform node can also read the scan with input gamma **Cineon Film Log**.
+
+The scan looks flat and pale until it is printed; that is expected. For a still, export
+**DPX · Cineon 10-bit** from the Fotufilm editor, or run
+`fotufilm in.dng out.dpx --paper cineon-log` on the command line. Resolve reads either as
+a Cineon scan.
+
 Negative Only ignores Output Color Space and writes density data. Print Only ignores
 Input Color Space and reads density directly. Texture Only converts scene light into
 the selected output space, even when no texture stages are enabled. Mode and space

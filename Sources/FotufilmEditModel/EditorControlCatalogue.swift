@@ -1660,16 +1660,19 @@ public enum EditorControlCatalogue {
                 hint: "Choose where the finished image lives. Match Film uses RA-4 paper for a still "
                     + "negative, the stock's native release print for a motion negative, and the "
                     + "direct positive for reversal film. Digital Reference is the HDR path; paper, "
-                    + "projection, Lab Scan, Telecine and Negative are SDR. Slide film also supports Ilfochrome/Cibachrome positive paper. Negative is available "
-                    + "only for negative film.",
+                    + "projection, Lab Scan, Telecine and Negative are SDR. Cineon Log is a flat "
+                    + "scan of the negative for grading, delivered as Cineon code values rather than "
+                    + "a picture. Slide film also supports Ilfochrome/Cibachrome positive paper. Negative "
+                    + "and Cineon Log are available only for negative film.",
                 kind: .choice(.dynamic(.papers), value: -1), order: 10),
             commandLine: CommandLineFlag("--paper", placeholder: "<name>",
                                          help: "Output medium: ektacolor-edge (default), endura-premier, "
                                              + "crystal-archive, vision-2383, vision-2393, eterna-cp, "
-                                             + "eterna-cp-3521xd, exr-5386, agfa-cp30, lab-scan, telecine, screen, negative or ilfochrome-cps-1k/ilfochrome-clm-1k (cibachrome alias). Photo and "
+                                             + "eterna-cp-3521xd, exr-5386, agfa-cp30, lab-scan, telecine, cineon-log, screen, negative or ilfochrome-cps-1k/ilfochrome-clm-1k (cibachrome alias). Photo and "
                                              + "projection variants are digitised from the manufacturers' "
                                              + "published datasheets; Ilfochrome uses published tone specifications with approximate color. Reversal stocks support "
-                                             + "screen and Ilfochrome; instant sheets use screen.",
+                                             + "screen and Ilfochrome; instant sheets use screen. cineon-log "
+                                             + "writes a 10-bit Cineon DPX of the negative's printing density.",
                                          generic: false),
             documentation: "Selects the print paper, projection print, scan, display reference or the negative itself."),
         EditorControl(
@@ -1685,7 +1688,8 @@ public enum EditorControlCatalogue {
                 hint: "Choose the light used to judge a physical print. Medium Reference means D50 "
                     + "for photo paper or calibrated 5400 K xenon for a projected release print. "
                     + "Only the viewing light changes; the developed print is not re-timed. "
-                    + "Digital Reference, Lab Scan, Telecine and Negative ignore this control.",
+                    + "Digital Reference, Lab Scan, Telecine, Cineon Log and Negative ignore this "
+                    + "control.",
                 kind: .choice(.fixed(printLights), value: 0), order: 20),
             web: .profile,
             commandLine: CommandLineFlag("--print-light", placeholder: "<k>",

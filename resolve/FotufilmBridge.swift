@@ -611,6 +611,12 @@ func fotufilm_bridge_resolved_paper(_ stockIndex: Int32, _ paperIndex: Int32,
     return copyOut(resolvedPaper(stock: stock, index: paperIndex).name, out, capacity)
 }
 
+@_cdecl("fotufilm_bridge_delivers_code_values")
+func fotufilm_bridge_delivers_code_values(_ stockIndex: Int32, _ paperIndex: Int32) -> Int32 {
+    guard let stock = stock(at: stockIndex) else { return 0 }
+    return resolvedPaper(stock: stock, index: paperIndex).deliversCodeValues ? 1 : 0
+}
+
 @_cdecl("fotufilm_bridge_development_count")
 func fotufilm_bridge_development_count(_ stockIndex: Int32) -> Int32 {
     guard let stock = stock(at: stockIndex) else { return 0 }

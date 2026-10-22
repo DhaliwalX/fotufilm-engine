@@ -87,6 +87,14 @@ color primaries, without applying a second gamma or log conversion. Auto reads t
 image's color information. An unnamed color space falls back to linear Rec.709,
 and the status line reports that choice.
 
+**Output Medium → Cineon Log** is a flat scan of the negative for grading: each channel
+is Cineon code value / 1023, the film base at 95 and 0.002 D a code value. The plugin
+passes those numbers out unchanged, whatever the color-space choice. Final Cut treats
+them as linear light, so the clip looks flat and dark until it is printed. A LUT that
+prints the scan must read its input as Cineon log, as code value / 1023 with no transfer.
+For grading with film-print LUTs, the DaVinci Resolve plugin, or a DPX exported from the
+Fotufilm editor, is the more direct route.
+
 ## Pipeline stages
 
 **Full** produces the final image. **Negative Only** produces density data for a

@@ -72,6 +72,8 @@ Options:
   --depth <8|16>     Output bit depth (default: 16 for TIFF; otherwise 8, dithered)
   --hlg              Write the print as 16-bit Rec.2020 HLG instead of sRGB.
                      Implies --depth 16.
+                     With --paper cineon-log, name a .dpx output: the scan is
+                     written as a 10-bit Cineon DPX for grading.
   --edge             Develop the film around the picture too (Emulsion Border):
                      the gauge's unexposed band, the gate's shadow at the
                      input's recorded aperture, and a negative's carrier
@@ -1373,6 +1375,16 @@ let hlgOutput = flags["--hlg"] != nil
 // the range sRGB gives its whole range to.
 let isTIFFOutput = ["tif", "tiff"].contains(URL(fileURLWithPath: positional[1])
     .pathExtension.lowercased())
+// A Cineon scan is code values, not light: it goes to DPX, and nothing else does.
+let cineonOutput = options.paper(for: stock).deliversCodeValues
+let isDPXOutput = URL(fileURLWithPath: positional[1]).pathExtension.lowercased() == "dpx"
+if cineonOutput && !isDPXOutput && flags["--stages"] == nil {
+    fail("--paper cineon-log writes a 10-bit Cineon DPX: name a .dpx output")
+}
+if isDPXOutput && !cineonOutput {
+    fail("A .dpx output is a Cineon scan: add --paper cineon-log")
+}
+if cineonOutput && hlgOutput { fail("--hlg and --paper cineon-log cannot be combined") }
 let depth = hlgOutput ? 16 : (flags["--depth"].flatMap { Int($0) } ?? (isTIFFOutput ? 16 : 8))
 guard depth == 8 || depth == 16 else { fail("--depth must be 8 or 16") }
 let balance = WhiteBalance(
@@ -1452,7 +1464,15 @@ for i in 0..<(width * height) {
     reflectance[i * 4 + 3] = rgba[i * 4 + 3]
 }
 let elapsed = Date().timeIntervalSince(start)
-if hlgOutput {
+if cineonOutput {
+    let film = CineonDPX.Film(frameRate: options.format.isMotionPicture ? 24 : nil,
+                              format: options.format.name, stock: stock.name)
+    let data = reflectance.withUnsafeBufferPointer {
+        CineonDPX.encode(signals: $0, width: width, height: height, film: film)
+    }
+    do { try data.write(to: URL(fileURLWithPath: positional[1])) }
+    catch { fail("Could not write: \(positional[1])") }
+} else if hlgOutput {
     saveHLG(reflectance, width: width, height: height, path: positional[1])
 } else {
     saveReflectance(reflectance, width: width, height: height, path: positional[1],

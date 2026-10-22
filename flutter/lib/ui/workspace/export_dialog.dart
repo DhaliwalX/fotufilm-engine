@@ -64,6 +64,10 @@ class _ExportDialogState extends State<ExportDialog> {
     final originalAvailable = !batch && x.originalAvailable(doc);
     // A photograph with no camera RAW behind it has no original to export.
     if (x.type == originalType && !originalAvailable) x.type = x.types.first.$1;
+    // DPX is one Cineon Log photograph's scan: not offered for a batch, or once the medium changes.
+    final types = [for (final t in x.types) if (!batch || t.$1 != dpxType) t];
+    if (x.type != originalType && !types.any((t) => t.$1 == x.type)) x.type = types.first.$1;
+    final dpx = x.type == dpxType;
     final original = x.type == originalType;
     final sizes = x.sizes(batch: batch);
     final unavailable = x.unavailable(batch: batch);
@@ -124,7 +128,7 @@ class _ExportDialogState extends State<ExportDialog> {
               _SelectRow('Format', PickerField<String>(
                 value: x.type,
                 options: [
-                  for (final (id, label) in x.types) PickerOption(id, label),
+                  for (final (id, label) in types) PickerOption(id, label),
                   if (originalAvailable) const PickerOption(originalType, 'Original RAW'),
                 ],
                 onChanged: (v) => setState(() => x.type = v),
@@ -157,7 +161,7 @@ class _ExportDialogState extends State<ExportDialog> {
                       onChanged: (v) => setState(() => x.quality = v.round()),
                     ),
                   ),
-                if (metadata != null)
+                if (metadata != null && !dpx)
                   _SelectRow('Metadata', PickerField<String>(
                     value: x.metadata,
                     options: [
@@ -170,10 +174,14 @@ class _ExportDialogState extends State<ExportDialog> {
                     padding: const EdgeInsets.symmetric(vertical: 6),
                     child: SwitchRow(label: 'HDR', value: x.hdr, onChanged: (v) => x.hdr = v),
                   ),
-                // The desktop engine writes Display P3.
+                // The desktop engine writes Display P3, and a Cineon Log scan printing density.
                 _Detail('${batch ? '$count photos' : '${delivered.width} × ${delivered.height} '
-                    'pixels'} · Display P3 · '
-                    '${x.type == 'image/tiff' ? '16-bit' : hdr ? 'HDR' : '8-bit'}'),
+                    'pixels'} · '
+                    '${dpx ? 'Cineon log · 10-bit' : 'Display P3 · '
+                        '${x.type == 'image/tiff' ? '16-bit' : hdr ? 'HDR' : '8-bit'}'}'),
+                if (dpx)
+                  const _Detail('Printing density for grading. In DaVinci Resolve, read it as '
+                      'Cineon Film Log.'),
                 _Detail(batch
                     ? 'Exports every photo with its own film, crop and adjustments into one '
                         'folder.'

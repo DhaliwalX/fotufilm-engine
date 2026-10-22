@@ -77,7 +77,8 @@ struct HostPlatform {
             "subjectSelection": subjects != nil,
             "copyImage": clipboard != nil,
             "printFrames": frames != nil,
-            "imageExportTypes": encoder?.types.sorted() ?? [],
+            // A Cineon Log scan's DPX is written in Swift, beside whatever the encoder writes.
+            "imageExportTypes": encoder.map { $0.types.sorted() + [CineonDPX.mimeType] } ?? [],
             "hdrExport": encoder?.writesHDR ?? false,
             // Export All: the open photographs into one folder, pipelined (`exportBatch`).
             "batchExport": decoder != nil && encoder != nil,

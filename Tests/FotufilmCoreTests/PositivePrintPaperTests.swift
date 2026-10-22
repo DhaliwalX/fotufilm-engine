@@ -24,8 +24,9 @@ final class PositivePrintPaperTests: XCTestCase {
                        [.ektacolorEdge, .enduraPremier, .crystalArchive,
                         .vision2383, .vision2393, .eternaCP, .labScan, .telecine, .screen, .negative])
         // Media added later are appended, so no host's persisted index moves.
-        XCTAssertEqual(Array(PrintPaper.allCases.suffix(5)),
-                       [.ilfochromeCPS1K, .ilfochromeCLM1K, .exr5386, .agfaCP30, .eternaCP3521XD])
+        XCTAssertEqual(Array(PrintPaper.allCases.suffix(6)),
+                       [.ilfochromeCPS1K, .ilfochromeCLM1K, .exr5386, .agfaCP30, .eternaCP3521XD,
+                        .cineonLog])
         XCTAssertEqual(PrintPaper.default(for: stock), .screen)
         var instant = stock; instant.isReflectionPrint = true
         XCTAssertEqual(PrintPaper.choices(for: instant), [.screen])

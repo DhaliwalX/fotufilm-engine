@@ -27,7 +27,12 @@ const exportTypeLabels = {
   'image/jpeg': 'JPEG',
   'image/heic': 'HEIC',
   'image/webp': 'WebP',
+  dpxType: 'DPX · Cineon 10-bit',
 };
+
+/// A Cineon Log scan's format: 10-bit printing density for grading, offered only for an edit
+/// whose output medium is Cineon Log (`ExportOptions.dpx`).
+const dpxType = 'image/x-dpx';
 
 /// Export Original's format: the camera RAW file itself.
 const originalType = 'original';
@@ -54,7 +59,7 @@ String cleanName(String name) {
 String stillFilename(String name, Json edit, String type) {
   final stock = edit['stock'] as String?;
   final medium = edit['medium'] as String?;
-  final ext = type == 'image/jpeg' ? 'jpg' : type.split('/').last;
+  final ext = switch (type) { 'image/jpeg' => 'jpg', dpxType => 'dpx', _ => type.split('/').last };
   return '${cleanName(name)}-${stock == null || stock.isEmpty ? 'normal' : stock}'
       '${medium == null || medium.isEmpty ? '' : '-$medium'}.$ext';
 }
@@ -64,6 +69,7 @@ class ExportOptions {
   ExportOptions.fromJson(Json json)
       : metadata = (json['metadata'] as List?)?.cast<String>(),
         hdr = json['hdr'] == true,
+        dpx = json['dpx'] == true,
         unavailable = ((json['unavailable'] as List?) ?? const []).cast<String>();
 
   /// The metadata policies; null hides the picker.
@@ -71,6 +77,9 @@ class ExportOptions {
 
   /// Whether a HEIC may carry HDR: the film delivers light above display white.
   final bool hdr;
+
+  /// Whether the edit is a Cineon Log scan, which exports as DPX.
+  final bool dpx;
 
   /// The size ids past the developer's memory limit at this photo quality.
   final List<String> unavailable;
@@ -149,7 +158,8 @@ class ExportTool {
     final offered = (_capabilities['imageExportTypes'] as List?)?.cast<String>() ?? const [];
     return [
       for (final MapEntry(:key, :value) in exportTypeLabels.entries)
-        if (offered.isEmpty || offered.contains(key)) (key, value),
+        if ((offered.isEmpty || offered.contains(key)) && (key != dpxType || options?.dpx == true))
+          (key, value),
     ];
   }
 

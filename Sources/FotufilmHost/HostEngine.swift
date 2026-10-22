@@ -425,7 +425,8 @@ public final class HostEngine {
                          keepsCodes: Bool) throws -> (developed: [UInt8], original: [UInt8]?)? {
         guard let film = stock(edit.edit.stock) else { return nil }
         let options = try options(edit, stock: film, contentHeadroom: contentHeadroom)
-        guard options.transportConstruction(for: film) == nil else { return nil }
+        guard options.transportConstruction(for: film) == nil,
+              !options.paper(for: film).deliversCodeValues else { return nil }
         let shouldContinue = continuation()
         takeRenderLock()
         defer { renderLock.unlock() }
@@ -488,15 +489,18 @@ public final class HostEngine {
 
         let knee = film.map { options.sdrShoulderKnee(for: $0) } ?? FilmSDRDelivery.boundedShoulderKnee
         let seed = UInt32(truncatingIfNeeded: options.seed)
+        // Cineon Log delivers code values, not light: they are shown as the signal they are, a
+        // flat scan, with no shoulder and no transfer, and a float target receives them verbatim.
+        let codeValues = film.map { options.paper(for: $0).deliversCodeValues } ?? false
         try developer.develop(
             scene, width: width, height: height, stock: stock, noFilm: film == nil,
             options: options, pace: HostDevelopPace(frameIndex: frameIndex, realtime: realtime,
                                                     exactMath: exactMath),
-            encode: target.format == .rgba8DisplayP3,
+            encode: target.format == .rgba8DisplayP3 && !codeValues,
             knee: film == nil ? nil : knee, shouldContinue: shouldContinue,
             deliver: { rows, range, encoded in
-                self.deliver(rows, rows: range, width: width, encoded: encoded, knee: knee,
-                             seed: seed, target: target)
+                self.deliver(rows, rows: range, width: width, encoded: encoded || codeValues,
+                             knee: knee, seed: seed, target: target)
             })
     }
 
@@ -512,6 +516,7 @@ public final class HostEngine {
                                        stock: stock)
         let knee = options.sdrShoulderKnee(for: stock)
         let seed = UInt32(truncatingIfNeeded: options.seed)
+        let codeValues = options.paper(for: stock).deliversCodeValues
         try printScan(width: width, height: height, stock: stock, options: options,
                       calibration: reading.calibration,
                       readScan: { rows, into in
@@ -521,8 +526,8 @@ public final class HostEngine {
                           }
                       },
                       writeRows: { range, rows in
-                          self.deliver(rows, rows: range, width: width, encoded: false, knee: knee,
-                                       seed: seed, target: target)
+                          self.deliver(rows, rows: range, width: width, encoded: codeValues,
+                                       knee: knee, seed: seed, target: target)
                       })
     }
 

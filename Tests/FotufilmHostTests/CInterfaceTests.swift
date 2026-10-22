@@ -4,6 +4,7 @@ import AppKit
 #endif
 import CFotufilmHost
 @testable import FotufilmHost
+import FotufilmCore
 #if canImport(ImageIO)
 import ImageIO
 import UniformTypeIdentifiers
@@ -46,8 +47,9 @@ final class CInterfaceTests: XCTestCase {
         let platform = HostPlatform.current
         XCTAssertEqual(capabilities["subjectSelection"] as? Bool, platform.subjects != nil)
         XCTAssertEqual(capabilities["copyImage"] as? Bool, platform.clipboard != nil)
+        // A Cineon Log scan's DPX is written in Swift, beside whatever the encoder writes.
         XCTAssertEqual(capabilities["imageExportTypes"] as? [String],
-                       platform.encoder?.types.sorted() ?? [])
+                       platform.encoder.map { $0.types.sorted() + [CineonDPX.mimeType] } ?? [])
         #if canImport(ImageIO)
         XCTAssertEqual(capabilities["hdrExport"] as? Bool, true)
         #endif
@@ -304,6 +306,63 @@ extension CInterfaceTests {
         defer { try? FileManager.default.removeItem(at: hdr) }
         XCTAssertEqual(answer["hdr"] as? Bool, true)
         XCTAssertEqual(make(properties(hdr)), "Fotufilm Test")
+    }
+
+    /// A Cineon Log edit exports as a 10-bit DPX of its code values, offered only for that medium,
+    /// and its 16-bit TIFF carries the same signal rather than a display encode of it.
+    func testCineonLogExportsAsDPX() throws {
+        let engine = try makeEngine()
+        defer { fotufilm_engine_destroy(engine) }
+        let service = Unmanaged<HostEngine>.fromOpaque(UnsafeRawPointer(engine))
+            .takeUnretainedValue().service
+        func call(_ method: String, _ params: String) throws -> [String: Any] {
+            let answer = try service.call(method, params: Data(params.utf8), payload: nil)
+            return try JSONSerialization.jsonObject(with: answer.json) as? [String: Any] ?? [:]
+        }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("fotufilm-cineon-\(UUID().uuidString).png")
+        try writeRamp(to: url, width: 96, height: 64)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let handle = try XCTUnwrap(call("importPath", #"{"path": "\#(url.path)"}"#)["handle"])
+        func request(_ medium: String) -> String {
+            #""handle": \#(handle), "edit": {"stock": "vision250d", "params": {}}, "# +
+                #""profileRequest": {"controls": {}, "medium": "\#(medium)"}"#
+        }
+        let types = try XCTUnwrap(HostPlatform.current.capabilities["imageExportTypes"] as? [String])
+        XCTAssertTrue(types.contains(CineonDPX.mimeType))
+        XCTAssertEqual(try call("exportOptions", "{\(request("cineon-log")), \"maxEdge\": 256}")["dpx"]
+                       as? Bool, true)
+        XCTAssertEqual(try call("exportOptions", "{\(request("vision-2383")), \"maxEdge\": 256}")["dpx"]
+                       as? Bool, false)
+
+        let target = FileManager.default.temporaryDirectory
+            .appendingPathComponent("fotufilm-cineon-\(UUID().uuidString).dpx")
+        defer { try? FileManager.default.removeItem(at: target) }
+        let answer = try call("export", """
+        {\(request("cineon-log")), "maxEdge": null, "type": "\(CineonDPX.mimeType)",
+         "path": "\(target.path)"}
+        """)
+        let (width, height) = (try XCTUnwrap(answer["width"] as? Int),
+                               try XCTUnwrap(answer["height"] as? Int))
+        let bytes = [UInt8](try Data(contentsOf: target))
+        XCTAssertEqual(bytes.count, 2048 + width * height * 4)
+        XCTAssertEqual(Array(bytes[0..<4]), Array("SDPX".utf8))
+        XCTAssertEqual(bytes[801], 1, "printing density")
+        // The ramp climbs left to right: so do the code values, from near the film base.
+        func code(_ x: Int, _ channel: Int) -> Int {
+            let i = 2048 + ((height / 2) * width + x) * 4
+            let word = bytes[i..<i + 4].reduce(UInt32(0)) { $0 << 8 | UInt32($1) }
+            return Int((word >> UInt32(22 - channel * 10)) & 0x3FF)
+        }
+        for channel in 0..<3 {
+            XCTAssertGreaterThan(code(width - 2, channel), code(1, channel) + 50, "channel \(channel)")
+            XCTAssertGreaterThanOrEqual(code(1, channel), 90, "channel \(channel)")
+        }
+        // Another medium has no code values for a DPX to carry.
+        XCTAssertThrowsError(try call("export", """
+        {\(request("vision-2383")), "maxEdge": null, "type": "\(CineonDPX.mimeType)",
+         "path": "\(target.path)"}
+        """))
     }
 
     /// Choose Film Per Photo: every film ranked for the photograph, the choice learned, and

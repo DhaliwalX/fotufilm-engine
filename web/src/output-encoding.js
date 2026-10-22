@@ -44,7 +44,8 @@ function triangularDither(index, channelSeed) {
 /// The print's interior of one tile, encoded for a canvas into its place in the frame. The print
 /// moves into the canvas's primaries first and takes the shoulder and the clip there, as every
 /// native delivery does. The dither is indexed by the pixel's place in the frame, not in the tile,
-/// so how the frame was cut leaves no trace in it.
+/// so how the frame was cut leaves no trace in it. Cineon code values (`codeValues`) are a signal
+/// already: they are written as they are, with no matrix, shoulder or transfer.
 export function encodeTileInto(
   pixels,
   frameWidth,
@@ -56,11 +57,14 @@ export function encodeTileInto(
   colorSpace = 'srgb',
   destination = { x: 0, y: 0, width: frameWidth },
   shoulderKnee = 1,
+  codeValues = false,
 ) {
   validateColorSpace(colorSpace)
   const sixteen = pixels instanceof Uint16Array
   const n =
-    colorSpace === 'display-p3' ? [1, 0, 0, 0, 1, 0, 0, 0, 1] : P3_TO_SRGB
+    colorSpace === 'display-p3' || codeValues ? [1, 0, 0, 0, 1, 0, 0, 0, 1] : P3_TO_SRGB
+  const transfer = codeValues ? clamp01 : linearToSrgb
+  const knee = codeValues ? -1 : shoulderKnee
   const [o0, o1, o2] = offsets
   const channelSeeds = [0, 1, 2].map((channel) =>
     pcgHash((channel + Math.imul(seed, 0x9e3779b9)) >>> 0),
@@ -74,14 +78,14 @@ export function encodeTileInto(
       const b = output[at + o2]
       const delivered = (c) =>
         clamp01(
-          displayShoulder(n[c * 3] * r + n[c * 3 + 1] * g + n[c * 3 + 2] * b, shoulderKnee),
+          displayShoulder(n[c * 3] * r + n[c * 3 + 1] * g + n[c * 3 + 2] * b, knee),
         )
       const p = y * frameWidth + x
       const i =
         ((y - destination.y) * destination.width + x - destination.x) * 4
       if (sixteen) {
         for (let c = 0; c < 3; c++) {
-          const value = linearToSrgb(delivered(c))
+          const value = transfer(delivered(c))
           pixels[i + c] = Number.isFinite(value)
             ? Math.round(clamp01(value) * 65535)
             : 0
@@ -92,17 +96,17 @@ export function encodeTileInto(
       // Native UInt8 conversion truncates after the half-step and dither.
       // Uint8ClampedArray rounds instead, so floor first to avoid a second round.
       pixels[i] = Math.floor(
-        linearToSrgb(delivered(0)) * 255 +
+        transfer(delivered(0)) * 255 +
           0.5 +
           triangularDither(p, channelSeeds[0]),
       )
       pixels[i + 1] = Math.floor(
-        linearToSrgb(delivered(1)) * 255 +
+        transfer(delivered(1)) * 255 +
           0.5 +
           triangularDither(p, channelSeeds[1]),
       )
       pixels[i + 2] = Math.floor(
-        linearToSrgb(delivered(2)) * 255 +
+        transfer(delivered(2)) * 255 +
           0.5 +
           triangularDither(p, channelSeeds[2]),
       )

@@ -67,6 +67,17 @@ void main() {
       expect(stillFilename('Été.heic', {'stock': 'portra400'}, 'image/heic'), 'Été-portra400.heic');
     });
 
+    test('a Cineon Log scan is a .dpx', () {
+      expect(stillFilename('A001.dng', {'stock': 'vision250d', 'medium': 'cineon-log'}, dpxType),
+          'A001-vision250d-cineon-log.dpx');
+    });
+
+    test('the engine says when an edit exports as DPX', () {
+      expect(ExportOptions.fromJson({'dpx': true}).dpx, isTrue);
+      expect(ExportOptions.fromJson({}).dpx, isFalse);
+      expect(exportTypeLabels[dpxType], 'DPX · Cineon 10-bit');
+    });
+
     test('a name with nothing left is a photo', () {
       expect(cleanName('.png'), 'photo');
     });
