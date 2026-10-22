@@ -267,6 +267,32 @@ extension FilmOutputTransform {
                             premultiplied: false,
                             shoulderKnee: shoulderKnee)
     }
+
+    /// Cineon code values as they leave the paper table: no matrix, no shoulder, no transfer.
+    /// They are a signal already (`FilmOutputConversion.cineonLog`), not light to encode.
+    public static let cineonLog = FilmOutputTransform(
+        matrix: identityMatrix, transfer: .linear, coefficients: [1, 0, 0, 0, 0, 0],
+        premultiplied: false)
+
+    /// A still's delivery for `stock` under `options`: Display P3 over the material's SDR
+    /// shoulder, or the code values themselves for a medium that delivers them.
+    public static func still(_ options: FotufilmEngine.Options,
+                             stock: FilmStock) -> FilmOutputTransform {
+        options.paper(for: stock).deliversCodeValues ? .cineonLog
+            : .displayP3(shoulderKnee: options.sdrShoulderKnee(for: stock))
+    }
+}
+
+extension AnyFilmOutputConverter {
+    /// The host-side counterpart of `FilmOutputTransform.still`, for rows the kernel handed
+    /// back as display-linear light.
+    public static func still(_ options: FotufilmEngine.Options,
+                             stock: FilmStock) -> AnyFilmOutputConverter {
+        options.paper(for: stock).deliversCodeValues
+            ? AnyFilmOutputConverter(FilmOutputConversion.cineonLog)
+            : AnyFilmOutputConverter(FilmDisplayP3SDRConversion(
+                shoulderKnee: options.sdrShoulderKnee(for: stock)))
+    }
 }
 
 /// Runs a built-in or client-supplied converter at the developed-print boundary.

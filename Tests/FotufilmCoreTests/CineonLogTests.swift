@@ -155,6 +155,27 @@ final class CineonLogTests: XCTestCase {
         }
     }
 
+    func testStillDeliveryLeavesCodeValuesAsTheyAre() throws {
+        let film = try stock("vision250d")
+        let still = FilmOutputTransform.still(options(), stock: film)
+        XCTAssertEqual(still, .cineonLog)
+        XCTAssertNil(still.shoulderKnee)
+        XCTAssertEqual(still.transfer, .linear)
+        let printed = options(.vision2383)
+        XCTAssertEqual(FilmOutputTransform.still(printed, stock: film),
+                       .displayP3(shoulderKnee: printed.sdrShoulderKnee(for: film)))
+        let signals: [Float] = [95 / 1023, 0.5, 685 / 1023, 1, 1.2, 0.3, 0, 0.7]
+        var out = [Float](repeating: -1, count: signals.count)
+        signals.withUnsafeBufferPointer { source in
+            out.withUnsafeMutableBufferPointer { destination in
+                AnyFilmOutputConverter.still(options(), stock: film)
+                    .convert(source, from: 0, count: signals.count, into: destination)
+            }
+        }
+        XCTAssertEqual(Array(out[0..<3]), Array(signals[0..<3]))
+        XCTAssertEqual(Array(out[4..<7]), Array(signals[4..<7]))
+    }
+
     func testTimingKeysAndGradeCannotMoveTheCodeValues() throws {
         let film = try stock("vision500t")
         let plain = try FotufilmEngine(stock: film, options: options())

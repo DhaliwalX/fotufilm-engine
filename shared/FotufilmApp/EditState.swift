@@ -381,7 +381,14 @@ struct EditState: Equatable {
     /// Where the developed image is finished. Most choices form a positive; `.negative` keeps the
     /// developed film itself as the output.
     var paper = PrintPaper.editorDefault
-    var printFrame = PrintFrame.none
+    /// The frame drawn around the print. A Cineon Log scan has none: its code values are not a
+    /// picture a frame drawn in display light belongs around, so the choice is kept and set
+    /// aside until the medium takes a frame again.
+    var printFrame: PrintFrame {
+        get { resolvedPaper.deliversCodeValues ? .none : chosenPrintFrame }
+        set { chosenPrintFrame = newValue }
+    }
+    var chosenPrintFrame = PrintFrame.none
     /// Border Width: the frame's margin as a multiple of its preset, for the frames that have one.
     var printFrameMargin = 1.0
     /// Edge Printing and Frame Number: whether a film border shows the stock's edge printing,

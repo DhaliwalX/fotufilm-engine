@@ -665,7 +665,10 @@ public struct ControlsExport {
             "",
             "object OutputMedia {",
             "    val all = listOf(\(PrintPaper.allCases.enumerated().map { index, paper in "MenuChoice(\(kotlinString(paper.rawValue)), \(kotlinString(paper.name)), \"\", \(index + 1).0)" }.joined(separator: ", ")))",
-            "    fun choices(stock: StockPreset?) = all.filter { if (stock?.isReflectionPrint == true) it.id == \"screen\" else if (stock?.isReversal == true) it.id == \"screen\" || it.id.startsWith(\"ilfochrome-\") else !it.id.startsWith(\"ilfochrome-\") }",
+            // Android's byte kernel always encodes for a display, so a medium that delivers code
+            // values keeps its index in `all` but is not offered there.
+            "    private val codeValues = setOf(\(PrintPaper.allCases.filter(\.deliversCodeValues).map { kotlinString($0.rawValue) }.joined(separator: ", ")))",
+            "    fun choices(stock: StockPreset?) = all.filter { if (stock?.isReflectionPrint == true) it.id == \"screen\" else if (stock?.isReversal == true) it.id == \"screen\" || it.id.startsWith(\"ilfochrome-\") else !it.id.startsWith(\"ilfochrome-\") && it.id !in codeValues }",
             "}",
             "",
             "object EditorControls {",

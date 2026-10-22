@@ -1025,11 +1025,12 @@ enum FilmRender {
         let hdrPrinted = hdrOutput?.bound(to: UInt16.self)
         // Still delivery has one portable conversion contract. ImageIO only packs and tags the
         // resulting normalized values; it does not choose another transfer implementation.
+        // A Cineon Log scan's code values are a signal already, and leave as they are.
         let sdrConversion: AnyFilmOutputConverter = film == nil
             ? AnyFilmOutputConverter(FilmOutputConversion.displayP3)
-            : AnyFilmOutputConverter(FilmDisplayP3SDRConversion(
-                shoulderKnee: stock.map { options.sdrShoulderKnee(for: $0) }
-                    ?? FilmSDRDelivery.boundedShoulderKnee))
+            : stock.map { AnyFilmOutputConverter.still(options, stock: $0) }
+                ?? AnyFilmOutputConverter(FilmDisplayP3SDRConversion(
+                    shoulderKnee: FilmSDRDelivery.boundedShoulderKnee))
         // The same delivery, named so the engine can take it in the producing kernel instead of
         // handing back display-linear light for the host to walk. Three things have to hold: the
         // engine's streaming path is the one developing (the film-free and viewport paths do
@@ -1048,8 +1049,8 @@ enum FilmRender {
            film.engine.carriesOutputTransform(
                stock: film.stock, options: options, width: width,
                height: height, exactMath: exact) {
-            outputTransform = .displayP3(shoulderKnee: stock.map { options.sdrShoulderKnee(for: $0) }
-                ?? FilmSDRDelivery.boundedShoulderKnee)
+            outputTransform = stock.map { FilmOutputTransform.still(options, stock: $0) }
+                ?? .displayP3(shoulderKnee: FilmSDRDelivery.boundedShoulderKnee)
         }
         if wantsKernelDelivery, let plainEngine,
            plainEngine.carriesOutputTransform(
@@ -2279,5 +2280,28 @@ struct Rendered {
                 options: [.hdrImage: hdr, .hdrGainMapAsRGB: true])) != nil
         }
     }
+
+    /// A Cineon Log print as a 10-bit DPX (`CineonDPX`): its code values read back exactly as the
+    /// develop wrote them, with no colour management, and turned upright, since a DPX carries
+    /// no orientation a grading suite reads.
+    func writeDPX(to url: URL, film: CineonDPX.Film = CineonDPX.Film()) throws {
+        let upright = CIImage(cgImage: image).oriented(orientation)
+        let extent = upright.extent.integral
+        let width = Int(extent.width), height = Int(extent.height)
+        var signals = [Float](repeating: 0, count: width * height * 4)
+        signals.withUnsafeMutableBytes { buffer in
+            Self.signalContext.render(upright, toBitmap: buffer.baseAddress!, rowBytes: width * 16,
+                                      bounds: extent, format: .RGBAf, colorSpace: nil)
+        }
+        let data = signals.withUnsafeBufferPointer {
+            CineonDPX.encode(signals: $0, width: width, height: height, film: film)
+        }
+        try data.write(to: url, options: .atomic)
+    }
+
+    /// Unmanaged and in full float, so a code value comes back as the number it was.
+    private static let signalContext = CIContext(options: [
+        .workingColorSpace: NSNull(), .outputColorSpace: NSNull(), .workingFormat: CIFormat.RGBAf,
+    ])
 
 }
