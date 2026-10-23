@@ -105,8 +105,15 @@ public:
         // Reduce chemical inhibition before its final combination. Keeping every field inline
         // exceeds WebGPU's per-stage storage bindings. Native GPU schedules retain the existing
         // fused expression.
-        case Store::Inhibition:
         case Store::MtfSelected:
+            // The halation reads the light after the MTF in two kernels of a row-window graph;
+            // held once, neither selects between the blur and its bypass again.
+            if (register_stages()) {
+                return remember(values, schedule_.store_frame(values, half, channels));
+            }
+            return schedule_.reference_sampling()
+                ? remember(values, schedule_.store_frame(values, false, channels)) : values;
+        case Store::Inhibition:
         case Store::PrintMtfInput:
             return schedule_.reference_sampling()
                 ? remember(values, schedule_.store_frame(values, false, channels)) : values;
@@ -114,15 +121,25 @@ public:
         case Store::Diffused:
         case Store::TextureLight:
             return remember(values, schedule_.store_frame(values, half, channels, branch));
+        case Store::HalationReturned:
+            if (register_stages()) {
+                schedule_.register_stage(values);
+                return remember(values, values);
+            }
+            return remember(values, schedule_.store_frame(values, half, channels, branch));
         case Store::MtfMixed:
         case Store::MtfSeparated:
-        case Store::HalationReturned:
         case Store::LogExposure:
         case Store::Released:
         case Store::FlatLog:
         case Store::FlatReleased:
             return remember(values, schedule_.store_frame(values, half, channels, branch));
         case Store::FilmDensity:
+            if (register_stages()) {
+                schedule_.register_stage(values);
+                return remember(values, values);
+            }
+            return remember(values, schedule_.store_frame(values, false, channels, branch));
         case Store::FilmGrain:
             // Density to the grain's thousandths: never half.
             return remember(values, schedule_.store_frame(values, false, channels, branch));
@@ -131,12 +148,17 @@ public:
         case Store::Transmittance:
         case Store::FlatTransmittance:
             return remember(values, schedule_.store_frame(values, half, channels));
+        case Store::PrintActivation:
+        case Store::PaperActivation:
+            if (register_stages()) {
+                schedule_.register_stage(values);
+                return remember(values, values);
+            }
+            return values;
         case Store::MtfLumaDirect:
         case Store::FlatDensity:
         case Store::Printed:
         case Store::FlatPrinted:
-        case Store::PrintActivation:
-        case Store::PaperActivation:
         case Store::Display:
         case Store::Output:
             return values;
@@ -343,6 +365,13 @@ public:
 
     Expr film_curve(ImageParam &configuration, Func table, Expr channel,
                     Expr log_exposure) override {
+        // The realtime Metal graphs read a measured curve through the table too: the table is
+        // built from the same density, and a select would evaluate the measured curve's search
+        // at every pixel of every kernel the density is developed in.
+        if (policy_.tabulated_curves && policy_.realtime
+            && schedule_.gpu_device_api() == DeviceAPI::Metal) {
+            return sample_curve(table, log_exposure, channel);
+        }
         return policy_.tabulated_curves
             ? sample_film_curve(configuration, table, log_exposure, channel)
             : film_density(configuration, channel, log_exposure, policy_.approximate);
@@ -467,6 +496,13 @@ public:
 
 
 private:
+    /// Whether a stage that only one kernel reads, and reads across its channels, is developed
+    /// in that kernel's threads rather than stored: the row-window graphs on Metal, which the
+    /// row-window host measures.
+    bool register_stages() const {
+        return schedule_.windowed() && schedule_.gpu_device_api() == DeviceAPI::Metal;
+    }
+
     Func remember(Func original, Func view) {
         stored_.insert(original.name());
         stored_.insert(view.name());

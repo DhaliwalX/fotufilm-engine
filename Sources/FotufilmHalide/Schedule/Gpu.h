@@ -8,6 +8,7 @@
 
 #include <Halide.h>
 #include <cstdlib>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -36,6 +37,7 @@ public:
                          bool windowed = false)
         : configuration_(std::move(configuration)), windowed_(windowed) {}
     const GpuConfiguration &configuration() const { return configuration_; }
+    bool windowed() const { return windowed_; }
     Target gpu_target() const { return configuration_.target(); }
     DeviceAPI gpu_device_api() const { return configuration_.device; }
     // Preserve the CPU model's sampling and operation order on portable GPU backends.
@@ -55,10 +57,81 @@ public:
     int32_t ablated_features() const { return configuration_.ablated; }
     const std::vector<Func> &window_stores() const { return window_stores_; }
 
+    /// A per-pixel stage whose channels each consumer reads together. Inline, every channel of
+    /// the consumer recomputes all of its channels — the print's cube lookups nine times a
+    /// pixel — and stored, it costs a frame of memory traffic. Where one kernel is its only
+    /// reader, `place_register_stages` computes it there once per pixel, in registers.
+    void register_stage(Func stage) { register_stages_.push_back(stage); }
+
+    /// Records a kernel the graph stores and the thread loop a register stage would join.
+    void note_root(Func function, Var thread) { root_kernels_.push_back({function, thread}); }
+
+    /// Places each register stage in the kernels that evaluate it. A kernel that reads the stage
+    /// itself, rather than through a function it inlines, takes a copy of its own; the stage is
+    /// then computed in the one kernel left, and stays inline where more than one is.
+    void place_register_stages() {
+        for (Func stage : register_stages_) {
+            const RootKernel *home = nullptr;
+            int readers = 0;
+            for (const RootKernel &root : root_kernels_) {
+                if (!reaches_inline(root.function, stage.name())) continue;
+                if (reads_only_directly(root.function, stage.name())) {
+                    Func copy = stage.clone_in(root.function);
+                    copy.compute_at(root.function, root.thread).unroll(copy.args()[2]);
+                } else {
+                    home = &root;
+                    ++readers;
+                }
+            }
+            if (readers != 1) continue;
+            stage.compute_at(home->function, home->thread).unroll(stage.args()[2]);
+        }
+        register_stages_.clear();
+    }
+
 private:
     const GpuConfiguration configuration_;
     const bool windowed_;
     std::vector<Func> window_stores_;
+    /// Every kernel the graph stores, with the thread loop its body runs in.
+    struct RootKernel {
+        Func function;
+        Var thread;
+    };
+    std::vector<RootKernel> root_kernels_;
+    std::vector<Func> register_stages_;
+
+    /// Whether `from` calls `target` itself and through none of the functions it inlines.
+    bool reads_only_directly(const Func &from, const std::string &target) const {
+        std::set<std::string> roots;
+        for (const RootKernel &root : root_kernels_) roots.insert(root.function.name());
+        bool direct = false;
+        for (const auto &call : Halide::Internal::find_direct_calls(from.function())) {
+            if (call.first == target) { direct = true; continue; }
+            if (roots.count(call.first)) continue;
+            if (reaches_inline(Func(call.second), target)) return false;
+        }
+        return direct;
+    }
+
+    /// Whether `from`'s kernel evaluates `target` itself: reaches it through functions it
+    /// inlines, without passing through another stored kernel.
+    bool reaches_inline(const Func &from, const std::string &target) const {
+        std::set<std::string> roots;
+        for (const RootKernel &root : root_kernels_) roots.insert(root.function.name());
+        std::vector<Halide::Internal::Function> pending{from.function()};
+        std::set<std::string> seen{from.name()};
+        while (!pending.empty()) {
+            Halide::Internal::Function next = pending.back();
+            pending.pop_back();
+            for (const auto &call : Halide::Internal::find_direct_calls(next)) {
+                if (call.first == target) return true;
+                if (roots.count(call.first) || !seen.insert(call.first).second) continue;
+                pending.push_back(call.second);
+            }
+        }
+        return false;
+    }
 
 public:
     /// A per-frame kernel table, computed on the GPU rather than the host.
@@ -128,7 +201,8 @@ public:
     void gpu_pointwise(Func function, Var x, Var y, Var channel, int channels,
                               Expr branch = Expr()) {
         Var block_x, block_y, thread_y;
-        Var thread_x = gpu_device_api() == DeviceAPI::WebGPU ? thread_var(function) : Var();
+        Var thread_x = gpu_device_api() == DeviceAPI::WebGPU || gpu_device_api() == DeviceAPI::Metal
+            ? thread_var(function) : Var();
         if (windowed_) window_stores_.push_back(function);
         function.compute_root()
             .bound(channel, 0, channels)
@@ -141,6 +215,7 @@ public:
         // edge/interior loops costs seconds per JIT variant without improving Metal throughput.
         if (gpu_device_api() == DeviceAPI::Metal) function.never_partition_all();
         if (branch.defined()) function.specialize(branch);
+        note_root(function, thread_x);
     }
 
     /// Materializes `values` as one full-frame GPU pass and returns the view its consumers read.
@@ -159,13 +234,16 @@ public:
     }
 
     /// Defines `f` as the sum of `data` over its taps divided by the sum of `weight`, the weight of
-    /// the taps inside the frame. On WebGPU both sums run in one loop, which shares each tap's bounds
-    /// test and kernel load: as two loops, the weights cost most of what the blur itself did. Each
+    /// the taps inside the frame. On WebGPU and in Metal's row-window graphs both sums run in one
+    /// loop, which shares each tap's bounds test and kernel load: as two loops, the weights cost
+    /// most of what the blur itself did. Each
     /// accumulator adds the same terms in the same order as its own sum would, so the result is
     /// the same. `stored` says `f` is scheduled as its own pass, the accumulators' home.
     void normalized_taps(Func f, Var x, Var y, Var channel, Expr data, Expr weight,
                          bool stored, const std::string &name) {
-        if (gpu_device_api() != DeviceAPI::WebGPU || !stored) {
+        const bool fused = gpu_device_api() == DeviceAPI::WebGPU
+            || (gpu_device_api() == DeviceAPI::Metal && windowed_);
+        if (!fused || !stored) {
             f(x, y, channel) = Halide::sum(data, name + "_sum")
                 / Halide::max(Halide::sum(weight, name + "_weight"), 1.0e-12f);
             return;
@@ -183,10 +261,13 @@ public:
     }
 
     /// A cell's valid samples, counted. The sum of a 1 per valid sample is that same integer, exact
-    /// in float, and WebGPU spends a loop over the cell computing it; it reads the count instead.
+    /// in float, and a loop over the cell computing it costs a decimation kernel as much again as
+    /// the samples do; WebGPU and Metal's row-window graphs read the count instead.
     Expr cell_count(Expr valid, Expr start_x, Expr start_y, Expr cells, Expr width, Expr height,
                     const std::string &name) {
-        if (gpu_device_api() != DeviceAPI::WebGPU) return Halide::sum(valid, name);
+        const bool counted = gpu_device_api() == DeviceAPI::WebGPU
+            || (gpu_device_api() == DeviceAPI::Metal && windowed_);
+        if (!counted) return Halide::sum(valid, name);
         return Halide::cast<float>(cells_inside(start_x, cells, width)
                                    * cells_inside(start_y, cells, height));
     }
@@ -256,20 +337,73 @@ public:
             !half, name + "_horizontal");
         Func horizontal_view = store_frame(horizontal, half, channels);
         RDom vertical_taps(-extent, extent * 2 + 1, name + "_vertical_taps");
+        Expr vertical_data = tap(horizontal_view(x, y + vertical_taps.x, channel))
+            * kernel(vertical_taps.x, channel);
+        Expr vertical_weight = Halide::select(y + vertical_taps.x >= 0
+                                                  && y + vertical_taps.x < height,
+                                              Halide::cast<float>(kernel(vertical_taps.x, channel)),
+                                              0.0f);
+        if (windowed_ && gpu_device_api() == DeviceAPI::Metal && store_result && !half
+            && !merged) {
+            return gpu_gaussian_three(bounded, kernel, vertical_data, vertical_weight, extent,
+                                      width, height, channels, name);
+        }
         Func vertical(name);
-        normalized_taps(vertical, x, y, channel,
-            tap(horizontal_view(x, y + vertical_taps.x, channel))
-                * kernel(vertical_taps.x, channel),
-            Halide::select(y + vertical_taps.x >= 0
-                               && y + vertical_taps.x < height,
-                           Halide::cast<float>(kernel(vertical_taps.x, channel)), 0.0f),
-            store_result && !half, name + "_vertical");
+        normalized_taps(vertical, x, y, channel, vertical_data, vertical_weight,
+                        store_result && !half, name + "_vertical");
         if (!store_result && taps16) {
             Func widened(name + "_widened");
             widened(x, y, channel) = Halide::cast<float>(vertical(x, y, channel));
             return widened;
         }
         return store_result ? store_frame(vertical, half, channels) : vertical;
+    }
+
+    /// The separable blur's second pass in a kernel that, at a one-pixel radius, runs the first
+    /// pass too: three taps of three taps, written out in the order and with the arithmetic of
+    /// the two passes' sums, read from the source instead of a frame-sized store of the first
+    /// pass. Every other radius reads the stored first pass, which then runs only for it.
+    Func gpu_gaussian_three(Func bounded, Func kernel, Expr vertical_data, Expr vertical_weight,
+                            Expr extent, Expr width, Expr height, int channels,
+                            const std::string &name) {
+        Var x("x"), y("y"), channel("channel");
+        auto sum_taps = [](const std::vector<std::pair<Expr, Expr>> &taps) {
+            Expr data = taps[0].first, weight = taps[0].second;
+            for (size_t index = 1; index < taps.size(); ++index) {
+                data = data + taps[index].first;
+                weight = weight + taps[index].second;
+            }
+            return data / Halide::max(weight, 1.0e-12f);
+        };
+        auto row = [&](Expr row_y) {
+            std::vector<std::pair<Expr, Expr>> taps;
+            for (int offset = -1; offset <= 1; ++offset) {
+                taps.push_back({bounded(x + offset, row_y, channel) * kernel(offset, channel),
+                                Halide::select(x + offset >= 0 && x + offset < width,
+                                               Halide::cast<float>(kernel(offset, channel)),
+                                               0.0f)});
+            }
+            return sum_taps(taps);
+        };
+        std::vector<std::pair<Expr, Expr>> taps;
+        for (int offset = -1; offset <= 1; ++offset) {
+            taps.push_back({row(y + offset) * kernel(offset, channel),
+                            Halide::select(y + offset >= 0 && y + offset < height,
+                                           Halide::cast<float>(kernel(offset, channel)), 0.0f)});
+        }
+        Func sums(name + "_vertical_sums");
+        sums(x, y, channel) = {Halide::cast(vertical_data.type(), 0),
+                               Halide::cast(vertical_weight.type(), 0)};
+        sums(x, y, channel) = {sums(x, y, channel)[0] + vertical_data,
+                               sums(x, y, channel)[1] + vertical_weight};
+        Func blurred(name);
+        blurred(x, y, channel) = Halide::select(
+            extent == 1, sum_taps(taps),
+            sums(x, y, channel)[0] / Halide::max(sums(x, y, channel)[1], 1.0e-12f));
+        store_frame(blurred, false, channels);
+        sums.compute_at(blurred, thread_var(blurred));
+        blurred.specialize(extent == 1);
+        return blurred;
     }
 
     /// One level of a box-averaged pyramid: `previous` (a frame or a coarser grid, `previous_width`

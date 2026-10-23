@@ -56,26 +56,26 @@ int main(int argc, char **argv) {
         int luma_radius = 1;
     };
     const Case cases[] = {
-        {"first-window", 32, 512, 0, 1, 1},
-        {"partial-window", 65, 513, 0, 1, 1},
+        {"first-window", 32, 1080, 0, 1, 1},
+        {"partial-window", 65, 1081, 0, 1, 1},
         {"odd-frame", 1919, 1081, 0, 1, 1},
         {"4k", 3840, 2160, 0, 1, 1},
-        {"image-reach-limit", 65, 769, 0, 55, 1},
-        {"image-reach-fallback", 65, 769, 0, 56, 1},
-        {"grain-reach-limit", 65, 769, 0, 1, 179},
-        {"grain-reach-fallback", 65, 769, 0, 1, 180},
-        {"offset-fallback", 65, 769, 7, 1, 1},
-        {"stride-one-limit", 65, 769, 0, 1, 1, 65},
-        {"stride-one-fallback", 65, 769, 0, 1, 1, 66},
-        {"chromatic-fringe-small-fallback", 65, 769, 0, 1, 1, 2, 2.0f},
-        {"chromatic-fringe-fallback", 65, 769, 0, 1, 1, 2, 50.0f},
-        {"screened-adjacency-fallback", 65, 769, 0, 1, 1, 2, 0, true},
+        {"image-reach-limit", 65, 2161, 0, 55, 1},
+        {"image-reach-fallback", 65, 2161, 0, 56, 1},
+        {"grain-reach-limit", 65, 2161, 0, 1, 179},
+        {"grain-reach-fallback", 65, 2161, 0, 1, 180},
+        {"offset-fallback", 65, 2161, 7, 1, 1},
+        {"stride-one-limit", 65, 2161, 0, 1, 1, 65},
+        {"stride-one-fallback", 65, 2161, 0, 1, 1, 66},
+        {"chromatic-fringe-small-fallback", 65, 2161, 0, 1, 1, 2, 2.0f},
+        {"chromatic-fringe-fallback", 65, 2161, 0, 1, 1, 2, 50.0f},
+        {"screened-adjacency-fallback", 65, 2161, 0, 1, 1, 2, 0, true},
         {"portrait-rec709", 1080, 1920, 0, 1, 1, 2, 0, false, 2},
-        {"partial-window-srgb", 65, 513, 0, 1, 1, 2, 0, false, 3},
+        {"partial-window-srgb", 65, 1081, 0, 1, 1, 2, 0, false, 3},
         {"odd-frame-linear709", 1919, 1081, 0, 1, 1, 2, 0, false, 1},
         {"portrait-monochrome-rec709", 1080, 1920, 0, 1, 1, 2, 0, false, 2, true},
-        {"partial-monochrome-srgb", 65, 769, 0, 1, 1, 2, 0, false, 3, true},
-        {"linear709-one-window", 32, 512, 0, 1, 1, 2, 0, false, 1},
+        {"partial-monochrome-srgb", 65, 2161, 0, 1, 1, 2, 0, false, 3, true},
+        {"linear709-one-window", 32, 1080, 0, 1, 1, 2, 0, false, 1},
         {"no-coupler-diffusion", 1920, 1080, 0, 1, 1, 2, 0, false, 0, false,
          FOTUFILM_FRAME_COUPLER_DIFFUSION},
         {"no-couplers", 1920, 1080, 0, 1, 1, 2, 0, false, 0, false,
@@ -90,8 +90,8 @@ int main(int argc, char **argv) {
          FOTUFILM_FRAME_DONOR_LAYER},
         // With the fixture's luminance MTF, its radius sets the MTF's reach; without it, the
         // per-layer radius of 1 does and both frames take the windows.
-        {"luma-reach-limit", 65, 769, 0, 1, 1, 2, 0, false, 0, false, 0, 55},
-        {"luma-reach-fallback", 65, 769, 0, 1, 1, 2, 0, false, 0, false, 0, 56},
+        {"luma-reach-limit", 65, 2161, 0, 1, 1, 2, 0, false, 0, false, 0, 55},
+        {"luma-reach-fallback", 65, 2161, 0, 1, 1, 2, 0, false, 0, false, 0, 56},
     };
     for (const Case &test : cases) {
         auto c = configuration;

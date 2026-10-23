@@ -42,6 +42,7 @@
 #include <cstring>
 #include <new>
 #include <set>
+#include <unordered_map>
 #include <vector>
 
 using Halide::Runtime::Buffer;
@@ -178,6 +179,15 @@ FrameFunction select_variant(int32_t feature_mask) {
     return fotufilm::aot::select_variant(kVariants, std::size(kVariants), feature_mask);
 }
 
+namespace {
+/// Pools the device buffers a frame pipeline allocates while it is alive; defined beside the
+/// Metal context below.
+struct FrameScope {
+    FrameScope();
+    ~FrameScope();
+};
+}
+
 int run_aot(ExecutionState &state, halide_buffer_t *in, halide_buffer_t *out,
             int32_t width, int32_t height, const float *configuration,
             int32_t feature_mask, uint32_t seed,
@@ -245,7 +255,8 @@ int run_aot(ExecutionState &state, halide_buffer_t *in, halide_buffer_t *out,
     if (!pipeline) return -3;
 #if FOTUFILM_AOT_WINDOWED_HOST
     const FrameFunction general_pipeline = pipeline;
-    // Each full-resolution field needs 256 output rows plus its spatial apron.
+    FrameFunction exact = nullptr;
+    // Each full-resolution field needs a window's output rows plus its spatial apron.
     // Decimated fields need fewer rows. Two grid samples cover box alignment and
     // bilinear interpolation; the three-box halation kernel spans 3*r samples.
     const int32_t stride[] = {frame.halation_stride_0, frame.halation_stride_1, frame.halation_stride_2};
@@ -296,22 +307,42 @@ int run_aot(ExecutionState &state, halide_buffer_t *in, halide_buffer_t *out,
         && in->dim[0].extent == width && in->dim[1].extent == height
         && out->dim[0].extent == width && out->dim[1].extent == height
         && std::max(image_reach, grain_reach) <= fotufilm::kWindowMaximumReach) {
+        // A twin compiled for exactly the request's stages runs them with nothing gated, so it
+        // serves the request ahead of the gated twin; it can serve no other. One compiled without
+        // couplers or a donor applies no coupler warp, where a graph that gates them off still
+        // applies the warp the frame carries; the host sends one only with either running, so
+        // such a twin serves only a frame without one.
+        bool carries_warp = false;
+        for (int i = 0; i < 3 * FOTUFILM_COUPLER_WARP_SAMPLES && !carries_warp; ++i) {
+            carries_warp = configuration[FOTUFILM_CONFIG_COUPLER_WARP + i] != 0.0f;
+        }
+#define FOTUFILM_PICK_EXACT_WINDOWED(variant_name, stages_name, variant_mask) \
+        if (pipeline == fotufilm_halide_ios_##variant_name \
+            && wanted_stages == ((variant_mask) & FOTUFILM_VARIANT_STAGE_BITS) \
+            && (((variant_mask) & (FOTUFILM_FRAME_COUPLERS | FOTUFILM_FRAME_DONOR_LAYER)) != 0 \
+                || !carries_warp)) \
+            exact = fotufilm_halide_ios_##variant_name##_windowed_##stages_name;
+        FOTUFILM_AOT_EXACT_WINDOWED_VARIANTS(FOTUFILM_PICK_EXACT_WINDOWED)
+#undef FOTUFILM_PICK_EXACT_WINDOWED
 #define FOTUFILM_PICK_WINDOWED(variant_name, variant_mask) \
         if (pipeline == fotufilm_halide_ios_##variant_name \
             && (wanted_stages & ~(variant_mask)) == 0) \
             pipeline = fotufilm_halide_ios_##variant_name##_windowed;
         FOTUFILM_AOT_WINDOWED_VARIANTS(FOTUFILM_PICK_WINDOWED)
 #undef FOTUFILM_PICK_WINDOWED
+        if (exact && pipeline != general_pipeline) pipeline = exact;
     }
     if (pipeline != general_pipeline && state.last_windowed_trace_mask != feature_mask) {
         state.last_windowed_trace_mask = feature_mask;
         const char *tracing = std::getenv("FOTUFILM_TRACE_VARIANT");
         if (tracing && std::atoi(tracing)) {
-            std::fprintf(stderr, "Fotufilm AOT: 256-row windows, spatial reach %lld pixels\n",
+            std::fprintf(stderr, "Fotufilm AOT: %d-row windows%s, spatial reach %lld pixels\n",
+                         fotufilm::kWindowRows, pipeline == exact ? " for exactly its stages" : "",
                          static_cast<long long>(std::max(image_reach, grain_reach)));
         }
     }
 #endif
+    FrameScope frame_scope;
     return pipeline(FOTUFILM_ARGUMENTS, out);
 #undef FOTUFILM_ARGUMENTS
 }
@@ -426,6 +457,196 @@ extern "C" int halide_metal_acquire_context(void *, halide_metal_device **device
 extern "C" int halide_metal_release_context(void *) {
     pthread_mutex_unlock(&context_mutex);
     return halide_error_code_success;
+}
+
+// Device allocations made while a frame pipeline runs are pooled by size. The runtime has no
+// allocation cache on Metal, so every row window of every frame asked for fresh buffers, and
+// fresh shared memory is zero-filled and mapped for the device on submission: measured at 4K,
+// that held each frame's command buffers back ~25 ms before the device started them. A buffer
+// the runtime lets go returns to the pool only once the last command buffer that could have used
+// it has completed, so neither the host nor a later kernel can reach it while one is still
+// reading. The runtime retains and releases a buffer through its crops too, so the pool counts
+// those itself and treats the buffer as released when the count reaches zero. The runtime's
+// helpers for these are weak, so the definitions below replace them.
+struct halide_metal_command_buffer;
+
+namespace {
+
+id send(id object, const char *selector) {
+    return ((id(*)(id, SEL))objc_msgSend)(object, sel_getUid(selector));
+}
+
+/// How much idle device memory the pool may hold. FOTUFILM_METAL_POOL sets it in megabytes; 0
+/// turns pooling off. The row-window host, whose frames are the large ones, pools by default.
+int pool_megabytes() {
+    static const int megabytes = [] {
+        const char *setting = std::getenv("FOTUFILM_METAL_POOL");
+        return setting ? std::max(0, std::atoi(setting))
+                       : (FOTUFILM_AOT_WINDOWED_HOST ? 1024 : 0);
+    }();
+    return megabytes;
+}
+
+int frame_depth = 0;  // Guarded by context_mutex.
+
+struct PooledBuffer {
+    size_t length;
+    int references;
+};
+// A pthread mutex and leaked containers, for the reason context_mutex is one: the runtime still
+// frees buffers from static destructors after `exit` has begun.
+pthread_mutex_t pool_mutex = PTHREAD_MUTEX_INITIALIZER;
+struct PoolLock {
+    PoolLock() { pthread_mutex_lock(&pool_mutex); }
+    ~PoolLock() { pthread_mutex_unlock(&pool_mutex); }
+};
+// Every buffer the pool made and still owns.
+auto &pooled = *new std::unordered_map<void *, PooledBuffer>();
+// Free for reuse.
+auto &idle = *new std::unordered_multimap<size_t, void *>();
+struct Returned {
+    void *buffer;
+    id fence;  // Retained; the buffer is idle once this command buffer has completed.
+};
+auto &returning = *new std::vector<Returned>();
+size_t idle_bytes = 0;
+id newest_fence = nullptr;  // Retained.
+
+/// The size a pooled buffer is made at: within 1/16 of the next power of two above the request,
+/// so the row windows of a frame, whose aprons differ by a few rows, share their buffers.
+size_t pooled_length(size_t requested) {
+    constexpr size_t kExactBelow = size_t(1) << 16;
+    if (requested < kExactBelow) return requested;
+    size_t power = kExactBelow;
+    while (power < requested) power <<= 1;
+    const size_t step = power / 16;
+    return (requested + step - 1) / step * step;
+}
+
+/// Moves returned buffers whose fence has completed to the idle set. Holds pool_mutex.
+void reclaim_returned() {
+    constexpr unsigned long kCompleted = 4;  // MTLCommandBufferStatusCompleted; 5 is Error.
+    for (size_t index = 0; index < returning.size();) {
+        Returned &entry = returning[index];
+        const unsigned long status = entry.fence
+            ? ((unsigned long (*)(id, SEL))objc_msgSend)(entry.fence, sel_getUid("status"))
+            : kCompleted;
+        if (status < kCompleted) {
+            ++index;
+            continue;
+        }
+        if (entry.fence) send(entry.fence, "release");
+        const size_t length = pooled[entry.buffer].length;
+        if (idle_bytes + length <= size_t(pool_megabytes()) << 20) {
+            idle.emplace(length, entry.buffer);
+            idle_bytes += length;
+        } else {
+            pooled.erase(entry.buffer);
+            send(static_cast<id>(entry.buffer), "release");
+        }
+        entry = returning.back();
+        returning.pop_back();
+    }
+}
+
+FrameScope::FrameScope() {
+    pthread_mutex_lock(&context_mutex);
+    ++frame_depth;
+    pthread_mutex_unlock(&context_mutex);
+}
+
+FrameScope::~FrameScope() {
+    pthread_mutex_lock(&context_mutex);
+    --frame_depth;
+    pthread_mutex_unlock(&context_mutex);
+}
+
+}
+
+namespace Halide {
+namespace Runtime {
+namespace Internal {
+namespace Metal {
+
+void commit_command_buffer(halide_metal_command_buffer *buffer) {
+    send(reinterpret_cast<id>(buffer), "commit");
+    if (pool_megabytes() == 0) return;
+    // The newest command buffer on the queue, which completes after every earlier one.
+    PoolLock held;
+    send(reinterpret_cast<id>(buffer), "retain");
+    if (newest_fence) send(newest_fence, "release");
+    newest_fence = reinterpret_cast<id>(buffer);
+}
+
+void *new_buffer(halide_metal_device *device, size_t requested) {
+    const bool pooling = pool_megabytes() > 0 && frame_depth > 0;
+    const size_t length = pooling ? pooled_length(requested) : requested;
+    if (pooling) {
+        PoolLock held;
+        reclaim_returned();
+        auto found = idle.find(length);
+        if (found != idle.end()) {
+            void *buffer = found->second;
+            idle.erase(found);
+            idle_bytes -= length;
+            pooled[buffer].references = 1;
+            return buffer;
+        }
+    }
+    void *buffer = ((void *(*)(id, SEL, size_t, size_t))objc_msgSend)(
+        reinterpret_cast<id>(device), sel_getUid("newBufferWithLength:options:"), length, 0);
+    if (buffer && pooling) {
+        PoolLock held;
+        pooled[buffer] = PooledBuffer{length, 1};
+    }
+    return buffer;
+}
+
+}  // namespace Metal
+
+void retain_ns_object(void *object) {
+    if (pool_megabytes() > 0) {
+        PoolLock held;
+        auto found = pooled.find(object);
+        if (found != pooled.end()) {
+            ++found->second.references;
+            return;
+        }
+    }
+    send(static_cast<id>(object), "retain");
+}
+
+void release_ns_object(void *object) {
+    if (pool_megabytes() > 0) {
+        PoolLock held;
+        auto found = pooled.find(object);
+        if (found != pooled.end()) {
+            if (--found->second.references > 0) return;
+            // Every command buffer that could have used the buffer is the newest one or was
+            // committed before it, and the queue completes them in order.
+            id fence = newest_fence;
+            if (fence) send(fence, "retain");
+            returning.push_back(Returned{object, fence});
+            return;
+        }
+    }
+    send(static_cast<id>(object), "release");
+}
+
+}  // namespace Internal
+}  // namespace Runtime
+}  // namespace Halide
+
+/// Lets go of every idle pooled buffer; buffers still in use rejoin the pool as they return.
+extern "C" void fotufilm_halide_metal_release_pool(void) {
+    PoolLock held;
+    reclaim_returned();
+    for (auto &entry : idle) {
+        pooled.erase(entry.second);
+        send(static_cast<id>(entry.second), "release");
+    }
+    idle.clear();
+    idle_bytes = 0;
 }
 
 extern "C" void *fotufilm_halide_metal_context_create(void) {

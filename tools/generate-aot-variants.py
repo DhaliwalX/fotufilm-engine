@@ -46,6 +46,23 @@ class Table:
         self.exact_bits = sum(self.resolve(t) for t in schema["axes"]["exact"])
         if self.stage_bits & self.exact_bits:
             raise ValueError("A bit cannot be both coverable and exact")
+        twins = {name: mask for name, mask, _ in self.windowed}
+        self.exact_windowed = []
+        for twin in schema["windowed"].get("exact", []):
+            if twin["variant"] not in twins:
+                raise ValueError(f"Exact twin {twin['name']} has no windowed twin {twin['variant']}")
+            stages = self.evaluate(twin["stages"])
+            if stages & ~self.stage_bits:
+                raise ValueError(f"Exact twin {twin['name']} names bits that are not stages")
+            if stages & ~twins[twin["variant"]]:
+                raise ValueError(f"Exact twin {twin['name']} carries a stage its windowed twin "
+                                 "cannot bound")
+            self.exact_windowed.append(
+                (twin["variant"], twin["name"], (twins[twin["variant"]] & ~self.stage_bits) | stages,
+                 twin["stages"]))
+        exact_names = [f"{variant}_windowed_{name}" for variant, name, _, _ in self.exact_windowed]
+        if len(set(exact_names)) != len(exact_names):
+            raise ValueError("Duplicate exact twin names")
 
     def resolve(self, token):
         if token in self.spans:
@@ -70,6 +87,7 @@ class Table:
         names = [name for name, _, _ in self.variants]
         if windowed:
             names += [name + "_windowed" for name, _, _ in self.windowed]
+            names += [f"{variant}_windowed_{name}" for variant, name, _, _ in self.exact_windowed]
         names += self.schema["extras"]["names"]
         return [PREFIX + name for name in names]
 
@@ -127,6 +145,17 @@ def render_header(table):
     windowed = entries(schema["windowed"]["variants"])
     out += macro_lines(windowed[:-1]) + [windowed[-1]]
     out.append("")
+    if table.exact_windowed:
+        out += doc_comment(schema["windowed"].get("exact_doc", ""))
+        out.append("#define FOTUFILM_AOT_EXACT_WINDOWED_VARIANTS(X) \\")
+        windowed_masks = {v["name"]: v["mask"] for v in schema["windowed"]["variants"]}
+        exact = [
+            f"    X({variant}, {name}, "
+            f"((({table.c_expression(windowed_masks[variant])}) & ~FOTUFILM_VARIANT_STAGE_BITS) "
+            f"| {table.c_expression(stages)}))"
+            for variant, name, _, stages in table.exact_windowed]
+        out += macro_lines(exact[:-1]) + [exact[-1]]
+        out.append("")
     out += doc_comment(schema["axes"].get("doc", ""))
     out.append("#define FOTUFILM_VARIANT_STAGE_BITS \\")
     out.append("    (" + " | ".join(
@@ -159,6 +188,8 @@ def render_shim_includes(table):
     out.append("#if FOTUFILM_AOT_WINDOWED_HOST")
     for name, _, _ in table.windowed:
         out.append(f'#include "{PREFIX}{name}_windowed.h"')
+    for variant, name, _, _ in table.exact_windowed:
+        out.append(f'#include "{PREFIX}{variant}_windowed_{name}.h"')
     out += ["#endif", "", "#endif", ""]
     return "\n".join(out)
 

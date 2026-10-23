@@ -70,15 +70,22 @@ int main(int argc, char **argv) {
         int features;
         bool runtime;
         bool windowed;
+        // Compiled for exactly its stages, none of them gated at run time.
+        bool exact_stages;
     };
 #define FOTUFILM_AOT_GENERATOR_ENTRY(variant_name, variant_mask) \
-    {prefix + #variant_name, (variant_mask), false, false},
+    {prefix + #variant_name, (variant_mask), false, false, false},
 #define FOTUFILM_AOT_WINDOWED_ENTRY(variant_name, variant_mask) \
-    {prefix + #variant_name "_windowed", (variant_mask), false, true},
+    {prefix + #variant_name "_windowed", (variant_mask), false, true, false},
+#define FOTUFILM_AOT_EXACT_WINDOWED_ENTRY(variant_name, stages_name, variant_mask) \
+    {prefix + #variant_name "_windowed_" #stages_name, (variant_mask), false, true, true},
+    // The exact twins come last, so adding one leaves every earlier variant's tag where it was.
     Variant variants[] = {
         FOTUFILM_AOT_VARIANTS(FOTUFILM_AOT_GENERATOR_ENTRY)
         FOTUFILM_AOT_WINDOWED_VARIANTS(FOTUFILM_AOT_WINDOWED_ENTRY)
+        FOTUFILM_AOT_EXACT_WINDOWED_VARIANTS(FOTUFILM_AOT_EXACT_WINDOWED_ENTRY)
     };
+#undef FOTUFILM_AOT_EXACT_WINDOWED_ENTRY
 #undef FOTUFILM_AOT_WINDOWED_ENTRY
 #undef FOTUFILM_AOT_GENERATOR_ENTRY
     // Linux's two sets share one runtime, compiled with --extras.
@@ -176,11 +183,12 @@ int main(int argc, char **argv) {
         if (work == Work::ExtrasOnly || (work == Work::OneVariant && index != wanted)) {
             continue;
         }
-        // The Linux shim develops whole frames; the 256-row windowed twins are Apple's.
+        // The Linux shim develops whole frames; the row-window twins are Apple's.
         if (linux && variant.windowed) continue;
         try {
             GpuFramePipeline pipeline(variant.features,
-                                        "_v" + std::to_string(index), variant.windowed, configuration);
+                                        "_v" + std::to_string(index), variant.windowed, configuration,
+                                        variant.exact_stages);
             pipeline.compile_aot((output / variant.name).string(), variant.name,
                                  variant.runtime, target);
         } catch (const Halide::CompileError &error) {

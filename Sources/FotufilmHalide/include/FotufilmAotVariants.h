@@ -47,6 +47,19 @@
 /// reach a pixel at the frame's size.
 #define FOTUFILM_AOT_SLIDE_NO_MTF ((FOTUFILM_AOT_SLIDE & ~FOTUFILM_FRAME_MTF))
 
+/// A colour negative through the enlarger: the stages most colour negatives ask for at video sizes.
+#define FOTUFILM_AOT_PRINTED_NEGATIVE ((FOTUFILM_AOT_NEGATIVE | FOTUFILM_FRAME_PRINT_MTF))
+
+/// The same with the luminance MTF arm.
+#define FOTUFILM_AOT_PRINTED_NEGATIVE_LUMA ((FOTUFILM_AOT_PRINTED_NEGATIVE | FOTUFILM_FRAME_MTF_LUMA))
+
+/// The same with a fourth, donor record.
+#define FOTUFILM_AOT_PRINTED_NEGATIVE_DONOR ((FOTUFILM_AOT_PRINTED_NEGATIVE_LUMA | FOTUFILM_FRAME_DONOR_LAYER))
+
+/// A black-and-white negative, or a colour stock without an interimage correction, through the
+/// enlarger.
+#define FOTUFILM_AOT_PRINTED_SLIDE ((FOTUFILM_AOT_SLIDE | FOTUFILM_FRAME_PRINT_MTF))
+
 /// Every stage a class can carry. One variant per exact class compiles all of them and the request
 /// selects at run time: a stage the frame does not ask for is bypassed, not run at zero strength,
 /// so the served frame is the requested frame.
@@ -127,6 +140,18 @@
 #define FOTUFILM_AOT_WINDOWED_VARIANTS(X) \
     X(color_float_realtime, FOTUFILM_AOT_WINDOWED_STAGES) \
     X(monochrome_float_realtime, FOTUFILM_AOT_WINDOWED_STAGES | FOTUFILM_FRAME_MONOCHROME)
+
+/// A twin compiled for one exact stage set, with nothing gated at run time: every stage it carries
+/// runs, so its kernels read no bypass arm and store nothing a gate could skip. The shim serves a
+/// request from one only when the request's stages are exactly that set, and otherwise from the
+/// gated twin.
+#define FOTUFILM_AOT_EXACT_WINDOWED_VARIANTS(X) \
+    X(color_float_realtime, negative, (((FOTUFILM_AOT_WINDOWED_STAGES) & ~FOTUFILM_VARIANT_STAGE_BITS) | FOTUFILM_AOT_PRINTED_NEGATIVE)) \
+    X(color_float_realtime, negative_luma, (((FOTUFILM_AOT_WINDOWED_STAGES) & ~FOTUFILM_VARIANT_STAGE_BITS) | FOTUFILM_AOT_PRINTED_NEGATIVE_LUMA)) \
+    X(color_float_realtime, negative_donor, (((FOTUFILM_AOT_WINDOWED_STAGES) & ~FOTUFILM_VARIANT_STAGE_BITS) | FOTUFILM_AOT_PRINTED_NEGATIVE_DONOR)) \
+    X(color_float_realtime, slide_interimage, (((FOTUFILM_AOT_WINDOWED_STAGES) & ~FOTUFILM_VARIANT_STAGE_BITS) | FOTUFILM_AOT_SLIDE_INTERIMAGE)) \
+    X(color_float_realtime, printed_slide, (((FOTUFILM_AOT_WINDOWED_STAGES) & ~FOTUFILM_VARIANT_STAGE_BITS) | FOTUFILM_AOT_PRINTED_SLIDE)) \
+    X(monochrome_float_realtime, printed_slide, (((FOTUFILM_AOT_WINDOWED_STAGES | FOTUFILM_FRAME_MONOCHROME) & ~FOTUFILM_VARIANT_STAGE_BITS) | FOTUFILM_AOT_PRINTED_SLIDE))
 
 /// A stage bit is covered by any variant that carries it; an exact bit must match. The delivery
 /// encode and its transfer (ENCODE_OUT, OUTPUT_*) and the whole-frame glare measurement

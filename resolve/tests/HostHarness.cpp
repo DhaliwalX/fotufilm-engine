@@ -1172,11 +1172,12 @@ int testPlugin() {
                 check(renderNow() && difference(output->pixels, expected) < 2e-4f, message);
             }
 
-            // Cross several 256-row GPU windows. Small preview-sized frames do not
-            // exercise circular storage, whose display-output reads once escaped the
-            // 512-row allocation when gamut fitting was enabled.
+            // Cross the GPU's row windows, into a last window one row tall. Small
+            // preview-sized frames develop whole and never reach a window seam, where
+            // display-output reads once escaped their window's allocation when gamut fitting
+            // was enabled.
             {
-                const int tallWidth = 96, tallHeight = 1025;
+                const int tallWidth = 96, tallHeight = 2161;
                 auto resizeClips = [&](int w, int h) {
                     for (Clip *clip : {source, output}) {
                         clip->pixels.assign(static_cast<size_t>(w) * h * 4, 0.0f);
@@ -2219,8 +2220,16 @@ int testPlugin() {
             const char *budgetSetting = std::getenv("FOTUFILM_BENCHMARK_BUDGET_MS");
             const double budgetMs = budgetSetting ? std::atof(budgetSetting) : 15.0;
             std::vector<double> timings;
-            provision(3840, 2160, 0, 0, true);
-            setChoice(plugin, instanceHandle, instance.params, "stock", 0);
+            // FOTUFILM_BENCHMARK_SIZE ("1920x1080") measures another frame size, and
+            // FOTUFILM_BENCHMARK_STOCK another film by menu index.
+            int benchmarkWidth = 3840, benchmarkHeight = 2160;
+            if (const char *size = std::getenv("FOTUFILM_BENCHMARK_SIZE")) {
+                std::sscanf(size, "%dx%d", &benchmarkWidth, &benchmarkHeight);
+            }
+            provision(benchmarkWidth, benchmarkHeight, 0, 0, true);
+            const char *benchmarkStock = std::getenv("FOTUFILM_BENCHMARK_STOCK");
+            setChoice(plugin, instanceHandle, instance.params, "stock",
+                      benchmarkStock ? std::atoi(benchmarkStock) : 0);
             // Match the plugin's normal 35 mm default. Smaller gauges deliberately render
             // larger film structures and remain useful stress cases, but are not the playback
             // target this benchmark names.

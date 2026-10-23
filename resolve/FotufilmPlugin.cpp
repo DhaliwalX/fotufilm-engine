@@ -2941,9 +2941,14 @@ OfxStatus isIdentity(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs,
     return kOfxStatOK;
 }
 
+#if defined(__APPLE__)
+extern "C" void fotufilm_halide_metal_release_pool(void);
+#endif
+
 /// Hands back what the instance was keeping between frames: the decoded frame and decode band
-/// of a striped render, and the engine's staging if a frame left it borrowed. All of it is
-/// reclaimed on the next render, so a purge costs that frame an allocation and nothing else.
+/// of a striped render, the engine's staging if a frame left it borrowed, and the engine's
+/// pooled device buffers. All of it is reclaimed on the next render, so a purge costs that frame
+/// an allocation and nothing else.
 OfxStatus purgeCaches(OfxImageEffectHandle effect) {
     Instance *instance = instanceOf(effect);
     if (!instance) return kOfxStatOK;
@@ -2954,6 +2959,9 @@ OfxStatus purgeCaches(OfxImageEffectHandle effect) {
     std::vector<float>().swap(instance->frame);
     std::vector<float>().swap(instance->decodeScratch);
     fotufilm_bridge_release_staging(instance->bridge);
+#if defined(__APPLE__)
+    fotufilm_halide_metal_release_pool();
+#endif
     return kOfxStatOK;
 }
 
