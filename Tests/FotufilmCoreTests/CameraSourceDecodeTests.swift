@@ -201,6 +201,29 @@ final class CameraSourceDecodeTests: XCTestCase {
         }
     }
 
+    /// The decode kernels take a log curve as `exp(v * c1 - c2) - c5` over a linear toe, in
+    /// float. Restated that way, each curve that has the shape has to land where its own
+    /// decode does, from below black to past full code.
+    func testExponentialTransferRestatesTheCurve() {
+        var restated = 0
+        for curve in CameraLogCurve.allCases {
+            guard let c = curve.exponentialTransfer else {
+                XCTAssertTrue(curve == .appleLog || curve == .hlg, "\(curve) has the shape")
+                continue
+            }
+            restated += 1
+            XCTAssertEqual(c.count, 6)
+            for step in -100...1200 {
+                let code = Float(step) / 1000
+                let kernel = code <= c[4] ? (code - c[3]) * c[0] : exp(code * c[1] - c[2]) - c[5]
+                let direct = curve.linear(code)
+                XCTAssertEqual(kernel, direct, accuracy: max(2e-7, abs(direct) * 2e-6),
+                               "\(curve) at code \(code)")
+            }
+        }
+        XCTAssertEqual(restated, 5, "S-Log3, S-Log2, F-Log, F-Log2 and V-Log")
+    }
+
     func testHLGAnchorsAndDeclaredHeadroom() {
         XCTAssertEqual(CameraLogCurve.hlgToLinear(0.75),
                        0.9, accuracy: 1e-5)

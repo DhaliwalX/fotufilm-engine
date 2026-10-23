@@ -1,4 +1,7 @@
 import Foundation
+#if !os(Linux)
+import Metal
+#endif
 
 import FotufilmHalide
 
@@ -33,12 +36,155 @@ final class BridgeDevice {
 
     deinit { fotufilm_halide_metal_context_destroy(context) }
 }
+
+/// A host's frames when it hands them over as Metal buffers (the OFX GPU render extension): moved
+/// between the host's buffers and the engine's staging on the GPU, on the host's own queue, so
+/// the frame never visits CPU memory and the copies are ordered after the work that drew it.
+final class BridgeHostFrames {
+    private var mirrors: [MTLBuffer?] = [nil, nil]
+
+    static func object<T>(_ pointer: UnsafeMutableRawPointer?) -> T? {
+        guard let pointer else { return nil }
+        return Unmanaged<AnyObject>.fromOpaque(pointer).takeUnretainedValue() as? T
+    }
+
+    static func handle(_ object: AnyObject) -> UnsafeMutableRawPointer {
+        Unmanaged.passUnretained(object).toOpaque()
+    }
+
+    /// Whether the queue and every buffer are on the device the engine develops on: a copy
+    /// between devices is not a copy the GPU can make.
+    static func usable(queue: UnsafeMutableRawPointer?,
+                       buffers: [UnsafeMutableRawPointer?]) -> Bool {
+        guard let queue: MTLCommandQueue = object(queue),
+              let device = MTLCreateSystemDefaultDevice(), queue.device === device
+        else { return false }
+        return buffers.allSatisfy { pointer in
+            (object(pointer) as MTLBuffer?).map { $0.device === device } ?? false
+        }
+    }
+
+    static func staging(_ staging: BridgeStaging?)
+        -> (scene: UnsafeMutableRawPointer, developed: UnsafeMutableRawPointer)? {
+        guard let staging else { return nil }
+        return (handle(staging.sceneBuffer), handle(staging.developedBuffer))
+    }
+
+    /// A shared buffer of at least `bytes` this context keeps for the frames that still need the
+    /// CPU, and its CPU view.
+    func mirror(slot: Int, bytes: Int)
+        -> (buffer: UnsafeMutableRawPointer, contents: UnsafeMutableRawPointer)? {
+        guard mirrors.indices.contains(slot), bytes > 0 else { return nil }
+        if mirrors[slot].map({ $0.length < bytes }) ?? true {
+            mirrors[slot] = nil
+            mirrors[slot] = MTLCreateSystemDefaultDevice()?
+                .makeBuffer(length: bytes, options: .storageModeShared)
+        }
+        guard let buffer = mirrors[slot] else { return nil }
+        return (Self.handle(buffer), buffer.contents())
+    }
+
+    private static let source = """
+        #include <metal_stdlib>
+        using namespace metal;
+        struct Rows { int sourceBase; int sourceStep; int destinationBase; int destinationStep;
+                      uint width; uint rows; };
+        kernel void fotufilm_copy_rows(device const float4 *source [[buffer(0)]],
+                                       device float4 *destination [[buffer(1)]],
+                                       constant Rows &rows [[buffer(2)]],
+                                       uint2 at [[thread_position_in_grid]]) {
+            if (at.x >= rows.width || at.y >= rows.rows) return;
+            destination[rows.destinationBase + rows.destinationStep * int(at.y) + int(at.x)] =
+                source[rows.sourceBase + rows.sourceStep * int(at.y) + int(at.x)];
+        }
+        """
+    private static let pipelineLock = NSLock()
+    nonisolated(unsafe) private static var pipelines: [ObjectIdentifier: MTLComputePipelineState] = [:]
+
+    private static func pipeline(_ device: MTLDevice) -> MTLComputePipelineState? {
+        pipelineLock.lock()
+        defer { pipelineLock.unlock() }
+        if let built = pipelines[ObjectIdentifier(device)] { return built }
+        guard let library = try? device.makeLibrary(source: source, options: nil),
+              let function = library.makeFunction(name: "fotufilm_copy_rows"),
+              let built = try? device.makeComputePipelineState(function: function)
+        else { return nil }
+        pipelines[ObjectIdentifier(device)] = built
+        return built
+    }
+
+    /// Whether pixels `base + step * row + x` for every row and x stay inside a buffer.
+    private static func fits(_ buffer: MTLBuffer, base: Int, step: Int, width: Int,
+                             rows: Int) -> Bool {
+        let first = base + min(0, step * (rows - 1))
+        let last = base + max(0, step * (rows - 1)) + width - 1
+        return first >= 0 && (last + 1) * 16 <= buffer.length && last < Int(Int32.max)
+    }
+
+    /// Copies `rows` rows of `width` RGBA-float pixels, pixel (x, row) of each side at
+    /// `base + step * row + x`; a negative step walks the rows the other way. Encoded on the host's
+    /// queue — after whatever drew the source, before whatever reads the destination — and waited
+    /// for, so the engine's own queue may read what landed. 1 when copied, 0 when it could not be,
+    /// -1 when the host's queue did not reach it within `timeout` seconds.
+    static func copy(queue queuePointer: UnsafeMutableRawPointer?,
+                     source sourcePointer: UnsafeMutableRawPointer?, sourceBase: Int,
+                     sourceStep: Int, destination destinationPointer: UnsafeMutableRawPointer?,
+                     destinationBase: Int, destinationStep: Int, width: Int, rows: Int,
+                     timeout: Double = 4) -> Int32 {
+        guard width > 0, rows > 0,
+              let queue: MTLCommandQueue = object(queuePointer),
+              let source: MTLBuffer = object(sourcePointer),
+              let destination: MTLBuffer = object(destinationPointer),
+              fits(source, base: sourceBase, step: sourceStep, width: width, rows: rows),
+              fits(destination, base: destinationBase, step: destinationStep, width: width,
+                   rows: rows),
+              let pipeline = pipeline(queue.device),
+              let commands = queue.makeCommandBuffer(),
+              let encoder = commands.makeComputeCommandEncoder()
+        else { return 0 }
+        var arguments = (Int32(sourceBase), Int32(sourceStep), Int32(destinationBase),
+                         Int32(destinationStep), UInt32(width), UInt32(rows))
+        encoder.setComputePipelineState(pipeline)
+        encoder.setBuffer(source, offset: 0, index: 0)
+        encoder.setBuffer(destination, offset: 0, index: 1)
+        encoder.setBytes(&arguments, length: MemoryLayout.size(ofValue: arguments), index: 2)
+        let across = min(width, pipeline.threadExecutionWidth)
+        encoder.dispatchThreads(
+            MTLSize(width: width, height: rows, depth: 1),
+            threadsPerThreadgroup: MTLSize(
+                width: across,
+                height: max(1, min(rows, pipeline.maxTotalThreadsPerThreadgroup / across)),
+                depth: 1))
+        encoder.endEncoding()
+        commands.label = "Fotufilm host frame copy"
+        let done = DispatchSemaphore(value: 0)
+        commands.addCompletedHandler { _ in done.signal() }
+        commands.commit()
+        if done.wait(timeout: .now() + timeout) == .timedOut { return -1 }
+        return commands.status == .completed ? 1 : 0
+    }
+}
 #else
 /// Linux keeps its device state process-wide (`FotufilmHalideLinux.cpp`), so an instance has
 /// nothing of its own to bind.
 final class BridgeDevice {
     init?() {}
     func run<Result>(_ body: () -> Result) -> Result { body() }
+}
+
+/// No host hands a Linux build Metal buffers: the plugin advertises the extension only on the Mac.
+final class BridgeHostFrames {
+    static func usable(queue: UnsafeMutableRawPointer?,
+                       buffers: [UnsafeMutableRawPointer?]) -> Bool { false }
+    static func staging(_ staging: BridgeStaging?)
+        -> (scene: UnsafeMutableRawPointer, developed: UnsafeMutableRawPointer)? { nil }
+    func mirror(slot: Int, bytes: Int)
+        -> (buffer: UnsafeMutableRawPointer, contents: UnsafeMutableRawPointer)? { nil }
+    static func copy(queue: UnsafeMutableRawPointer?, source: UnsafeMutableRawPointer?,
+                     sourceBase: Int, sourceStep: Int,
+                     destination: UnsafeMutableRawPointer?, destinationBase: Int,
+                     destinationStep: Int, width: Int, rows: Int,
+                     timeout: Double = 4) -> Int32 { 0 }
 }
 
 /// A frame's pair of host buffers, as the Metal staging is a pair of shared ones: the host decodes

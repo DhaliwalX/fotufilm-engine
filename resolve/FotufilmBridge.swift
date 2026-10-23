@@ -43,6 +43,7 @@ private final class BridgeContext {
     var lastError: String
     var frameStaging: BridgeStaging?
     var outputQuery: OutputTransformQuery?
+    let hostFrames = BridgeHostFrames()
 
     init?(lastError: String) {
         guard let device = BridgeDevice() else { return nil }
@@ -805,6 +806,76 @@ func fotufilm_bridge_release_staging(_ opaque: UnsafeMutableRawPointer?) {
     context.lock.lock()
     context.releaseStaging()
     context.lock.unlock()
+}
+
+@_cdecl("fotufilm_bridge_camera_input_transform")
+func fotufilm_bridge_camera_input_transform(_ index: Int32,
+                                            _ out: UnsafeMutableRawPointer?) -> Int32 {
+    guard cameraInputDecoders.indices.contains(Int(index)), let out else { return 0 }
+    let encoding = EditorControlCatalogue.pluginCameraInputs[Int(index)].encoding
+    guard let coefficients = encoding.curve.exponentialTransfer else { return 0 }
+    let matrix = encoding.gamut.toRec2020
+    guard matrix.count == 9, coefficients.count == 6 else { return 0 }
+    out.assumingMemoryBound(to: Int32.self)[InputTransformField.transfer] =
+        FilmInputTransform.Transfer.exponential.rawValue
+    let floats = (out + InputTransformField.firstFloat).assumingMemoryBound(to: Float.self)
+    for (offset, value) in matrix.enumerated() {
+        floats[InputTransformField.matrix + offset] = Float(value)
+    }
+    for (offset, value) in coefficients.enumerated() {
+        floats[InputTransformField.coefficients + offset] = value
+    }
+    return 1
+}
+
+@_cdecl("fotufilm_bridge_host_metal_usable")
+func fotufilm_bridge_host_metal_usable(_ queue: UnsafeMutableRawPointer?,
+                                       _ source: UnsafeMutableRawPointer?,
+                                       _ output: UnsafeMutableRawPointer?) -> Int32 {
+    BridgeHostFrames.usable(queue: queue, buffers: [source, output]) ? 1 : 0
+}
+
+@_cdecl("fotufilm_bridge_host_metal_staging")
+func fotufilm_bridge_host_metal_staging(
+    _ opaque: UnsafeMutableRawPointer?,
+    _ scene: UnsafeMutablePointer<UnsafeMutableRawPointer?>?,
+    _ developed: UnsafeMutablePointer<UnsafeMutableRawPointer?>?
+) -> Int32 {
+    guard let context = context(opaque), let scene, let developed else { return 0 }
+    context.lock.lock()
+    defer { context.lock.unlock() }
+    guard let buffers = BridgeHostFrames.staging(context.frameStaging) else { return 0 }
+    scene.pointee = buffers.scene
+    developed.pointee = buffers.developed
+    return 1
+}
+
+@_cdecl("fotufilm_bridge_host_metal_mirror")
+func fotufilm_bridge_host_metal_mirror(
+    _ opaque: UnsafeMutableRawPointer?, _ slot: Int32, _ bytes: Int64,
+    _ buffer: UnsafeMutablePointer<UnsafeMutableRawPointer?>?
+) -> UnsafeMutableRawPointer? {
+    guard let context = context(opaque), let buffer else { return nil }
+    context.lock.lock()
+    defer { context.lock.unlock() }
+    guard let mirror = context.hostFrames.mirror(slot: Int(slot), bytes: Int(bytes))
+    else { return nil }
+    buffer.pointee = mirror.buffer
+    return mirror.contents
+}
+
+@_cdecl("fotufilm_bridge_host_metal_copy")
+func fotufilm_bridge_host_metal_copy(
+    _ queue: UnsafeMutableRawPointer?,
+    _ source: UnsafeMutableRawPointer?, _ sourceBase: Int64, _ sourceStep: Int64,
+    _ destination: UnsafeMutableRawPointer?, _ destinationBase: Int64,
+    _ destinationStep: Int64, _ width: Int32, _ rows: Int32
+) -> Int32 {
+    BridgeHostFrames.copy(queue: queue, source: source, sourceBase: Int(sourceBase),
+                          sourceStep: Int(sourceStep), destination: destination,
+                          destinationBase: Int(destinationBase),
+                          destinationStep: Int(destinationStep), width: Int(width),
+                          rows: Int(rows))
 }
 
 @_cdecl("fotufilm_bridge_decode_staged")

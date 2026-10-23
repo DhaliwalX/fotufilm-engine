@@ -67,6 +67,12 @@ public final class FilmFrameStaging {
         output.contents().assumingMemoryBound(to: Float.self)
     }
 
+    /// The buffers behind `scenePixels` and `developedPixels`, for a caller that fills or drains
+    /// them on the GPU — a host that hands its frames over as Metal buffers — rather than
+    /// through their CPU views.
+    public var sceneBuffer: MTLBuffer { input }
+    public var developedBuffer: MTLBuffer { output }
+
     fileprivate var inputHandle: UInt64 {
         UInt64(UInt(bitPattern: Unmanaged.passUnretained(input as AnyObject).toOpaque()))
     }
