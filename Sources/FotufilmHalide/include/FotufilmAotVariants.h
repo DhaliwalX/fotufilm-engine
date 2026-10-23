@@ -52,10 +52,13 @@
 /// so the served frame is the requested frame.
 #define FOTUFILM_AOT_FULL_STAGES ((FOTUFILM_AOT_ALL_STAGES | FOTUFILM_FRAME_FLARE | FOTUFILM_FRAME_GRAIN_MOTTLE | FOTUFILM_FRAME_DONOR_LAYER))
 
-/// Common float video graphs. AOT windowed twins keep the same arguments and physics, with their
-/// intermediate rows stored in bounded circular buffers; the shim picks one only for a request
-/// inside this stage set.
+/// Common float video graphs.
 #define FOTUFILM_AOT_BASIC_STAGES (((FOTUFILM_AOT_ALL_STAGES & ~(FOTUFILM_FRAME_MTF_LUMA | FOTUFILM_FRAME_DIFFUSION)) | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_REALTIME))
+
+/// The stages a row-window twin carries: the common float video graph with the luminance MTF and a
+/// donor layer, which most colour negatives ask for. Each window stores its rows plus the apron its
+/// consumers read, so a stage here needs only a reach the shim can bound.
+#define FOTUFILM_AOT_WINDOWED_STAGES ((FOTUFILM_AOT_BASIC_STAGES | FOTUFILM_FRAME_MTF_LUMA | FOTUFILM_FRAME_DONOR_LAYER))
 
 #define FOTUFILM_AOT_VARIANTS(X) \
     /* The byte-input classes are realtime by construction: half-precision stores. */ \
@@ -119,11 +122,11 @@
     X(no_film_float_exact, FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_EXACT_MATH | FOTUFILM_FRAME_NO_FILM)
 
 /// Compiled a second time with the row-window schedule, for the hosts that cannot hold a whole
-/// frame's intermediates. The shim picks a twin only when the request's stages fit BASIC_STAGES,
+/// frame's intermediates. The shim picks a twin only when the request's stages fit WINDOWED_STAGES,
 /// whose reach it can bound.
 #define FOTUFILM_AOT_WINDOWED_VARIANTS(X) \
-    X(color_float_realtime, FOTUFILM_AOT_BASIC_STAGES) \
-    X(monochrome_float_realtime, FOTUFILM_AOT_BASIC_STAGES | FOTUFILM_FRAME_MONOCHROME)
+    X(color_float_realtime, FOTUFILM_AOT_WINDOWED_STAGES) \
+    X(monochrome_float_realtime, FOTUFILM_AOT_WINDOWED_STAGES | FOTUFILM_FRAME_MONOCHROME)
 
 /// A stage bit is covered by any variant that carries it; an exact bit must match. The delivery
 /// encode and its transfer (ENCODE_OUT, OUTPUT_*) and the whole-frame glare measurement

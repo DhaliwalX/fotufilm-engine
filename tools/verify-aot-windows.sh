@@ -33,7 +33,7 @@ assert "Fotufilm AOT:" not in (root / "0.trace").read_text(), "general path used
 assert "Fotufilm AOT:" in (root / "1.trace").read_text(), "windowed path was not exercised"
 general = sorted((root / "0").glob("*.f32"))
 windowed = sorted((root / "1").glob("*.f32"))
-assert len(general) == len(windowed) == 52, "missing comparison frames"
+assert len(general) == len(windowed) == 60, "missing comparison frames"
 worst = 0.0
 for left, right in zip(general, windowed):
     assert left.name == right.name

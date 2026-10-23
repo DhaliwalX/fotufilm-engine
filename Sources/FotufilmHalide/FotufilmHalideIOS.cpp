@@ -256,7 +256,14 @@ int run_aot(ExecutionState &state, halide_buffer_t *in, halide_buffer_t *out,
             fotufilm::resampled_grid_reach(
                 fotufilm::kTripleBoxPasses * int64_t(strided_radius[scale]), stride[scale]));
     }
-    const int64_t image_reach = std::max({frame.mtf_radius_0, frame.mtf_radius_1, frame.mtf_radius_2})
+    // The luminance MTF and its secondary spread blur beside the per-layer MTF, out to
+    // `mtf_luma_radius`. A donor layer adds no reach of its own: its record rides the light
+    // through the same blurs, and its release diffuses through the coupler kernel.
+    int64_t mtf_reach = std::max({frame.mtf_radius_0, frame.mtf_radius_1, frame.mtf_radius_2});
+    if (feature_mask & FOTUFILM_FRAME_MTF_LUMA) {
+        mtf_reach = std::max<int64_t>(mtf_reach, frame.mtf_luma_radius);
+    }
+    const int64_t image_reach = mtf_reach
         + halo_reach
         + std::max({fotufilm::gaussian_grid_reach(frame.coupler_sigma, frame.coupler_radius),
                     fotufilm::gaussian_grid_reach(frame.adjacency_sigma, frame.adjacency_radius),
@@ -282,7 +289,7 @@ int run_aot(ExecutionState &state, halide_buffer_t *in, halide_buffer_t *out,
     // its own glare stays on the full-frame variant.
     const bool measures = (feature_mask & FOTUFILM_FRAME_FLARE_MEASURE) != 0;
     if (windowed_enabled && supports_windowed_transport && !measures
-        && width >= 32 && height >= fotufilm::kWindowStorageRows
+        && width >= 32 && height >= fotufilm::kWindowMinimumHeight
         && origin_x == 0 && origin_y == 0 && !wants_extended
         && in->dim[0].min == 0 && in->dim[1].min == 0
         && out->dim[0].min == 0 && out->dim[1].min == 0

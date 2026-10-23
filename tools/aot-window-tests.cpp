@@ -51,19 +51,22 @@ int main(int argc, char **argv) {
         // Stages the request leaves out, as a film without them asks: the twin still runs, with
         // those stages gated off at run time, over every window of the frame.
         int off = 0;
+        // The luminance MTF's reach, which joins the per-layer MTF's when the fixture's film
+        // asks for it.
+        int luma_radius = 1;
     };
     const Case cases[] = {
         {"first-window", 32, 512, 0, 1, 1},
         {"partial-window", 65, 513, 0, 1, 1},
         {"odd-frame", 1919, 1081, 0, 1, 1},
         {"4k", 3840, 2160, 0, 1, 1},
-        {"image-reach-limit", 65, 769, 0, 2, 1},
-        {"image-reach-fallback", 65, 769, 0, 3, 1},
-        {"grain-reach-limit", 65, 769, 0, 1, 126},
-        {"grain-reach-fallback", 65, 769, 0, 1, 127},
+        {"image-reach-limit", 65, 769, 0, 55, 1},
+        {"image-reach-fallback", 65, 769, 0, 56, 1},
+        {"grain-reach-limit", 65, 769, 0, 1, 179},
+        {"grain-reach-fallback", 65, 769, 0, 1, 180},
         {"offset-fallback", 65, 769, 7, 1, 1},
-        {"stride-one-limit", 65, 769, 0, 1, 1, 12},
-        {"stride-one-fallback", 65, 769, 0, 1, 1, 13},
+        {"stride-one-limit", 65, 769, 0, 1, 1, 65},
+        {"stride-one-fallback", 65, 769, 0, 1, 1, 66},
         {"chromatic-fringe-small-fallback", 65, 769, 0, 1, 1, 2, 2.0f},
         {"chromatic-fringe-fallback", 65, 769, 0, 1, 1, 2, 50.0f},
         {"screened-adjacency-fallback", 65, 769, 0, 1, 1, 2, 0, true},
@@ -82,6 +85,13 @@ int main(int argc, char **argv) {
         {"no-grain", 1920, 1080, 0, 1, 1, 2, 0, false, 0, false, FOTUFILM_FRAME_GRAIN},
         {"no-halation-monochrome", 1920, 1080, 0, 1, 1, 2, 0, false, 0, true,
          FOTUFILM_FRAME_HALATION},
+        {"no-mtf-luma", 1920, 1080, 0, 1, 1, 2, 0, false, 0, false, FOTUFILM_FRAME_MTF_LUMA},
+        {"no-donor-layer", 1920, 1080, 0, 1, 1, 2, 0, false, 0, false,
+         FOTUFILM_FRAME_DONOR_LAYER},
+        // With the fixture's luminance MTF, its radius sets the MTF's reach; without it, the
+        // per-layer radius of 1 does and both frames take the windows.
+        {"luma-reach-limit", 65, 769, 0, 1, 1, 2, 0, false, 0, false, 0, 55},
+        {"luma-reach-fallback", 65, 769, 0, 1, 1, 2, 0, false, 0, false, 0, 56},
     };
     for (const Case &test : cases) {
         auto c = configuration;
@@ -98,6 +108,8 @@ int main(int argc, char **argv) {
             }
         }
         for (int i = 0; i < 3; ++i) c[FOTUFILM_CONFIG_MTF_RADIUS + i] = 1;
+        c[FOTUFILM_CONFIG_MTF_LUMA_RADIUS] = float(test.luma_radius);
+        for (int i = 0; i < 3; ++i) c[FOTUFILM_CONFIG_MTF_SECONDARY_RADIUS + i] = 1;
         c[FOTUFILM_CONFIG_COUPLER_SIGMA] = 0.81f;
         c[FOTUFILM_CONFIG_COUPLER_RADIUS] = float(test.coupler_radius);
         c[FOTUFILM_CONFIG_ADJACENCY_SIGMA] = 2.7f;
@@ -138,7 +150,10 @@ int main(int argc, char **argv) {
             std::memcpy(c.data() + FOTUFILM_CONFIG_OUTPUT_COEFFICIENTS,
                         test.delivery == 3 ? srgb : gamma24, sizeof(gamma24));
         }
-        const int mask = (FOTUFILM_AOT_BASIC_STAGES & ~test.off)
+        // The luminance MTF and the donor layer join the request when the fixture's film has
+        // them, as they do for most colour negatives.
+        const int film_stages = header[4] & (FOTUFILM_FRAME_MTF_LUMA | FOTUFILM_FRAME_DONOR_LAYER);
+        const int mask = ((FOTUFILM_AOT_BASIC_STAGES | film_stages) & ~test.off)
             | FOTUFILM_FRAME_ENCODE_OUT
             | (test.delivery >= 2 ? FOTUFILM_FRAME_OUTPUT_POWER : FOTUFILM_FRAME_OUTPUT_LINEAR)
             | (test.monochrome ? FOTUFILM_FRAME_MONOCHROME : 0)

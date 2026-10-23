@@ -20,8 +20,13 @@ auto gaussian_grid_radius(Integer radius, Integer stride, Maximum maximum) {
 
 constexpr int kTripleBoxPasses = 3;
 constexpr int kWindowRows = 256;
-constexpr int kWindowStorageRows = 512;
-constexpr int kWindowMaximumReach = (kWindowStorageRows - kWindowRows) / 2 - 1;
+// Frames shorter than two windows develop whole.
+constexpr int kWindowMinimumHeight = 2 * kWindowRows;
+// A row-window stage stores its window's rows and the apron its consumers read, recomputing the
+// apron for every window, so a window costs more the further the frame's stages reach. Measured
+// at 4K on an M4 Pro across every film, the windows develop a frame 6-24% faster than the
+// whole-frame graph up to a reach of 179 pixels, and 2-8% slower from 187.
+constexpr int kWindowMaximumReach = 180;
 
 inline int64_t resampled_grid_reach(int64_t radius, int64_t stride) {
     // At stride 1 the zero-weight upper bilinear neighbour is still read.

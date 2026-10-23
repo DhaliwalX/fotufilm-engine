@@ -53,9 +53,9 @@ class VariantTableTests(unittest.TestCase):
                     self.assertTrue(candidates, f"precise seam request {request:#x} has no variant")
 
     def test_windowed_twins_fit_the_reach_the_shim_bounds(self):
-        basic = self.table.evaluate("BASIC_STAGES")
+        windowed = self.table.evaluate("WINDOWED_STAGES")
         for name, mask, _ in self.table.windowed:
-            self.assertEqual(mask & self.table.stage_bits & ~basic, 0, name)
+            self.assertEqual(mask & self.table.stage_bits & ~windowed, 0, name)
 
     def test_axes_partition_the_selector_bits(self):
         self.assertEqual(self.table.stage_bits & self.table.exact_bits, 0)

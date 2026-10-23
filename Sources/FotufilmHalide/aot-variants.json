@@ -64,7 +64,12 @@
     {
       "name": "BASIC_STAGES",
       "mask": "((ALL_STAGES & ~(MTF_LUMA | DIFFUSION)) | FLOAT_IO | REALTIME)",
-      "doc": "Common float video graphs. AOT windowed twins keep the same arguments and physics, with their intermediate rows stored in bounded circular buffers; the shim picks one only for a request inside this stage set."
+      "doc": "Common float video graphs."
+    },
+    {
+      "name": "WINDOWED_STAGES",
+      "mask": "(BASIC_STAGES | MTF_LUMA | DONOR_LAYER)",
+      "doc": "The stages a row-window twin carries: the common float video graph with the luminance MTF and a donor layer, which most colour negatives ask for. Each window stores its rows plus the apron its consumers read, so a stage here needs only a reach the shim can bound."
     }
   ],
   "axes": {
@@ -248,15 +253,15 @@
     }
   ],
   "windowed": {
-    "doc": "Compiled a second time with the row-window schedule, for the hosts that cannot hold a whole frame's intermediates. The shim picks a twin only when the request's stages fit BASIC_STAGES, whose reach it can bound.",
+    "doc": "Compiled a second time with the row-window schedule, for the hosts that cannot hold a whole frame's intermediates. The shim picks a twin only when the request's stages fit WINDOWED_STAGES, whose reach it can bound.",
     "variants": [
       {
         "name": "color_float_realtime",
-        "mask": "BASIC_STAGES"
+        "mask": "WINDOWED_STAGES"
       },
       {
         "name": "monochrome_float_realtime",
-        "mask": "BASIC_STAGES | MONOCHROME"
+        "mask": "WINDOWED_STAGES | MONOCHROME"
       }
     ]
   },
