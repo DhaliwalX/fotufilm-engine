@@ -330,6 +330,34 @@ int32_t fotufilm_bridge_frame_staging(FotufilmBridgeContext context,
 /// call when no staging was borrowed. A render that aborts after decode must still call this.
 void fotufilm_bridge_release_staging(FotufilmBridgeContext context);
 
+/// A host that renders through the OFX Metal extension hands its images over as `id<MTLBuffer>`
+/// with an `id<MTLCommandQueue>` to order work on. These move the frame between those buffers and
+/// the engine's staging on the GPU, so it never crosses into CPU memory. Mac only; on Linux every
+/// call reports it cannot.
+
+/// 1 when the queue and both buffers are on the device the engine develops on.
+int32_t fotufilm_bridge_host_metal_usable(void *queue, void *source, void *output);
+
+/// The claimed staging's buffers as `id<MTLBuffer>`: `scene` is what `scenePixels` views and
+/// `developed` what `developedPixels` views. Returns 0 when no staging is claimed.
+int32_t fotufilm_bridge_host_metal_staging(FotufilmBridgeContext context,
+                                          void **scene, void **developed);
+
+/// A shared buffer of at least `bytes` the context keeps between frames (`slot` 0 or 1), for a
+/// frame that still needs CPU pixels. Returns its CPU view and sets `buffer`, or NULL.
+void *fotufilm_bridge_host_metal_mirror(FotufilmBridgeContext context, int32_t slot,
+                                       int64_t bytes, void **buffer);
+
+/// Copies `rows` rows of `width` RGBA-float pixels from `source` to `destination` on `queue` and
+/// waits for it. Pixel (x, row) of each side is at `base + step * row + x`, counted in pixels; a
+/// negative step walks rows in the other direction, which is how the host's bottom-up rows become
+/// the engine's top-down ones. Returns 1 when copied, 0 when it could not be, and -1 when the
+/// host's queue did not reach the copy in time.
+int32_t fotufilm_bridge_host_metal_copy(void *queue,
+                                       void *source, int64_t source_base, int64_t source_step,
+                                       void *destination, int64_t destination_base,
+                                       int64_t destination_step, int32_t width, int32_t rows);
+
 /// Host-to-engine matrix, transfer decode, and premultiplication state.
 /// Input and output transfer coefficients are defined independently and are not algebraic inverses.
 ///
@@ -347,6 +375,14 @@ struct FotufilmInputTransform {
     float matrix[9];
     float coefficients[6];
 };
+
+/// Fills `transform`'s transfer, matrix and coefficients with camera input `index`'s decode — its
+/// log curve as the exponential transfer, its gamut into Rec.2020 — when the curve has that shape,
+/// so the frame decodes in the kernel; `premultiplied` is left as it was. Returns 0 for a curve
+/// the kernels cannot state (Apple Log, HLG), which `fotufilm_bridge_decode_camera` decodes on the
+/// host instead.
+int32_t fotufilm_bridge_camera_input_transform(int32_t index,
+                                              struct FotufilmInputTransform *transform);
 
 /// Decodes tightly packed host pixels from staging output into scene-linear staging input.
 /// `peak` receives the largest finite pre-repair RGB value; `repaired` reports any non-finite

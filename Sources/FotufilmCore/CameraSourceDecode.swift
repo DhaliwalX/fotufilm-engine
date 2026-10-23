@@ -100,6 +100,42 @@ public enum CameraLogCurve: UInt32, CaseIterable, Codable, Sendable {
         }
     }
 
+    /// The curve restated as the signed exponential transfer the decode kernels take —
+    /// `v <= c[4] ? (v - c[3]) * c[0] : exp(v * c[1] - c[2]) - c[5]` — for the curves that are a
+    /// linear toe under a power-of-ten log segment, with the base, the segment's offset and its
+    /// gain folded into the exponent. Nil for Apple Log's parabolic toe and HLG's square law. The
+    /// arms meet at the cut, so which of them owns the cut itself does not matter.
+    public var exponentialTransfer: [Float]? {
+        let ln10 = log(10.0)
+        let coefficients: [Double]
+        switch self {
+        case .sLog3:
+            coefficients = [1023 * 0.01125 / (171.2102946929 - 95), ln10 * 1023 / 261.5,
+                            ln10 * 420 / 261.5 - log(0.19), 95.0 / 1023,
+                            171.2102946929 / 1023, 0.01]
+        case .sLog2:
+            let toe = 0.030001222851889303, gain = 0.9 * 219.0 / 155.0
+            let cut = (64 + 876 * toe) / 1023
+            coefficients = [1023 * gain / (876 * 5), ln10 * 1023 / (876 * 0.432699),
+                            ln10 * (64.0 / 876 + 0.616596 + 0.03) / 0.432699 - log(gain),
+                            cut, cut, 0.037584 * gain]
+        case .fLog:
+            let a = 0.555556, b = 0.009468, c = 0.344676, d = 0.790453
+            coefficients = [1 / 8.735631, ln10 / c, ln10 * d / c + log(a), 0.092864,
+                            0.100537775223865, b / a]
+        case .fLog2:
+            let a = 5.555556, b = 0.064829, c = 0.245281, d = 0.384316
+            coefficients = [1 / 8.799461, ln10 / c, ln10 * d / c + log(a), 0.092864,
+                            0.100686685370811, b / a]
+        case .vLog:
+            coefficients = [1 / 5.6, ln10 / 0.241514, ln10 * 0.598206 / 0.241514, 0.125, 0.181,
+                            0.00873]
+        case .appleLog, .hlg:
+            return nil
+        }
+        return coefficients.map(Float.init)
+    }
+
     /// S-Log3, from Sony's technical summary for S-Gamut3/S-Log3.
     public static func slog3ToLinear(_ code: Float) -> Float {
         let c = code * 1023

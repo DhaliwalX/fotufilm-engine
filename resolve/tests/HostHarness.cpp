@@ -32,6 +32,41 @@ int OfxGetNumberOfPlugins(void);
 OfxPlugin *OfxGetPlugin(int nth);
 }
 
+#ifndef kOfxImageEffectPropMetalRenderSupported
+#define kOfxImageEffectPropMetalRenderSupported "OfxImageEffectPropMetalRenderSupported"
+#define kOfxImageEffectPropMetalEnabled "OfxImageEffectPropMetalEnabled"
+#define kOfxImageEffectPropMetalCommandQueue "OfxImageEffectPropMetalCommandQueue"
+#endif
+
+#ifdef __APPLE__
+#include <objc/message.h>
+#include <objc/runtime.h>
+extern "C" void *MTLCreateSystemDefaultDevice(void);
+
+/// Just enough Metal, through the Objective-C runtime, to play a host that renders through the
+/// OFX Metal extension: a queue, and shared buffers whose CPU view the harness fills and reads.
+namespace HostMetal {
+void *send(void *target, const char *selector) {
+    return reinterpret_cast<void *(*)(void *, SEL)>(objc_msgSend)(target,
+                                                                   sel_registerName(selector));
+}
+void *device() {
+    static void *const shared = MTLCreateSystemDefaultDevice();
+    return shared;
+}
+void *queue() {
+    static void *const shared = device() ? send(device(), "newCommandQueue") : nullptr;
+    return shared;
+}
+void *buffer(size_t bytes) {
+    return reinterpret_cast<void *(*)(void *, SEL, unsigned long, unsigned long)>(objc_msgSend)(
+        device(), sel_registerName("newBufferWithLength:options:"), bytes, 0);
+}
+float *contents(void *buffer) { return static_cast<float *>(send(buffer, "contents")); }
+void release(void *object) { send(object, "release"); }
+}  // namespace HostMetal
+#endif
+
 namespace {
 int (*gGetNumberOfPlugins)(void) = OfxGetNumberOfPlugins;
 OfxPlugin *(*gGetPlugin)(int) = OfxGetPlugin;
@@ -822,8 +857,20 @@ int testPlugin() {
           "negotiates Resolve's OFX 1.5 full colour management");
     check(config && std::strcmp(config, kOfxConfigIdentifier) == 0,
           "declares the required native colour config");
-    check(describer.properties->strings.count("OfxImageEffectPropMetalRenderSupported") == 0,
-          "does not advertise a host-Metal path that would block Resolve's queue");
+#ifdef __APPLE__
+    {
+        auto metal = describer.properties->strings.find(kOfxImageEffectPropMetalRenderSupported);
+        const char *hostMetal = std::getenv("FOTUFILM_HOST_METAL");
+        const bool asked = hostMetal && std::strcmp(hostMetal, "1") == 0;
+        check(asked ? metal != describer.properties->strings.end() &&
+                          metal->second.size() == 1 && metal->second[0] == "true"
+                    : metal == describer.properties->strings.end(),
+              "offers to take the host's Metal frames only when FOTUFILM_HOST_METAL=1 asks");
+    }
+#else
+    check(describer.properties->strings.count(kOfxImageEffectPropMetalRenderSupported) == 0,
+          "offers Metal frames only where there is Metal");
+#endif
     {
         // The clip preferences follow the span, so the host has to be told which parameters
         // move them, or it is entitled to ask once and never again.
@@ -1172,11 +1219,12 @@ int testPlugin() {
                 check(renderNow() && difference(output->pixels, expected) < 2e-4f, message);
             }
 
-            // Cross several 256-row GPU windows. Small preview-sized frames do not
-            // exercise circular storage, whose display-output reads once escaped the
-            // 512-row allocation when gamut fitting was enabled.
+            // Cross the GPU's row windows, into a last window one row tall. Small
+            // preview-sized frames develop whole and never reach a window seam, where
+            // display-output reads once escaped their window's allocation when gamut fitting
+            // was enabled.
             {
-                const int tallWidth = 96, tallHeight = 1025;
+                const int tallWidth = 96, tallHeight = 2161;
                 auto resizeClips = [&](int w, int h) {
                     for (Clip *clip : {source, output}) {
                         clip->pixels.assign(static_cast<size_t>(w) * h * 4, 0.0f);
@@ -1629,6 +1677,64 @@ int testPlugin() {
         }
         check(outsideUntouched, "leaves everything outside the window alone");
         check(insideFinite && insideChanged > 0, "fills the window with finite pixels");
+
+#ifdef __APPLE__
+        // A host rendering through the Metal extension hands the same frame over as buffers. The
+        // frame has to come back exactly as the CPU host's does: the same kernels develop it, and
+        // only where the pixels travel changes — on the GPU for a frame the kernels take whole,
+        // through CPU mirrors for one that needs resampling.
+        if (HostMetal::queue()) {
+            std::printf("Metal host frames\n");
+            auto metalRender = [&](std::vector<float> &developed) {
+                const size_t sourceBytes = source->pixels.size() * sizeof(float);
+                const size_t outputBytes = output->pixels.size() * sizeof(float);
+                void *in = HostMetal::buffer(sourceBytes);
+                void *out = HostMetal::buffer(outputBytes);
+                std::memcpy(HostMetal::contents(in), source->pixels.data(), sourceBytes);
+                std::memcpy(HostMetal::contents(out), output->pixels.data(), outputBytes);
+                propSetPointer(handleOf(source->image), kOfxImagePropData, 0, in);
+                propSetPointer(handleOf(output->image), kOfxImagePropData, 0, out);
+                propSetInt(handleOf(renderArgs), kOfxImageEffectPropMetalEnabled, 0, 1);
+                propSetPointer(handleOf(renderArgs), kOfxImageEffectPropMetalCommandQueue, 0,
+                               HostMetal::queue());
+                const bool rendered = renderNow();
+                developed.assign(HostMetal::contents(out),
+                                 HostMetal::contents(out) + output->pixels.size());
+                propSetInt(handleOf(renderArgs), kOfxImageEffectPropMetalEnabled, 0, 0);
+                propSetPointer(handleOf(renderArgs), kOfxImageEffectPropMetalCommandQueue, 0,
+                               nullptr);
+                propSetPointer(handleOf(source->image), kOfxImagePropData, 0,
+                               source->pixels.data());
+                propSetPointer(handleOf(output->image), kOfxImagePropData, 0,
+                               output->pixels.data());
+                HostMetal::release(in);
+                HostMetal::release(out);
+                return rendered;
+            };
+            auto matchesCPU = [&](const char *label) {
+                std::fill(output->pixels.begin(), output->pixels.end(), -7.0f);
+                const bool cpuRendered = renderNow();
+                const std::vector<float> cpu = output->pixels;
+                std::fill(output->pixels.begin(), output->pixels.end(), -7.0f);
+                std::vector<float> metal;
+                const bool metalRendered = metalRender(metal);
+                float worst = 0;
+                for (size_t i = 0; i < cpu.size() && i < metal.size(); ++i) {
+                    worst = std::max(worst, std::fabs(cpu[i] - metal[i]));
+                }
+                std::printf("       %s: worst %.3g\n", label, worst);
+                check(cpuRendered && metalRendered && metal == cpu, label);
+            };
+            provision(64, 48, -7, 5);
+            propSetIntN(handleOf(renderArgs), kOfxImageEffectPropRenderWindow, 4, subwindow);
+            matchesCPU("develops an offset Metal frame through a subwindow as the CPU frame");
+            provision(96, 64, 0, 0, true);
+            matchesCPU("develops a whole Metal frame as the CPU frame");
+            propSetDouble(handleOf(source->properties), kOfxImagePropPixelAspectRatio, 0, 2.0);
+            matchesCPU("develops a resampled Metal frame through CPU mirrors as the CPU frame");
+            propSetDouble(handleOf(source->properties), kOfxImagePropPixelAspectRatio, 0, 1.0);
+        }
+#endif
 
         for (const auto &size : {std::make_pair(17, 9), std::make_pair(16, 16),
                                  std::make_pair(1, 1)}) {
@@ -2219,16 +2325,75 @@ int testPlugin() {
             const char *budgetSetting = std::getenv("FOTUFILM_BENCHMARK_BUDGET_MS");
             const double budgetMs = budgetSetting ? std::atof(budgetSetting) : 15.0;
             std::vector<double> timings;
-            provision(3840, 2160, 0, 0, true);
-            setChoice(plugin, instanceHandle, instance.params, "stock", 0);
+            // FOTUFILM_BENCHMARK_SIZE ("1920x1080") measures another frame size, and
+            // FOTUFILM_BENCHMARK_STOCK another film, by menu index or a substring of its name.
+            int benchmarkWidth = 3840, benchmarkHeight = 2160;
+            if (const char *size = std::getenv("FOTUFILM_BENCHMARK_SIZE")) {
+                std::sscanf(size, "%dx%d", &benchmarkWidth, &benchmarkHeight);
+            }
+            provision(benchmarkWidth, benchmarkHeight, 0, 0, true);
+            const auto menuIndex = [](const char *wanted, int32_t count,
+                                      int32_t (*name)(int32_t, char *, int32_t)) {
+                if (!wanted) return 0;
+                if (std::isdigit(static_cast<unsigned char>(wanted[0]))) return std::atoi(wanted);
+                for (int32_t i = 0; i < count; ++i) {
+                    char label[256] = {};
+                    name(i, label, sizeof label);
+                    if (std::strstr(label, wanted)) {
+                        std::printf("       %s\n", label);
+                        return static_cast<int>(i);
+                    }
+                }
+                return 0;
+            };
+            setChoice(plugin, instanceHandle, instance.params, "stock",
+                      menuIndex(std::getenv("FOTUFILM_BENCHMARK_STOCK"),
+                                fotufilm_bridge_stock_count(), fotufilm_bridge_stock_name));
             // Match the plugin's normal 35 mm default. Smaller gauges deliberately render
             // larger film structures and remain useful stress cases, but are not the playback
             // target this benchmark names.
-            setChoice(plugin, instanceHandle, instance.params, "format", 3);
-            setChoice(plugin, instanceHandle, instance.params, "paper", 0);
-            setParam(instance.params, "grain", 1);
+            // FOTUFILM_BENCHMARK_DEFAULTS keeps the plugin's own "match film" format and
+            // output medium, as a freshly applied effect starts.
+            // FOTUFILM_BENCHMARK_STAGE picks a pipeline span by menu index (1 = Negative Only).
+            if (const char *benchmarkStage = std::getenv("FOTUFILM_BENCHMARK_STAGE")) {
+                setChoice(plugin, instanceHandle, instance.params, "stage",
+                          std::atoi(benchmarkStage));
+            }
+            if (!std::getenv("FOTUFILM_BENCHMARK_DEFAULTS")) {
+                setChoice(plugin, instanceHandle, instance.params, "format", 3);
+                setChoice(plugin, instanceHandle, instance.params, "paper", 0);
+            }
+            const char *benchmarkGrain = std::getenv("FOTUFILM_BENCHMARK_GRAIN");
+            setParam(instance.params, "grain", benchmarkGrain ? std::atof(benchmarkGrain) : 1);
             setParam(instance.params, "colorSpace",
                      static_cast<double>(fotufilm::Encoding::DaVinciIntermediate));
+            // FOTUFILM_BENCHMARK_CAMERA reads the frames as a camera log ("S-Log3"), managed.
+            if (const char *camera = std::getenv("FOTUFILM_BENCHMARK_CAMERA")) {
+                setChoice(plugin, instanceHandle, instance.params, "colorManagement", 1);
+                setChoice(plugin, instanceHandle, instance.params, "inputColorSpace",
+                          static_cast<int>(fotufilm::Encoding::Count) +
+                          menuIndex(camera, fotufilm_bridge_camera_input_count(),
+                                    fotufilm_bridge_camera_input_name));
+                setChoice(plugin, instanceHandle, instance.params, "outputColorSpace",
+                          static_cast<int>(fotufilm::Encoding::DaVinciIntermediate));
+            }
+#ifdef __APPLE__
+            // FOTUFILM_BENCHMARK_METAL hands the frames over as Metal buffers, as Resolve does
+            // when it renders through the extension.
+            void *metalIn = nullptr, *metalOut = nullptr;
+            if (std::getenv("FOTUFILM_BENCHMARK_METAL") && HostMetal::queue()) {
+                metalIn = HostMetal::buffer(source->pixels.size() * sizeof(float));
+                metalOut = HostMetal::buffer(output->pixels.size() * sizeof(float));
+                std::memcpy(HostMetal::contents(metalIn), source->pixels.data(),
+                            source->pixels.size() * sizeof(float));
+                propSetPointer(handleOf(source->image), kOfxImagePropData, 0, metalIn);
+                propSetPointer(handleOf(output->image), kOfxImagePropData, 0, metalOut);
+                propSetInt(handleOf(renderArgs), kOfxImageEffectPropMetalEnabled, 0, 1);
+                propSetPointer(handleOf(renderArgs), kOfxImageEffectPropMetalCommandQueue, 0,
+                               HostMetal::queue());
+                std::printf("       with Metal frames\n");
+            }
+#endif
             check(renderNow(), "warms the 4K render path");
 
             double total = 0;
@@ -2245,6 +2410,19 @@ int testPlugin() {
                 timings.push_back(elapsed * 1000.0);
             }
             propSetDouble(handleOf(renderArgs), kOfxPropTime, 0, savedTime);
+#ifdef __APPLE__
+            if (metalIn) {
+                std::memcpy(output->pixels.data(), HostMetal::contents(metalOut),
+                            output->pixels.size() * sizeof(float));
+                propSetInt(handleOf(renderArgs), kOfxImageEffectPropMetalEnabled, 0, 0);
+                propSetPointer(handleOf(source->image), kOfxImagePropData, 0,
+                               source->pixels.data());
+                propSetPointer(handleOf(output->image), kOfxImagePropData, 0,
+                               output->pixels.data());
+                HostMetal::release(metalIn);
+                HostMetal::release(metalOut);
+            }
+#endif
             std::sort(timings.begin(), timings.end());
             const double medianMs = (timings[(frames - 1) / 2] + timings[frames / 2]) * 0.5;
             const double p95Ms = timings[static_cast<size_t>(std::ceil(frames * 0.95)) - 1];

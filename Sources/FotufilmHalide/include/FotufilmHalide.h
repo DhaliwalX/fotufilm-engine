@@ -13,6 +13,8 @@ void *fotufilm_halide_metal_context_create(void);
 void fotufilm_halide_metal_context_destroy(void *context);
 void *fotufilm_halide_metal_context_bind(void *context);
 void fotufilm_halide_metal_context_restore(void *context);
+/// Frees the device buffers the Metal runtime keeps pooled between frames.
+void fotufilm_halide_metal_release_pool(void);
 
 #include "FotufilmConfigLayout.h"
 

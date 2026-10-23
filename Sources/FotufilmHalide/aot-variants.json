@@ -57,6 +57,26 @@
       "doc": "The same without the emulsion MTF, which is compiled out when the stock's diffusion does not reach a pixel at the frame's size."
     },
     {
+      "name": "PRINTED_NEGATIVE",
+      "mask": "(NEGATIVE | PRINT_MTF)",
+      "doc": "A colour negative through the enlarger: the stages most colour negatives ask for at video sizes."
+    },
+    {
+      "name": "PRINTED_NEGATIVE_LUMA",
+      "mask": "(PRINTED_NEGATIVE | MTF_LUMA)",
+      "doc": "The same with the luminance MTF arm."
+    },
+    {
+      "name": "PRINTED_NEGATIVE_DONOR",
+      "mask": "(PRINTED_NEGATIVE_LUMA | DONOR_LAYER)",
+      "doc": "The same with a fourth, donor record."
+    },
+    {
+      "name": "PRINTED_SLIDE",
+      "mask": "(SLIDE | PRINT_MTF)",
+      "doc": "A black-and-white negative, or a colour stock without an interimage correction, through the enlarger."
+    },
+    {
       "name": "FULL_STAGES",
       "mask": "(ALL_STAGES | FLARE | GRAIN_MOTTLE | DONOR_LAYER)",
       "doc": "Every stage a class can carry. One variant per exact class compiles all of them and the request selects at run time: a stage the frame does not ask for is bypassed, not run at zero strength, so the served frame is the requested frame."
@@ -64,7 +84,12 @@
     {
       "name": "BASIC_STAGES",
       "mask": "((ALL_STAGES & ~(MTF_LUMA | DIFFUSION)) | FLOAT_IO | REALTIME)",
-      "doc": "Common float video graphs. AOT windowed twins keep the same arguments and physics, with their intermediate rows stored in bounded circular buffers; the shim picks one only for a request inside this stage set."
+      "doc": "Common float video graphs."
+    },
+    {
+      "name": "WINDOWED_STAGES",
+      "mask": "(BASIC_STAGES | MTF_LUMA | DONOR_LAYER)",
+      "doc": "The stages a row-window twin carries: the common float video graph with the luminance MTF and a donor layer, which most colour negatives ask for. Each window stores its rows plus the apron its consumers read, so a stage here needs only a reach the shim can bound."
     }
   ],
   "axes": {
@@ -248,15 +273,57 @@
     }
   ],
   "windowed": {
-    "doc": "Compiled a second time with the row-window schedule, for the hosts that cannot hold a whole frame's intermediates. The shim picks a twin only when the request's stages fit BASIC_STAGES, whose reach it can bound.",
+    "doc": "Compiled a second time with the row-window schedule, for the hosts that cannot hold a whole frame's intermediates. The shim picks a twin only when the request's stages fit WINDOWED_STAGES, whose reach it can bound.",
     "variants": [
       {
         "name": "color_float_realtime",
-        "mask": "BASIC_STAGES"
+        "mask": "WINDOWED_STAGES"
       },
       {
         "name": "monochrome_float_realtime",
-        "mask": "BASIC_STAGES | MONOCHROME"
+        "mask": "WINDOWED_STAGES | MONOCHROME"
+      },
+      {
+        "name": "color_float_realtime_negative",
+        "mask": "WINDOWED_STAGES | DENSITY_OUT"
+      }
+    ],
+    "exact_doc": "A twin compiled for one exact stage set, with nothing gated at run time: every stage it carries runs, so its kernels read no bypass arm and store nothing a gate could skip. The shim serves a request from one only when the request's stages are exactly that set, and otherwise from the gated twin.",
+    "exact": [
+      {
+        "variant": "color_float_realtime",
+        "name": "negative",
+        "stages": "PRINTED_NEGATIVE"
+      },
+      {
+        "variant": "color_float_realtime",
+        "name": "negative_luma",
+        "stages": "PRINTED_NEGATIVE_LUMA"
+      },
+      {
+        "variant": "color_float_realtime",
+        "name": "negative_donor",
+        "stages": "PRINTED_NEGATIVE_DONOR"
+      },
+      {
+        "variant": "color_float_realtime",
+        "name": "slide_interimage",
+        "stages": "SLIDE_INTERIMAGE"
+      },
+      {
+        "variant": "color_float_realtime",
+        "name": "printed_slide",
+        "stages": "PRINTED_SLIDE"
+      },
+      {
+        "variant": "monochrome_float_realtime",
+        "name": "printed_slide",
+        "stages": "PRINTED_SLIDE"
+      },
+      {
+        "variant": "color_float_realtime_negative",
+        "name": "negative",
+        "stages": "NEGATIVE"
       }
     ]
   },

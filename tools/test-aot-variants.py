@@ -53,9 +53,21 @@ class VariantTableTests(unittest.TestCase):
                     self.assertTrue(candidates, f"precise seam request {request:#x} has no variant")
 
     def test_windowed_twins_fit_the_reach_the_shim_bounds(self):
-        basic = self.table.evaluate("BASIC_STAGES")
+        windowed = self.table.evaluate("WINDOWED_STAGES")
         for name, mask, _ in self.table.windowed:
-            self.assertEqual(mask & self.table.stage_bits & ~basic, 0, name)
+            self.assertEqual(mask & self.table.stage_bits & ~windowed, 0, name)
+
+    def test_exact_twins_keep_their_class_and_fit_their_windowed_twin(self):
+        twins = {name: mask for name, mask, _ in self.table.windowed}
+        for variant, name, mask, _ in self.table.exact_windowed:
+            twin = twins[variant]
+            self.assertEqual(mask & ~self.table.stage_bits, twin & ~self.table.stage_bits, name)
+            self.assertEqual(mask & self.table.stage_bits & ~twin, 0, name)
+        schema = copy.deepcopy(SCHEMA)
+        schema["windowed"]["exact"].append(
+            {"variant": "color_float_realtime", "name": "flared", "stages": "SLIDE | FLARE"})
+        with self.assertRaises(ValueError):
+            aot.Table(schema)
 
     def test_axes_partition_the_selector_bits(self):
         self.assertEqual(self.table.stage_bits & self.table.exact_bits, 0)
