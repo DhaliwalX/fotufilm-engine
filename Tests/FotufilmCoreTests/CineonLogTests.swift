@@ -38,11 +38,12 @@ final class CineonLogTests: XCTestCase {
         }
     }
 
-    func testEncodingPlacesTheBaseAtNinetyFiveAndStepsTwoThousandthsOfADensity() {
-        XCTAssertEqual(CineonLog.signal(densityAboveBase: 0) * 1023, 95, accuracy: 1e-4)
-        XCTAssertEqual(CineonLog.signal(densityAboveBase: 1.18) * 1023, 685, accuracy: 1e-3)
-        XCTAssertEqual(CineonLog.densityAboveBase(signal: CineonLog.signal(densityAboveBase: 0.7)),
-                       0.7, accuracy: 1e-6)
+    func testEncodingPlacesGreyAtTheLADAndStepsTwoThousandthsOfADensity() {
+        XCTAssertEqual(CineonLog.signal(densityAboveGrey: 0) * 1023, 445, accuracy: 1e-4)
+        XCTAssertEqual(CineonLog.signal(densityAboveGrey: 0.48) * 1023, 685, accuracy: 1e-3)
+        XCTAssertEqual(CineonLog.signal(densityAboveGrey: -0.7) * 1023, 95, accuracy: 1e-3)
+        XCTAssertEqual(CineonLog.densityAboveGrey(signal: CineonLog.signal(densityAboveGrey: 0.3)),
+                       0.3, accuracy: 1e-6)
         XCTAssertEqual(CineonLog.codeValue(signal: 95.0 / 1023), 95)
         XCTAssertEqual(CineonLog.codeValue(signal: 2), 1023)
         XCTAssertEqual(CineonLog.codeValue(signal: -1), 0)
@@ -111,14 +112,18 @@ final class CineonLogTests: XCTestCase {
         XCTAssertEqual(PrintPaper.cineonLog.resolved(for: slide), .screen)
     }
 
-    func testWedgeSitsOnTheBaseAndClimbsAtTheFilmsPrintingContrast() throws {
-        for id in ["vision250d", "vision500t", "portra400", "hp5plus400"] {
+    func testWedgeIsNeutralAtTheLADAndClimbsAtTheFilmsPrintingContrast() throws {
+        for id in ["vision250d", "vision500t", "portra400", "gold200", "hp5plus400"] {
             let output = try FotufilmEngine(stock: stock(id), options: options())
                 .processChecked(linearRGB: wedge())
             let codes = codeValues(output)
             for c in 0..<3 {
-                // Unexposed, the film is at its base: code value 95.
-                XCTAssertEqual(codes[0][c], 95, accuracy: 4, "\(id) channel \(c) base")
+                // A normally exposed mid grey is the laboratory aim density the scanner was set
+                // up on: code value 445 in every record, so it reads as grey.
+                XCTAssertEqual(codes[3][c], 445, accuracy: 1, "\(id) channel \(c) grey")
+                // Unexposed, the film is at its base, the scan's floor, near the convention's 95.
+                XCTAssertLessThan(codes[0][c], codes[1][c], "\(id) channel \(c) base")
+                XCTAssertEqual(codes[0][c], 95, accuracy: 90, "\(id) channel \(c) base")
                 for step in 1..<codes.count {
                     XCTAssertGreaterThan(codes[step][c], codes[step - 1][c],
                                          "\(id) channel \(c) step \(stops[step])")
@@ -128,18 +133,14 @@ final class CineonLogTests: XCTestCase {
                 XCTAssertGreaterThan(perStop, 55, "\(id) channel \(c)")
                 XCTAssertLessThan(perStop, 125, "\(id) channel \(c)")
             }
-            // A normally exposed mid-grey lands near the Cineon convention's 445-470.
-            let grey = (codes[3].x + codes[3].y + codes[3].z) / 3
-            XCTAssertGreaterThan(grey, 330, id)
-            XCTAssertLessThan(grey, 600, id)
         }
     }
 
-    func testMidGreyIsItsPrintingDensityAboveTheBase() throws {
+    func testEachStepIsItsPrintingDensityAboveMidGrey() throws {
         let film = try stock("vision250d")
         let output = try FotufilmEngine(stock: film, options: options())
             .processChecked(linearRGB: wedge())
-        let mid = codeValues(output)[3]
+        let codes = codeValues(output)
         // The same read the output table makes, done directly: RP 180 bands under a flat lamp.
         let bands = PrintPaper.cineonLog.sensitivity(bands: .paper)
         func energy(_ density: [Float]) -> SIMD3<Float> {
@@ -147,11 +148,19 @@ final class CineonLogTests: XCTestCase {
                                           lamp: SpectralGrid.equalEnergy,
                                           paperSensitivity: bands)
         }
-        let base = energy(film.curves.map(\.dMin))
-        let grey = energy((0..<3).map { film.developedDensity(layer: $0, logExposure: 0) })
-        for c in 0..<3 {
-            let density = log10(base[c] / grey[c])
-            XCTAssertEqual(mid[c], 95 + density / 0.002, accuracy: 6, "channel \(c)")
+        func exposed(stops: Float) -> SIMD3<Float> {
+            energy((0..<3).map {
+                film.developedDensity(layer: $0, logExposure: stops * log10(2))
+            })
+        }
+        let grey = exposed(stops: 0)
+        // The base, and two stops over: each is its printing density relative to mid grey.
+        for (step, read) in [(0, energy(film.curves.map(\.dMin))), (4, exposed(stops: 2))] {
+            for c in 0..<3 {
+                let density = log10(grey[c] / read[c])
+                XCTAssertEqual(codes[step][c], 445 + density / 0.002, accuracy: 6,
+                               "step \(step) channel \(c)")
+            }
         }
     }
 

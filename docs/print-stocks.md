@@ -8,7 +8,7 @@ how to add one.
 
 | Type | Role |
 | --- | --- |
-| `PrintPaper` | The output a user chooses. Its raw value is the CLI and preset ID, and hosts persist its case order. It also covers outputs with no print material: Lab Scan, Telecine, Cineon Log, Digital Reference and Negative. Cineon Log (`deliversCodeValues`) delivers printing density above the film base as Cineon code values (`CineonLog`); hosts pass those out unconverted and write them to DPX with `CineonDPX`. |
+| `PrintPaper` | The output a user chooses. Its raw value is the CLI and preset ID, and hosts persist its case order. It also covers outputs with no print material: Lab Scan, Telecine, Cineon Log, Digital Reference and Negative. Cineon Log (`deliversCodeValues`) delivers printing density as Cineon code values (`CineonLog`), set up so the stock's normally exposed grey reads 445 in every record; hosts pass those out unconverted and write them to DPX with `CineonDPX`. |
 | `PrintStock` | One physical material, described in `PrintStockCatalogue.swift`: name, menu detail, process, three characteristic curves, spectra and, for release print film, its setup aims. |
 | `PrintStock.Process` | The material's family. It decides how the print is exposed, viewed and timed, and which films and gauges can use it. |
 | `PrintStock.Spectra` | Dye and layer-sensitivity spectra on the engine's 380–780 nm, 5 nm grid, derived from datasheet values by the family's rules. |

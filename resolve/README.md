@@ -199,10 +199,11 @@ output primaries without changing in-gamut colors or adding another tone curve.
 
 **Output Medium → Cineon Log** delivers the developed negative as a flat film scan for
 grading, the way a scanner hands film to a grading suite. Each channel holds printing density
-above the film base as Cineon code values (code value / 1023): the base sits at 95, and
-each code value is 0.002 D, read through the SMPTE RP 180 printing-density bands. The film's
-own contrast stays in the scan. No print, timing, grade, finish or display transform is
-applied.
+as Cineon code values (code value / 1023), 0.002 D a code value, read through the SMPTE RP 180
+printing-density bands. Like a scanner set up on the stock's laboratory aim density, a
+normally exposed grey reads 445 in every channel, so it comes out grey; the film base lands
+near 95. The film's own contrast stays in the scan. No print, timing, grade, finish or
+display transform is applied.
 
 A Cineon scan has no output color space of its own: its channels are the negative's printing
 densities, not light in any set of primaries. So Output Color Space does not apply. The menu
