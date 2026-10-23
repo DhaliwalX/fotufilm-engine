@@ -2326,15 +2326,29 @@ int testPlugin() {
             const double budgetMs = budgetSetting ? std::atof(budgetSetting) : 15.0;
             std::vector<double> timings;
             // FOTUFILM_BENCHMARK_SIZE ("1920x1080") measures another frame size, and
-            // FOTUFILM_BENCHMARK_STOCK another film by menu index.
+            // FOTUFILM_BENCHMARK_STOCK another film, by menu index or a substring of its name.
             int benchmarkWidth = 3840, benchmarkHeight = 2160;
             if (const char *size = std::getenv("FOTUFILM_BENCHMARK_SIZE")) {
                 std::sscanf(size, "%dx%d", &benchmarkWidth, &benchmarkHeight);
             }
             provision(benchmarkWidth, benchmarkHeight, 0, 0, true);
-            const char *benchmarkStock = std::getenv("FOTUFILM_BENCHMARK_STOCK");
+            const auto menuIndex = [](const char *wanted, int32_t count,
+                                      int32_t (*name)(int32_t, char *, int32_t)) {
+                if (!wanted) return 0;
+                if (std::isdigit(static_cast<unsigned char>(wanted[0]))) return std::atoi(wanted);
+                for (int32_t i = 0; i < count; ++i) {
+                    char label[256] = {};
+                    name(i, label, sizeof label);
+                    if (std::strstr(label, wanted)) {
+                        std::printf("       %s\n", label);
+                        return static_cast<int>(i);
+                    }
+                }
+                return 0;
+            };
             setChoice(plugin, instanceHandle, instance.params, "stock",
-                      benchmarkStock ? std::atoi(benchmarkStock) : 0);
+                      menuIndex(std::getenv("FOTUFILM_BENCHMARK_STOCK"),
+                                fotufilm_bridge_stock_count(), fotufilm_bridge_stock_name));
             // Match the plugin's normal 35 mm default. Smaller gauges deliberately render
             // larger film structures and remain useful stress cases, but are not the playback
             // target this benchmark names.
@@ -2349,9 +2363,20 @@ int testPlugin() {
                 setChoice(plugin, instanceHandle, instance.params, "format", 3);
                 setChoice(plugin, instanceHandle, instance.params, "paper", 0);
             }
-            setParam(instance.params, "grain", 1);
+            const char *benchmarkGrain = std::getenv("FOTUFILM_BENCHMARK_GRAIN");
+            setParam(instance.params, "grain", benchmarkGrain ? std::atof(benchmarkGrain) : 1);
             setParam(instance.params, "colorSpace",
                      static_cast<double>(fotufilm::Encoding::DaVinciIntermediate));
+            // FOTUFILM_BENCHMARK_CAMERA reads the frames as a camera log ("S-Log3"), managed.
+            if (const char *camera = std::getenv("FOTUFILM_BENCHMARK_CAMERA")) {
+                setChoice(plugin, instanceHandle, instance.params, "colorManagement", 1);
+                setChoice(plugin, instanceHandle, instance.params, "inputColorSpace",
+                          static_cast<int>(fotufilm::Encoding::Count) +
+                          menuIndex(camera, fotufilm_bridge_camera_input_count(),
+                                    fotufilm_bridge_camera_input_name));
+                setChoice(plugin, instanceHandle, instance.params, "outputColorSpace",
+                          static_cast<int>(fotufilm::Encoding::DaVinciIntermediate));
+            }
 #ifdef __APPLE__
             // FOTUFILM_BENCHMARK_METAL hands the frames over as Metal buffers, as Resolve does
             // when it renders through the extension.

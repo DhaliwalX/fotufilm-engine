@@ -282,6 +282,10 @@
       {
         "name": "monochrome_float_realtime",
         "mask": "WINDOWED_STAGES | MONOCHROME"
+      },
+      {
+        "name": "color_float_realtime_negative",
+        "mask": "WINDOWED_STAGES | DENSITY_OUT"
       }
     ],
     "exact_doc": "A twin compiled for one exact stage set, with nothing gated at run time: every stage it carries runs, so its kernels read no bypass arm and store nothing a gate could skip. The shim serves a request from one only when the request's stages are exactly that set, and otherwise from the gated twin.",
@@ -315,6 +319,11 @@
         "variant": "monochrome_float_realtime",
         "name": "printed_slide",
         "stages": "PRINTED_SLIDE"
+      },
+      {
+        "variant": "color_float_realtime_negative",
+        "name": "negative",
+        "stages": "NEGATIVE"
       }
     ]
   },

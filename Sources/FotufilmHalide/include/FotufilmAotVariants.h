@@ -139,7 +139,8 @@
 /// whose reach it can bound.
 #define FOTUFILM_AOT_WINDOWED_VARIANTS(X) \
     X(color_float_realtime, FOTUFILM_AOT_WINDOWED_STAGES) \
-    X(monochrome_float_realtime, FOTUFILM_AOT_WINDOWED_STAGES | FOTUFILM_FRAME_MONOCHROME)
+    X(monochrome_float_realtime, FOTUFILM_AOT_WINDOWED_STAGES | FOTUFILM_FRAME_MONOCHROME) \
+    X(color_float_realtime_negative, FOTUFILM_AOT_WINDOWED_STAGES | FOTUFILM_FRAME_DENSITY_OUT)
 
 /// A twin compiled for one exact stage set, with nothing gated at run time: every stage it carries
 /// runs, so its kernels read no bypass arm and store nothing a gate could skip. The shim serves a
@@ -151,7 +152,8 @@
     X(color_float_realtime, negative_donor, (((FOTUFILM_AOT_WINDOWED_STAGES) & ~FOTUFILM_VARIANT_STAGE_BITS) | FOTUFILM_AOT_PRINTED_NEGATIVE_DONOR)) \
     X(color_float_realtime, slide_interimage, (((FOTUFILM_AOT_WINDOWED_STAGES) & ~FOTUFILM_VARIANT_STAGE_BITS) | FOTUFILM_AOT_SLIDE_INTERIMAGE)) \
     X(color_float_realtime, printed_slide, (((FOTUFILM_AOT_WINDOWED_STAGES) & ~FOTUFILM_VARIANT_STAGE_BITS) | FOTUFILM_AOT_PRINTED_SLIDE)) \
-    X(monochrome_float_realtime, printed_slide, (((FOTUFILM_AOT_WINDOWED_STAGES | FOTUFILM_FRAME_MONOCHROME) & ~FOTUFILM_VARIANT_STAGE_BITS) | FOTUFILM_AOT_PRINTED_SLIDE))
+    X(monochrome_float_realtime, printed_slide, (((FOTUFILM_AOT_WINDOWED_STAGES | FOTUFILM_FRAME_MONOCHROME) & ~FOTUFILM_VARIANT_STAGE_BITS) | FOTUFILM_AOT_PRINTED_SLIDE)) \
+    X(color_float_realtime_negative, negative, (((FOTUFILM_AOT_WINDOWED_STAGES | FOTUFILM_FRAME_DENSITY_OUT) & ~FOTUFILM_VARIANT_STAGE_BITS) | FOTUFILM_AOT_NEGATIVE))
 
 /// A stage bit is covered by any variant that carries it; an exact bit must match. The delivery
 /// encode and its transfer (ENCODE_OUT, OUTPUT_*) and the whole-frame glare measurement

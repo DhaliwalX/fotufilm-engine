@@ -49,12 +49,14 @@
 #if FOTUFILM_AOT_WINDOWED_HOST
 #include "fotufilm_halide_ios_color_float_realtime_windowed.h"
 #include "fotufilm_halide_ios_monochrome_float_realtime_windowed.h"
+#include "fotufilm_halide_ios_color_float_realtime_negative_windowed.h"
 #include "fotufilm_halide_ios_color_float_realtime_windowed_negative.h"
 #include "fotufilm_halide_ios_color_float_realtime_windowed_negative_luma.h"
 #include "fotufilm_halide_ios_color_float_realtime_windowed_negative_donor.h"
 #include "fotufilm_halide_ios_color_float_realtime_windowed_slide_interimage.h"
 #include "fotufilm_halide_ios_color_float_realtime_windowed_printed_slide.h"
 #include "fotufilm_halide_ios_monochrome_float_realtime_windowed_printed_slide.h"
+#include "fotufilm_halide_ios_color_float_realtime_negative_windowed_negative.h"
 #endif
 
 #endif
