@@ -66,7 +66,10 @@ struct HostPlatform {
 
     /// What the editor may offer with these services.
     var capabilities: [String: Any] {
-        [
+        // Typed beforehand: inside the heterogeneous literal, the optional chain and `??` are
+        // past what Swift 6.2's type checker solves on Linux.
+        let imageExportTypes: [String] = encoder.map { $0.types.sorted() + [CineonDPX.mimeType] } ?? []
+        return [
             "importPath": decoder != nil,
             "thumbnails": thumbnails != nil,
             // Scanned negatives open as documents, read as the edit's film and printed.
@@ -78,7 +81,7 @@ struct HostPlatform {
             "copyImage": clipboard != nil,
             "printFrames": frames != nil,
             // A Cineon Log scan's DPX is written in Swift, beside whatever the encoder writes.
-            "imageExportTypes": encoder.map { $0.types.sorted() + [CineonDPX.mimeType] } ?? [],
+            "imageExportTypes": imageExportTypes,
             "hdrExport": encoder?.writesHDR ?? false,
             // Export All: the open photographs into one folder, pipelined (`exportBatch`).
             "batchExport": decoder != nil && encoder != nil,
