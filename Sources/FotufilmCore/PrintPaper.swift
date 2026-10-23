@@ -41,8 +41,9 @@ public enum PrintPaper: String, CaseIterable, Sendable {
     case agfaCP30 = "agfa-cp30"
     /// FUJIFILM ETERNA-CP 3521XD: measured curves, with 3513DI's spectra.
     case eternaCP3521XD = "eterna-cp-3521xd"
-    /// A flat film scan for grading: each record's printing density (SMPTE RP 180) above the
-    /// film base, as Cineon code values (`CineonLog`). Nothing is timed, inverted or finished.
+    /// A flat film scan for grading: each record's printing density (SMPTE RP 180) as Cineon code
+    /// values set up on the stock's laboratory aim density (`CineonLog`). Nothing is timed,
+    /// inverted or finished.
     case cineonLog = "cineon-log"
 
     /// Default for engine and headless callers.
@@ -121,7 +122,7 @@ public enum PrintPaper: String, CaseIterable, Sendable {
         case .telecine:
             return "A Rec.709 video transfer with timed color, raised blacks and a finished contrast curve."
         case .cineonLog:
-            return "A flat film scan for grading: printing density above the film base as 10-bit Cineon log, base at 95. Read it in DaVinci Resolve as Cineon Film Log."
+            return "A flat film scan for grading: printing density as 10-bit Cineon log, a normal grey at 445 in every channel. Read it in DaVinci Resolve as Cineon Film Log."
         case .screen:
             return "A fixed digital receiver preserves negative-film color and tone. Reversal films are viewed directly and support HDR output."
         case .negative:
