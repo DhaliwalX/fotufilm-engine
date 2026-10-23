@@ -301,11 +301,18 @@ public struct DXEdgeCode: Codable, Equatable, Sendable {
         func bits(_ value: Int, _ count: Int) -> [Bool] {
             (0..<count).map { value >> (count - 1 - $0) & 1 == 1 }
         }
-        let payload = bits(part1, 7) + bits(part2, 4) + bits(frame & 63, 6) + [half]
+        let first: [Bool] = bits(part1, 7), second: [Bool] = bits(part2, 4)
+        let count: [Bool] = bits(frame & 63, 6)
+        let payload: [Bool] = first + second + count + [half]
         let parity = payload.filter { $0 }.count % 2 == 1
-        let data = [true, false, true, false, true, false] + bits(part1, 7) + [false]
-            + bits(part2, 4) + bits(frame & 63, 6) + [half, false, parity]
-            + [false, true, false, true]
+        // Joined a piece at a time: one long sum of array literals and calls is past what Swift
+        // 6.2's type checker solves on Linux.
+        var data: [Bool] = [true, false, true, false, true, false]
+        data += first
+        data.append(false)
+        data += second
+        data += count
+        data += [half, false, parity, false, true, false, true]
         // The clock track is the same in every code.
         let clock = "1111101010101010101010101010111".map { $0 == "1" }
         return (data, clock)
