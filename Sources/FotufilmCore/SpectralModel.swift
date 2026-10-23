@@ -654,9 +654,8 @@ public enum SpectralRuntime {
         }
 
         let printing: SpectralLUT
-        // Cineon's film base, as the same relative read: the printing density mid-grey holds
-        // above the base, per record.
-        var cineonBaseRead: SIMD3<Float>?
+        // Whether the output table writes Cineon code values from the relative read.
+        var cineonScan = false
         if paper.readsLayersDirectly(for: stock) {
             let reading = screenReading(for: stock)
             // The same film-base black a colour negative gets at a reference exposure.
@@ -727,7 +726,7 @@ public enum SpectralRuntime {
                 }
             }
             let relativeEnergy = energyReader(receiverBands)
-            if paper.deliversCodeValues { cineonBaseRead = relativeEnergy(dMin) }
+            cineonScan = paper.deliversCodeValues
             // Digital Reference at a reference exposure carries the film base to display
             // black by stretching only the shadow side of the read, so the stock's highlight
             // contrast stays its own. The graded styles level the whole read in the kernel.
@@ -767,18 +766,19 @@ public enum SpectralRuntime {
         let viewingLight = printViewingKelvin.map(printLightSPD)
             ?? referenceViewingLight(for: paper)
         let paperOutput: SpectralLUT
-        if let base = cineonBaseRead {
+        if cineonScan {
             // The straight line hands the relative read back unchanged, so each channel's code
             // value is linear in its activation and the cube interpolates it exactly. The read
-            // is the printing density mid-grey holds above this pixel's; the base's is the same
-            // above the base's, so their difference is the density above the base.
+            // is the printing density the stock's mid-grey holds above this pixel's, so its
+            // negation is the pixel's density above that grey, which the scanner's set-up
+            // places on the LAD code value in every record.
             let line = PrintPaper.cineonLine
             paperOutput = buildLUT { activation in
                 let read = SIMD3(activation.x * paperRanges[0], activation.y * paperRanges[1],
                                  activation.z * paperRanges[2]) / line.gamma + line.toe
-                return SIMD3(CineonLog.signal(densityAboveBase: base.x - read.x),
-                             CineonLog.signal(densityAboveBase: base.y - read.y),
-                             CineonLog.signal(densityAboveBase: base.z - read.z))
+                return SIMD3(CineonLog.signal(densityAboveGrey: -read.x),
+                             CineonLog.signal(densityAboveGrey: -read.y),
+                             CineonLog.signal(densityAboveGrey: -read.z))
             }
         } else if paper == .screen {
             let grade = effectiveScreenGrade(screenGrade, stock: stock, paper: paper,
@@ -2736,8 +2736,6 @@ extension SpectralRuntime {
         let viewingLight = referenceViewingLight(for: paper)
         let receiver = printReceiver(stock: stock, paper: paper,
                                      viewingLight: viewingLight)
-        let cineonBase = paper.deliversCodeValues
-            ? relativeEnergy(stock.curves.map(\.dMin)) : .zero
         return stops.map { s in
             let density = (0..<3).map {
                 stock.developedDensity(layer: $0, logExposure: s * perStop)
@@ -2770,7 +2768,7 @@ extension SpectralRuntime {
             } else if paper.deliversCodeValues {
                 // Code values, read as the output table writes them.
                 rgb = SIMD3((0..<3).map {
-                    CineonLog.signal(densityAboveBase: cineonBase[$0] - relative[$0])
+                    CineonLog.signal(densityAboveGrey: -relative[$0])
                 })
             } else if paper.isScan {
                 // A scan's characterization holds the receiver's luminance exactly, so this
