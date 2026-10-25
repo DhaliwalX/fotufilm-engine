@@ -1,6 +1,7 @@
 // The "?" beside a control's name: the catalogue's description of the control in a popover.
 import 'package:flutter/widgets.dart';
 
+import '../../app/strings.dart';
 import '../theme/theme.dart';
 import 'buttons.dart';
 import 'focus.dart';
@@ -14,22 +15,23 @@ class HelpButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final detail = this.detail;
-    if (detail == null || detail.isEmpty) return const SizedBox.shrink();
+    final source = detail;
+    if (source == null || source.isEmpty) return const SizedBox.shrink();
+    final shown = AppStrings.tr(source);
     return Builder(builder: (anchor) {
       void open() => showAnchored(
             anchor,
             (context, _) => PopoverSurface(
               child: Padding(
                 padding: const EdgeInsets.all(12),
-                child: Text(detail, style: editorText(context, height: 1.45)),
+                child: Text(shown, style: editorText(context, height: 1.45)),
               ),
             ),
             width: 240,
           );
       return KeyTarget(
         onActivate: open,
-        label: 'Help',
+        label: AppStrings.tr('Help'),
         radius: size,
         child: MouseRegion(
         cursor: SystemMouseCursors.click,

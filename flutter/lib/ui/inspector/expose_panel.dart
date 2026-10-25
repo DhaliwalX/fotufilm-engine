@@ -5,6 +5,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
 
+import '../../app/strings.dart';
 import '../../model/catalogue.dart';
 import '../../model/negative_document.dart';
 import '../kit/kit.dart';
@@ -27,17 +28,17 @@ List<Widget> exposePanel(InspectorControls c) {
   // Only a photograph that records light above white has any to keep.
   final headroom = editor.active?.headroom ?? 1;
   return [
-    Section(title: 'Light', children: [
+    Section(title: AppStrings.tr('Light'), children: [
       ...c.sliders('Light', film: !negative),
       if (!negative)
         SwitchRow(
-          label: 'Regional',
+          label: AppStrings.tr('Regional'),
           detail: c.catalogue.detail('localTone'),
           value: c.edit['localTone'] == true,
           onChanged: (v) => editor.change({'localTone': v}),
         ),
     ]),
-    if (!negative) Section(title: 'Source Illuminant', children: [
+    if (!negative) Section(title: AppStrings.tr('Source Illuminant'), children: [
       PickerField<String>(
         label: sceneLight['title'] as String,
         detail: sceneLight['detail'] as String?,
@@ -50,15 +51,15 @@ List<Widget> exposePanel(InspectorControls c) {
       ),
       if (c.edit['sceneLight'] == 'custom') ...c.sliders('Source Illuminant'),
     ]),
-    Section(title: 'White Balance', children: c.sliders('White Balance')),
-    Section(title: 'Color', children: c.sliders('Color')),
-    Section(title: 'Grade', children: [
+    Section(title: AppStrings.tr('White Balance'), children: c.sliders('White Balance')),
+    Section(title: AppStrings.tr('Color'), children: c.sliders('Color')),
+    Section(title: AppStrings.tr('Grade'), children: [
       GradeDeck(editor: editor),
-      c.editSwitch('gradeSpace', 'Encoded Grade'),
+      c.editSwitch('gradeSpace', AppStrings.tr('Encoded Grade')),
       Align(
         alignment: Alignment.centerLeft,
         child: PillButton(
-          'Reset Grade',
+          AppStrings.tr('Reset Grade'),
           variant: ButtonVariant.negative,
           onPressed: graded
               ? () => editor.change({
@@ -69,13 +70,13 @@ List<Widget> exposePanel(InspectorControls c) {
       ),
     ]),
     if (!negative && c.available.contains('shutter'))
-      Section(title: 'Long Exposure', children: c.profileControls(const ['shutter'])),
+      Section(title: AppStrings.tr('Long Exposure'), children: c.profileControls(const ['shutter'])),
     if (!negative && !c.fixedSettings) lensFiltersSection(c),
     if (!negative) LensSection(editor: editor),
     if (!negative && headroom > 1)
-      Section(title: 'HDR Highlights', children: [
+      Section(title: AppStrings.tr('HDR Highlights'), children: [
         ...c.profileControls(const ['hdrRange', 'hdrRollOff']),
-        Note('${_stops(math.log(headroom) / math.ln2)} stops above white recorded'),
+        Note('${_stops(math.log(headroom) / math.ln2)} ${AppStrings.tr('stops above white recorded')}'),
       ]),
   ];
 }

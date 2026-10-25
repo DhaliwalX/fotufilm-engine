@@ -4,6 +4,7 @@
 // size instead.
 import 'package:flutter/widgets.dart';
 
+import '../../app/strings.dart';
 import '../../model/editor.dart';
 import '../../model/export.dart';
 import '../kit/kit.dart';
@@ -83,18 +84,18 @@ class _ExportDialogState extends State<ExportDialog> {
     final palette = Palette.of(context);
 
     return DialogCard(
-      title: batch ? 'Export $count photos' : 'Export image',
+      title: batch ? '${AppStrings.tr('Export')} $count ${AppStrings.tr('Photos')}' : AppStrings.tr('Export image'),
       width: 480,
       actions: [
-        PillButton('Cancel', onPressed: exporting ? x.cancel : widget.onClose),
+        PillButton(AppStrings.tr('Cancel'), onPressed: exporting ? x.cancel : widget.onClose),
         PillButton(
           exporting
-              ? 'Exporting…'
+              ? AppStrings.tr('Exporting…')
               : original
-                  ? 'Export Original'
+                  ? AppStrings.tr('Export Original')
                   : batch
                       ? 'Export $count Photos'
-                      : 'Export',
+                      : AppStrings.tr('Export'),
           variant: ButtonVariant.accent,
           onPressed: exporting || (!original && unavailable.contains(sizeId))
               ? null
@@ -109,10 +110,10 @@ class _ExportDialogState extends State<ExportDialog> {
             opacity: exporting ? .45 : 1,
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               if (count > 1)
-                _SelectRow('Export', PickerField<String>(
+                _SelectRow(AppStrings.tr('Export'), PickerField<String>(
                   value: _scope,
                   options: [
-                    const PickerOption('photo', 'This Photo'),
+                    PickerOption('photo', AppStrings.tr('This Photo')),
                     PickerOption('all', x.batchChosen ? '$count Chosen Photos' : 'All $count Photos'),
                   ],
                   onChanged: (v) => setState(() => _scope = v),
@@ -122,22 +123,21 @@ class _ExportDialogState extends State<ExportDialog> {
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   // In a row, so the button keeps its own width.
                   child: Row(children: [
-                    PillButton('Use Last Export Settings', onPressed: x.applyLast),
+                    PillButton(AppStrings.tr('Use Last Export Settings'), onPressed: x.applyLast),
                   ]),
                 ),
-              _SelectRow('Format', PickerField<String>(
+              _SelectRow(AppStrings.tr('Format'), PickerField<String>(
                 value: x.type,
                 options: [
                   for (final (id, label) in types) PickerOption(id, label),
-                  if (originalAvailable) const PickerOption(originalType, 'Original RAW'),
+                  if (originalAvailable) PickerOption(originalType, AppStrings.tr('Original RAW')),
                 ],
                 onChanged: (v) => setState(() => x.type = v),
               )),
               if (original)
-                const _Detail('Copies the original camera RAW file. Fotufilm edits and the '
-                    'resolution setting are not included.')
+                _Detail(AppStrings.tr('Copies the original camera RAW file. Fotufilm edits and the resolution setting are not included.'))
               else ...[
-                _SelectRow('Size', PickerField<String>(
+                _SelectRow(AppStrings.tr('Size'), PickerField<String>(
                   value: sizeId,
                   options: [
                     for (final s in sizes)
@@ -155,14 +155,14 @@ class _ExportDialogState extends State<ExportDialog> {
                   Padding(
                     padding: const EdgeInsets.only(top: 10, bottom: 4),
                     child: AdjustmentRow(
-                      label: 'Quality',
+                      label: AppStrings.tr('Quality'),
                       value: x.quality.toDouble(),
                       range: const SliderRange(min: 1, max: 100, step: 1, def: 95),
                       onChanged: (v) => setState(() => x.quality = v.round()),
                     ),
                   ),
                 if (metadata != null && !dpx)
-                  _SelectRow('Metadata', PickerField<String>(
+                  _SelectRow(AppStrings.tr('Metadata'), PickerField<String>(
                     value: x.metadata,
                     options: [
                       for (final id in metadata) PickerOption(id, metadataLabels[id] ?? id),
@@ -172,7 +172,7 @@ class _ExportDialogState extends State<ExportDialog> {
                 if (x.type == 'image/heic' && hdrOffered)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: SwitchRow(label: 'HDR', value: x.hdr, onChanged: (v) => x.hdr = v),
+                    child: SwitchRow(label: AppStrings.tr('HDR'), value: x.hdr, onChanged: (v) => x.hdr = v),
                   ),
                 // The desktop engine writes Display P3, and a Cineon Log scan printing density.
                 _Detail('${batch ? '$count photos' : '${delivered.width} × ${delivered.height} '
@@ -193,7 +193,7 @@ class _ExportDialogState extends State<ExportDialog> {
         if (exporting)
           Padding(
             padding: const EdgeInsets.only(top: 12),
-            child: Text(editor.status ?? 'Preparing export',
+            child: Text(AppStrings.tr(editor.status ?? 'Preparing export'),
                 style: editorText(context, color: palette.text)),
           ),
       ],
@@ -218,9 +218,9 @@ class _ExportDialogState extends State<ExportDialog> {
       title: label('export'),
       width: 480,
       actions: [
-        PillButton('Cancel', onPressed: exporting ? x.cancel : widget.onClose),
+        PillButton(AppStrings.tr('Cancel'), onPressed: exporting ? x.cancel : widget.onClose),
         PillButton(
-          exporting ? 'Exporting…' : 'Export',
+          exporting ? AppStrings.tr('Exporting…') : AppStrings.tr('Export'),
           variant: ButtonVariant.accent,
           onPressed: exporting || type == null ? null : () => _export(false),
         ),
@@ -235,10 +235,10 @@ class _ExportDialogState extends State<ExportDialog> {
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   child: Row(children: [
-                    PillButton('Use Last Export Settings', onPressed: x.applyLast),
+                    PillButton(AppStrings.tr('Use Last Export Settings'), onPressed: x.applyLast),
                   ]),
                 ),
-              _SelectRow('Format', PickerField<String>(
+              _SelectRow(AppStrings.tr('Format'), PickerField<String>(
                 value: type?['id'] as String? ?? x.videoFormat,
                 options: [
                   for (final t in x.videoTypes)
@@ -246,7 +246,7 @@ class _ExportDialogState extends State<ExportDialog> {
                 ],
                 onChanged: (v) => setState(() => x.videoFormat = v),
               )),
-              _SelectRow('Size', PickerField<String>(
+              _SelectRow(AppStrings.tr('Size'), PickerField<String>(
                 value: sizeId,
                 options: [
                   for (final s in sizes) PickerOption(s.id, [s.label, ?s.detail].join(' · ')),
@@ -257,7 +257,7 @@ class _ExportDialogState extends State<ExportDialog> {
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 6),
                   child: SwitchRow(
-                      label: 'HDR', value: x.videoHDR, onChanged: (v) => x.videoHDR = v),
+                      label: AppStrings.tr('HDR'), value: x.videoHDR, onChanged: (v) => x.videoHDR = v),
                 ),
               if (rates.isNotEmpty)
                 _SelectRow(label('frameRate'), PickerField<int?>(
@@ -269,13 +269,13 @@ class _ExportDialogState extends State<ExportDialog> {
                   onChanged: (v) => x.videoFrameRate = v,
                 )),
               if (x.videoProcessingOffered)
-                _SelectRow('Processing', PickerField<String>(
+                _SelectRow(AppStrings.tr('Processing'), PickerField<String>(
                   value: x.videoProcessing,
-                  options: const [PickerOption('full', 'Full'), PickerOption('fast', 'Fast')],
+                  options: [PickerOption('full', AppStrings.tr('Accurate')), PickerOption('fast', AppStrings.tr('Fast'))],
                   onChanged: (v) => x.videoProcessing = v,
                 )),
               if (type?['quality'] != false && x.videoBitrates.isNotEmpty)
-                _SelectRow('File Size', PickerField<String>(
+                _SelectRow(AppStrings.tr('File Size'), PickerField<String>(
                   value: x.videoBitrate,
                   options: [
                     for (final b in x.videoBitrates)
@@ -295,7 +295,7 @@ class _ExportDialogState extends State<ExportDialog> {
         if (exporting)
           Padding(
             padding: const EdgeInsets.only(top: 12),
-            child: Text(editor.status ?? 'Preparing export',
+            child: Text(AppStrings.tr(editor.status ?? 'Preparing export'),
                 style: editorText(context, color: palette.text)),
           ),
       ],
@@ -319,7 +319,7 @@ class _SelectRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: LayoutBuilder(
           builder: (context, constraints) => Row(children: [
-            Expanded(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis)),
+            Expanded(child: Text(AppStrings.tr(label), maxLines: 1, overflow: TextOverflow.ellipsis)),
             const SizedBox(width: 12),
             SizedBox(
                 width: (constraints.maxWidth - 96).clamp(120, 260).toDouble(), child: control),
@@ -336,7 +336,7 @@ class _Detail extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.only(top: 10),
-        child: Text(text,
+        child: Text(AppStrings.tr(text),
             style: editorText(context,
                 size: TextSizes.label, color: Palette.of(context).muted, height: 1.6)),
       );

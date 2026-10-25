@@ -2,6 +2,7 @@
 // files (export_dialog.dart, shortcuts_dialog.dart).
 import 'package:flutter/widgets.dart';
 
+import '../../app/strings.dart';
 import '../theme/theme.dart';
 
 /// A dialog's card: its title, its body and its buttons on the right.
@@ -35,7 +36,7 @@ class DialogCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(title,
+            Text(AppStrings.tr(title),
                 style: editorText(context, size: TextSizes.dialog, weight: FontWeight.w700)),
             const SizedBox(height: 14),
             ...children,

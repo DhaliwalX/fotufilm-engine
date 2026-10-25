@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
 
+import '../../app/strings.dart';
 import '../../model/editor.dart';
 import '../kit/kit.dart';
 import '../theme/theme.dart';
@@ -85,7 +86,7 @@ class _GradeDeckState extends State<GradeDeck> {
     final warmth = _get('Warmth'), tint = _get('Tint'), level = _get('Level');
     final rounded = (level * 100).round();
     return [
-      if (warmth != 0 || tint != 0) _cast(warmth, tint),
+      if (warmth != 0 || tint != 0) AppStrings.tr(_cast(warmth, tint)),
       if (level != 0) '${rounded < 0 ? '-' : '+'}${rounded.abs()}',
     ].join(' · ');
   }
@@ -97,13 +98,13 @@ class _GradeDeckState extends State<GradeDeck> {
         .copyWith(letterSpacing: .66);
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       SegmentedControl<String>(
-        items: [for (final b in GradeDeck.bands) (b, b)],
+        items: [for (final b in GradeDeck.bands) (b, AppStrings.tr(b))],
         selected: _band,
         onChanged: (b) => setState(() => _band = b),
       ),
       const SizedBox(height: Metrics.gradeGap),
       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Text(_band.toUpperCase(), style: caps),
+        Text(AppStrings.tr(_band).toUpperCase(), style: caps),
         Text(_reading.toUpperCase(),
             style: caps.copyWith(fontWeight: FontWeight.w500, color: palette.muted)),
       ]),
@@ -121,8 +122,8 @@ class _GradeDeckState extends State<GradeDeck> {
         size.height / 2 - _get('Tint') * (size.height / 2 - _padInset));
     final warmth = _get('Warmth'), tint = _get('Tint');
     return KeyTarget(
-      label: 'Color balance pad',
-      value: warmth == 0 && tint == 0 ? 'Neutral' : _cast(warmth, tint),
+      label: AppStrings.tr('Color balance pad'),
+      value: warmth == 0 && tint == 0 ? AppStrings.tr('Neutral') : AppStrings.tr(_cast(warmth, tint)),
       onNudge: (direction, shift) {
         final step = shift ? _step / 10 : _step;
         _nudge({'Warmth': direction.dx * step, 'Tint': -direction.dy * step});
@@ -153,7 +154,7 @@ class _GradeDeckState extends State<GradeDeck> {
       return level == 0 ? '0' : '${level < 0 ? '-' : '+'}${level.abs()}';
     }
     return KeyTarget(
-      label: 'Level',
+      label: AppStrings.tr('Level'),
       value: reading(_get('Level')),
       increasedValue: reading(_get('Level') + _step),
       decreasedValue: reading(_get('Level') - _step),

@@ -6,6 +6,8 @@ import 'dart:convert';
 
 import 'package:flutter/services.dart';
 
+import '../app/strings.dart';
+
 typedef Json = Map<String, dynamic>;
 
 class SliderSpec {
@@ -37,13 +39,35 @@ class Catalogue {
   static Future<Catalogue> load() async =>
       Catalogue._(jsonDecode(await rootBundle.loadString('assets/generated/controls.json')) as Json);
 
+  static Json _tr(Json c) => {
+        ...c,
+        if (c['title'] case final String title) 'title': AppStrings.tr(title),
+        if (c['label'] case final String label) 'label': AppStrings.tr(label),
+        if (c['detail'] case final String detail) 'detail': AppStrings.tr(detail),
+        if (c['name'] case final String name) 'name': AppStrings.tr(name),
+        if (c['groupTitle'] case final String groupTitle) 'groupTitle': AppStrings.tr(groupTitle),
+        if (c['choices'] case final List choices)
+          'choices': [
+            for (final choice in choices.cast<Json>())
+              {
+                ...choice,
+                if (choice['label'] case final String label) 'label': AppStrings.tr(label),
+                if (choice['name'] case final String name) 'name': AppStrings.tr(name),
+                if (choice['detail'] case final String detail) 'detail': AppStrings.tr(detail),
+              }
+          ],
+      };
+
   List<Json> get controls => (module['EDITOR_CONTROLS'] as List).cast<Json>();
   List<Json> get filmFormats => (module['FILM_FORMATS'] as List).cast<Json>();
-  Json get screenConversion => module['SCREEN_CONVERSION'] as Json;
-  Json get profileMenus => module['PROFILE_MENUS'] as Json;
+  Json get screenConversion => _tr(module['SCREEN_CONVERSION'] as Json);
+  Json get profileMenus => {
+        for (final MapEntry(:key, :value) in (module['PROFILE_MENUS'] as Json).entries)
+          key: [for (final item in (value as List).cast<Json>()) _tr(item)],
+      };
 
-  Json control(String field) => controls.firstWhere((c) => c['field'] == field,
-      orElse: () => throw StateError('Unknown editor control: $field'));
+  Json control(String field) => _tr(controls.firstWhere((c) => c['field'] == field,
+      orElse: () => throw StateError('Unknown editor control: $field')));
 
   String? detail(String field) {
     for (final c in controls) {
@@ -66,8 +90,8 @@ class Catalogue {
     final scale = c['scale'] as Json;
     return SliderSpec(
       key: field,
-      label: c['title'] as String,
-      detail: c['detail'] as String?,
+      label: AppStrings.tr(c['title'] as String),
+      detail: (c['detail'] as String?) == null ? null : AppStrings.tr(c['detail'] as String),
       availability: c['availability'] as String?,
       group: group,
       step: step,
@@ -109,7 +133,7 @@ class Catalogue {
   late final List<Json> profileControls = [
     for (final c in controls)
       if (c['webTransform'] == 'profile')
-        {...c, 'choices': c['choices'] ?? profileMenus[c['field']]},
+        _tr({...c, 'choices': c['choices'] ?? profileMenus[c['field']]}),
   ];
 
   static Object? profileDefault(Json c) {
@@ -132,7 +156,7 @@ class Catalogue {
     final medium = profileMedium(edit, stock);
     final profile = stock?['profile'] as Map?;
     return {
-      ...c,
+      ..._tr(c),
       'scale': (profile?['scales'] as Map?)?[c['field']] ?? c['scale'],
       'choices': c['field'] == 'printLight'
           ? (medium?['viewingLights'] ?? c['choices'])

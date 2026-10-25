@@ -1,6 +1,7 @@
 // Spectrum's SegmentedControl, justified: a grey track with the selection as a raised white pill.
 import 'package:flutter/widgets.dart';
 
+import '../../app/strings.dart';
 import '../theme/theme.dart';
 import 'focus.dart';
 
@@ -27,7 +28,7 @@ class SegmentedControl<T> extends StatelessWidget {
           Expanded(
             child: KeyTarget(
               onActivate: () => onChanged(value),
-              label: label,
+              label: AppStrings.tr(label),
               selected: value == selected,
               radius: 8,
               child: GestureDetector(
@@ -45,7 +46,7 @@ class SegmentedControl<T> extends StatelessWidget {
                         ],
                       )
                     : null,
-                child: Text(label,
+                child: Text(AppStrings.tr(label),
                     maxLines: 1,
                     softWrap: false,
                     overflow: TextOverflow.fade,
