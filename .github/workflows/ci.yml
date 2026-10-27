@@ -36,6 +36,7 @@ jobs:
         run: tools/test-tiff-codec.sh
       - run: python3 tools/generate-config-layout.py --check
       - run: python3 tools/generate-aot-variants.py --check
+      - run: python3 tools/export-web-constants.py --check
       - run: swift run fotufilm-controls --check
       - run: python3 tools/test-config-layout.py
       - run: python3 tools/test-aot-variants.py
