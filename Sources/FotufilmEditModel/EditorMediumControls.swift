@@ -55,6 +55,11 @@ extension EditorControlCatalogue {
             // Cineon code values are graded in the suite they are delivered to, and a frame
             // drawn in display light has no density to write.
             return !paper.deliversCodeValues
+        case .shadowDetail, .highlightDetail:
+            // The print's own light, so nothing to hold back on the viewed negative, and Cineon
+            // delivers code values for the suite to grade.
+            guard let stock else { return false }
+            return !(paper.isNegative && !stock.isReversal) && !paper.deliversCodeValues
         case .screenGrade:
             // The grade shapes the graded curve, which only a negative is printed through, and
             // Reference Exposure keeps the calibrated curve without one.

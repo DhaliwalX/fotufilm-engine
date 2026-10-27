@@ -313,6 +313,14 @@
       "colours": [],
       "rendering": "hierarchical"
     },
+    "fotu.slider.highlightDetail.high": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.highlightDetail.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
     "fotu.slider.highlights.high": {
       "colours": [],
       "rendering": "hierarchical"
@@ -609,6 +617,14 @@
         "systemBlue"
       ],
       "rendering": "multicolor"
+    },
+    "fotu.slider.shadowDetail.high": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.shadowDetail.low": {
+      "colours": [],
+      "rendering": "hierarchical"
     },
     "fotu.slider.shadows.high": {
       "colours": [],
@@ -1021,6 +1037,10 @@
       "high": "fotu.slider.hdrRollOff.high",
       "low": "fotu.slider.hdrRollOff.low"
     },
+    "highlightDetail": {
+      "high": "fotu.slider.highlightDetail.high",
+      "low": "fotu.slider.highlightDetail.low"
+    },
     "highlights": {
       "high": "fotu.slider.highlights.high",
       "low": "fotu.slider.highlights.low"
@@ -1140,6 +1160,10 @@
     "screenYellow": {
       "high": "fotu.slider.screenYellow.high",
       "low": "fotu.slider.screenYellow.low"
+    },
+    "shadowDetail": {
+      "high": "fotu.slider.shadowDetail.high",
+      "low": "fotu.slider.shadowDetail.low"
     },
     "shadows": {
       "high": "fotu.slider.shadows.high",

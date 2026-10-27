@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "count": 18271,
+  "count": 18275,
   "fields": {
     "CURVES": {
       "offset": 0,
@@ -413,6 +413,10 @@
     "SCAN_CROSSTALK": {
       "offset": 18262,
       "count": 9
+    },
+    "PRINT_DETAIL": {
+      "offset": 18271,
+      "count": 4
     }
   }
 }

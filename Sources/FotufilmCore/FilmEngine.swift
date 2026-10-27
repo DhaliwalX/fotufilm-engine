@@ -425,6 +425,9 @@ public struct FilmEngineInvocation {
     public static let grainModeOffset = Int(FOTUFILM_CONFIG_GRAIN_MODE)
     public static let cameraPreflashOffset = Int(FOTUFILM_CONFIG_CAMERA_PREFLASH)
     public static let printerPreflashOffset = Int(FOTUFILM_CONFIG_PRINTER_PREFLASH)
+    /// Shadow and Highlight Detail: the two strengths, then the highlight knee and white
+    /// (`PrintDetail.packed`); mirrors FOTUFILM_CONFIG_PRINT_DETAIL.
+    public static let printDetailOffset = Int(FOTUFILM_CONFIG_PRINT_DETAIL)
     /// The primaries of the byte frames on the encoded-byte road, input then output: 0 is
     /// Display P3, 1 is sRGB; mirrors FOTUFILM_CONFIG_BYTE_BASIS.
     public static let byteBasisOffset = Int(FOTUFILM_CONFIG_BYTE_BASIS)
@@ -1491,6 +1494,15 @@ public struct FilmEngineInvocation {
             : PrintFinish.neutral.packed
         configuration += ApproximateNegativeScan.packedReading(
             options.stage == .print ? options.scanReading : nil)
+        // Shadow and Highlight Detail dodge and burn whatever the film is printed, scanned or
+        // viewed as: never the viewed negative, nor the Cineon scan's code values.
+        let printsDetail = !noFilm && options.stage.writesPrint && !showingNegative
+            && !printMedium.deliversCodeValues
+        configuration += PrintDetail.packed(
+            shadows: printsDetail ? options.shadowDetail : 0,
+            highlights: printsDetail ? options.highlightDetail : 0, curves: paperCurves,
+            midpoints: printMedium.printExposureMidpoints(
+                for: stock, digitalReference: options.digitalReference))
         precondition(configuration.count == Self.configurationCount)
 
         var optical = 0

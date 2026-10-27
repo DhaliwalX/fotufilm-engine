@@ -154,6 +154,8 @@ extension EditorControlField {
                             write: { $0.printerProfile.yellow = Float($1) })
         case .printCorrection: return .number(\.printCorrection)
         case .printerPreflash: return .number(\.printerPreflash)
+        case .shadowDetail: return .number(\.shadowDetail)
+        case .highlightDetail: return .number(\.highlightDetail)
         case .printerRed: return .number(\.printerRed)
         case .printerGreen: return .number(\.printerGreen)
         case .printerBlue: return .number(\.printerBlue)

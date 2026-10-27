@@ -166,6 +166,8 @@ class Catalogue {
         return flag('correction');
       case 'negativeViewing':
         return flag('negative');
+      case 'highlightDetail' || 'shadowDetail':
+        return flag('printDetail');
       case 'filmGrainSize' || 'filmColourGrain' || 'filmRedLayer' || 'filmGreenLayer' ||
             'filmBlueLayer' || 'filmScanSoftness':
         return (edit['profile'] as Map?)?['grainModel'] == 'film';

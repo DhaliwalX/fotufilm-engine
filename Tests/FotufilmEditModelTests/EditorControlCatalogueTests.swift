@@ -419,6 +419,19 @@ final class EditorControlCatalogueTests: XCTestCase {
         XCTAssertFalse(offers(.screen, .negativeViewing, negative))
     }
 
+    func testPrintDetailStandsWhereThePrintHasLight() throws {
+        let negative = try preset("example-negative-400")
+        let reversal = try preset("example-reversal-64")
+        for field in [EditorControlField.highlightDetail, .shadowDetail] {
+            XCTAssertTrue(offers(.screen, field, negative), "\(field)")
+            XCTAssertTrue(offers(.ektacolorEdge, field, negative), "\(field)")
+            XCTAssertTrue(offers(.screen, field, reversal), "\(field)")
+            XCTAssertFalse(offers(.negative, field, negative), "\(field)")
+            XCTAssertFalse(offers(.cineonLog, field, negative), "\(field)")
+            XCTAssertFalse(offers(.screen, field, nil), "\(field)")
+        }
+    }
+
     func testReversalOffersPrintControlsForPositivePaper() throws {
         let reversal = try preset("example-reversal-64")
         let offered = EditorControlCatalogue.controls(in: .printPaper,
@@ -428,7 +441,8 @@ final class EditorControlCatalogueTests: XCTestCase {
                         .printerRed, .printerGreen, .printerBlue, .negativeViewing,
                         .digitalReference,
                         .screenGrade, .screenExposure, .screenRedBand, .screenGreenBand,
-                        .screenBlueBand, .labScanDodging, .labScanLook])
+                        .screenBlueBand, .labScanDodging, .labScanLook, .highlightDetail,
+                        .shadowDetail])
         XCTAssertTrue(EditorControlCatalogue.control(.printFrame)!.availability.admits(stock: nil))
 
         let negative = try preset("example-negative-400")
@@ -440,7 +454,7 @@ final class EditorControlCatalogueTests: XCTestCase {
                         .digitalReference,
                         .screenGrade, .screenExposure, .screenRedBand, .screenGreenBand,
                         .screenBlueBand, .screenCyan, .screenMagenta, .screenYellow,
-                        .labScanDodging, .labScanLook])
+                        .labScanDodging, .labScanLook, .highlightDetail, .shadowDetail])
         XCTAssertEqual(EditorControlCatalogue.controls(in: .printLamp, for: negative).map(\.field),
                        [.enlarger, .printerEnabled, .printerLamp, .printerExposure,
                         .printerMagenta, .printerYellow, .printerPreflash])

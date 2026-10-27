@@ -150,6 +150,7 @@ public:
             return remember(values, schedule_.store_frame(values, half, channels));
         case Store::PrintActivation:
         case Store::PaperActivation:
+        case Store::DetailHold:
             if (register_stages()) {
                 schedule_.register_stage(values);
                 return remember(values, values);
