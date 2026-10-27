@@ -1651,7 +1651,8 @@ public struct FilmEngineInvocation {
                     ^ options.lensFilters.signature) &* 0x100000001b3
             }
         }
-        if !noFilm {
+        // Only a print that takes the hold reads the film's corners; any other leaves them zero.
+        if featureMask & FilmEngineFeature.printDetail != 0 {
             let corners = Self.printDetailOffset + 4
             self.configuration.replaceSubrange(corners..<corners + 6,
                                                with: PrintDetail.corners(of: self.spectral.filmOutput))

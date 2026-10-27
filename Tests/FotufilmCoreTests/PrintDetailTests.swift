@@ -132,12 +132,20 @@ final class PrintDetailTests: XCTestCase {
         XCTAssertTrue(compiles(.screen, 0.5))
         XCTAssertFalse(compiles(.negative, 0.5))
         XCTAssertFalse(compiles(.cineonLog, 0.5))
+        // Without the hold the film's corners stay zero.
+        var plain = FotufilmEngine.Options()
+        plain.paper = .vision2383
+        let invocation = FilmEngineInvocation(stock: film, options: plain, width: 4, height: 4)
+        let offset = FilmEngineInvocation.printDetailOffset + 4
+        XCTAssertEqual(Array(invocation.configuration[offset..<offset + 6]), [0, 0, 0, 0, 0, 0])
     }
 
     func testInvocationCarriesTheFilmCubesCorners() throws {
         for id in ["vision500t", "provia100f", "hp5plus400"] {
             let film = try XCTUnwrap(FilmStock.named(id))
-            let invocation = FilmEngineInvocation(stock: film, options: FotufilmEngine.Options(),
+            var options = FotufilmEngine.Options()
+            options.highlightDetail = 0.5
+            let invocation = FilmEngineInvocation(stock: film, options: options,
                                                   width: 4, height: 4)
             let offset = FilmEngineInvocation.printDetailOffset + 4
             let packed = Array(invocation.configuration[offset..<offset + 6])
