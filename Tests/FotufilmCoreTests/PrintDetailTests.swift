@@ -118,6 +118,35 @@ final class PrintDetailTests: XCTestCase {
         (rgb * PrintFinish.luminance).sum()
     }
 
+    func testOnlyAPrintWithDetailCompilesTheHold() throws {
+        let film = try XCTUnwrap(FilmStock.named("vision500t"))
+        func compiles(_ paper: PrintPaper, _ strength: Float) -> Bool {
+            var options = FotufilmEngine.Options()
+            options.paper = paper
+            options.shadowDetail = strength
+            let invocation = FilmEngineInvocation(stock: film, options: options, width: 4, height: 4)
+            return invocation.featureMask & FilmEngineFeature.printDetail != 0
+        }
+        XCTAssertFalse(compiles(.vision2383, 0))
+        XCTAssertTrue(compiles(.vision2383, 0.5))
+        XCTAssertTrue(compiles(.screen, 0.5))
+        XCTAssertFalse(compiles(.negative, 0.5))
+        XCTAssertFalse(compiles(.cineonLog, 0.5))
+    }
+
+    func testInvocationCarriesTheFilmCubesCorners() throws {
+        for id in ["vision500t", "provia100f", "hp5plus400"] {
+            let film = try XCTUnwrap(FilmStock.named(id))
+            let invocation = FilmEngineInvocation(stock: film, options: FotufilmEngine.Options(),
+                                                  width: 4, height: 4)
+            let offset = FilmEngineInvocation.printDetailOffset + 4
+            let packed = Array(invocation.configuration[offset..<offset + 6])
+            let cube = invocation.spectral.filmOutput
+            let clear = cube.sample(.zero), dense = cube.sample(SIMD3(repeating: 1))
+            XCTAssertEqual(packed, [clear.x, clear.y, clear.z, dense.x, dense.y, dense.z], id)
+        }
+    }
+
     func testZeroIsBitIdentical() throws {
         try XCTSkipUnless(FotufilmEngine.isHalideBackendAvailable,
                           "the Halide engine is the only processing backend")

@@ -76,9 +76,11 @@ inline Halide::Expr paper_activation(Halide::ImageParam &configuration,
                                      Halide::Func paper_curve, Halide::Expr channel,
                                      Halide::Expr relative,
                                      bool approximate = false,
-                                     Halide::Expr hold = Halide::Expr(0.0f)) {
+                                     Halide::Expr hold = Halide::Expr()) {
     Halide::Expr base = paper_curve_base(channel);
-    Halide::Expr exposure = paper_exposure(configuration, channel, relative, approximate) - hold;
+    Halide::Expr exposure = paper_exposure(configuration, channel, relative, approximate);
+    // Shadow and Highlight Detail's hold, where the print compiles one.
+    if (hold.defined()) exposure -= hold;
     return (sample_curve(paper_curve, exposure, channel) - configuration(base))
         / curve_range(configuration, base);
 }

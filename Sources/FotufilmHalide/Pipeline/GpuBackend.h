@@ -150,12 +150,21 @@ public:
             return remember(values, schedule_.store_frame(values, half, channels));
         case Store::PrintActivation:
         case Store::PaperActivation:
-        case Store::DetailHold:
             if (register_stages()) {
                 schedule_.register_stage(values);
                 return remember(values, values);
             }
             return values;
+        case Store::DetailHold:
+            // Every channel of the paper activation reads the hold, and the paper cube reads the
+            // activation several times a pixel, so inline it would sample the film cube for all
+            // three records at each read. Outside registers it is kept in full float: one log
+            // exposure a pixel.
+            if (register_stages()) {
+                schedule_.register_stage(values);
+                return remember(values, values);
+            }
+            return remember(values, schedule_.store_frame(values, false, channels));
         case Store::MtfLumaDirect:
         case Store::FlatDensity:
         case Store::Printed:

@@ -35,13 +35,20 @@ public enum PrintDetail {
     /// Each record's share of the exposure the controls are keyed on, near the print's luminance.
     public static let weights = SIMD3<Float>(0.25, 0.65, 0.10)
 
+    /// FOTUFILM_CONFIG_PRINT_DETAIL's length: strengths, knee, white, then the film's corners.
+    public static let count = 10
+
     /// FOTUFILM_CONFIG_PRINT_DETAIL: the shadow and highlight strengths, each held to 0...1, then
     /// the luminance-weighted paper exposures of the highlight knee and of the white, for a paper
-    /// whose records are `curves` with aims at `midpoints`.
+    /// whose records are `curves` with aims at `midpoints`. The film's corners stay zero until
+    /// `corners(of:)` fills them from the film cube.
     public static func packed(shadows: Float, highlights: Float,
                               curves: [CharacteristicCurve], midpoints: [Float]) -> [Float] {
         func held(_ value: Float) -> Float { min(max(value.isFinite ? value : 0, 0), 1) }
-        guard curves.count == 3, midpoints.count == 3 else { return [held(shadows), 0, 0, 0] }
+        let unplaced = [Float](repeating: 0, count: count - 4)
+        guard curves.count == 3, midpoints.count == 3 else {
+            return [held(shadows), 0, 0, 0] + unplaced
+        }
         var knee: Float = 0, white: Float = 0
         for record in 0..<3 {
             let curve = curves[record]
@@ -51,8 +58,19 @@ public enum PrintDetail {
             knee += weights[record] * curve.logExposure(density: bright)
             white += weights[record] * curve.logExposure(density: lightest)
         }
-        guard knee.isFinite, white.isFinite else { return [held(shadows), 0, 0, 0] }
-        return [held(shadows), held(highlights), knee, white]
+        guard knee.isFinite, white.isFinite else { return [held(shadows), 0, 0, 0] + unplaced }
+        return [held(shadows), held(highlights), knee, white] + unplaced
+    }
+
+    /// The film cube's clear (every activation zero) and densest (every activation one) relative
+    /// exposures, red, green and blue each: the last six floats of FOTUFILM_CONFIG_PRINT_DETAIL.
+    /// They are the cube's first and last nodes, so a pixel reads them rather than sampling.
+    public static func corners(of film: SpectralLUT) -> [Float] {
+        let last = (film.dimension * film.dimension * film.dimension - 1) * 4
+        guard film.dimension >= 2, film.values.count >= last + 3 else {
+            return [Float](repeating: 0, count: 6)
+        }
+        return Array(film.values[0..<3]) + Array(film.values[last..<last + 3])
     }
 
     /// A directly viewed transparency's mid-grey, as the optical density of an 18% display grey.
@@ -89,7 +107,7 @@ public enum PrintDetail {
     /// `print_detail_hold` in FotufilmHalide/Stages/Print.h.
     public static func hold(at: Float, mid: Float, black: Float, knee: Float, white: Float,
                             packed: [Float]) -> Float {
-        guard packed.count == 4 else { return 0 }
+        guard packed.count >= 4 else { return 0 }
         var hold: Float = 0
         let shadowKnee = mid + shadowKneeShare * (black - mid)
         let span = black - shadowKnee

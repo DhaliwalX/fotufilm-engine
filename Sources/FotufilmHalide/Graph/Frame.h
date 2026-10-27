@@ -699,6 +699,8 @@ struct PrintInputs {
     /// negative's light controls. The fused pipeline compiles it into its density-in variants
     /// alone; the standalone CPU print always does, and neutral slots leave its print untouched.
     bool finish;
+    /// Whether the print takes Shadow and Highlight Detail (FOTUFILM_FRAME_PRINT_DETAIL).
+    bool detail;
     std::string prefix;
     std::string suffix;
 };
@@ -724,40 +726,48 @@ inline Func build_print(Backend &b, const PrintInputs &in, Func developed, Var x
     // zero) or densest (every activation one), prints darker: the clear base for a negative, the
     // densest slide for a positive. A transparency viewed directly is keyed on its own displayed
     // density instead, between its densest and its clear film.
-    Func hold(name("print_detail_hold"));
-    Expr exposure[3], grey[3], clear[3], dense[3], shown[3], darkest[3], lightest[3];
-    for (int record = 0; record < 3; ++record) {
-        Expr clear_read = b.film_lut_sample(Expr(0.0f), Expr(0.0f), Expr(0.0f), record);
-        Expr dense_read = b.film_lut_sample(Expr(1.0f), Expr(1.0f), Expr(1.0f), record);
-        exposure[record] = paper_exposure(configuration, record, relative(record), approximate);
-        grey[record] = paper_exposure(configuration, record, Expr(0.0f), approximate);
-        clear[record] = paper_exposure(configuration, record, clear_read, approximate);
-        dense[record] = paper_exposure(configuration, record, dense_read, approximate);
-        shown[record] = relative(record);
-        darkest[record] = dense_read;
-        lightest[record] = clear_read;
+    // Without FOTUFILM_FRAME_PRINT_DETAIL the print compiles exactly as it did before the hold.
+    Func hold_view;
+    if (in.detail) {
+        Func hold(name("print_detail_hold"));
+        Expr exposure[3], grey[3], clear[3], dense[3], shown[3], darkest[3], lightest[3];
+        for (int record = 0; record < 3; ++record) {
+            // The film cube's corners, packed once (`PrintDetail.corners`).
+            Expr clear_read = configuration(FOTUFILM_CONFIG_PRINT_DETAIL + 4 + record);
+            Expr dense_read = configuration(FOTUFILM_CONFIG_PRINT_DETAIL + 7 + record);
+            exposure[record] = paper_exposure(configuration, record, relative(record),
+                                              approximate);
+            grey[record] = paper_exposure(configuration, record, Expr(0.0f), approximate);
+            clear[record] = paper_exposure(configuration, record, clear_read, approximate);
+            dense[record] = paper_exposure(configuration, record, dense_read, approximate);
+            shown[record] = relative(record);
+            darkest[record] = dense_read;
+            lightest[record] = clear_read;
+        }
+        auto key = [](const Expr (&records)[3]) {
+            return print_detail_key(records[0], records[1], records[2]);
+        };
+        auto view_key = [&](const Expr (&records)[3]) {
+            return view_detail_key(records[0], records[1], records[2], approximate);
+        };
+        Expr through_paper_hold = print_detail_hold(
+            configuration, key(exposure), key(grey), Halide::max(key(clear), key(dense)),
+            configuration(FOTUFILM_CONFIG_PRINT_DETAIL + 2),
+            configuration(FOTUFILM_CONFIG_PRINT_DETAIL + 3));
+        // PrintDetail.viewGrey and .whiteDensity: a display mid-grey, a stop above it, and the
+        // clear film a hair short of its own white.
+        constexpr float kViewGrey = 0.7447275f, kStop = 0.30103f, kWhiteDensity = 0.03f;
+        Expr viewed_hold = print_detail_hold(
+            configuration, view_key(shown), Expr(kViewGrey), view_key(darkest),
+            Expr(kViewGrey - kStop), view_key(lightest) + kWhiteDensity);
+        hold(x, y, c) = Halide::select(in.reversal != 0, viewed_hold, through_paper_hold);
+        hold_view = b.store(hold, Store::DetailHold, 1);
     }
-    auto key = [](const Expr (&records)[3]) {
-        return print_detail_key(records[0], records[1], records[2]);
-    };
-    auto view_key = [&](const Expr (&records)[3]) {
-        return view_detail_key(records[0], records[1], records[2], approximate);
-    };
-    Expr through_paper_hold = print_detail_hold(
-        configuration, key(exposure), key(grey), Halide::max(key(clear), key(dense)),
-        configuration(FOTUFILM_CONFIG_PRINT_DETAIL + 2),
-        configuration(FOTUFILM_CONFIG_PRINT_DETAIL + 3));
-    // PrintDetail.viewGrey and .whiteDensity: a display mid-grey, a stop above it, and the clear
-    // film a hair short of its own white.
-    constexpr float kViewGrey = 0.7447275f, kStop = 0.30103f, kWhiteDensity = 0.03f;
-    Expr viewed_hold = print_detail_hold(
-        configuration, view_key(shown), Expr(kViewGrey), view_key(darkest),
-        Expr(kViewGrey - kStop), view_key(lightest) + kWhiteDensity);
-    hold(x, y, c) = Halide::select(in.reversal != 0, viewed_hold, through_paper_hold);
-    Func hold_view = b.store(hold, Store::DetailHold, 1);
     Func activated(name("print_paper_activation"));
-    activated(x, y, c) = paper_activation(configuration, paper_curve, c, relative(c), approximate,
-                                          hold_view(x, y, 0));
+    activated(x, y, c) = in.detail
+        ? paper_activation(configuration, paper_curve, c, relative(c), approximate,
+                           hold_view(x, y, 0))
+        : paper_activation(configuration, paper_curve, c, relative(c), approximate);
     Func activated_view = b.store(activated, Store::PaperActivation, 3);
 
     Func display(name("print_display"));
@@ -765,9 +775,12 @@ inline Func build_print(Backend &b, const PrintInputs &in, Func developed, Var x
                                             activated_view(x, y, 2), c);
     // A directly viewed transparency takes its detail hold as light: the same factor on every
     // channel, so its hue holds.
-    Expr held = hold_view(x, y, 0);
-    Expr viewed = Halide::select(held == 0.0f, relative(c),
-                                 relative(c) * fs_pow10(held, approximate));
+    Expr viewed = relative(c);
+    if (in.detail) {
+        Expr held = hold_view(x, y, 0);
+        viewed = Halide::select(held == 0.0f, relative(c),
+                                relative(c) * fs_pow10(held, approximate));
+    }
     display(x, y, c) = Halide::select(in.reversal != 0, viewed, through_paper);
     // Both read every channel of the display, so it is held once rather than recomputed per
     // channel through the paper's cube.

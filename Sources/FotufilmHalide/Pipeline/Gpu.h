@@ -445,6 +445,7 @@ public:
         const bool use_grain = feature_mask & FOTUFILM_FRAME_GRAIN;
         const bool use_mottle = use_grain && (feature_mask & FOTUFILM_FRAME_GRAIN_MOTTLE);
         const bool monochrome = feature_mask & FOTUFILM_FRAME_MONOCHROME;
+        const bool print_detail = feature_mask & FOTUFILM_FRAME_PRINT_DETAIL;
 
         Var x("x"), y("y"), channel("channel");
         input_.dim(0).set_stride(4);
@@ -624,7 +625,7 @@ public:
             // codes in DenseRampTests. The 2048-sample curve table avoids per-pixel
             // transcendental functions.
             graph::PrintInputs print{configuration_, Expr(reversal_), monochrome, density_in_,
-                                     "frame_", suffix};
+                                     print_detail, "frame_", suffix};
             Func printed = graph::build_print(backend, print, developed, x, y, channel);
             // What a scan's reading could not place, often the holder, prints black.
             display_linear(x, y, channel) = Halide::select(

@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "count": 18275,
+  "count": 18281,
   "fields": {
     "CURVES": {
       "offset": 0,
@@ -416,7 +416,7 @@
     },
     "PRINT_DETAIL": {
       "offset": 18271,
-      "count": 4
+      "count": 10
     }
   }
 }

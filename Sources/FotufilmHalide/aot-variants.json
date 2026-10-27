@@ -3,27 +3,27 @@
   "spans": [
     {
       "name": "ALL_STAGES",
-      "mask": "(MTF | MTF_LUMA | HALATION | COUPLERS | COUPLER_DIFFUSION | ADJACENCY | GRAIN | PRINT_MTF | DIFFUSION)",
-      "doc": "Full spatial-stage mask, including post-grain enlarger blur. Zero radius makes enlarger blur identity, avoiding a separate variant family. Capture glare remains opt-in through `FOTUFILM_AOT_FLARE` because most input has already passed through a lens."
+      "mask": "(MTF | MTF_LUMA | HALATION | COUPLERS | COUPLER_DIFFUSION | ADJACENCY | GRAIN | PRINT_MTF | DIFFUSION | PRINT_DETAIL)",
+      "doc": "Full spatial-stage mask, including post-grain enlarger blur and the print's Shadow and Highlight Detail, which hold nothing at zero strength. Zero radius makes enlarger blur identity, avoiding a separate variant family. Capture glare remains opt-in through `FOTUFILM_AOT_FLARE` because most input has already passed through a lens."
     },
     {
       "name": "HEAD",
-      "mask": "(ALL_STAGES & ~(GRAIN | PRINT_MTF))",
+      "mask": "(ALL_STAGES & ~(GRAIN | PRINT_MTF | PRINT_DETAIL))",
       "doc": "The stages up to but not including grain, which is where the split schedule cuts."
     },
     {
       "name": "TAIL",
-      "mask": "(GRAIN | PRINT_MTF | DENSITY_IN)",
+      "mask": "(GRAIN | PRINT_MTF | PRINT_DETAIL | DENSITY_IN)",
       "doc": "Grain and the enlarger: the half of develop that runs after the cut."
     },
     {
       "name": "NEGATIVE_SPAN",
-      "mask": "((ALL_STAGES & ~PRINT_MTF) | DENSITY_OUT)",
+      "mask": "((ALL_STAGES & ~(PRINT_MTF | PRINT_DETAIL)) | DENSITY_OUT)",
       "doc": "`PipelineStage.negative`: every stage up to and including grain, and nothing that images the negative afterwards. The same cut the hybrid still renderer makes, moved past grain so that what crosses the boundary is a developed negative rather than a latent one."
     },
     {
       "name": "PRINT_SPAN",
-      "mask": "(PRINT_MTF | DENSITY_IN)",
+      "mask": "(PRINT_MTF | PRINT_DETAIL | DENSITY_IN)",
       "doc": "`PipelineStage.print`: the enlarger and the print medium, reading densities. Everything the negative span already ran is absent, which is what makes the two spans together run each stage exactly once."
     },
     {

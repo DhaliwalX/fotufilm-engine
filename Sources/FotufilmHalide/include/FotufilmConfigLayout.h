@@ -300,8 +300,10 @@ enum {
     /// the paper's white: past the knee the exposure x is drawn in to W x / (x + W), W the knee's
     /// room to the white, so highlights roll toward the white instead of clipping. A directly
     /// viewed transparency runs the same curve on its displayed density and takes the hold as
-    /// light. Zero strengths leave the print unchanged. Appended without renumbering earlier
-    /// fields.
+    /// light. Then the film's clear (every activation zero) and densest (every activation one)
+    /// relative exposures, red, green and blue each, read once from the film cube's corners so a
+    /// pixel does not sample them. Zero strengths leave the print unchanged. Appended without
+    /// renumbering earlier fields.
     FOTUFILM_CONFIG_PRINT_DETAIL = 18271,
 };
 
@@ -409,9 +411,9 @@ enum {
     FOTUFILM_CONFIG_PRINT_FINISH_COUNT = 7,
     FOTUFILM_CONFIG_SCAN_READING_COUNT = 19,
     FOTUFILM_CONFIG_SCAN_CROSSTALK_COUNT = 9,
-    FOTUFILM_CONFIG_PRINT_DETAIL_COUNT = 4,
+    FOTUFILM_CONFIG_PRINT_DETAIL_COUNT = 10,
 };
 
-enum { FOTUFILM_FRAME_CONFIGURATION_COUNT = 18275 };
+enum { FOTUFILM_FRAME_CONFIGURATION_COUNT = 18281 };
 
 #endif
