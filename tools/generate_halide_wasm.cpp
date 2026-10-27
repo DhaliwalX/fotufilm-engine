@@ -98,10 +98,13 @@ int main(int argc, char **argv) {
         {"plain_float", FOTUFILM_FRAME_NO_FILM | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_EXACT_MATH, false},
         // Scans already contain developed film density. Their print stage must not
         // expose or develop those samples again, or add a second layer of grain.
+        // Shadow and Highlight Detail print them as they print a photograph.
         {"print_color_float", FOTUFILM_FRAME_DENSITY_IN | FOTUFILM_FRAME_FLOAT_IO
-             | FOTUFILM_FRAME_PRINT_MTF | FOTUFILM_FRAME_EXACT_MATH, false},
+             | FOTUFILM_FRAME_PRINT_MTF | FOTUFILM_FRAME_PRINT_DETAIL | FOTUFILM_FRAME_EXACT_MATH,
+         false},
         {"print_monochrome_float", FOTUFILM_FRAME_DENSITY_IN | FOTUFILM_FRAME_MONOCHROME
-             | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_PRINT_MTF | FOTUFILM_FRAME_EXACT_MATH, false},
+             | FOTUFILM_FRAME_FLOAT_IO | FOTUFILM_FRAME_PRINT_MTF | FOTUFILM_FRAME_PRINT_DETAIL
+             | FOTUFILM_FRAME_EXACT_MATH, false},
     };
 
     const Halide::Target target = wasm_target(webgpu);
