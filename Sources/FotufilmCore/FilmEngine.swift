@@ -32,6 +32,9 @@ public enum FilmEngineFeature {
     /// The enlarger and paper MTF, one blur in transmittance after grain; mirrors
     /// FOTUFILM_FRAME_PRINT_MTF.
     public static let printMTF: Int32 = Int32(FOTUFILM_FRAME_PRINT_MTF)
+    /// Shadow and Highlight Detail, the print's hold; mirrors FOTUFILM_FRAME_PRINT_DETAIL. Set
+    /// only when a strength is above zero; FOTUFILM_AOT_ALL_STAGES carries it.
+    public static let printDetail: Int32 = Int32(FOTUFILM_FRAME_PRINT_DETAIL)
     /// The kernel measures veiling glare from the frame it was handed instead of being told the
     /// mean; mirrors FOTUFILM_FRAME_FLARE_MEASURE. Only a whole-frame render may ask for it, and
     /// the mean it reaches is not the host's to the bit — the GPU sums float32 where the host
@@ -425,6 +428,10 @@ public struct FilmEngineInvocation {
     public static let grainModeOffset = Int(FOTUFILM_CONFIG_GRAIN_MODE)
     public static let cameraPreflashOffset = Int(FOTUFILM_CONFIG_CAMERA_PREFLASH)
     public static let printerPreflashOffset = Int(FOTUFILM_CONFIG_PRINTER_PREFLASH)
+    /// Shadow and Highlight Detail: the two strengths, the highlight knee and white, then the
+    /// film's clear and densest corners (`PrintDetail.packed`, `.corners`); mirrors
+    /// FOTUFILM_CONFIG_PRINT_DETAIL.
+    public static let printDetailOffset = Int(FOTUFILM_CONFIG_PRINT_DETAIL)
     /// The primaries of the byte frames on the encoded-byte road, input then output: 0 is
     /// Display P3, 1 is sRGB; mirrors FOTUFILM_CONFIG_BYTE_BASIS.
     public static let byteBasisOffset = Int(FOTUFILM_CONFIG_BYTE_BASIS)
@@ -1294,6 +1301,13 @@ public struct FilmEngineInvocation {
         if printMTFActive && printMTFRadius > 0 {
             featureMask |= FilmEngineFeature.printMTF
         }
+        // Shadow and Highlight Detail dodge and burn whatever the film is printed, scanned or
+        // viewed as: never the viewed negative, nor the Cineon scan's code values.
+        let printsDetail = !noFilm && options.stage.writesPrint && !showingNegative
+            && !printMedium.deliversCodeValues
+        if printsDetail && (options.shadowDetail > 0 || options.highlightDetail > 0) {
+            featureMask |= FilmEngineFeature.printDetail
+        }
         if (printMedium.viewsFilmDirectly(for: stock) && !levelsPositive) || showingNegative {
             featureMask |= FilmEngineFeature.reversal
         }
@@ -1491,6 +1505,11 @@ public struct FilmEngineInvocation {
             : PrintFinish.neutral.packed
         configuration += ApproximateNegativeScan.packedReading(
             options.stage == .print ? options.scanReading : nil)
+        configuration += PrintDetail.packed(
+            shadows: printsDetail ? options.shadowDetail : 0,
+            highlights: printsDetail ? options.highlightDetail : 0, curves: paperCurves,
+            midpoints: printMedium.printExposureMidpoints(
+                for: stock, digitalReference: options.digitalReference))
         precondition(configuration.count == Self.configurationCount)
 
         var optical = 0
@@ -1631,6 +1650,12 @@ public struct FilmEngineInvocation {
                 self.spectralCacheID = (self.spectralCacheID
                     ^ options.lensFilters.signature) &* 0x100000001b3
             }
+        }
+        // Only a print that takes the hold reads the film's corners; any other leaves them zero.
+        if featureMask & FilmEngineFeature.printDetail != 0 {
+            let corners = Self.printDetailOffset + 4
+            self.configuration.replaceSubrange(corners..<corners + 6,
+                                               with: PrintDetail.corners(of: self.spectral.filmOutput))
         }
         self.featureMask = featureMask
         self.seed = UInt32(truncatingIfNeeded: animatedSeed)

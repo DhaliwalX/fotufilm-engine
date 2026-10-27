@@ -2035,6 +2035,32 @@ public enum EditorControlCatalogue {
                 + "turned toward cyan, and reds and oranges turned slightly toward yellow. 0 "
                 + "delivers the neutral characterized scan."),
         EditorControl(
+            .highlightDetail, title: "Highlight Detail",
+            detail: "Print the highlights darker, keeping their detail and colour.",
+            section: .printPaper,
+            kind: .slider(EditorControlScale(0...1, neutral: 0, unit: .percent)),
+            availability: .printStage,
+            binding: .highlightDetail,
+            surfaces: [.app, .desktop, .android, .cli, .web],
+            omitted: printDetailHostOmissions,
+            web: .profile,
+            commandLine: CommandLineFlag("--highlight-detail", placeholder: "<f>",
+                                         help: "Print the highlights darker, keeping their detail and colour (0...1, default: 0)"),
+            documentation: "Gives more printing light where the film would print near white, the same amount on every colour record, so highlights roll toward the white with their own separation and colour instead of clipping. Negatives, slides and black-and-white alike; not applied to the viewed negative or the Cineon Log scan."),
+        EditorControl(
+            .shadowDetail, title: "Shadow Detail",
+            detail: "Print the shadows lighter, keeping their detail and colour.",
+            section: .printPaper,
+            kind: .slider(EditorControlScale(0...1, neutral: 0, unit: .percent)),
+            availability: .printStage,
+            binding: .shadowDetail,
+            surfaces: [.app, .desktop, .android, .cli, .web],
+            omitted: printDetailHostOmissions,
+            web: .profile,
+            commandLine: CommandLineFlag("--shadow-detail", placeholder: "<f>",
+                                         help: "Print the shadows lighter, keeping their detail and colour (0...1, default: 0)"),
+            documentation: "Holds back the printing light where the film would print dark, the same amount on every colour record, so crushed shadows return with their own separation and colour while black stays black. Negatives, slides and black-and-white alike; not applied to the viewed negative or the Cineon Log scan."),
+        EditorControl(
             .enlarger, title: "Enlarger",
             detail: "Choose the enlarger lighting used to make the print.",
             section: .printLamp,
@@ -2143,6 +2169,11 @@ public enum EditorControlCatalogue {
             commandLine: CommandLineFlag("--printer-preflash", placeholder: "<f>",
                                          help: "Pre-expose the print paper (0...0.10, default: 0)"),
             documentation: "Pre-exposes the print paper with uniform illumination to soften highlights without affecting maximum black."),
+    ]
+
+    private static let printDetailHostOmissions: [EditorSurface: String] = [
+        .resolve: "not yet offered; the plugin bridge has no slot for it",
+        .finalcut: "not yet offered; the plugin bridge has no slot for it",
     ]
 
     private static let filmGrainOmission = "not yet offered; the Grain Model menu is not offered"

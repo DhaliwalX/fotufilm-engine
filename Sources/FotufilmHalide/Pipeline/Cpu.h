@@ -404,8 +404,9 @@ public:
         developed(x, y, c) = Halide::select(
             reads_scan, scan_film_density(configuration_, c, scan_r, scan_g, scan_b, false),
             input_(x, y, c));
-        graph::PrintInputs inputs{configuration_, Expr(reversal ? 1 : 0), monochrome, true, "",
-                                  suffix};
+        // The standalone print always takes the detail hold; zero strengths hold nothing.
+        graph::PrintInputs inputs{configuration_, Expr(reversal ? 1 : 0), monochrome, true, true,
+                                  "", suffix};
         Func read_print = graph::build_print(backend, inputs, developed, x, y, c);
         // What the reading could not place, often the holder, prints black.
         Func printed("print_read" + suffix);

@@ -72,6 +72,11 @@ enum {
     /// sharp one. The Android CPU generator includes it; other AOT backends
     /// must include it in their own compiled variants before accepting the bit.
     FOTUFILM_FRAME_GRAIN_MOTTLE = 1 << 16,
+    /// Compiles Shadow and Highlight Detail (FOTUFILM_CONFIG_PRINT_DETAIL): the print's hold,
+    /// one log exposure a pixel moving every record alike. Set only when a strength is above
+    /// zero, so a print without it compiles and runs as it always has; the AOT variants carry it
+    /// as a stage and hold nothing at zero strength.
+    FOTUFILM_FRAME_PRINT_DETAIL = 1 << 15,
     /// Compiles the enlarger and paper MTF: one blur in transmittance at the end of develop,
     /// which is where the negative stops being the image and starts being the thing an enlarger
     /// projects. Off when the negative itself is what is being viewed, since then nothing

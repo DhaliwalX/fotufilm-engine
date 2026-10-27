@@ -290,6 +290,21 @@ enum {
     /// times the weighted density, held inside the negative interchange range. Its own channel
     /// alone, weight one, reads as before. Appended without renumbering earlier fields.
     FOTUFILM_CONFIG_SCAN_CROSSTALK = 18262,
+    /// Shadow and Highlight Detail: how a print moves its printing light at the two ends of its
+    /// tone scale, the same log exposure on every record so each pixel keeps the paper's own
+    /// colour. Shadow strength (0...1) first: a hold shaped as a bump on the luminance-weighted
+    /// paper exposure between a knee, a fixed share of the way from the film's mid-grey to
+    /// whichever extreme prints black (a negative's clear base, a slide's densest), and that
+    /// extreme, which keeps its black. Then highlight strength (0...1), the luminance-weighted
+    /// paper exposure of the highlight knee, where the paper prints a stop above its aim, and of
+    /// the paper's white: past the knee the exposure x is drawn in to W x / (x + W), W the knee's
+    /// room to the white, so highlights roll toward the white instead of clipping. A directly
+    /// viewed transparency runs the same curve on its displayed density and takes the hold as
+    /// light. Then the film's clear (every activation zero) and densest (every activation one)
+    /// relative exposures, red, green and blue each, read once from the film cube's corners so a
+    /// pixel does not sample them. Zero strengths leave the print unchanged. Appended without
+    /// renumbering earlier fields.
+    FOTUFILM_CONFIG_PRINT_DETAIL = 18271,
 };
 
 enum {
@@ -396,8 +411,9 @@ enum {
     FOTUFILM_CONFIG_PRINT_FINISH_COUNT = 7,
     FOTUFILM_CONFIG_SCAN_READING_COUNT = 19,
     FOTUFILM_CONFIG_SCAN_CROSSTALK_COUNT = 9,
+    FOTUFILM_CONFIG_PRINT_DETAIL_COUNT = 10,
 };
 
-enum { FOTUFILM_FRAME_CONFIGURATION_COUNT = 18271 };
+enum { FOTUFILM_FRAME_CONFIGURATION_COUNT = 18281 };
 
 #endif

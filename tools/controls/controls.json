@@ -6445,6 +6445,96 @@
     },
     {
       "availability" : "printStage",
+      "binding" : "highlightDetail",
+      "commandLineFlag" : "--highlight-detail",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Print the highlights darker, keeping their detail and colour (0...1, default: 0)",
+      "commandLinePlaceholder" : "<f>",
+      "detail" : "Print the highlights darker, keeping their detail and colour.",
+      "documentation" : "Gives more printing light where the film would print near white, the same amount on every colour record, so highlights roll toward the white with their own separation and colour instead of clipping. Negatives, slides and black-and-white alike; not applied to the viewed negative or the Cineon Log scan.",
+      "drives" : [
+
+      ],
+      "field" : "highlightDetail",
+      "group" : "print",
+      "kind" : "slider",
+      "omitted" : {
+        "finalcut" : "not yet offered; the plugin bridge has no slot for it",
+        "resolve" : "not yet offered; the plugin bridge has no slot for it"
+      },
+      "persistedKey" : "highlightDetail",
+      "scale" : {
+        "admittedMax" : 1,
+        "admittedMin" : 0,
+        "max" : 1,
+        "min" : 0,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "percent"
+      },
+      "scope" : "edit",
+      "section" : "printPaper",
+      "storedEncoding" : "same",
+      "storedNeutral" : 0,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "web",
+        "cli"
+      ],
+      "title" : "Highlight Detail",
+      "webTransform" : "profile"
+    },
+    {
+      "availability" : "printStage",
+      "binding" : "shadowDetail",
+      "commandLineFlag" : "--shadow-detail",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Print the shadows lighter, keeping their detail and colour (0...1, default: 0)",
+      "commandLinePlaceholder" : "<f>",
+      "detail" : "Print the shadows lighter, keeping their detail and colour.",
+      "documentation" : "Holds back the printing light where the film would print dark, the same amount on every colour record, so crushed shadows return with their own separation and colour while black stays black. Negatives, slides and black-and-white alike; not applied to the viewed negative or the Cineon Log scan.",
+      "drives" : [
+
+      ],
+      "field" : "shadowDetail",
+      "group" : "print",
+      "kind" : "slider",
+      "omitted" : {
+        "finalcut" : "not yet offered; the plugin bridge has no slot for it",
+        "resolve" : "not yet offered; the plugin bridge has no slot for it"
+      },
+      "persistedKey" : "shadowDetail",
+      "scale" : {
+        "admittedMax" : 1,
+        "admittedMin" : 0,
+        "max" : 1,
+        "min" : 0,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "percent"
+      },
+      "scope" : "edit",
+      "section" : "printPaper",
+      "storedEncoding" : "same",
+      "storedNeutral" : 0,
+      "surfaces" : [
+        "app",
+        "desktop",
+        "android",
+        "web",
+        "cli"
+      ],
+      "title" : "Shadow Detail",
+      "webTransform" : "profile"
+    },
+    {
+      "availability" : "printStage",
       "binding" : "enlargerIndex",
       "choices" : [
         {

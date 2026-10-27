@@ -39,7 +39,7 @@ public enum WebProfileCatalogue {
     private struct Medium: Encodable {
         let viewingLights: [ControlsManifest.Choice]
         let enlarger, correction, screenConversion, screenGrade, screenCMY, receiverBands, labScan,
-            printerLights, negative: Bool
+            printerLights, negative, printDetail: Bool
     }
     private struct Stock: Encodable {
         let available: [String]
@@ -80,7 +80,8 @@ public enum WebProfileCatalogue {
                     receiverBands: offers(.screenRedBand),
                     labScan: offers(.labScanLook),
                     printerLights: offers(.printerRed),
-                    negative: offers(.negativeViewing)))
+                    negative: offers(.negativeViewing),
+                    printDetail: offers(.shadowDetail)))
             })
             result[id] = Stock(available: controls.map { $0.field.rawValue },
                 nativeFormat: definition.nativeFormatID ?? FilmFormat.houseDefaultID,

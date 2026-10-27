@@ -31,6 +31,7 @@ public enum EditorControlField: String, CaseIterable, Sendable, Codable {
     case paper, digitalReference, screenGrade, screenExposure, printFrame, printFrameMargin, printFrameEdgePrinting, printFrameNumber, printFrameCount, printFrameCamera, printLight, enlarger, printCorrection,
          negativeViewing, gradeSpace
     case printerEnabled, printerLamp, printerExposure, printerMagenta, printerYellow, printerPreflash
+    case shadowDetail, highlightDetail
     case printerRed, printerGreen, printerBlue
     case gradeShadowsWarmth, gradeShadowsTint, gradeShadowsLevel
     case gradeMidtonesWarmth, gradeMidtonesTint, gradeMidtonesLevel

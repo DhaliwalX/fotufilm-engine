@@ -2,26 +2,27 @@
 #ifndef FOTUFILM_AOT_VARIANTS_H
 #define FOTUFILM_AOT_VARIANTS_H
 
-/// Full spatial-stage mask, including post-grain enlarger blur. Zero radius makes enlarger blur
-/// identity, avoiding a separate variant family. Capture glare remains opt-in through
-/// `FOTUFILM_AOT_FLARE` because most input has already passed through a lens.
-#define FOTUFILM_AOT_ALL_STAGES ((FOTUFILM_FRAME_MTF | FOTUFILM_FRAME_MTF_LUMA | FOTUFILM_FRAME_HALATION | FOTUFILM_FRAME_COUPLERS | FOTUFILM_FRAME_COUPLER_DIFFUSION | FOTUFILM_FRAME_ADJACENCY | FOTUFILM_FRAME_GRAIN | FOTUFILM_FRAME_PRINT_MTF | FOTUFILM_FRAME_DIFFUSION))
+/// Full spatial-stage mask, including post-grain enlarger blur and the print's Shadow and Highlight
+/// Detail, which hold nothing at zero strength. Zero radius makes enlarger blur identity, avoiding
+/// a separate variant family. Capture glare remains opt-in through `FOTUFILM_AOT_FLARE` because
+/// most input has already passed through a lens.
+#define FOTUFILM_AOT_ALL_STAGES ((FOTUFILM_FRAME_MTF | FOTUFILM_FRAME_MTF_LUMA | FOTUFILM_FRAME_HALATION | FOTUFILM_FRAME_COUPLERS | FOTUFILM_FRAME_COUPLER_DIFFUSION | FOTUFILM_FRAME_ADJACENCY | FOTUFILM_FRAME_GRAIN | FOTUFILM_FRAME_PRINT_MTF | FOTUFILM_FRAME_DIFFUSION | FOTUFILM_FRAME_PRINT_DETAIL))
 
 /// The stages up to but not including grain, which is where the split schedule cuts.
-#define FOTUFILM_AOT_HEAD ((FOTUFILM_AOT_ALL_STAGES & ~(FOTUFILM_FRAME_GRAIN | FOTUFILM_FRAME_PRINT_MTF)))
+#define FOTUFILM_AOT_HEAD ((FOTUFILM_AOT_ALL_STAGES & ~(FOTUFILM_FRAME_GRAIN | FOTUFILM_FRAME_PRINT_MTF | FOTUFILM_FRAME_PRINT_DETAIL)))
 
 /// Grain and the enlarger: the half of develop that runs after the cut.
-#define FOTUFILM_AOT_TAIL ((FOTUFILM_FRAME_GRAIN | FOTUFILM_FRAME_PRINT_MTF | FOTUFILM_FRAME_DENSITY_IN))
+#define FOTUFILM_AOT_TAIL ((FOTUFILM_FRAME_GRAIN | FOTUFILM_FRAME_PRINT_MTF | FOTUFILM_FRAME_PRINT_DETAIL | FOTUFILM_FRAME_DENSITY_IN))
 
 /// `PipelineStage.negative`: every stage up to and including grain, and nothing that images the
 /// negative afterwards. The same cut the hybrid still renderer makes, moved past grain so that what
 /// crosses the boundary is a developed negative rather than a latent one.
-#define FOTUFILM_AOT_NEGATIVE_SPAN (((FOTUFILM_AOT_ALL_STAGES & ~FOTUFILM_FRAME_PRINT_MTF) | FOTUFILM_FRAME_DENSITY_OUT))
+#define FOTUFILM_AOT_NEGATIVE_SPAN (((FOTUFILM_AOT_ALL_STAGES & ~(FOTUFILM_FRAME_PRINT_MTF | FOTUFILM_FRAME_PRINT_DETAIL)) | FOTUFILM_FRAME_DENSITY_OUT))
 
 /// `PipelineStage.print`: the enlarger and the print medium, reading densities. Everything the
 /// negative span already ran is absent, which is what makes the two spans together run each stage
 /// exactly once.
-#define FOTUFILM_AOT_PRINT_SPAN ((FOTUFILM_FRAME_PRINT_MTF | FOTUFILM_FRAME_DENSITY_IN))
+#define FOTUFILM_AOT_PRINT_SPAN ((FOTUFILM_FRAME_PRINT_MTF | FOTUFILM_FRAME_PRINT_DETAIL | FOTUFILM_FRAME_DENSITY_IN))
 
 /// `PipelineStage.texture`: the same stages the negative span runs, differenced against a
 /// development with none of them. The enlarger is in, because it is one of the selectable spatial

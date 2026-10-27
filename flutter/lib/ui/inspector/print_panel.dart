@@ -69,6 +69,8 @@ List<Widget> printPanel(InspectorControls c) {
         ..._screenCMY,
         'labScanLook',
         'labScanDodging',
+        'highlightDetail',
+        'shadowDetail',
       ]),
       if (!fixed && printMedium?['screenCMY'] == true)
         Align(

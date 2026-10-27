@@ -23,12 +23,64 @@ inline Halide::Expr print_mtf_read(Halide::ImageParam &configuration,
     return Halide::select(keep > 0.0f, spread + keep * (transmittance - spread), spread);
 }
 
+/// Shadow and Highlight Detail (FOTUFILM_CONFIG_PRINT_DETAIL): how far a pixel's log exposure
+/// moves, positive where the shadows are held back and negative where the highlights burn in.
+/// Every argument is a log exposure on one axis on which more prints darker: the pixel's `at`,
+/// the film's mid-grey `mid`, the film extreme that prints darkest `black`, and the highlight
+/// `knee` and `white`.
+///
+/// Shadows: the knee sits a fixed share of the way from mid-grey to black, and the hold is a
+/// smooth bump from there to black — nothing above the knee, nothing at black, most three fifths
+/// of the way down. Highlights: past the knee the exposure `x` beyond it is drawn in to
+/// `W x / (x + W)`, `W` the knee's room to the white: the slope matches at the knee and falls off
+/// slowly, so highlights roll toward the white, still apart, rather than clip. Mirrors
+/// `PrintDetail.hold` expression for expression; zero strengths hold nothing, bit for bit.
+inline Halide::Expr print_detail_hold(Halide::ImageParam &configuration, Halide::Expr at,
+                                      Halide::Expr mid, Halide::Expr black,
+                                      Halide::Expr knee, Halide::Expr white) {
+    using Halide::Expr;
+    Expr shadows = configuration(FOTUFILM_CONFIG_PRINT_DETAIL);
+    Expr highlights = configuration(FOTUFILM_CONFIG_PRINT_DETAIL + 1);
+    // PrintDetail.shadowKneeShare, .reach and .peak.
+    constexpr float kShadowKneeShare = 0.2f, kReach = 0.3f, kPeak = 0.18592f;
+    Expr shadow_knee = mid + kShadowKneeShare * (black - mid);
+    Expr span = black - shadow_knee;
+    Expr u = Halide::clamp((at - shadow_knee) / Halide::max(span, 1.0e-3f), 0.0f, 1.0f);
+    Expr bump = u * Halide::sqrt(u) * (1.0f - u) * (1.0f / kPeak);
+    Expr hold = Halide::select(shadows > 0.0f && span > 0.05f,
+                               shadows * kReach * span * bump, 0.0f);
+
+    Expr room = knee - white;
+    Expr past = Halide::max(knee - at, 0.0f);
+    // What the roll-off takes back: x - W x / (x + W).
+    Expr burn = Halide::select(highlights > 0.0f && room > 0.05f,
+                               highlights * past * past / (past + room), 0.0f);
+    return hold - burn;
+}
+
+/// The luminance-weighted paper exposure the detail controls key a print on
+/// (`PrintDetail.weights`).
+inline Halide::Expr print_detail_key(Halide::Expr red, Halide::Expr green, Halide::Expr blue) {
+    return 0.25f * red + 0.65f * green + 0.10f * blue;
+}
+
+/// A directly viewed transparency's key: the optical density of its displayed luminance
+/// (`PrintFinish.luminance`), on which a denser pixel shows darker.
+inline Halide::Expr view_detail_key(Halide::Expr red, Halide::Expr green, Halide::Expr blue,
+                                    bool approximate = false) {
+    Halide::Expr luminance = 0.2289746f * red + 0.6917385f * green + 0.0792869f * blue;
+    return -fs_log10(Halide::max(luminance, 1.0e-6f), approximate);
+}
+
 inline Halide::Expr paper_activation(Halide::ImageParam &configuration,
                                      Halide::Func paper_curve, Halide::Expr channel,
                                      Halide::Expr relative,
-                                     bool approximate = false) {
+                                     bool approximate = false,
+                                     Halide::Expr hold = Halide::Expr()) {
     Halide::Expr base = paper_curve_base(channel);
     Halide::Expr exposure = paper_exposure(configuration, channel, relative, approximate);
+    // Shadow and Highlight Detail's hold, where the print compiles one.
+    if (hold.defined()) exposure -= hold;
     return (sample_curve(paper_curve, exposure, channel) - configuration(base))
         / curve_range(configuration, base);
 }
