@@ -586,6 +586,10 @@ func fotufilm_bridge_control_capabilities(_ stockIndex: Int32, _ paperIndex: Int
     if paper == .screen && !stock.isReversal { flags |= 1024 }
     if paper == .labScan && !stock.isReversal && !stock.isReflectionPrint { flags |= 2048 }
     if PrinterLights.applies(stock: stock, paper: paper) { flags |= 4096 }
+    if EditorControlCatalogue.medium(paper, offers: .shadowDetail, stock: stock,
+                                     digitalReference: .referenceExposure) {
+        flags |= 8192
+    }
     if EditorControlAvailability.interlayerInhibition.admits(stock: stock) { flags |= 256 }
     return flags
 }

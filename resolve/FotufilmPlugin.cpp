@@ -1200,6 +1200,8 @@ void updateContextControls(Instance *instance, OfxTime time) {
     for (int slot : {FOTUFILM_BRIDGE_PRINTER_RED, FOTUFILM_BRIDGE_PRINTER_GREEN,
                      FOTUFILM_BRIDGE_PRINTER_BLUE})
         enable(slot, print && (capabilities & FOTUFILM_CONTROL_PRINTER_LIGHTS) != 0);
+    for (int slot : {FOTUFILM_BRIDGE_HIGHLIGHT_DETAIL, FOTUFILM_BRIDGE_SHADOW_DETAIL})
+        enable(slot, print && (capabilities & FOTUFILM_CONTROL_PRINT_DETAIL) != 0);
     enable(FOTUFILM_BRIDGE_SCREEN_GRADE, screen && (capabilities & FOTUFILM_CONTROL_SCREEN_GRADE) != 0
            && controlValue(instance, FOTUFILM_BRIDGE_DIGITAL_REFERENCE, time) != 0);
     enable(FOTUFILM_BRIDGE_ENLARGER, print && (capabilities & FOTUFILM_CONTROL_ENLARGER) != 0);

@@ -53,6 +53,8 @@ enum {
     kFotufilmParam_PrinterGreen = 106,
     kFotufilmParam_PrinterPreflash = 99,
     kFotufilmParam_PrinterBlue = 107,
+    kFotufilmParam_HighlightDetail = 108,
+    kFotufilmParam_ShadowDetail = 109,
     kFotufilmParam_NegativeViewing = 80,
     kFotufilmParam_Stage = 1,
     kFotufilmParam_StageID = 26,

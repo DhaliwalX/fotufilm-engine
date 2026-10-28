@@ -1487,6 +1487,11 @@ static NSString *FotufilmHostString(int32_t (*read)(int32_t, int32_t, char *, in
         [setting setParameterFlags:printerLights ? kFxParameterFlag_DEFAULT : kFxParameterFlag_DISABLED
                        toParameter:parameter];
     }
+    const BOOL printDetail = gating.prints && (capabilities & FOTUFILM_CONTROL_PRINT_DETAIL);
+    for (UInt32 parameter : {(UInt32)kFotufilmParam_HighlightDetail, (UInt32)kFotufilmParam_ShadowDetail}) {
+        [setting setParameterFlags:printDetail ? kFxParameterFlag_DEFAULT : kFxParameterFlag_DISABLED
+                       toParameter:parameter];
+    }
     const BOOL screenCMY = (screen || labScan) && (capabilities & FOTUFILM_CONTROL_COLOUR_NEGATIVE);
     for (UInt32 parameter : {(UInt32)kFotufilmParam_ScreenCyan, (UInt32)kFotufilmParam_ScreenMagenta,
                              (UInt32)kFotufilmParam_ScreenYellow}) {

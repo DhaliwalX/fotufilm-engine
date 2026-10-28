@@ -147,6 +147,8 @@ starts closed. Start with these settings:
   <tr><td>Green Light</td><td>Output</td><td>Cinema print film only: the release printer's green light in printer points, 25 at the stock's aim.</td></tr>
   <tr><td>Printer Preflash</td><td>Output</td><td>Pre-exposure of the print paper in relative log exposure units, softening highlights without lifting maximum density.</td></tr>
   <tr><td>Blue Light</td><td>Output</td><td>Cinema print film only: the release printer's blue light in printer points, 25 at the stock's aim.</td></tr>
+  <tr><td>Highlight Detail</td><td>Output</td><td>Print the highlights darker, keeping their detail and colour: 0 off, 1 full.</td></tr>
+  <tr><td>Shadow Detail</td><td>Output</td><td>Print the shadows lighter, keeping their detail and colour: 0 off, 1 full.</td></tr>
   <tr><td>Negative Viewing</td><td>Output</td><td>How the developed negative is read when Output Medium is Negative.</td></tr>
   <tr><td>Stage</td><td>Pipeline</td><td>Which span of the pipeline this node performs.</td></tr>
   <tr><td>Texture Stages</td><td>Pipeline</td><td>Whether Texture Only carries this stage.</td></tr>

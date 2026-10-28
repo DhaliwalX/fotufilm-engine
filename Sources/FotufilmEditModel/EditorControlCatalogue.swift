@@ -183,7 +183,7 @@ public enum EditorControlCatalogue {
 
     public static let retiredFxplugIDs: [Int] = [33]
     public static let fxplugTextureStageIDs: ClosedRange<Int> = 40...71
-    public static let bridgeSlotCount = 72
+    public static let bridgeSlotCount = 74
 
     static let hostOnly: [EditorSurface: String] = [
         .app: "a plugin host's own setting, with no meaning on a photograph",
@@ -2041,8 +2041,12 @@ public enum EditorControlCatalogue {
             kind: .slider(EditorControlScale(0...1, neutral: 0, unit: .percent)),
             availability: .printStage,
             binding: .highlightDetail,
-            surfaces: [.app, .desktop, .android, .cli, .web],
-            omitted: printDetailHostOmissions,
+            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .web, .cli],
+            host: HostParameter(
+                slot: 72, slotSymbol: "HIGHLIGHT_DETAIL", ofxName: "highlightDetail",
+                fxplugID: 108, group: .output, label: "Highlight Detail",
+                hint: "Print the highlights darker, keeping their detail and colour: 0 off, 1 full. Not applied to the viewed negative or Cineon Log.",
+                kind: .double(min: 0, max: 1, value: 0), clamp: 0...1, order: 37),
             web: .profile,
             commandLine: CommandLineFlag("--highlight-detail", placeholder: "<f>",
                                          help: "Print the highlights darker, keeping their detail and colour (0...1, default: 0)"),
@@ -2054,8 +2058,12 @@ public enum EditorControlCatalogue {
             kind: .slider(EditorControlScale(0...1, neutral: 0, unit: .percent)),
             availability: .printStage,
             binding: .shadowDetail,
-            surfaces: [.app, .desktop, .android, .cli, .web],
-            omitted: printDetailHostOmissions,
+            surfaces: [.app, .desktop, .android, .resolve, .finalcut, .web, .cli],
+            host: HostParameter(
+                slot: 73, slotSymbol: "SHADOW_DETAIL", ofxName: "shadowDetail",
+                fxplugID: 109, group: .output, label: "Shadow Detail",
+                hint: "Print the shadows lighter, keeping their detail and colour: 0 off, 1 full. Not applied to the viewed negative or Cineon Log.",
+                kind: .double(min: 0, max: 1, value: 0), clamp: 0...1, order: 38),
             web: .profile,
             commandLine: CommandLineFlag("--shadow-detail", placeholder: "<f>",
                                          help: "Print the shadows lighter, keeping their detail and colour (0...1, default: 0)"),
@@ -2169,11 +2177,6 @@ public enum EditorControlCatalogue {
             commandLine: CommandLineFlag("--printer-preflash", placeholder: "<f>",
                                          help: "Pre-expose the print paper (0...0.10, default: 0)"),
             documentation: "Pre-exposes the print paper with uniform illumination to soften highlights without affecting maximum black."),
-    ]
-
-    private static let printDetailHostOmissions: [EditorSurface: String] = [
-        .resolve: "not yet offered; the plugin bridge has no slot for it",
-        .finalcut: "not yet offered; the plugin bridge has no slot for it",
     ]
 
     private static let filmGrainOmission = "not yet offered; the Grain Model menu is not offered"

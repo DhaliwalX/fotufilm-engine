@@ -228,7 +228,7 @@
       "text" : "Not yet examined"
     }
   ],
-  "bridgeSlotCount" : 72,
+  "bridgeSlotCount" : 74,
   "bridgeSlots" : [
     "EXPOSURE_EV",
     "TEMPERATURE",
@@ -301,7 +301,9 @@
     "LAB_SCAN_LOOK",
     "PRINTER_RED",
     "PRINTER_GREEN",
-    "PRINTER_BLUE"
+    "PRINTER_BLUE",
+    "HIGHLIGHT_DETAIL",
+    "SHADOW_DETAIL"
   ],
   "controls" : [
     {
@@ -6457,10 +6459,33 @@
       ],
       "field" : "highlightDetail",
       "group" : "print",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "clampMax" : 1,
+        "clampMin" : 0,
+        "composed" : false,
+        "delta" : 0.01,
+        "fxplugID" : 108,
+        "group" : "output",
+        "hint" : "Print the highlights darker, keeping their detail and colour: 0 off, 1 full. Not applied to the viewed negative or Cineon Log.",
+        "kind" : "double",
+        "label" : "Highlight Detail",
+        "max" : 1,
+        "min" : 0,
+        "ofxName" : "highlightDetail",
+        "order" : 37,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 72,
+        "slotSymbol" : "HIGHLIGHT_DETAIL",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
       "kind" : "slider",
       "omitted" : {
-        "finalcut" : "not yet offered; the plugin bridge has no slot for it",
-        "resolve" : "not yet offered; the plugin bridge has no slot for it"
+
       },
       "persistedKey" : "highlightDetail",
       "scale" : {
@@ -6482,6 +6507,8 @@
         "app",
         "desktop",
         "android",
+        "resolve",
+        "finalcut",
         "web",
         "cli"
       ],
@@ -6502,10 +6529,33 @@
       ],
       "field" : "shadowDetail",
       "group" : "print",
+      "host" : {
+        "animates" : true,
+        "bridge" : "identity",
+        "clampMax" : 1,
+        "clampMin" : 0,
+        "composed" : false,
+        "delta" : 0.01,
+        "fxplugID" : 109,
+        "group" : "output",
+        "hint" : "Print the shadows lighter, keeping their detail and colour: 0 off, 1 full. Not applied to the viewed negative or Cineon Log.",
+        "kind" : "double",
+        "label" : "Shadow Detail",
+        "max" : 1,
+        "min" : 0,
+        "ofxName" : "shadowDetail",
+        "order" : 38,
+        "paramOffset" : 0,
+        "paramScale" : 1,
+        "secret" : false,
+        "slot" : 73,
+        "slotSymbol" : "SHADOW_DETAIL",
+        "value" : 0,
+        "zeroLeavesEngineDefault" : false
+      },
       "kind" : "slider",
       "omitted" : {
-        "finalcut" : "not yet offered; the plugin bridge has no slot for it",
-        "resolve" : "not yet offered; the plugin bridge has no slot for it"
+
       },
       "persistedKey" : "shadowDetail",
       "scale" : {
@@ -6527,6 +6577,8 @@
         "app",
         "desktop",
         "android",
+        "resolve",
+        "finalcut",
         "web",
         "cli"
       ],
