@@ -120,6 +120,8 @@
       <target object="9001001" channel="./36/106" name="Green Light"/>
       <target object="9001001" channel="./36/99" name="Printer Preflash"/>
       <target object="9001001" channel="./36/107" name="Blue Light"/>
+      <target object="9001001" channel="./36/108" name="Highlight Detail"/>
+      <target object="9001001" channel="./36/109" name="Shadow Detail"/>
       <target object="9001001" channel="./36/80" name="Negative Viewing"/>
       <target object="9001001" channel="./30/1" name="Stage"/>
       <target object="9001001" channel="./30/40" name="Emulsion Diffusion"/>
@@ -269,6 +271,8 @@
             <parameter name="Green Light" id="106" flags="12901679120" default="25" value="25"/>
             <parameter name="Printer Preflash" id="99" flags="12901679120" default="0" value="0"/>
             <parameter name="Blue Light" id="107" flags="12901679120" default="25" value="25"/>
+            <parameter name="Highlight Detail" id="108" flags="12901679120" default="0" value="0"/>
+            <parameter name="Shadow Detail" id="109" flags="12901679120" default="0" value="0"/>
             <parameter name="Negative Viewing" id="80" flags="12901744656" default="0" value="0"/>
           </parameter>
           <parameter name="Pipeline" id="30" flags="8594198560">

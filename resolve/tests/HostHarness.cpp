@@ -3179,6 +3179,9 @@ int testPlugin() {
                 {"printerRed", 31, "paper", static_cast<double>(releasePrint)},
                 {"printerGreen", 31, "paper", static_cast<double>(releasePrint)},
                 {"printerBlue", 31, "paper", static_cast<double>(releasePrint)},
+                // The print's dodging and burning, at full strength on the film's own print.
+                {"highlightDetail", 1, nullptr, 0},
+                {"shadowDetail", 1, nullptr, 0},
                 {"couplers", 0, nullptr, 0},
                 {"flare", 2.0, nullptr, 0},
                 {"estimatedHalation", 1, nullptr, 0},
