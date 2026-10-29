@@ -2,6 +2,7 @@
 // whose controls stack with the editor's control gap.
 import 'package:flutter/widgets.dart';
 
+import '../../app/strings.dart';
 import '../theme/theme.dart';
 import 'buttons.dart';
 import 'icons.dart';
@@ -29,7 +30,7 @@ class _SectionState extends State<Section> with PointerTint {
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         tinted(
           onTap: () => setState(() => _open = !_open),
-          label: widget.title,
+          label: AppStrings.tr(widget.title),
           expanded: _open,
           child: Container(
             height: Metrics.sectionTitleHeight,
@@ -41,7 +42,7 @@ class _SectionState extends State<Section> with PointerTint {
             child: Row(children: [
               AppIcon(_open ? 'chevronDown' : 'chevronRight', size: 16, color: palette.text),
               const SizedBox(width: 4),
-              Text(widget.title,
+              Text(AppStrings.tr(widget.title),
                   style: editorText(context, size: TextSizes.section, weight: FontWeight.w700)),
             ]),
           ),

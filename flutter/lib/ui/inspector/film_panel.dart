@@ -2,6 +2,7 @@
 // with a fixed profile has none of its settings.
 import 'package:flutter/widgets.dart';
 
+import '../../app/strings.dart';
 import '../../model/editor.dart';
 import '../kit/kit.dart';
 import 'controls.dart';
@@ -14,51 +15,51 @@ List<Widget> _following(EditorModel editor) {
     return [
       Align(
         alignment: Alignment.centerLeft,
-        child: PillButton(camera ? 'Match the Camera' : 'Match the Film',
+        child: PillButton(camera ? AppStrings.tr('Match the Camera') : AppStrings.tr('Match the Film'),
             onPressed: () => editor.change({'format': null})),
       ),
     ];
   }
-  if (!camera) return const [Note('Following the film.')];
+  if (!camera) return [Note(AppStrings.tr('Following the film.'))];
   final followed = followedFormat(editor);
   final name = editor.catalogue.filmFormats
       .where((f) => f['id'] == followed)
       .map((f) => f['name'] as String)
       .firstOrNull;
-  return [Note('Following the camera: ${name ?? followed}.')];
+  return [Note('${AppStrings.tr('Following the camera:')} ${name ?? followed}.')];
 }
 
 List<Widget> filmPanel(InspectorControls c) {
   final editor = c.editor;
   if (!c.hasFilm) {
-    return const [
-      Section(title: 'Normal', children: [InfoRow('Stock', 'None')]),
+    return [
+      Section(title: AppStrings.tr('Normal'), children: [InfoRow(AppStrings.tr('Stock'), AppStrings.tr('None'))]),
     ];
   }
   final fixed = c.fixedSettings;
   return [
-    Section(title: 'Loaded Film', children: [
-      if (fixed) const Note('Fixed profile: film settings are off.'),
-      InfoRow('Stock', c.stock?['name'] as String? ?? ''),
+    Section(title: AppStrings.tr('Loaded Film'), children: [
+      if (fixed) Note(AppStrings.tr('Fixed profile: film settings are off.')),
+      InfoRow(AppStrings.tr('Stock'), c.stock?['name'] as String? ?? ''),
     ]),
-    if (!fixed) Section(title: 'Film Format', children: [
+    if (!fixed) Section(title: AppStrings.tr('Film Format'), children: [
       FormatPicker(editor: editor),
       SwitchRow(
-        label: 'Magnified Detail',
+        label: AppStrings.tr('Magnified Detail'),
         value: editor.formatDetail,
         onChanged: editor.setFormatDetail,
       ),
       ..._following(editor),
     ]),
-    if (!fixed) Section(title: 'Film Condition', children: c.profileControls(const ['expired'])),
-    Section(title: 'Halation', children: [
+    if (!fixed) Section(title: AppStrings.tr('Film Condition'), children: c.profileControls(const ['expired'])),
+    Section(title: AppStrings.tr('Halation'), children: [
       PickerField<String>(
-        label: 'Halation Model',
+        label: AppStrings.tr('Halation Model'),
         detail: c.catalogue.detail('halationModel'),
         value: c.edit['halationModel'] as String? ?? 'legacy',
-        options: const [
-          PickerOption('legacy', 'Legacy'),
-          PickerOption('layered', 'Layered Transport'),
+        options: [
+          PickerOption('legacy', AppStrings.tr('Legacy')),
+          PickerOption('layered', AppStrings.tr('Layered Transport')),
         ],
         onChanged: (v) => editor.change({'halationModel': v}),
       ),

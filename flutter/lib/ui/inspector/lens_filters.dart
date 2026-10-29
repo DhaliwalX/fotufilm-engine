@@ -5,6 +5,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
 
+import '../../app/strings.dart';
 import '../../model/catalogue.dart';
 import '../../model/lens_filters.dart';
 import '../kit/kit.dart';
@@ -19,7 +20,7 @@ Widget lensFiltersSection(InspectorControls c) {
   void change(Json value) => editor.change(value);
   final options = [for (final f in catalogue.choices) PickerOption(f['id'] as String, f['name'] as String)];
   final note = catalogue.note(filters);
-  return Section(title: 'Filters', children: [
+  return Section(title: AppStrings.tr('Filters'), children: [
     for (var i = 0; i < filters.length; i++)
       _FittedFilter(
         // The same filter twice keeps each row its own.
@@ -30,7 +31,7 @@ Widget lensFiltersSection(InspectorControls c) {
         catalogue: catalogue,
         stock: c.stock,
         options: [
-          const PickerOption('none', 'None'),
+          PickerOption('none', AppStrings.tr('None')),
           ...options,
           if (catalogue.choice(filters[i]) == null)
             PickerOption(filters[i], catalogue.name(filters[i])),
@@ -39,16 +40,16 @@ Widget lensFiltersSection(InspectorControls c) {
         onMove: (delta) => change({'filters': moveFilter(filters, i, delta)}),
       ),
     PickerField<String>(
-      label: 'Add Filter',
+      label: AppStrings.tr('Add Filter'),
       value: 'none',
-      options: [const PickerOption('none', 'Add Filter…'), ...options],
+      options: [PickerOption('none', AppStrings.tr('Add Filter…')), ...options],
       onChanged: (id) {
         if (id != 'none') change({'filters': [...filters, id]});
       },
     ),
     if (filters.any((id) => !catalogue.isDiffusion(id)))
       PickerField<String>(
-        label: 'Metering',
+        label: AppStrings.tr('Metering'),
         value: c.edit['filterMetering'] as String? ?? 'throughTheLens',
         options: [
           for (final m in catalogue.meterings) PickerOption(m['id'] as String, m['name'] as String),
@@ -58,7 +59,7 @@ Widget lensFiltersSection(InspectorControls c) {
     if (filters.isNotEmpty)
       Align(
         alignment: Alignment.centerLeft,
-        child: QuietButton(label: 'Take Them All Off', onPressed: () => change({'filters': []})),
+        child: QuietButton(label: AppStrings.tr('Take Them All Off'), onPressed: () => change({'filters': []})),
       ),
     if (note != null) Note(note),
   ]);
@@ -93,13 +94,13 @@ class _FittedFilter extends StatelessWidget {
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             PickerField<String>(value: id, options: options, onChanged: onReplace),
             const SizedBox(height: 2),
-            Text(catalogue.isDiffusion(id) ? 'Scatters' : 'Absorbs',
+            Text(AppStrings.tr(catalogue.isDiffusion(id) ? 'Scatters' : 'Absorbs'),
                 style: editorText(context, size: TextSizes.caption, color: Palette.of(context).muted)),
           ]),
         ),
         const SizedBox(width: 6),
         QuietButton(
-          tooltip: 'Move filter nearer the lens',
+          tooltip: AppStrings.tr('Move filter nearer the lens'),
           onPressed: index == 0 ? null : () => onMove(-1),
           icon: 'chevronDown',
           iconSize: 16,
@@ -107,14 +108,14 @@ class _FittedFilter extends StatelessWidget {
         ),
         const SizedBox(width: 2),
         QuietButton(
-          tooltip: 'Move filter further from the lens',
+          tooltip: AppStrings.tr('Move filter further from the lens'),
           onPressed: index == count - 1 ? null : () => onMove(1),
           icon: 'chevronDown',
           iconSize: 16,
         ),
         const SizedBox(width: 2),
         QuietButton(
-          tooltip: 'Take this filter off',
+          tooltip: AppStrings.tr('Take this filter off'),
           onPressed: () => onReplace('none'),
           icon: 'minus',
           iconSize: 16,

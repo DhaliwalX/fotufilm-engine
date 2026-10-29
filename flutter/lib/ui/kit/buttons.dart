@@ -3,6 +3,7 @@
 import 'package:flutter/gestures.dart' show kPrimaryButton;
 import 'package:flutter/widgets.dart';
 
+import '../../app/strings.dart';
 import '../theme/theme.dart';
 import 'focus.dart';
 import 'icons.dart';
@@ -116,11 +117,11 @@ class _QuietButtonState extends State<QuietButton> with PointerTint {
                 ? palette.hover
                 : null;
     return HoverTip(
-      message: widget.tooltip,
+      message: widget.tooltip == null ? null : AppStrings.tr(widget.tooltip!),
       child: tinted(
         onTap: widget.onPressed,
         opensMenu: widget.opensMenu,
-        label: widget.label ?? widget.tooltip,
+        label: widget.label == null ? (widget.tooltip == null ? null : AppStrings.tr(widget.tooltip!)) : AppStrings.tr(widget.label!),
         selected: widget.selected ? true : null,
         child: Container(
           height: widget.size,
@@ -131,7 +132,7 @@ class _QuietButtonState extends State<QuietButton> with PointerTint {
           child: Center(
             widthFactor: 1,
             child: widget.label != null
-              ? Text(widget.label!, style: editorText(context, color: fg))
+              ? Text(AppStrings.tr(widget.label!), style: editorText(context, color: fg))
               : RotatedBox(
                   quarterTurns: widget.upsideDown ? 2 : 0,
                   child: AppIcon(widget.icon!, size: widget.iconSize, color: fg)),
@@ -175,7 +176,7 @@ class _PillButtonState extends State<PillButton> with PointerTint {
     };
     return tinted(
       onTap: widget.onPressed,
-      label: widget.label,
+      label: AppStrings.tr(widget.label),
       radius: Metrics.control / 2,
       child: Opacity(
         opacity: enabled ? 1 : .45,
@@ -190,7 +191,7 @@ class _PillButtonState extends State<PillButton> with PointerTint {
           // Its own width unless it expands, even under a stretching column.
           child: Center(
             widthFactor: widget.expand ? null : 1,
-            child: Text(widget.label,
+            child: Text(AppStrings.tr(widget.label),
                 style: editorText(context, weight: FontWeight.w700, color: fg)),
           ),
         ),

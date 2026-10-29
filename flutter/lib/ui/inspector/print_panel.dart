@@ -2,6 +2,7 @@
 // controls, the enlarger's lamp, the frame, and export.
 import 'package:flutter/widgets.dart';
 
+import '../../app/strings.dart';
 import '../../model/catalogue.dart';
 import '../../model/video.dart' show MovieDocument;
 import '../kit/kit.dart';
@@ -29,17 +30,19 @@ List<Widget> printPanel(InspectorControls c) {
   final cmyChanged = _screenCMY.any((f) => (c.profile[f] as num? ?? 0) != 0);
   final fixed = c.fixedSettings;
   return [
-    Section(title: 'Output', children: [
+    Section(title: AppStrings.tr('Output'), children: [
       MediumRow(
         editor: editor,
         offersBands: !fixed && printMedium?['receiverBands'] == true,
         picker: PickerField<String>(
-          label: 'Output medium',
+          label: AppStrings.tr('Output medium'),
           enabled: c.hasFilm,
           value: c.edit['mediumFollowsFilm'] == true && canMatchFilm ? _matchFilm : medium,
           options: [
-            if (canMatchFilm) const PickerOption(_matchFilm, 'Match Film'),
-            for (final m in media) PickerOption(m['id'] as String, m['name'] as String),
+            if (canMatchFilm) PickerOption(_matchFilm, AppStrings.tr('Match Film')),
+            for (final m in media)
+              PickerOption(m['id'] as String,
+                  m['id'] == 'screen' ? AppStrings.tr(m['name'] as String) : m['name'] as String),
           ],
           onChanged: (choice) => editor.change(choice == _matchFilm
               ? {'medium': stock!['filmMedium'], 'mediumFollowsFilm': true}
@@ -76,7 +79,7 @@ List<Widget> printPanel(InspectorControls c) {
         Align(
           alignment: Alignment.centerLeft,
           child: PillButton(
-            'Reset CMY',
+            AppStrings.tr('Reset CMY'),
             onPressed: cmyChanged
                 ? () => editor.change({
                       'profile': Map.of(c.profile)..removeWhere((k, _) => _screenCMY.contains(k)),
@@ -85,11 +88,11 @@ List<Widget> printPanel(InspectorControls c) {
           ),
         ),
       // The engine develops in Display P3, the space the web editor's canvas shows in the app.
-      const InfoRow('Color space', 'Display P3'),
+      InfoRow(AppStrings.tr('Color space'), 'Display P3'),
     ]),
     if (printMedium?['enlarger'] == true)
       Section(
-        title: 'Lamp',
+        title: AppStrings.tr('Lamp'),
         // The enlarger's lamp is set once in a while; it starts folded away below the output.
         initiallyOpen: false,
         children: c.profileControls(const [
@@ -103,11 +106,11 @@ List<Widget> printPanel(InspectorControls c) {
         ]),
       ),
     if (!fixed && editor.active != null) PrintFrameSection(editor: editor),
-    Section(title: 'Export', children: [
+    Section(title: AppStrings.tr('Export'), children: [
       Builder(
         builder: (context) => Align(
           alignment: Alignment.centerLeft,
-          child: PillButton(editor.active?.isMovie == true ? 'Export Video…' : 'Export Photo…',
+          child: PillButton(editor.active?.isMovie == true ? AppStrings.tr('Export Video…') : AppStrings.tr('Export Photo…'),
               onPressed: () => showExportDialog(context, editor)),
         ),
       ),

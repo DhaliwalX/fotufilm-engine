@@ -10,6 +10,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import 'strings.dart';
 import '../model/app_dialogs.dart';
 import '../model/editor.dart';
 import '../model/negative_document.dart';
@@ -150,118 +151,118 @@ const menuPanels = [
 
 /// The menu bar (main_menu.mm `FotufilmMainMenu`): `plugins` are the engine's {id, name}.
 List<SubmenuNode> mainMenu(List<Json> plugins) => [
-      const SubmenuNode('Fotufilm', [
-        NativeNode('about', 'About Fotufilm'),
+      SubmenuNode(AppStrings.tr('Fotufilm'), [
+        NativeNode('about', AppStrings.tr('About Fotufilm')),
         _separator,
-        CommandNode('checkForUpdates', 'Check for Updates…'),
-        CommandNode('autoUpdates', 'Check for Updates Automatically'),
+        CommandNode('checkForUpdates', AppStrings.tr('Check for Updates…')),
+        CommandNode('autoUpdates', AppStrings.tr('Check for Updates Automatically')),
         _separator,
-        CommandNode('settings', 'Settings…', KeyEquivalent(',')),
+        CommandNode('settings', '${AppStrings.tr('Settings')}…', KeyEquivalent(',')),
         _separator,
-        NativeNode('services', 'Services'),
+        NativeNode('services', AppStrings.tr('Services')),
         _separator,
-        NativeNode('hide', 'Hide Fotufilm', key: KeyEquivalent('h')),
-        NativeNode('hideOthers', 'Hide Others', key: KeyEquivalent('h', alt: true)),
-        NativeNode('showAll', 'Show All'),
+        NativeNode('hide', AppStrings.tr('Hide Fotufilm'), key: KeyEquivalent('h')),
+        NativeNode('hideOthers', AppStrings.tr('Hide Others'), key: KeyEquivalent('h', alt: true)),
+        NativeNode('showAll', AppStrings.tr('Show All')),
         _separator,
-        NativeNode('quit', 'Quit Fotufilm', key: KeyEquivalent('q')),
+        NativeNode('quit', AppStrings.tr('Quit Fotufilm'), key: KeyEquivalent('q')),
       ]),
-      const SubmenuNode('File', [
-        CommandNode('open', 'Open…', KeyEquivalent('o')),
-        CommandNode('importNegative', 'Import Scanned Negative…'),
-        CommandNode('importTrichromatic', 'Import Trichromatic Scan…'),
-        NativeNode('openRecent', 'Open Recent'),
-        CommandNode('useSamplePhoto', 'Use Sample Photo'),
+      SubmenuNode(AppStrings.tr('File'), [
+        CommandNode('open', AppStrings.tr('Open…'), KeyEquivalent('o')),
+        CommandNode('importNegative', AppStrings.tr('Import Scanned Negative…')),
+        CommandNode('importTrichromatic', AppStrings.tr('Import Trichromatic Scan…')),
+        NativeNode('openRecent', AppStrings.tr('Open Recent')),
+        CommandNode('useSamplePhoto', AppStrings.tr('Use Sample Photo')),
         _separator,
-        CommandNode('importFilmPack', 'Import Film Pack…', KeyEquivalent('i', shift: true)),
+        CommandNode('importFilmPack', AppStrings.tr('Import Film Pack…'), KeyEquivalent('i', shift: true)),
         _separator,
-        CommandNode('export', 'Export…', KeyEquivalent('e')),
+        CommandNode('export', AppStrings.tr('Export…'), KeyEquivalent('e')),
         _separator,
-        CommandNode('closePhoto', 'Close Photo', KeyEquivalent('w', shift: true)),
-        NativeNode('closeWindow', 'Close Window', key: KeyEquivalent('w')),
+        CommandNode('closePhoto', AppStrings.tr('Close Photo'), KeyEquivalent('w', shift: true)),
+        NativeNode('closeWindow', AppStrings.tr('Close Window'), key: KeyEquivalent('w')),
       ]),
       // Undo, Redo and the clipboard belong to a focused text field, or Undo and Redo to the
       // photograph's history, named after the step they change.
-      const SubmenuNode('Edit', [
-        CommandNode('undo', 'Undo', KeyEquivalent('z')),
-        CommandNode('redo', 'Redo', KeyEquivalent('z', shift: true)),
-        SubmenuNode('Edit History', [], list: 'history', empty: 'No Open Edit'),
+      SubmenuNode(AppStrings.tr('Edit'), [
+        CommandNode('undo', AppStrings.tr('Undo'), KeyEquivalent('z')),
+        CommandNode('redo', AppStrings.tr('Redo'), KeyEquivalent('z', shift: true)),
+        SubmenuNode(AppStrings.tr('Edit History'), [], list: 'history', empty: AppStrings.tr('No Open Edit')),
         _separator,
-        CommandNode('autoAdjust', 'Auto Adjust', KeyEquivalent('a', shift: true)),
-        CommandNode('sampleSelection', 'Sample a Selection', KeyEquivalent('s', shift: true)),
+        CommandNode('autoAdjust', AppStrings.tr('Auto Adjust'), KeyEquivalent('a', shift: true)),
+        CommandNode('sampleSelection', AppStrings.tr('Sample a Selection'), KeyEquivalent('s', shift: true)),
         _separator,
-        CommandNode('cut', 'Cut', KeyEquivalent('x')),
-        CommandNode('copy', 'Copy', KeyEquivalent('c')),
-        CommandNode('paste', 'Paste', KeyEquivalent('v')),
-        CommandNode('selectAll', 'Select All', KeyEquivalent('a')),
+        CommandNode('cut', AppStrings.tr('Cut'), KeyEquivalent('x')),
+        CommandNode('copy', AppStrings.tr('Copy'), KeyEquivalent('c')),
+        CommandNode('paste', AppStrings.tr('Paste'), KeyEquivalent('v')),
+        CommandNode('selectAll', AppStrings.tr('Select All'), KeyEquivalent('a')),
         _separator,
-        CommandNode('copyPhoto', 'Copy Photo', KeyEquivalent('c', shift: true)),
+        CommandNode('copyPhoto', AppStrings.tr('Copy Photo'), KeyEquivalent('c', shift: true)),
         _separator,
-        CommandNode('copySettings', 'Copy Settings…', KeyEquivalent('c', alt: true)),
-        CommandNode('pasteSettings', 'Paste Settings', KeyEquivalent('v', alt: true)),
-        SubmenuNode('Presets', [
-          CommandNode('savePreset', 'Save Preset…'),
-          CommandNode('managePresets', 'Manage Presets…'),
-          CommandNode('importLooks', 'Import Looks…'),
-        ], list: 'presets', empty: 'No Presets'),
+        CommandNode('copySettings', AppStrings.tr('Copy Settings…'), KeyEquivalent('c', alt: true)),
+        CommandNode('pasteSettings', AppStrings.tr('Paste Settings'), KeyEquivalent('v', alt: true)),
+        SubmenuNode(AppStrings.tr('Presets'), [
+          CommandNode('savePreset', AppStrings.tr('Save Preset…')),
+          CommandNode('managePresets', AppStrings.tr('Manage Presets…')),
+          CommandNode('importLooks', AppStrings.tr('Import Looks…')),
+        ], list: 'presets', empty: AppStrings.tr('No Presets')),
       ]),
-      const SubmenuNode('Film', [
-        SubmenuNode('Choose Film', [], list: 'films', empty: 'No Films'),
+      SubmenuNode(AppStrings.tr('Film'), [
+        SubmenuNode(AppStrings.tr('Choose Film'), [], list: 'films', empty: AppStrings.tr('No Films')),
         _separator,
-        CommandNode('newGrainPattern', 'New Grain Pattern', KeyEquivalent('g', shift: true)),
-        SubmenuNode('Grain Model', [
-          CommandNode('grainModel:clump', 'Standard'),
-          CommandNode('grainModel:film', 'Film'),
+        CommandNode('newGrainPattern', AppStrings.tr('New Grain Pattern'), KeyEquivalent('g', shift: true)),
+        SubmenuNode(AppStrings.tr('Grain Model'), [
+          CommandNode('grainModel:clump', AppStrings.tr('Standard')),
+          CommandNode('grainModel:film', AppStrings.tr('Film')),
         ]),
-        CommandNode('estimatedHalation', 'Estimated Halation Shape (Advanced)'),
+        CommandNode('estimatedHalation', AppStrings.tr('Estimated Halation Shape (Advanced)')),
         _separator,
-        CommandNode('autoFilm', 'Choose Film Per Photo'),
-        CommandNode('forgetFilms', 'Forget What I\'ve Taught It'),
+        CommandNode('autoFilm', AppStrings.tr('Choose Film Per Photo')),
+        CommandNode('forgetFilms', AppStrings.tr("Forget What I've Taught It")),
         _separator,
-        CommandNode('resetEdits', 'Reset All Edits', KeyEquivalent('r', shift: true)),
+        CommandNode('resetEdits', AppStrings.tr('Reset All Edits'), KeyEquivalent('r', shift: true)),
       ]),
-      SubmenuNode('View', [
+      SubmenuNode(AppStrings.tr('View'), [
         // ⌘+ rather than ⌘=: the menu shows characters, as the Mac app's does.
-        const CommandNode('zoomIn', 'Zoom In', KeyEquivalent('+')),
-        const CommandNode('zoomOut', 'Zoom Out', KeyEquivalent('-')),
-        const CommandNode('zoomToFit', 'Zoom to Fit', KeyEquivalent('0')),
+        CommandNode('zoomIn', AppStrings.tr('Zoom In'), const KeyEquivalent('+')),
+        CommandNode('zoomOut', AppStrings.tr('Zoom Out'), const KeyEquivalent('-')),
+        CommandNode('zoomToFit', AppStrings.tr('Zoom to Fit'), const KeyEquivalent('0')),
         _separator,
-        const CommandNode('showOriginal', 'Show Original', KeyEquivalent('\\')),
-        const CommandNode('showNegative', 'Show Negative', KeyEquivalent('n', alt: true)),
-        const CommandNode('histogram', 'Show Histogram', KeyEquivalent('h', control: true)),
-        const CommandNode('play', 'Play'),
+        CommandNode('showOriginal', AppStrings.tr('Show Original'), const KeyEquivalent('\\')),
+        CommandNode('showNegative', AppStrings.tr('Show Negative'), const KeyEquivalent('n', alt: true)),
+        CommandNode('histogram', AppStrings.tr('Show Histogram'), const KeyEquivalent('h', control: true)),
+        CommandNode('play', AppStrings.tr('Play')),
         _separator,
-        const CommandNode('filmSidebar', 'Film Stocks', KeyEquivalent('s', control: true)),
-        const CommandNode('inspector', 'Inspector', KeyEquivalent('i', alt: true)),
+        CommandNode('filmSidebar', AppStrings.tr('Film Stocks'), const KeyEquivalent('s', control: true)),
+        CommandNode('inspector', AppStrings.tr('Inspector'), const KeyEquivalent('i', alt: true)),
         // The inspector's tabs, numbered as they are stacked.
         _separator,
         for (final (i, (id, title)) in menuPanels.indexed)
-          CommandNode('panel:$id', title, KeyEquivalent('${i + 1}')),
+          CommandNode('panel:$id', AppStrings.tr(title), KeyEquivalent('${i + 1}')),
         _separator,
-        const NativeNode('fullScreen', 'Enter Full Screen', key: KeyEquivalent('f', control: true)),
+        NativeNode('fullScreen', AppStrings.tr('Enter Full Screen'), key: const KeyEquivalent('f', control: true)),
       ]),
       // Two items per editor, named after it; Install reads Reinstall once the plug-in is there.
       if (plugins.isNotEmpty)
-        SubmenuNode('Plugins', [
+        SubmenuNode(AppStrings.tr('Plugins'), [
           for (final (i, p) in plugins.indexed) ...[
             if (i > 0) _separator,
-            CommandNode('installPlugin:${p['id']}', 'Install ${p['name']} Plug-in…'),
-            CommandNode('revealPlugin:${p['id']}', 'Show ${p['name']} Plug-in ${HostWindow.fileManager}'),
+            CommandNode('installPlugin:${p['id']}', '${AppStrings.tr('Install')} ${p['name']} Plug-in…'),
+            CommandNode('revealPlugin:${p['id']}', '${AppStrings.tr('Show')} ${p['name']} Plug-in ${HostWindow.fileManager}'),
           ],
         ]),
-      const SubmenuNode('Window', [
-        NativeNode('minimize', 'Minimize', key: KeyEquivalent('m')),
-        NativeNode('zoom', 'Zoom'),
+      SubmenuNode(AppStrings.tr('Window'), [
+        NativeNode('minimize', AppStrings.tr('Minimize'), key: const KeyEquivalent('m')),
+        NativeNode('zoom', AppStrings.tr('Zoom')),
         _separator,
-        NativeNode('bringAllToFront', 'Bring All to Front'),
+        NativeNode('bringAllToFront', AppStrings.tr('Bring All to Front')),
       ], role: 'window'),
       // The same pages the native Mac app opens.
-      const SubmenuNode('Help', [
-        NativeNode('help', 'Fotufilm Help', page: 'support', key: KeyEquivalent('?')),
+      SubmenuNode(AppStrings.tr('Help'), [
+        NativeNode('help', AppStrings.tr('Fotufilm Help'), page: 'support', key: const KeyEquivalent('?')),
         _separator,
-        NativeNode('help', 'Third-Party Notices', page: 'third-party'),
-        NativeNode('help', 'Terms of Use', page: 'terms'),
-        NativeNode('help', 'Privacy Policy', page: 'privacy'),
+        NativeNode('help', AppStrings.tr('Third-Party Notices'), page: 'third-party'),
+        NativeNode('help', AppStrings.tr('Terms of Use'), page: 'terms'),
+        NativeNode('help', AppStrings.tr('Privacy Policy'), page: 'privacy'),
       ], role: 'help'),
     ];
 

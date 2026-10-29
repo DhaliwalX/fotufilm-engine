@@ -3,6 +3,7 @@
 // this device and the bands new photographs start on.
 import 'package:flutter/widgets.dart';
 
+import '../../app/strings.dart';
 import '../../model/band_sets.dart';
 import '../../model/editor.dart';
 import '../kit/kit.dart';
@@ -32,9 +33,9 @@ class _MediumRowState extends State<MediumRow> {
         if (widget.offersBands) ...[
           const SizedBox(width: 4),
           HoverTip(
-            message: 'Receiver bands',
+            message: AppStrings.tr('Receiver bands'),
             child: _GlyphButton(
-              label: 'Receiver bands',
+              label: AppStrings.tr('Receiver bands'),
               expanded: _open,
               glyph: 'fotu.ui.settings',
               color: _open ? palette.accent : palette.muted,
@@ -109,9 +110,9 @@ class ReceiverBands extends StatelessWidget {
     final rows = <Widget>[
       if (sets.isNotEmpty)
         PickerField<String?>(
-          label: 'Saved Bands',
+          label: AppStrings.tr('Saved Bands'),
           value: saved?['name'] as String?,
-          placeholder: 'Unsaved',
+          placeholder: AppStrings.tr('Unsaved'),
           options: [for (final s in sets) PickerOption(s['name'] as String, s['name'] as String)],
           onChanged: (name) => apply(sets.firstWhere((s) => s['name'] == name)),
         ),
@@ -127,18 +128,18 @@ class ReceiverBands extends StatelessWidget {
             },
           ),
           const SizedBox(width: 4),
-          Text('nm', style: editorText(context, size: TextSizes.label)),
+          Text(AppStrings.tr('nm'), style: editorText(context, size: TextSizes.label)),
         ]),
       SwitchRow(
-        label: 'Use for New Photos',
+        label: AppStrings.tr('Use for New Photos'),
         value: sameBands(bands.starting, current),
         onChanged: (on) => bands.starting = on ? current : null,
       ),
       Wrap(spacing: 6, runSpacing: 6, children: [
-        PillButton('Save Bands…', onPressed: () => showBandSetDialog(context, editor)),
+        PillButton(AppStrings.tr('Save Bands…'), onPressed: () => showBandSetDialog(context, editor)),
         if (saved != null)
-          PillButton('Delete Set', onPressed: () => bands.delete(saved['name'] as String)),
-        PillButton('Reset Bands', onPressed: moved ? () => apply(null) : null),
+          PillButton(AppStrings.tr('Delete Set'), onPressed: () => bands.delete(saved['name'] as String)),
+        PillButton(AppStrings.tr('Reset Bands'), onPressed: moved ? () => apply(null) : null),
       ]),
     ];
     return Container(
@@ -201,14 +202,14 @@ class _BandSetDialogState extends State<_BandSetDialog> {
     final name = _name.text.trim();
     final replaces = bands.sets.any((s) => s['name'] == name);
     return DialogCard(
-      title: 'Save Bands',
+      title: AppStrings.tr('Save Bands'),
       width: 360,
       actions: [
-        PillButton('Cancel', onPressed: widget.onClose),
-        PillButton('Save', variant: ButtonVariant.accent, onPressed: name.isEmpty ? null : _save),
+        PillButton(AppStrings.tr('Cancel'), onPressed: widget.onClose),
+        PillButton(AppStrings.tr('Save'), variant: ButtonVariant.accent, onPressed: name.isEmpty ? null : _save),
       ],
       children: [
-        FieldLabel('Name'),
+        FieldLabel(AppStrings.tr('Name')),
         const SizedBox(height: 3),
         Container(
           height: Metrics.control + 4,
@@ -225,7 +226,7 @@ class _BandSetDialogState extends State<_BandSetDialog> {
         ),
         const SizedBox(height: 4),
         Note(replaces
-            ? 'Replaces the set of this name.'
+            ? AppStrings.tr('Replaces the set of this name.')
             : '${current['red']} / ${current['green']} / ${current['blue']} nm'),
       ],
     );
