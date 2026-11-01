@@ -522,6 +522,27 @@ void write(const Surface &surface, const float *in, int sourceStride,
     IOSurfaceUnlock(surface.surface, 0, nullptr);
 }
 
+/// Clear only the tile pixels outside its picture intersection. In particular, do not touch
+/// IOSurface alignment padding or rely on a recycled output surface already containing zeros.
+void clearOutside(const Surface &surface, int column, int row, int width, int height) {
+    IOSurfaceLock(surface.surface, 0, nullptr);
+    const size_t stride = IOSurfaceGetBytesPerRow(surface.surface);
+    const size_t pixel = bytesPerPixel(surface.format);
+    uint8_t *base = (uint8_t *)IOSurfaceGetBaseAddress(surface.surface) +
+                    (size_t)surface.originY * stride + (size_t)surface.originX * pixel;
+    for (int y = 0; y < surface.height; ++y) {
+        uint8_t *to = base + (size_t)y * stride;
+        if (y < row || y >= row + height) {
+            std::memset(to, 0, (size_t)surface.width * pixel);
+        } else {
+            std::memset(to, 0, (size_t)column * pixel);
+            std::memset(to + (size_t)(column + width) * pixel, 0,
+                        (size_t)(surface.width - column - width) * pixel);
+        }
+    }
+    IOSurfaceUnlock(surface.surface, 0, nullptr);
+}
+
 /// The band a striped decode walks, in rows: a 16 MiB working set, and never less than one row.
 int decodeBandRows(int width) {
     const size_t bytes = 16u << 20;
@@ -2393,6 +2414,28 @@ writesInterchange:(bool)writesInterchange
     const FxRect bounds = destinationImage.imagePixelBounds;
     const FxRect tile = destinationImage.tilePixelBounds;
 
+    // Final Cut can request a tile with an apron outside the image, even for a generator.
+    // Develop the picture, not that apron; leave transparent black outside the image instead
+    // of rejecting a valid host request or reading before the cached frame.
+    const FxRect clipped{std::max(tile.left, bounds.left), std::max(tile.bottom, bounds.bottom),
+                         std::min(tile.right, bounds.right), std::min(tile.top, bounds.top)};
+    if (clipped.left >= clipped.right || clipped.bottom >= clipped.top) {
+        clearOutside(destination, 0, 0, 0, 0);
+        return YES;
+    }
+    const bool topDown = destinationImage.imageOrigin == kFxImageOrigin_TOP_LEFT;
+    const int columnOffset = clipped.left - bounds.left;
+    const int rowOffset = topDown ? bounds.top - clipped.top : clipped.bottom - bounds.bottom;
+    const int tileWidth = std::min(clipped.right - clipped.left, source.width - columnOffset);
+    const int tileHeight = std::min(clipped.top - clipped.bottom, source.height - rowOffset);
+    if (columnOffset < 0 || rowOffset < 0 || tileWidth <= 0 || tileHeight <= 0) {
+        if (error) *error = FotufilmError(kFotufilmError_Surface,
+                                          @"Fotufilm was asked for a tile outside the frame");
+        return NO;
+    }
+    const int destinationColumn = clipped.left - tile.left;
+    const int destinationRow = topDown ? tile.top - clipped.top : clipped.bottom - tile.bottom;
+
     // The frame is identified by everything that changes a pixel: the state block, the time, the
     // frame's size, the colour space — and the picture itself. The picture has to be in there
     // because the parameters can stand still while the clip under them moves: an upstream change
@@ -2457,25 +2500,15 @@ writesInterchange:(bool)writesInterchange
         self.cacheKey = key;
     }
 
-    // Which edge the surface's first row belongs to is the image's to say, and both answers occur:
-    // a bottom-up image measures the tile's offset from the image's bottom, a top-down one from its
-    // top. Getting this backwards puts the right pixels in the wrong half of the frame, which on a
-    // two-band render looks like the picture cut and swapped.
-    const int columnOffset = tile.left - bounds.left;
-    const int rowOffset = destinationImage.imageOrigin == kFxImageOrigin_TOP_LEFT
-                              ? bounds.top - tile.top
-                              : tile.bottom - bounds.bottom;
-    const int tileWidth = std::min(destination.width, source.width - columnOffset);
-    const int tileHeight = std::min(destination.height, source.height - rowOffset);
-    if (columnOffset < 0 || rowOffset < 0 || tileWidth <= 0 || tileHeight <= 0) {
-        if (error) *error = FotufilmError(kFotufilmError_Surface,
-                                          @"Fotufilm was asked for a tile outside the frame");
-        return NO;
+    // The offsets on both sides follow the surface's row origin: an apron can precede the
+    // picture in memory as well as follow it. Ordinary in-image tiles need no clearing.
+    if (destinationColumn || destinationRow || tileWidth != destination.width ||
+        tileHeight != destination.height) {
+        clearOutside(destination, destinationColumn, destinationRow, tileWidth, tileHeight);
     }
-
     const float *from = _developed.data() +
                         ((size_t)rowOffset * source.width + columnOffset) * 4;
-    write(destination, from, source.width, 0, 0, tileWidth, tileHeight);
+    write(destination, from, source.width, destinationColumn, destinationRow, tileWidth, tileHeight);
     return YES;
 }
 
