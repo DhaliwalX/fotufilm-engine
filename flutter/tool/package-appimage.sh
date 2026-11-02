@@ -68,14 +68,42 @@ ldd "$LIB/libfotufilm.so" | grep -q '^\s*libjpeg\.so\.8 ' || {
 }
 JPEG="$(tools/build-libjpeg-turbo-linux.sh)"
 cp -L "$JPEG" "$LIB/libjpeg.so.8"
-# libheif's plug-in folder, beside its library.
-plugins="$(dirname "$(ldd "$LIB/libfotufilm.so" | awk '$1 ~ /^libheif\.so/ {print $3}')")/libheif/plugins"
+# libheif's plug-in folder, beside the system library the image's copy came from (ldd on the engine
+# now finds the copy).
+plugins="$(dirname "$(grep -m1 '/libheif\.so' "$OUT/bundled.txt")")/libheif/plugins"
 mkdir -p "$APP/heif-plugins"
 for plugin in libheif-libde265.so libheif-aomdec.so libheif-dav1d.so; do
   if [[ -f "$plugins/$plugin" ]]; then
     cp -L "$plugins/$plugin" "$APP/heif-plugins/"
     bundle "$plugins/$plugin" >> "$OUT/bundled.txt"
   fi
+done
+
+# The carried libraries look for one another in the image. A RUNPATH serves only its own object's
+# NEEDED entries, so the engine's $ORIGIN does not reach libOpenEXR's libIlmThread and libIex,
+# libraw's libgomp or the HEIF decoders' codecs: without their own, a system with another OpenEXR
+# (or none) fails to load the engine.
+command -v patchelf >/dev/null || { echo "error: packing needs patchelf" >&2; exit 1; }
+carried=()
+for library in "$LIB"/*; do
+  name="$(basename "$library")"
+  if [[ "$name" =~ $bundled || "$name" == libjpeg.so.8 ]]; then
+    patchelf --set-rpath '$ORIGIN' "$library"
+    carried+=("$library")
+  fi
+done
+for plugin in "$APP"/heif-plugins/*.so; do
+  [[ -f "$plugin" ]] || continue
+  patchelf --set-rpath '$ORIGIN/../lib' "$plugin"
+  carried+=("$plugin")
+done
+for object in "$LIB/libfotufilm.so" "${carried[@]}"; do
+  readelf -d "$object" | sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p' | while read -r name; do
+    if [[ ("$name" =~ $bundled || "$name" == libjpeg.so.8) && ! -e "$LIB/$name" ]]; then
+      echo "error: $(basename "$object") needs $name, which the image does not carry" >&2
+      exit 1
+    fi
+  done
 done
 
 # The licences of what the image carries beside the app's own (THIRD_PARTY_NOTICES.md).
