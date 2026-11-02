@@ -112,7 +112,8 @@ libraw-dev liblcms2-dev libopenexr-dev libheif-dev`, with `libheif-plugin-libde2
 `libheif-plugin-x265` for HEIC at run time. The AppImage carries libjpeg-turbo 3 rather than the
 build host's libjpeg, because the system's libtiff binds to the carried copy and newer
 distributions build libtiff against libjpeg-turbo 3; `tools/build-libjpeg-turbo-linux.sh` builds it
-from the pinned release when the image is packed, which needs `cmake` and `nasm`. Movies go
+from the pinned release when the image is packed, which needs `cmake` and `nasm`. Packing also
+needs `patchelf`, which points each carried library at the others in the image. Movies go
 through the system's FFmpeg (`Sources/CFotufilmVideo`), opened at run time rather than linked or
 bundled: the build needs `libavformat-dev libavcodec-dev libavutil-dev libswscale-dev
 libswresample-dev`, and a machine without FFmpeg 6 runs with video off.
