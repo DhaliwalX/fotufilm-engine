@@ -1829,6 +1829,88 @@ int main(int argc, const char *argv[]) {
                    "a tiled render joins into exactly the whole-frame render");
         }
 
+        printf("tiles extending beyond the image\n");
+        {
+            // Final Cut can request an output tile with an apron outside imagePixelBounds.
+            // In issue #325 a 3840x2160 generator received {-4, -6, 3846, 2164}.
+            // The picture must stay in place and every pixel outside it must be transparent,
+            // including a tile with no picture at all. Surface alignment padding is not a tile.
+            const FxRect bounds{11, -7, 11 + width, -7 + height};
+            const FxRect tiles[] = {
+                {bounds.left - 4, bounds.bottom - 6, bounds.right + 6, bounds.top + 4},
+                {bounds.left - 4, bounds.bottom, bounds.left + width / 2, bounds.top},
+                {bounds.left + width / 2, bounds.bottom, bounds.right + 6, bounds.top},
+                {bounds.left, bounds.bottom - 6, bounds.right, bounds.bottom + height / 2},
+                {bounds.left, bounds.bottom + height / 2, bounds.right, bounds.top + 4},
+                {bounds.right, bounds.bottom, bounds.right + 6, bounds.top},
+                {bounds.left, bounds.top + 2, bounds.right, bounds.top + 6},
+            };
+            for (FxImageOrigin origin : {kFxImageOrigin_TOP_LEFT, kFxImageOrigin_BOTTOM_LEFT}) {
+                IOSurfaceRef input = makeSurface(width, height);
+                fill(input, width, height, ramp);
+                FxImageTile *source = makeTile(input, bounds, bounds);
+                source.imageOrigin = origin;
+                NSData *state = nil;
+                [effect pluginState:&state atTime:kCMTimeZero quality:2 error:&error];
+                for (OSType format : {kCVPixelFormatType_64RGBAHalf,
+                                      kCVPixelFormatType_128RGBAFloat}) {
+                    IOSurfaceRef full = makeSurface(width, height, format);
+                    FxImageTile *destination = makeTile(full, bounds, bounds);
+                    destination.imageOrigin = origin;
+                    bool referenceRendered = [effect renderDestinationImage:destination
+                                                               sourceImages:@[source]
+                                                                pluginState:state
+                                                                     atTime:kCMTimeZero
+                                                                      error:&error];
+                    expect(referenceRendered, "the whole-frame reference renders");
+                    std::vector<float> reference = readback(full, width, height);
+                    CFRelease(full);
+                    for (FxRect tile : tiles) {
+                        const int columns = tile.right - tile.left;
+                        const int rows = tile.top - tile.bottom;
+                        IOSurfaceRef output = makeSurface(columns + 3, rows + 2, format);
+                        fill(output, columns + 3, rows + 2, ^(int, int, float *rgba) {
+                            rgba[0] = rgba[1] = rgba[2] = 5.0f; rgba[3] = 1.0f;
+                        });
+                        destination = makeTile(output, bounds, tile);
+                        destination.imageOrigin = origin;
+                        error = nil;
+                        bool rendered = [effect renderDestinationImage:destination
+                                                          sourceImages:@[source]
+                                                           pluginState:state
+                                                                atTime:kCMTimeZero
+                                                                 error:&error];
+                        if (!rendered) {
+                            printf("  apron render refused: %s\n",
+                                   error.localizedDescription.UTF8String);
+                        }
+                        const std::vector<float> got = readback(output, columns + 3, rows + 2);
+                        bool matches = referenceRendered && rendered;
+                        for (int y = 0; y < rows + 2; ++y) {
+                            for (int x = 0; x < columns + 3; ++x) {
+                                const int sourceX = tile.left + x - bounds.left;
+                                const int sourceY = origin == kFxImageOrigin_TOP_LEFT
+                                    ? bounds.top - tile.top + y : tile.bottom - bounds.bottom + y;
+                                const bool padding = x >= columns || y >= rows;
+                                const bool inside = sourceX >= 0 && sourceX < width &&
+                                                    sourceY >= 0 && sourceY < height;
+                                for (int c = 0; c < 4; ++c) {
+                                    const float expected = padding ? (c == 3 ? 1.0f : 5.0f)
+                                        : inside ? reference[((size_t)sourceY * width + sourceX) * 4 + c]
+                                                 : 0.0f;
+                                    matches &= got[((size_t)y * (columns + 3) + x) * 4 + c] == expected;
+                                }
+                            }
+                        }
+                        expect(matches,
+                               "an apron tile preserves the picture, clears outside RGBA, and leaves surface padding alone");
+                        CFRelease(output);
+                    }
+                }
+                CFRelease(input);
+            }
+        }
+
         printf("geometry\n");
         {
             // A host is free to back a 1920x1080 image with a surface padded out to some

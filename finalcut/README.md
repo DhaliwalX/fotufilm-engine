@@ -77,6 +77,8 @@ The **Status** line explains input color handling, unavailable controls, and ren
 errors. The plugin includes all 47 film profiles and needs no activation.
 A saved project retains its menu choices and texture-stage controls when reopened.
 A smaller film gauge makes grain and other spatial effects larger in the image.
+Final Cut may request output tiles extending beyond the image bounds; the plugin
+preserves the picture and fills the outside area with transparent black.
 
 **Source Illuminant** defaults to **Stock Native**, following the selected film's
 reference light. Choose a preset or **Custom** and set **Source Illuminant (K)**
