@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/widgets.dart';
 
+import '../../app/strings.dart';
 import '../../model/editor.dart';
 import '../../model/negative_document.dart';
 import '../kit/kit.dart';
@@ -72,7 +73,7 @@ class _FilmLibraryState extends State<FilmLibrary> {
                 if (open) ...[
                   Expanded(
                     child: SegmentedControl<bool>(
-                      items: const [(false, 'Films'), (true, 'Presets')],
+                      items: [(false, AppStrings.tr('Films')), (true, AppStrings.tr('Presets'))],
                       selected: editor.presetsTab,
                       onChanged: (presets) {
                         // Each tab keeps its own search.
@@ -96,7 +97,7 @@ class _FilmLibraryState extends State<FilmLibrary> {
               Expanded(
                 child: _SearchField(
                   controller: _search,
-                  placeholder: editor.presetsTab ? 'Search presets' : 'Search films',
+                  placeholder: editor.presetsTab ? AppStrings.tr('Search presets') : AppStrings.tr('Search films'),
                   onChanged: editor.presetsTab ? editor.presets.setSearch : editor.setSearch,
                 ),
               ),
@@ -104,7 +105,7 @@ class _FilmLibraryState extends State<FilmLibrary> {
                 const SizedBox(width: 4),
                 QuietButton(
                   icon: 'plus',
-                  tooltip: 'Save Preset…',
+                  tooltip: AppStrings.tr('Save Preset…'),
                   onPressed:
                       editor.active == null ? null : () => showSavePresetDialog(context, editor),
                 ),
@@ -127,7 +128,7 @@ class _FilmLibraryState extends State<FilmLibrary> {
   Widget _list(bool open) {
     final editor = widget.editor;
     final films = _films();
-    if (films.isEmpty) return const LibraryEmpty('No matching films.');
+    if (films.isEmpty) return LibraryEmpty(AppStrings.tr('No matching films.'));
     final selected = editor.edit['stock'] as String?;
     final doc = editor.active;
     // Beside the picture there is the height for the list.
@@ -150,8 +151,8 @@ class _FilmLibraryState extends State<FilmLibrary> {
               editor: editor,
               id: id ?? '',
               child: StockRow(
-              name: stock?['name'] as String? ?? 'Normal',
-              kind: stock == null ? 'No film' : 'Film',
+              name: stock?['name'] as String? ?? AppStrings.tr('Normal'),
+              kind: stock == null ? AppStrings.tr('No film') : AppStrings.tr('Film'),
               thumbnail: doc?.filmThumbnails[id ?? ''] ?? doc?.importPicture,
               selected: id == selected,
               compact: !open,
@@ -196,7 +197,7 @@ class _FilmLibraryState extends State<FilmLibrary> {
             editor: editor,
             id: id ?? '',
             child: StripTile(
-              name: stock?['name'] as String? ?? 'Normal',
+              name: stock?['name'] as String? ?? AppStrings.tr('Normal'),
               thumbnail: doc?.filmThumbnails[id ?? ''] ?? doc?.importPicture,
               selected: id == selected,
               onPressed: doc == null ? null : () => editor.chooseStock(id),
@@ -316,11 +317,11 @@ class _FilmTypePickerState extends State<_FilmTypePicker> with PointerTint {
     final palette = Palette.of(context);
     final filtered = widget.selected != FilmType.all;
     return HoverTip(
-      message: 'Film type',
+      message: AppStrings.tr('Film type'),
       child: Builder(
         builder: (anchor) => tinted(
           opensMenu: true,
-          label: 'Film type',
+          label: AppStrings.tr('Film type'),
           value: widget.selected.title,
           onTap: () => showMenu(anchor, alignEnd: true, width: 170, [
             for (final type in widget.types)

@@ -2,6 +2,7 @@
 // so a panel only says which controls go in which section.
 import 'package:flutter/widgets.dart';
 
+import '../../app/strings.dart';
 import '../../model/catalogue.dart';
 import '../../model/editor.dart';
 import '../kit/kit.dart';
@@ -118,7 +119,7 @@ class InspectorControls {
         children: [
           slider,
           QuietButton(
-            label: 'Use Film Return',
+            label: AppStrings.tr('Use Film Return'),
             onPressed: enabled && profile.containsKey(field) ? () => set(null) : null,
           ),
         ],

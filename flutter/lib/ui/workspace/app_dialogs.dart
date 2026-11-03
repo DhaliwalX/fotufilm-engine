@@ -3,6 +3,7 @@
 // (Spectrum's Dialog and AlertDialog).
 import 'package:flutter/widgets.dart';
 
+import '../../app/strings.dart';
 import '../../model/app_dialogs.dart';
 import '../../model/editor.dart';
 import '../kit/kit.dart';
@@ -136,12 +137,12 @@ class AppDialogCard extends StatelessWidget {
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.only(top: 4),
-                  child: Text(title,
+                  child: Text(AppStrings.tr(title),
                       style: editorText(context, size: TextSizes.dialog, weight: FontWeight.w700)),
                 ),
               ),
               if (onDismiss != null)
-                QuietButton(icon: 'close', tooltip: 'Dismiss', onPressed: onDismiss),
+                QuietButton(icon: 'close', tooltip: AppStrings.tr('Dismiss'), onPressed: onDismiss),
             ]),
             const SizedBox(height: 14),
             Flexible(
@@ -205,7 +206,7 @@ class AlertCard extends StatelessWidget {
               child: AppIcon('warning', size: 20, color: palette.dark ? const Color(0xFFF5A623) : const Color(0xFFC77D00)),
             ),
           ),
-        Text(message, style: editorText(context, height: 1.5)),
+        Text(AppStrings.tr(message), style: editorText(context, height: 1.5)),
       ],
     );
   }
@@ -219,7 +220,7 @@ class PaneHeading extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.only(top: 12),
-        child: Text(text, style: editorText(context, weight: FontWeight.w700)),
+        child: Text(AppStrings.tr(text), style: editorText(context, weight: FontWeight.w700)),
       );
 }
 

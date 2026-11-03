@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
 
+import '../../app/strings.dart';
 import '../../model/catalogue.dart';
 import '../kit/kit.dart';
 import '../theme/theme.dart';
@@ -123,7 +124,7 @@ class _SpectrumCurveState extends State<SpectrumCurve> {
         Row(children: [
           Expanded(child: FieldLabel(widget.title, detail: widget.detail)),
           QuietButton(
-            label: 'Reset ${widget.title}',
+            label: '${AppStrings.tr('Reset')}${AppStrings.isChinese ? '' : ' '}${widget.title}',
             onPressed: enabled
                 ? () {
                     widget.onReset();

@@ -4,6 +4,7 @@
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/widgets.dart';
 
+import '../../app/strings.dart';
 import '../../model/editor.dart';
 import '../../model/film_packs.dart';
 import '../../model/film_suggestion.dart';
@@ -36,14 +37,14 @@ class _SettingsDialogState extends State<SettingsDialog> {
       listenable: Listenable.merge(
           [editor, editor.settings, editor.filmPacks, editor.filmSuggestion]),
       builder: (context, _) => AppDialogCard(
-        title: 'Settings',
+        title: AppStrings.tr('Settings'),
         onDismiss: widget.onClose,
         children: [
           SegmentedControl<SettingsPane>(
-            items: const [
-              (SettingsPane.general, 'General'),
-              (SettingsPane.output, 'Output'),
-              (SettingsPane.filmModel, 'Film Model'),
+            items: [
+              (SettingsPane.general, AppStrings.tr('General')),
+              (SettingsPane.output, AppStrings.tr('Output')),
+              (SettingsPane.filmModel, AppStrings.tr('Film Model')),
             ],
             selected: _pane,
             onChanged: (p) => setState(() => _pane = SettingsDialog.pane = p),
@@ -73,31 +74,30 @@ class _SettingsDialogState extends State<SettingsDialog> {
     final suggestion = editor.filmSuggestion;
     final learned = suggestion.learned == null || suggestion.learned! > 0;
     return [
-      const PaneHeading('New Photos'),
+      PaneHeading(AppStrings.tr('New Photos')),
       _SettingPicker(
-        label: 'Starting Film',
+        label: AppStrings.tr('Starting Film'),
         setting: 'startingFilm',
         settings: _settings,
         options: [
-          const PickerOption(null, 'Current Film'),
-          const PickerOption('none', 'Normal'),
+          PickerOption(null, AppStrings.tr('Current Film')),
+          PickerOption('none', AppStrings.tr('Normal')),
           for (final s in editor.stocks) PickerOption(s['id'] as String, s['name'] as String),
         ],
       ),
       _SettingPicker(
-        label: 'Film Format',
+        label: AppStrings.tr('Film Format'),
         setting: 'startingFormat',
         settings: _settings,
         options: [
-          const PickerOption(null, 'Match the Film'),
+          PickerOption(null, AppStrings.tr('Match the Film')),
           for (final f in editor.catalogue.filmFormats)
             PickerOption(f['id'] as String, f['name'] as String),
         ],
       ),
       if (suggestion.available) ...[
-        _SettingSwitch(label: 'Suggest a Film Automatically', setting: 'autoFilm', settings: _settings),
-        const PaneNote('Suggests a film when you open a photo, based on your previous choices. '
-            'You can select a different film at any time.'),
+        _SettingSwitch(label: AppStrings.tr('Suggest a Film Automatically'), setting: 'autoFilm', settings: _settings),
+        PaneNote(AppStrings.tr('Suggests a film when you open a photo, based on your previous choices. You can select a different film at any time.')),
         const SizedBox(height: 6),
         Align(
           alignment: Alignment.centerLeft,
@@ -106,22 +106,21 @@ class _SettingsDialogState extends State<SettingsDialog> {
       ],
       if (editor.filmPacks.available) _FilmPacksSection(packs: editor.filmPacks),
       if (editor.updates.available) ...[
-        const PaneHeading('Updates'),
+        PaneHeading(AppStrings.tr('Updates')),
         _SettingSwitch(
-            label: 'Check for Updates Automatically',
+            label: AppStrings.tr('Check for Updates Automatically'),
             setting: 'updateChecksAutomatically',
             settings: _settings),
-        _SettingSwitch(label: 'Include Pre-releases', setting: 'updatePrereleases', settings: _settings),
+        _SettingSwitch(label: AppStrings.tr('Include Pre-releases'), setting: 'updatePrereleases', settings: _settings),
       ],
-      const PaneHeading('Reset'),
+      PaneHeading(AppStrings.tr('Reset')),
       const SizedBox(height: 6),
       Align(
         alignment: Alignment.centerLeft,
         child: PillButton('Reset All Settings',
             variant: ButtonVariant.negative, onPressed: () => _confirmReset(context)),
       ),
-      const PaneNote('Restores Fotufilm’s original settings. Your photographs and edits are not '
-          'changed.'),
+      PaneNote(AppStrings.tr('Restores Fotufilm’s original settings. Your photographs and edits are not changed.')),
     ];
   }
 
@@ -130,8 +129,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
       context,
       (close) => AlertCard(
         title: 'Reset All Settings?',
-        message: 'This restores Fotufilm’s original settings. Your photos and edits will not '
-            'change.',
+        message: 'This restores Fotufilm’s original settings. Your photos and edits will not change.',
         primary: 'Reset',
         variant: ButtonVariant.negative,
         cancel: 'Cancel',
@@ -151,26 +149,25 @@ class _SettingsDialogState extends State<SettingsDialog> {
         ((widget.editor.engine?.capabilities['imageExportTypes'] as List?) ?? const []).isNotEmpty;
     if (!exports) {
       return [
-        const PaneHeading('Photos'),
+        PaneHeading(AppStrings.tr('Photos')),
         const PaneNote('This engine exports photos in standard dynamic range.'),
         ..._video(),
       ];
     }
     return [
-      const PaneHeading('Photos'),
+      PaneHeading(AppStrings.tr('Photos')),
       const SizedBox(height: 4),
-      _SettingSwitch(label: 'HDR', setting: 'photoHDR', settings: _settings),
+      _SettingSwitch(label: AppStrings.tr('HDR'), setting: 'photoHDR', settings: _settings),
       const PaneNote('HDR preserves brighter highlights on compatible displays. Choose Standard '
           'for wider compatibility. It applies to HEIC exports of films that deliver HDR, '
           'without a print frame.'),
       _SettingPicker(
-        label: 'Photo Quality',
+        label: AppStrings.tr('Photo Quality'),
         setting: 'photoQuality',
         settings: _settings,
-        options: const [PickerOption('accurate', 'Accurate'), PickerOption('fast', 'Fast')],
+        options: [PickerOption('accurate', AppStrings.tr('Accurate')), PickerOption('fast', AppStrings.tr('Fast'))],
       ),
-      const PaneNote('Accurate uses exact film curves. Fast uses an approximation to reduce '
-          'processing time.'),
+      PaneNote(AppStrings.tr('Accurate uses exact film curves. Fast uses an approximation to reduce processing time.')),
       ..._video(),
     ];
   }
@@ -184,9 +181,9 @@ class _SettingsDialogState extends State<SettingsDialog> {
     final bitrates = exporter.videoBitrates;
     if (!playable) return const [];
     return [
-      const PaneHeading('Video'),
+      PaneHeading(AppStrings.tr('Video')),
       _SettingPicker(
-        label: 'Playback Quality',
+        label: AppStrings.tr('Playback Quality'),
         setting: 'videoPlaybackQuality',
         settings: _settings,
         options: [for (final (id, name, _) in playbackQualities) PickerOption(id, name)],
@@ -194,22 +191,22 @@ class _SettingsDialogState extends State<SettingsDialog> {
       const PaneNote(playbackQualityHelp),
       if (exporter.videoProcessingOffered) ...[
         _SettingPicker(
-          label: 'Video Quality',
+          label: AppStrings.tr('Video Quality'),
           setting: 'videoProcessing',
           settings: _settings,
-          options: const [PickerOption('full', 'Full'), PickerOption('fast', 'Fast')],
+          options: [PickerOption('full', AppStrings.tr('Full')), PickerOption('fast', AppStrings.tr('Fast'))],
         ),
         const PaneNote('Video quality sets the processing resolution. Full uses the source '
             'resolution; Fast processes at up to 1080p.'),
       ],
       if (hdr) ...[
-        _SettingSwitch(label: 'HDR', setting: 'videoHDR', settings: _settings),
+        _SettingSwitch(label: AppStrings.tr('HDR'), setting: 'videoHDR', settings: _settings),
         const PaneNote('HEVC and ProRes movies of films that deliver HDR are written as HLG; '
             'H.264 stays standard.'),
       ],
       if (bitrates.isNotEmpty) ...[
         _SettingPicker(
-          label: 'Video File Size',
+          label: AppStrings.tr('Video File Size'),
           setting: 'videoBitrate',
           settings: _settings,
           options: [

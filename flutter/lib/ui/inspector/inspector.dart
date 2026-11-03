@@ -3,6 +3,7 @@
 // panels' buttons.
 import 'package:flutter/widgets.dart';
 
+import '../../app/strings.dart';
 import '../../model/editor.dart';
 import '../../model/panel_layout.dart';
 import '../kit/kit.dart';
@@ -59,16 +60,16 @@ class _EditorInspectorState extends State<EditorInspector> {
             child: Row(children: [
               Text(
                   switch (editor.panel) {
-                    Panel.crop => 'Crop',
-                    Panel.selective => 'Selective',
-                    _ => 'Darkroom',
+                    Panel.crop => AppStrings.tr('Crop'),
+                    Panel.selective => AppStrings.tr('Selective'),
+                    _ => AppStrings.tr('Darkroom'),
                   },
                   style: editorText(context, size: TextSizes.heading, weight: FontWeight.w700)),
               const SizedBox(width: 2),
               HelpButton(detail: _help[editor.panel], size: 16),
               if (editor.panel == Panel.crop || editor.panel == Panel.selective) ...[
                 const SizedBox(width: 6),
-                Text('Canvas tool',
+                Text(AppStrings.tr('Canvas tool'),
                     style: editorText(context,
                         size: TextSizes.label, color: Palette.of(context).muted)),
               ],

@@ -4,6 +4,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import '../../app/strings.dart';
 import '../../model/editor.dart';
 import '../../model/presets.dart';
 import '../kit/kit.dart';
@@ -80,20 +81,20 @@ class _SectionsDialogState extends State<_SectionsDialog> {
     return CallbackShortcuts(
       bindings: {const SingleActivator(LogicalKeyboardKey.escape): widget.onClose},
       child: DialogCard(
-        title: widget.preset ? 'Save Preset' : 'Copy Settings',
+        title: widget.preset ? AppStrings.tr('Save Preset…') : AppStrings.tr('Copy Settings…'),
         width: 520,
         actions: [
-          PillButton('Check All',
+          PillButton(AppStrings.tr('Check All'),
               onPressed: () => setState(() => _sections = [for (final s in presets.allSections) s.id])),
-          PillButton('Check None', onPressed: () => setState(() => _sections = [])),
+          PillButton(AppStrings.tr('Check None'), onPressed: () => setState(() => _sections = [])),
           const Spacer(),
-          PillButton('Cancel', onPressed: widget.onClose),
-          PillButton(widget.preset ? 'Save' : 'Copy',
+          PillButton(AppStrings.tr('Cancel'), onPressed: widget.onClose),
+          PillButton(widget.preset ? AppStrings.tr('Save') : AppStrings.tr('Copy'),
               variant: ButtonVariant.accent, onPressed: _ready ? _confirm : null),
         ],
         children: [
           if (widget.preset) ...[
-            const FieldLabel('Name'),
+            FieldLabel(AppStrings.tr('Name')),
             const SizedBox(height: 3),
             NameField(
               controller: _name,
@@ -103,7 +104,7 @@ class _SectionsDialogState extends State<_SectionsDialog> {
             ),
             if (replaces) ...[
               const SizedBox(height: 4),
-              Text('Replaces the preset of this name.',
+              Text(AppStrings.tr('Replaces the preset of this name.'),
                   style: editorText(context, size: TextSizes.label, color: palette.muted)),
             ],
             const SizedBox(height: 16),
@@ -216,11 +217,11 @@ class _PresetsDialogState extends State<_PresetsDialog> {
       );
 
   Widget _confirmDelete(BuildContext context, Preset preset) => DialogCard(
-        title: 'Delete “${preset.name}”?',
+        title: '${AppStrings.tr('Delete')} “${preset.name}”?',
         width: 360,
         actions: [
-          PillButton('Cancel', onPressed: () => setState(() => _doomed = null)),
-          PillButton('Delete', variant: ButtonVariant.negative, onPressed: () {
+          PillButton(AppStrings.tr('Cancel'), onPressed: () => setState(() => _doomed = null)),
+          PillButton(AppStrings.tr('Delete'), variant: ButtonVariant.negative, onPressed: () {
             editor.presets.delete(preset.id);
             setState(() => _doomed = null);
           }),
@@ -232,18 +233,18 @@ class _PresetsDialogState extends State<_PresetsDialog> {
     final presets = editor.presets;
     final usable = editor.active != null && !editor.exporting;
     return DialogCard(
-      title: 'Presets',
+      title: AppStrings.tr('Presets'),
       actions: [
-        PillButton('Import Looks…', onPressed: () => importLooks(context, editor)),
-        PillButton('Export All…',
+        PillButton(AppStrings.tr('Import Looks…'), onPressed: () => importLooks(context, editor)),
+        PillButton(AppStrings.tr('Export All…'),
             onPressed: presets.list.isEmpty
                 ? null
                 : () => presets.export([for (final p in presets.list) p.id])),
         const Spacer(),
-        PillButton('Done', variant: ButtonVariant.accent, onPressed: widget.onClose),
+        PillButton(AppStrings.tr('Done'), variant: ButtonVariant.accent, onPressed: widget.onClose),
       ],
       children: [
-        if (presets.list.isEmpty) const Note('No presets yet.'),
+        if (presets.list.isEmpty) Note(AppStrings.tr('No presets yet.')),
         ConstrainedBox(
           constraints: const BoxConstraints(maxHeight: 320),
           child: SingleChildScrollView(
@@ -260,9 +261,9 @@ class _PresetsDialogState extends State<_PresetsDialog> {
                     ),
                     const SizedBox(width: 8),
                     if (_renaming == preset.id)
-                      PillButton('Rename', variant: ButtonVariant.accent, onPressed: _renamed)
+                      PillButton(AppStrings.tr('Rename'), variant: ButtonVariant.accent, onPressed: _renamed)
                     else
-                      PillButton('Apply',
+                      PillButton(AppStrings.tr('Apply'),
                           onPressed: usable
                               ? () {
                                   presets.applyPreset(preset.id);
@@ -271,14 +272,14 @@ class _PresetsDialogState extends State<_PresetsDialog> {
                               : null),
                     const SizedBox(width: 4),
                     QuietButton(
-                        icon: 'edited', tooltip: 'Rename', onPressed: () => _rename(preset)),
+                        icon: 'edited', tooltip: AppStrings.tr('Rename'), onPressed: () => _rename(preset)),
                     QuietButton(
                         icon: 'export',
-                        tooltip: 'Export as a Look File…',
+                        tooltip: AppStrings.tr('Export as a Look File…'),
                         onPressed: () => presets.export([preset.id])),
                     QuietButton(
                         icon: 'delete',
-                        tooltip: 'Delete',
+                        tooltip: AppStrings.tr('Delete'),
                         onPressed: () => setState(() => _doomed = preset)),
                   ]),
                 ),

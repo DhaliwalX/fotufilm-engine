@@ -4,6 +4,7 @@ import 'package:flutter/material.dart'
         TextSelectionThemeData;
 import 'package:flutter/widgets.dart';
 
+import '../../app/strings.dart';
 import '../theme/theme.dart';
 import 'buttons.dart';
 import 'focus.dart';
@@ -32,6 +33,7 @@ class EditableField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = Palette.of(context);
+    final shown = placeholder == null ? null : AppStrings.tr(placeholder!);
     return Material(
       type: MaterialType.transparency,
       child: TextSelectionTheme(
@@ -51,7 +53,7 @@ class EditableField extends StatelessWidget {
             isDense: true,
             isCollapsed: true,
             border: InputBorder.none,
-            hintText: placeholder,
+            hintText: shown,
             hintStyle: style.copyWith(color: palette.muted),
           ),
         ),
@@ -69,12 +71,12 @@ class FieldLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Row(children: [
         Flexible(
-          child: Text(label,
+          child: Text(AppStrings.tr(label),
               overflow: TextOverflow.ellipsis,
               style: editorText(context, size: TextSizes.label,
                   color: Palette.of(context).text.withValues(alpha: .75))),
         ),
-        HelpButton(detail: detail),
+        HelpButton(detail: detail == null ? null : AppStrings.tr(detail!)),
       ]);
 }
 
@@ -98,12 +100,13 @@ class SwitchRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = Palette.of(context);
+    final shown = AppStrings.tr(label);
     return Opacity(
       opacity: enabled ? 1 : .45,
       child: Row(children: [
         KeyTarget(
           onActivate: enabled ? () => onChanged(!value) : null,
-          label: label,
+          label: shown,
           toggled: value,
           child: GestureDetector(
           behavior: HitTestBehavior.opaque,
@@ -125,11 +128,11 @@ class SwitchRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            Text(label, style: editorText(context, size: TextSizes.label)),
+            Text(shown, style: editorText(context, size: TextSizes.label)),
           ]),
         ),
         ),
-        HelpButton(detail: detail),
+        HelpButton(detail: detail == null ? null : AppStrings.tr(detail!)),
       ]),
     );
   }
@@ -171,11 +174,14 @@ class PickerField<T> extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = Palette.of(context);
     final current = options.where((o) => o.value == value).firstOrNull;
+    final shownLabel = label == null ? null : AppStrings.tr(label!);
+    final shownDetail = detail == null ? null : AppStrings.tr(detail!);
+    final shownPlaceholder = placeholder == null ? null : AppStrings.tr(placeholder!);
     return Opacity(
       opacity: enabled ? 1 : .45,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        if (label != null) ...[
-          FieldLabel(label!, detail: detail),
+        if (shownLabel != null) ...[
+          FieldLabel(shownLabel, detail: shownDetail),
           const SizedBox(height: 3),
         ],
         Builder(builder: (anchor) {
@@ -183,7 +189,7 @@ class PickerField<T> extends StatelessWidget {
               ? () => showMenu(anchor, matchWidth: true, [
                     for (final o in options)
                       MenuItem(
-                        label: o.label,
+                        label: AppStrings.tr(o.label),
                         checked: o.value == value,
                         onSelected: o.enabled ? () => onChanged(o.value) : null,
                       ),
@@ -191,8 +197,8 @@ class PickerField<T> extends StatelessWidget {
               : null;
           return KeyTarget(
             onActivate: open,
-            label: label,
-            value: current?.label ?? placeholder,
+            label: shownLabel,
+            value: current == null ? shownPlaceholder : AppStrings.tr(current.label),
             child: PressTrigger(
             onPress: open,
             child: Container(
@@ -202,7 +208,7 @@ class PickerField<T> extends StatelessWidget {
                   color: palette.gray100, borderRadius: BorderRadius.circular(Metrics.radius)),
               child: Row(children: [
                 Expanded(
-                  child: Text(current?.label ?? placeholder ?? '',
+                  child: Text(current == null ? shownPlaceholder ?? '' : AppStrings.tr(current.label),
                       overflow: TextOverflow.ellipsis, style: editorText(context)),
                 ),
                 AppIcon('chevronDown', size: 16),
@@ -225,9 +231,9 @@ class InfoRow extends StatelessWidget {
   Widget build(BuildContext context) => Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: editorText(context, size: TextSizes.label)),
+          Text(AppStrings.tr(label), style: editorText(context, size: TextSizes.label)),
           Flexible(
-            child: Text(value,
+            child: Text(AppStrings.tr(value),
                 textAlign: TextAlign.right,
                 overflow: TextOverflow.ellipsis,
                 style: editorText(context, size: TextSizes.label, color: Palette.of(context).muted)),
@@ -242,6 +248,6 @@ class Note extends StatelessWidget {
   final String text;
 
   @override
-  Widget build(BuildContext context) => Text(text,
+  Widget build(BuildContext context) => Text(AppStrings.tr(text),
       style: editorText(context, size: TextSizes.label, color: Palette.of(context).muted, height: 1.45));
 }
