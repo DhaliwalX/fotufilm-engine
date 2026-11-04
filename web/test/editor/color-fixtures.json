@@ -348,5 +348,60 @@
       0.8827029962906549,
       0.8735728959166943
     ]
-  }
+  },
+  "levelledGrades": [
+    {
+      "controls": {
+        "gradeShadowsWarmth": 0.3,
+        "gradeShadowsTint": -0.2,
+        "gradeShadowsLevel": 0.1,
+        "gradeMidtonesWarmth": -0.2,
+        "gradeMidtonesTint": 0.1,
+        "gradeMidtonesLevel": 0.3,
+        "gradeHighlightsWarmth": 0.7,
+        "gradeHighlightsTint": -0.3,
+        "gradeHighlightsLevel": -0.2,
+        "blackPoint": 0.12,
+        "whitePoint": 0.85
+      },
+      "packed": [
+        0.01867077968516103,
+        0.007562378326740493,
+        0.007186001640578368,
+        0.744132767949937,
+        0.5707857769385117,
+        0.539834493346764,
+        0.9493421209505192,
+        0.8827029962906549,
+        0.8735728959166943
+      ]
+    },
+    {
+      "controls": {
+        "gradeShadowsWarmth": 0.3,
+        "gradeShadowsTint": -0.2,
+        "gradeShadowsLevel": 0.1,
+        "gradeMidtonesWarmth": -0.2,
+        "gradeMidtonesTint": 0.1,
+        "gradeMidtonesLevel": 0.3,
+        "gradeHighlightsWarmth": 0.7,
+        "gradeHighlightsTint": -0.3,
+        "gradeHighlightsLevel": -0.2,
+        "blackPoint": 0.12,
+        "whitePoint": 0.85,
+        "gradeSpace": true
+      },
+      "packed": [
+        0.1159891019586392,
+        0.09053557670690443,
+        0.08829101810823163,
+        0.9148075270586575,
+        0.7314209137082142,
+        0.697240181125448,
+        0.9493421209505192,
+        0.8827029962906549,
+        0.8735728959166943
+      ]
+    }
+  ]
 }

@@ -1533,7 +1533,7 @@ public enum EditorControlCatalogue {
             surfaces: [.app, .desktop, .android],
             omitted: hostsOwnIt,
             documentation: "Grades the sRGB-encoded signal, where a grading suite's corrector works, instead of display-linear light."),
-    ] + gradeBands + [
+    ] + gradeBands + outputLevels + [
         EditorControl(
             .hdrRange, title: "Range",
             detail: "Choose how much of an HDR photo's range above white reaches the film. The rest is compressed smoothly into it.",
@@ -2231,6 +2231,43 @@ public enum EditorControlCatalogue {
                           omitted: hostsOwnIt),
         ]
     }
+
+    private static let outputLevelsOmissions = hostsOwnIt.filter { $0.key != .cli }.merging([
+        .app: "the iPhone and iPad grade deck does not yet place the output levels",
+        .android: "the Android editor does not yet offer the output levels",
+    ]) { $1 }
+
+    /// The finished print's output levels, after the three-way grade, on every output medium.
+    private static let outputLevels: [EditorControl] = [
+        EditorControl(
+            .blackPoint, title: "Black Point",
+            detail: "Lift the print's black toward grey, for a faded, matte finish.",
+            section: .lightGrade,
+            kind: .slider(EditorControlScale(Double(ColorGrade.blackPointRange.lowerBound)
+                                                 ... Double(ColorGrade.blackPointRange.upperBound),
+                                             neutral: 0, unit: .percent)),
+            binding: .gradeBlackPoint,
+            surfaces: [.desktop, .cli],
+            omitted: outputLevelsOmissions,
+            commandLine: CommandLineFlag("--black-point", placeholder: "<f>",
+                help: "Output black level, 0...0.5 of the encoded signal (default: 0)"),
+            documentation: "Output black level, 0–50% of the encoded signal: where the print's black "
+                + "lands after the grade, on every output medium. Nothing clips."),
+        EditorControl(
+            .whitePoint, title: "White Point",
+            detail: "Dim the print's white toward grey.",
+            section: .lightGrade,
+            kind: .slider(EditorControlScale(Double(ColorGrade.whitePointRange.lowerBound)
+                                                 ... Double(ColorGrade.whitePointRange.upperBound),
+                                             neutral: 1, unit: .percent)),
+            binding: .gradeWhitePoint,
+            surfaces: [.desktop, .cli],
+            omitted: outputLevelsOmissions,
+            commandLine: CommandLineFlag("--white-point", placeholder: "<f>",
+                help: "Output white level, 0.5...1 of the encoded signal (default: 1)"),
+            documentation: "Output white level, 50–100% of the encoded signal: where the print's white "
+                + "lands after the grade, on every output medium. Nothing clips."),
+    ]
 
     private static let frame: [EditorControl] = [
         EditorControl(

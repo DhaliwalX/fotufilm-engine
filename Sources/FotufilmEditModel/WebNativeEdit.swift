@@ -135,6 +135,8 @@ public struct WebNativeEdit: Decodable {
         ("gradeHighlightsWarmth", .gradeHighlightsWarmth, { $0 }),
         ("gradeHighlightsTint", .gradeHighlightsTint, { $0 }),
         ("gradeHighlightsLevel", .gradeHighlightsLevel, { $0 }),
+        ("blackPoint", .blackPoint, { $0 }),
+        ("whitePoint", .whitePoint, { $0 }),
     ]
 
     /// The edit as one document. A medium the editor leaves unstated is the one an editor's edit

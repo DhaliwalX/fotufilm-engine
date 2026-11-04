@@ -198,6 +198,7 @@ public enum EngineBinding: Equatable, Sendable {
     case printViewingKelvin
     case printCorrection
     case grade(GradeBand, GradeAxis)
+    case gradeBlackPoint, gradeWhitePoint
     case gradeSpaceEncoded
     case flareScale
     case estimatedHalationProfile
@@ -265,7 +266,7 @@ public enum EngineBinding: Equatable, Sendable {
         case .shutterSeconds: return ["shutterSeconds"]
         case .printViewingKelvin: return ["printViewingKelvin"]
         case .printCorrection: return ["printCorrection"]
-        case .grade: return ["grade"]
+        case .grade, .gradeBlackPoint, .gradeWhitePoint: return ["grade"]
         case .gradeSpaceEncoded: return ["gradeSpace"]
         case .flareScale: return ["flareScale"]
         case .estimatedHalationProfile: return ["useEstimatedHalationProfile"]
@@ -377,6 +378,10 @@ public enum EngineBinding: Equatable, Sendable {
             if let number = value.number {
                 options.grade[keyPath: band.keyPath][keyPath: axis.keyPath] = Float(number)
             }
+        case .gradeBlackPoint:
+            if let number = value.number { options.grade.blackPoint = Float(number) }
+        case .gradeWhitePoint:
+            if let number = value.number { options.grade.whitePoint = Float(number) }
         case .gradeSpaceEncoded:
             if let flag = value.flag { options.gradeSpace = flag ? .encoded : .linear }
         case .flareScale:

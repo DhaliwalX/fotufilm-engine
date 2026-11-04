@@ -1382,7 +1382,7 @@ public struct FilmEngineInvocation {
         configuration += [stock.grainLumaCorrelation]
         configuration += [mtfLumaActive ? stock.mtfLumaShare : 0,
                           mtfLumaSigma, Float(mtfLumaRadius)]
-        configuration += options.grade.packed
+        configuration += options.grade.packed(in: options.gradeSpace)
         configuration += [Float(width), Float(height)]
         configuration += [1, 1]
         var toneGrid = [Float](repeating: 0, count: 2 * Self.toneGridCells)

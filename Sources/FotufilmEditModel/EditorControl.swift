@@ -36,6 +36,7 @@ public enum EditorControlField: String, CaseIterable, Sendable, Codable {
     case gradeShadowsWarmth, gradeShadowsTint, gradeShadowsLevel
     case gradeMidtonesWarmth, gradeMidtonesTint, gradeMidtonesLevel
     case gradeHighlightsWarmth, gradeHighlightsTint, gradeHighlightsLevel
+    case blackPoint, whitePoint
 
     case crop, straighten, perspectiveVertical, perspectiveHorizontal
     case rotation, flip

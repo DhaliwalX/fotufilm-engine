@@ -50,6 +50,7 @@ extension EditorControlCatalogue {
         case .gradeShadowsWarmth, .gradeShadowsTint, .gradeShadowsLevel,
              .gradeMidtonesWarmth, .gradeMidtonesTint, .gradeMidtonesLevel,
              .gradeHighlightsWarmth, .gradeHighlightsTint, .gradeHighlightsLevel, .gradeSpace,
+             .blackPoint, .whitePoint,
              .printFrame, .printFrameMargin, .printFrameEdgePrinting, .printFrameNumber,
              .printFrameCount, .printFrameCamera:
             // Cineon code values are graded in the suite they are delivered to, and a frame

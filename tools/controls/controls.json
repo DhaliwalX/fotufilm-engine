@@ -4635,6 +4635,94 @@
     },
     {
       "availability" : "always",
+      "binding" : "gradeBlackPoint",
+      "commandLineFlag" : "--black-point",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Output black level, 0...0.5 of the encoded signal (default: 0)",
+      "commandLinePlaceholder" : "<f>",
+      "detail" : "Lift the print's black toward grey, for a faded, matte finish.",
+      "documentation" : "Output black level, 0–50% of the encoded signal: where the print's black lands after the grade, on every output medium. Nothing clips.",
+      "drives" : [
+
+      ],
+      "field" : "blackPoint",
+      "group" : "light",
+      "kind" : "slider",
+      "omitted" : {
+        "android" : "the Android editor does not yet offer the output levels",
+        "app" : "the iPhone and iPad grade deck does not yet place the output levels",
+        "finalcut" : "the host owns the frame's geometry and its colour corrector",
+        "resolve" : "the host owns the frame's geometry and its colour corrector",
+        "web" : "the demo shows one still without a frame tool"
+      },
+      "persistedKey" : "blackPoint",
+      "scale" : {
+        "admittedMax" : 0.5,
+        "admittedMin" : 0,
+        "max" : 0.5,
+        "min" : 0,
+        "neutral" : 0,
+        "stops" : [
+
+        ],
+        "unit" : "percent"
+      },
+      "scope" : "edit",
+      "section" : "lightGrade",
+      "storedEncoding" : "same",
+      "storedNeutral" : 0,
+      "surfaces" : [
+        "desktop",
+        "cli"
+      ],
+      "title" : "Black Point"
+    },
+    {
+      "availability" : "always",
+      "binding" : "gradeWhitePoint",
+      "commandLineFlag" : "--white-point",
+      "commandLineGeneric" : true,
+      "commandLineHelp" : "Output white level, 0.5...1 of the encoded signal (default: 1)",
+      "commandLinePlaceholder" : "<f>",
+      "detail" : "Dim the print's white toward grey.",
+      "documentation" : "Output white level, 50–100% of the encoded signal: where the print's white lands after the grade, on every output medium. Nothing clips.",
+      "drives" : [
+
+      ],
+      "field" : "whitePoint",
+      "group" : "light",
+      "kind" : "slider",
+      "omitted" : {
+        "android" : "the Android editor does not yet offer the output levels",
+        "app" : "the iPhone and iPad grade deck does not yet place the output levels",
+        "finalcut" : "the host owns the frame's geometry and its colour corrector",
+        "resolve" : "the host owns the frame's geometry and its colour corrector",
+        "web" : "the demo shows one still without a frame tool"
+      },
+      "persistedKey" : "whitePoint",
+      "scale" : {
+        "admittedMax" : 1,
+        "admittedMin" : 0.5,
+        "max" : 1,
+        "min" : 0.5,
+        "neutral" : 1,
+        "stops" : [
+
+        ],
+        "unit" : "percent"
+      },
+      "scope" : "edit",
+      "section" : "lightGrade",
+      "storedEncoding" : "same",
+      "storedNeutral" : 1,
+      "surfaces" : [
+        "desktop",
+        "cli"
+      ],
+      "title" : "White Point"
+    },
+    {
+      "availability" : "always",
       "binding" : "hdrRange",
       "commandLineFlag" : "--hdr-range",
       "commandLineGeneric" : true,

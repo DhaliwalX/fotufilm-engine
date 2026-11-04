@@ -60,6 +60,14 @@
       "colours": [],
       "rendering": "hierarchical"
     },
+    "fotu.slider.blackPoint.high": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.blackPoint.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
     "fotu.slider.cameraPreflash.high": {
       "colours": [],
       "rendering": "hierarchical"
@@ -670,6 +678,14 @@
       ],
       "rendering": "multicolor"
     },
+    "fotu.slider.whitePoint.high": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.slider.whitePoint.low": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
     "fotu.tab.balance": {
       "colours": [],
       "rendering": "hierarchical"
@@ -933,6 +949,10 @@
       "high": "fotu.slider.autoAdjustment.high",
       "low": "fotu.slider.autoAdjustment.low"
     },
+    "blackPoint": {
+      "high": "fotu.slider.blackPoint.high",
+      "low": "fotu.slider.blackPoint.low"
+    },
     "cameraPreflash": {
       "high": "fotu.slider.cameraPreflash.high",
       "low": "fotu.slider.cameraPreflash.low"
@@ -1180,6 +1200,10 @@
     "warmth": {
       "high": "fotu.slider.warmth.high",
       "low": "fotu.slider.warmth.low"
+    },
+    "whitePoint": {
+      "high": "fotu.slider.whitePoint.high",
+      "low": "fotu.slider.whitePoint.low"
     }
   }
 }

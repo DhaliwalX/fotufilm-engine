@@ -1,6 +1,7 @@
-// The Expose panel: light, the source illuminant, white balance, colour, the grade deck, then the
-// film's long exposure, the filters on the lens, the lens, and an HDR photograph's highlights. A
-// scanned negative printed on its film keeps only what acts on its print.
+// The Expose panel: light, the source illuminant, white balance, colour, the grade deck with the
+// print's output levels, then the film's long exposure, the filters on the lens, the lens, and an
+// HDR photograph's highlights. A scanned negative printed on its film keeps only what acts on its
+// print.
 import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
@@ -18,10 +19,14 @@ final _gradeKeys = [
     for (final axis in GradeDeck.axes) 'grade$band$axis',
 ];
 
+/// The output levels and where each rests: Reset Grade returns them there too.
+const _levelsAtRest = {'blackPoint': 0.0, 'whitePoint': 1.0};
+
 List<Widget> exposePanel(InspectorControls c) {
   final editor = c.editor;
   final sceneLight = c.catalogue.control('sceneLight');
-  final graded = _gradeKeys.any((k) => (c.params[k] as num? ?? 0) != 0);
+  final graded = _gradeKeys.any((k) => (c.params[k] as num? ?? 0) != 0) ||
+      _levelsAtRest.entries.any((e) => (c.params[e.key] as num? ?? e.value) != e.value);
   // A scanned negative's light acts on its print: nothing reaches a scene it never had.
   final negative = printsNegative(c.edit);
   // Only a photograph that records light above white has any to keep.
@@ -54,6 +59,7 @@ List<Widget> exposePanel(InspectorControls c) {
     Section(title: 'Color', children: c.sliders('Color')),
     Section(title: 'Grade', children: [
       GradeDeck(editor: editor),
+      ...c.sliders('Output Levels'),
       c.editSwitch('gradeSpace', 'Encoded Grade'),
       Align(
         alignment: Alignment.centerLeft,
@@ -62,7 +68,7 @@ List<Widget> exposePanel(InspectorControls c) {
           variant: ButtonVariant.negative,
           onPressed: graded
               ? () => editor.change({
-                    'params': {...c.params, for (final k in _gradeKeys) k: 0.0},
+                    'params': {...c.params, for (final k in _gradeKeys) k: 0.0, ..._levelsAtRest},
                   })
               : null,
         ),

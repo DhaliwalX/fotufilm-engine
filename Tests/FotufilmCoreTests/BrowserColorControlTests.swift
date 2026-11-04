@@ -6,8 +6,20 @@ final class BrowserColorControlTests: XCTestCase {
     struct Fixture: Decodable {
         struct Balance: Decodable { let temperature: Float; let tint: Float; let gains: [Float] }
         struct Grade: Decodable { let controls: [String: Float]; let packed: [Float] }
+        /// The same grade with output levels, in each grading space (`gradeSpace` true is
+        /// encoded).
+        struct LevelledGrade: Decodable {
+            struct Controls: Decodable {
+                let blackPoint: Float
+                let whitePoint: Float
+                let gradeSpace: Bool?
+            }
+            let controls: Controls
+            let packed: [Float]
+        }
         let balances: [Balance]
         let grade: Grade
+        let levelledGrades: [LevelledGrade]
     }
 
     func testBrowserWhiteBalanceAndGradeMatchNative() throws {
@@ -32,8 +44,18 @@ final class BrowserColorControlTests: XCTestCase {
         }
         let grade = ColorGrade(shadows: band("Shadows"), midtones: band("Midtones"),
                                highlights: band("Highlights"))
-        for (actual, expected) in zip(grade.packed, fixture.grade.packed) {
+        for (actual, expected) in zip(grade.packed(in: .linear), fixture.grade.packed) {
             XCTAssertEqual(actual, expected, accuracy: 0.000001)
+        }
+        XCTAssertEqual(fixture.levelledGrades.count, 2)
+        for levelled in fixture.levelledGrades {
+            var withLevels = grade
+            withLevels.blackPoint = levelled.controls.blackPoint
+            withLevels.whitePoint = levelled.controls.whitePoint
+            let space: ColorGrade.Space = levelled.controls.gradeSpace == true ? .encoded : .linear
+            for (actual, expected) in zip(withLevels.packed(in: space), levelled.packed) {
+                XCTAssertEqual(actual, expected, accuracy: 0.000002, "\(space)")
+            }
         }
     }
 }

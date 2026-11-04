@@ -78,20 +78,38 @@ export function whiteBalanceGains(temperature = 6504, tint = 0) {
   return [f(gains[0] / gains[1]), 1, f(gains[2] / gains[1])]
 }
 
-// ColorGrade.swift: lift, gain, and inverse gamma in the engine's own working space.
+// ColorGrade.swift: lift, gain, and inverse gamma in the engine's own working space, with the
+// output levels folded into lift and gain before the power (`ColorGrade.levelled(in:)`).
 export function packedGrade(controls) {
   const tilt = (band) => {
     const x = controls[`${band}Warmth`] || 0,
       y = controls[`${band}Tint`] || 0
     return [x - 0.5 * y, y, -x - 0.5 * y]
   }
-  return [
-    ...tilt('gradeShadows').map((v) => 0.04 * (controls.gradeShadowsLevel || 0) + 0.02 * v),
-    ...tilt('gradeHighlights').map(
-      (v) => 2 ** (0.6 * (controls.gradeHighlightsLevel || 0) + 0.3 * v),
-    ),
-    ...tilt('gradeMidtones').map((v) => 2 ** -(0.5 * (controls.gradeMidtonesLevel || 0) + 0.3 * v)),
-  ]
+  const lift = tilt('gradeShadows').map(
+    (v) => 0.04 * (controls.gradeShadowsLevel || 0) + 0.02 * v,
+  )
+  const gain = tilt('gradeHighlights').map(
+    (v) => 2 ** (0.6 * (controls.gradeHighlightsLevel || 0) + 0.3 * v),
+  )
+  const inverseGamma = tilt('gradeMidtones').map(
+    (v) => 2 ** -(0.5 * (controls.gradeMidtonesLevel || 0) + 0.3 * v),
+  )
+  const level = (value, low, high, rest) =>
+    Number.isFinite(value) ? Math.min(Math.max(value, low), high) : rest
+  const black = level(controls.blackPoint ?? 0, 0, 0.5, 0),
+    white = level(controls.whitePoint ?? 1, 0.5, 1, 1)
+  if (black === 0 && white === 1) return [...lift, ...gain, ...inverseGamma]
+  // ColorScience.gradingDecode over 0…1: the levels are read in the encoded signal.
+  const decode = (v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)
+  const working = (v) => (controls.gradeSpace ? v : decode(v))
+  const levelled = (values) =>
+    values.map((v, i) => {
+      const low = working(black) ** (1 / inverseGamma[i]),
+        high = working(white) ** (1 / inverseGamma[i])
+      return low + (high - low) * v
+    })
+  return [...levelled(lift), ...levelled(gain), ...inverseGamma]
 }
 
 export function applyColorControls(configuration, controls) {

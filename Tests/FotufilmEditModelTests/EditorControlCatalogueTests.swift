@@ -475,6 +475,10 @@ final class EditorControlCatalogueTests: XCTestCase {
         }
         XCTAssertEqual(
             EditorControlCatalogue.controls(in: .lightGrade, for: nil).count, 10)
+        // The desktop editor places the output levels under the grade deck as well.
+        XCTAssertEqual(
+            EditorControlCatalogue.controls(in: .lightGrade, for: nil, on: .desktop)
+                .suffix(2).map(\.field), [.blackPoint, .whitePoint])
         XCTAssertEqual(
             EditorControlCatalogue.controls(in: .lightGrade, for: nil).first?.field,
             .gradeSpace,
