@@ -5839,7 +5839,7 @@
         "delta" : 0.01,
         "fxplugID" : 96,
         "group" : "output",
-        "hint" : "Variable-contrast paper grade 0–5 for Graded Print and Auto Levels on Digital Reference: grade 2 is the calibrated curve, softer grades roll highlights off earlier, harder grades later. Mid-grey and film-base black hold. Negatives only.",
+        "hint" : "Variable-contrast paper grade 0–5 for Graded Print and Auto Levels on Digital Reference: grade 2 is the calibrated curve, softer grades lower contrast in the highlights and shadows, harder grades raise it. Mid-grey and film-base black hold. Negatives only.",
         "kind" : "double",
         "label" : "Paper Grade",
         "max" : 5,

@@ -1858,8 +1858,9 @@ public enum EditorControlCatalogue {
                 slot: 54, slotSymbol: "SCREEN_GRADE", ofxName: "screenGrade",
                 fxplugID: 96, group: .output, label: "Paper Grade",
                 hint: "Variable-contrast paper grade 0–5 for Graded Print and Auto Levels on Digital "
-                    + "Reference: grade 2 is the calibrated curve, softer grades roll highlights off "
-                    + "earlier, harder grades later. Mid-grey and film-base black hold. Negatives only.",
+                    + "Reference: grade 2 is the calibrated curve, softer grades lower contrast in the "
+                    + "highlights and shadows, harder grades raise it. Mid-grey and film-base black hold. "
+                    + "Negatives only.",
                 kind: .double(min: 0, max: 5, value: 2), clamp: 0...5, order: 27),
             web: .profile,
             commandLine: CommandLineFlag("--screen-grade", placeholder: "<g>",

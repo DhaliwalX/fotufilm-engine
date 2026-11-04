@@ -592,19 +592,25 @@ final class DigitalReferenceReceiverTests: XCTestCase {
         }
     }
 
-    func testPaperGradeChangesHighlightContrastOnly() throws {
-        // A softer grade rolls highlights off earlier and a harder one later, while mid-grey and
-        // the film-base black hold at every grade. Reference Exposure and positives ignore it.
+    func testPaperGradeChangesContrastOnBothSidesOfMidGrey() throws {
+        // A softer grade rolls highlights off earlier and holds shadows open, a harder one the
+        // reverse, while mid-grey and the film-base black hold at every grade. Reference
+        // Exposure and positives ignore it.
         let weights = ColorScience.displayP3LuminanceWeights
         func luminance(_ rgb: SIMD3<Float>) -> Float {
             weights.0 * rgb.x + weights.1 * rgb.y + weights.2 * rgb.z
         }
         let high = SIMD3<Float>(repeating: 2 * log10(2))
+        let low = SIMD3<Float>(repeating: -2 * log10(2))
         for id in ["gold200", "acros100"] {
             let film = try XCTUnwrap(FilmStock.named(id), id)
             for style in [DigitalReferenceStyle.gradedPrint, .autoLevels] {
                 var previous: Float = 0
+                var previousShadow: Float = 1
                 for grade: Float in [0, 1, 2, 3, 5] {
+                    let shadow = luminance(positive(film, exposure: low, style: style, grade: grade))
+                    XCTAssertLessThan(shadow, previousShadow - 0.002, "\(id) \(style) grade \(grade)")
+                    previousShadow = shadow
                     let grey = positive(film, exposure: .zero, style: style, grade: grade)
                     XCTAssertEqual(grey.y, 0.18, accuracy: 0.006, "\(id) \(style) grade \(grade)")
                     XCTAssertLessThan(positive(film, exposure: SIMD3(repeating: -8), style: style,
