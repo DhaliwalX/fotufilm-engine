@@ -75,6 +75,9 @@ export function profileControlAvailable(c, edit, stock) {
       return !!medium?.correction;
     case "negativeViewing":
       return !!medium?.negative;
+    case "highlightDetail":
+    case "shadowDetail":
+      return !!medium?.printDetail;
     case "filmGrainSize":
     case "filmColourGrain":
     case "filmRedLayer":

@@ -20,11 +20,13 @@ const stock = {
         screenConversion: true,
         screenGrade: true,
         screenCMY: true,
+        printDetail: true,
         viewingLights: [{ id: "reference" }],
       },
       paper: {
         enlarger: true,
         correction: true,
+        printDetail: true,
         viewingLights: [{ id: "reference" }, { id: "tungsten" }],
       },
       negative: {
@@ -118,6 +120,23 @@ test("retained controls follow the selected stock and medium without losing save
       stock,
     ),
     false,
+  );
+});
+
+test("print detail is offered only where the medium prints light", () => {
+  const edit = {
+    ...defaultEdit("gold200"),
+    profile: { shadowDetail: 0.5, highlightDetail: 0.4 },
+  };
+  for (const medium of ["screen", "paper"])
+    assert.deepEqual(
+      profileRequestControls({ ...edit, medium }, stock),
+      { shadowDetail: 0.5, highlightDetail: 0.4 },
+      medium,
+    );
+  assert.deepEqual(
+    profileRequestControls({ ...edit, medium: "negative" }, stock),
+    {},
   );
 });
 

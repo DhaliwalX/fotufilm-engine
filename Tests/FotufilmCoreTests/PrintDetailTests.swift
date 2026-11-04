@@ -71,6 +71,41 @@ final class PrintDetailTests: XCTestCase {
         XCTAssertLessThan(packed[2], 0)
     }
 
+    /// On Digital Reference's graded styles the tone lives in the output table, so the knee and
+    /// white are solved on the output at the edit's grade: a stop above grey and a paper's white.
+    func testGradedScreenPlacesTheKneeAStopAboveGreyAtEveryGrade() throws {
+        let film = try XCTUnwrap(FilmStock.named("gold200"))
+        let weights = ColorScience.displayP3LuminanceWeights
+        for style in [DigitalReferenceStyle.gradedPrint, .autoLevels] {
+            var knees: [Float] = []
+            for grade: Float in [0, 2, 5] {
+                let shown = try XCTUnwrap(DigitalReferenceReceiver.detailDensities(
+                    style: style, stock: film, grade: grade), "\(style) \(grade)")
+                func luminance(_ density: Float) -> Float {
+                    let rgb = DigitalReferenceReceiver.rgb(density: SIMD3(repeating: density),
+                                                           style: style, stock: film, grade: grade)
+                    return weights.0 * rgb.x + weights.1 * rgb.y + weights.2 * rgb.z
+                }
+                let grey = luminance(DigitalReferenceReceiver.anchorDensity)
+                XCTAssertEqual(luminance(shown.knee), 2 * grey, accuracy: 0.004, "\(style) \(grade)")
+                // A soft grade never shows a paper's white inside the curve's range: its white is
+                // the brightest the curve shows.
+                XCTAssertEqual(luminance(shown.white),
+                               min(pow(10, -PrintDetail.whiteDensity), luminance(0)),
+                               accuracy: 0.004, "\(style) \(grade)")
+                XCTAssertGreaterThan(shown.knee, shown.white)
+                knees.append(shown.knee)
+            }
+            // A harder grade shows a stop over grey nearer the anchor's density.
+            XCTAssertLessThan(knees[0], knees[1])
+            XCTAssertLessThan(knees[1], knees[2])
+        }
+        XCTAssertNil(DigitalReferenceReceiver.detailDensities(style: .referenceExposure,
+                                                              stock: film, grade: 2))
+        XCTAssertNil(DigitalReferenceReceiver.detailDensities(
+            style: .gradedPrint, stock: try XCTUnwrap(FilmStock.named("provia100f")), grade: 2))
+    }
+
     // MARK: Rendered
 
     private func ramp(stops: [Float], colour: SIMD3<Float> = .one) -> ImageBuffer {
@@ -224,6 +259,29 @@ final class PrintDetailTests: XCTestCase {
         func shown(_ y: Float) -> Float { y <= 0.0031308 ? 12.92 * y : 1.055 * pow(y, 1 / 2.4) - 0.055 }
         XCTAssertGreaterThanOrEqual(shown(after[6]) - shown(after[3]), shown(before[6]) - shown(before[3]))
         XCTAssertLessThan(after[6], 0.85 * before[6])
+        for index in 1..<after.count { XCTAssertGreaterThan(after[index], after[index - 1]) }
+    }
+
+    /// On Graded Print the burn starts where the screen shows a stop above grey, as it does on a
+    /// paper, rather than near white.
+    func testGradedScreenBurnsFromAStopAboveGrey() throws {
+        try XCTSkipUnless(FotufilmEngine.isHalideBackendAvailable,
+                          "the Halide engine is the only processing backend")
+        let film = try XCTUnwrap(FilmStock.named("gold200"))
+        let stops: [Float] = [0, 0.5, 1, 1.5, 2, 3]
+        let image = ramp(stops: stops)
+        func shown(_ highlights: Float) -> [Float] {
+            patches(render(image, stock: film, paper: .screen, strength: nil,
+                           highlights: highlights) { $0.digitalReference = .gradedPrint },
+                    count: stops.count).map(luminance)
+        }
+        let before = shown(0), after = shown(1)
+        XCTAssertEqual(after[0], before[0], accuracy: before[0] * 1e-3, "mid-grey stays")
+        // Over a stop and a quarter above grey: past the knee, short of where the straight
+        // curve's knee left everything alone.
+        let between = before.indices.filter { (0.45...0.55).contains(before[$0]) }
+        XCTAssertFalse(between.isEmpty, "a patch about a stop and a half over grey")
+        for index in between { XCTAssertLessThan(after[index], before[index] - 0.01) }
         for index in 1..<after.count { XCTAssertGreaterThan(after[index], after[index - 1]) }
     }
 
