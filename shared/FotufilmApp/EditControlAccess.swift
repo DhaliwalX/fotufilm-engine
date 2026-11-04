@@ -172,6 +172,12 @@ extension EditorControlField {
         case .gradeHighlightsWarmth: return Self.grade(.highlights, .warmth)
         case .gradeHighlightsTint: return Self.grade(.highlights, .tint)
         case .gradeHighlightsLevel: return Self.grade(.highlights, .level)
+        case .blackPoint:
+            return .derived(read: { Double($0.grade.blackPoint) },
+                            write: { $0.grade.blackPoint = Float($1) })
+        case .whitePoint:
+            return .derived(read: { Double($0.grade.whitePoint) },
+                            write: { $0.grade.whitePoint = Float($1) })
 
         case .crop:
             return .bespoke { $0.crop != nil || $0.cornerCrop != nil }
