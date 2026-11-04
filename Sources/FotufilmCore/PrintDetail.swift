@@ -40,10 +40,13 @@ public enum PrintDetail {
 
     /// FOTUFILM_CONFIG_PRINT_DETAIL: the shadow and highlight strengths, each held to 0...1, then
     /// the luminance-weighted paper exposures of the highlight knee and of the white, for a paper
-    /// whose records are `curves` with aims at `midpoints`. The film's corners stay zero until
-    /// `corners(of:)` fills them from the film cube.
+    /// whose records are `curves` with aims at `midpoints`. `shown` places the knee and white
+    /// instead, as densities above each curve's D-min, where an output table rather than the
+    /// curve sets the tone (`DigitalReferenceReceiver.detailDensities`). The film's corners stay
+    /// zero until `corners(of:)` fills them from the film cube.
     public static func packed(shadows: Float, highlights: Float,
-                              curves: [CharacteristicCurve], midpoints: [Float]) -> [Float] {
+                              curves: [CharacteristicCurve], midpoints: [Float],
+                              shown: (knee: Float, white: Float)? = nil) -> [Float] {
         func held(_ value: Float) -> Float { min(max(value.isFinite ? value : 0, 0), 1) }
         let unplaced = [Float](repeating: 0, count: count - 4)
         guard curves.count == 3, midpoints.count == 3 else {
@@ -52,9 +55,10 @@ public enum PrintDetail {
         var knee: Float = 0, white: Float = 0
         for record in 0..<3 {
             let curve = curves[record]
-            let lightest = curve.dMin + whiteDensity
+            let lightest = curve.dMin + (shown?.white ?? whiteDensity)
             let aim = curve.density(logExposure: midpoints[record])
-            let bright = max(aim - highlightKneeStops * log10(2), lightest + 0.01)
+            let bright = shown.map { curve.dMin + $0.knee }
+                ?? max(aim - highlightKneeStops * log10(2), lightest + 0.01)
             knee += weights[record] * curve.logExposure(density: bright)
             white += weights[record] * curve.logExposure(density: lightest)
         }

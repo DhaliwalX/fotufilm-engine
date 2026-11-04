@@ -339,6 +339,40 @@ enum DigitalReferenceReceiver {
         return black * ratio * u / (1 + (ratio - 1) * u)
     }
 
+    /// Where Shadow and Highlight Detail place the highlights on the graded styles, as densities
+    /// above base on the straight kernel curve: the knee where the output shows a stop above the
+    /// anchor's grey, and the white where it reaches the brightness a paper's white
+    /// (`PrintDetail.whiteDensity` over its D-min) shows. On a paper both are read off the
+    /// paper's own curve; here the curve is the graded one, at the edit's grade, applied in the
+    /// output table, so they are solved on the output itself. A soft grade never shows a paper's
+    /// white inside the curve's range; its white is then the brightest the curve shows. Nil for a
+    /// style or film that does not print through it.
+    static func detailDensities(style: DigitalReferenceStyle, stock: FilmStock,
+                                grade: Float) -> (knee: Float, white: Float)? {
+        guard style.usesGradedCurve, !stock.isReversal, !stock.isReflectionPrint else { return nil }
+        let weights = ColorScience.displayP3LuminanceWeights
+        func luminance(_ density: Float) -> Float {
+            let rgb = rgb(density: SIMD3(repeating: density), style: style, stock: stock,
+                          grade: grade)
+            return weights.0 * rgb.x + weights.1 * rgb.y + weights.2 * rgb.z
+        }
+        // Output falls as density rises; bisect between clear and the anchor.
+        func density(showing target: Float) -> Float {
+            var low: Float = 0, high = anchorDensity
+            for _ in 0..<40 {
+                let mid = (low + high) / 2
+                if luminance(mid) > target { low = mid } else { high = mid }
+            }
+            return (low + high) / 2
+        }
+        let grey = luminance(anchorDensity)
+        let knee = density(showing: min(grey * exp2(PrintDetail.highlightKneeStops), 0.99))
+        let paperWhite = pow(10, -PrintDetail.whiteDensity) as Float
+        let white = luminance(0) > paperWhite ? density(showing: paperWhite) : 0
+        guard knee.isFinite, white.isFinite, knee > white else { return nil }
+        return (knee, white)
+    }
+
     // MARK: Levels
 
     /// The affine the kernel applies to the receiver's relative log exposure for the graded

@@ -1509,7 +1509,12 @@ public struct FilmEngineInvocation {
             shadows: printsDetail ? options.shadowDetail : 0,
             highlights: printsDetail ? options.highlightDetail : 0, curves: paperCurves,
             midpoints: printMedium.printExposureMidpoints(
-                for: stock, digitalReference: options.digitalReference))
+                for: stock, digitalReference: options.digitalReference),
+            shown: printMedium == .screen ? DigitalReferenceReceiver.detailDensities(
+                style: options.digitalReference, stock: stock,
+                grade: SpectralRuntime.effectiveScreenGrade(
+                    options.screenGrade, stock: stock, paper: printMedium,
+                    digitalReference: options.digitalReference)) : nil)
         precondition(configuration.count == Self.configurationCount)
 
         var optical = 0
