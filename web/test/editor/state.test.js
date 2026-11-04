@@ -125,6 +125,8 @@ test('browser color constants stay aligned with the native parity fixture', asyn
       assert.ok(Math.abs(v - balance.gains[i]) < 1e-12),
     )
   assert.deepEqual(packedGrade(fixture.grade.controls), fixture.grade.packed)
+  for (const levelled of fixture.levelledGrades)
+    assert.deepEqual(packedGrade(levelled.controls), levelled.packed)
 })
 
 test('foreground renders run before pending thumbnails, without overlapping heaps', async () => {

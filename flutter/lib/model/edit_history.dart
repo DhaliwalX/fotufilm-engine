@@ -25,7 +25,8 @@ bool _profileChanged(Json? before, Json? after, bool Function(String field) test
       .any((field) => test(field) && !_same(a[field], b[field]));
 }
 
-final _grade = RegExp(r'^grade(Shadows|Midtones|Highlights)(Warmth|Tint|Level)$');
+final _grade =
+    RegExp(r'^(grade(Shadows|Midtones|Highlights)(Warmth|Tint|Level)|blackPoint|whitePoint)$');
 final _filmGrain = RegExp(
     r'^(grainMottle|grainModel|film(GrainSize|ColourGrain|RedLayer|GreenLayer|BlueLayer|ScanSoftness))$');
 final _bands = RegExp(r'^screen(Red|Green|Blue)Band$');

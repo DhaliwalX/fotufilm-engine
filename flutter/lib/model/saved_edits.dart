@@ -66,7 +66,9 @@ Json parseEdit(String text, Catalogue catalogue, Iterable<String?> stocks) {
   if (params is! Map ||
       !catalogue.sliders.every((s) {
         final value = params[s.key] ??
-            (const ['cameraPreflash', 'sceneLightKelvin'].contains(s.key) ? s.def : null);
+            (const ['cameraPreflash', 'sceneLightKelvin', 'blackPoint', 'whitePoint'].contains(s.key)
+                ? s.def
+                : null);
         return _finite(value) && value >= s.min && value <= s.max;
       })) {
     throw const EditProblem('Invalid adjustment values.');

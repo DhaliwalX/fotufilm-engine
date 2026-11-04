@@ -44,7 +44,7 @@ final class ColorGradeTests: XCTestCase {
 
     func testNeutralGradePacksTheExactIdentity() {
         let neutral = ColorGrade.neutral
-        XCTAssertEqual(neutral.packed, [0, 0, 0, 1, 1, 1, 1, 1, 1])
+        XCTAssertEqual(neutral.packed(in: .linear), [0, 0, 0, 1, 1, 1, 1, 1, 1])
         XCTAssertTrue(neutral.isNeutral)
     }
 
@@ -59,6 +59,59 @@ final class ColorGradeTests: XCTestCase {
         XCTAssertThrowsError(try JSONDecoder().decode(ColorGrade.self, from: Data("{}".utf8)))
         XCTAssertThrowsError(try JSONDecoder().decode(ColorGrade.Band.self,
                                                        from: Data("{}".utf8)))
+    }
+
+    func testOutputLevelsPlaceBlackAndWhiteInEitherSpace() {
+        // The band-free black lands on the black point and white on the white point, read in the
+        // sRGB-encoded signal, at any midtone setting and in either grading space.
+        for space in [ColorGrade.Space.linear, .encoded] {
+            for midtone: Float in [-0.8, 0, 0.6] {
+                var grade = ColorGrade(midtones: .init(level: midtone),
+                                       blackPoint: 0.12, whitePoint: 0.85)
+                let black = grade.apply(.zero, in: space)
+                let white = grade.apply(SIMD3(repeating: 1), in: space)
+                for channel in 0..<3 {
+                    XCTAssertEqual(ColorScience.gradingEncode(black[channel]), 0.12, accuracy: 1e-4,
+                                   "\(space) midtone \(midtone)")
+                    XCTAssertEqual(ColorScience.gradingEncode(white[channel]), 0.85, accuracy: 1e-4,
+                                   "\(space) midtone \(midtone)")
+                }
+                let grey = grade.apply(SIMD3(repeating: 0.18), in: space)
+                XCTAssertGreaterThan(grey.y, black.y)
+                XCTAssertLessThan(grey.y, white.y)
+                XCTAssertFalse(grade.isNeutral)
+                // Out-of-range points clamp to the ends of their ranges.
+                grade.blackPoint = -1
+                grade.whitePoint = 3
+                XCTAssertEqual(grade.packed(in: space),
+                               ColorGrade(midtones: .init(level: midtone)).packed(in: space))
+            }
+        }
+    }
+
+    func testGradesSavedBeforeOutputLevelsStillRead() throws {
+        let legacy = #"{"shadows":{"balanceX":0,"balanceY":0,"level":0.5},"#
+            + #""midtones":{"balanceX":0,"balanceY":0,"level":0},"#
+            + #""highlights":{"balanceX":0,"balanceY":0,"level":0}}"#
+        let grade = try JSONDecoder().decode(ColorGrade.self, from: Data(legacy.utf8))
+        XCTAssertEqual(grade.blackPoint, 0)
+        XCTAssertEqual(grade.whitePoint, 1)
+        let levelled = ColorGrade(blackPoint: 0.1, whitePoint: 0.9)
+        XCTAssertEqual(try JSONDecoder().decode(ColorGrade.self,
+                                                from: JSONEncoder().encode(levelled)), levelled)
+    }
+
+    func testOutputLevelsFadeTheRenderedPrint() {
+        // A raised black point lightens a black frame and a lowered white point darkens a white
+        // one, through the kernel's own grade.
+        let stock = TestStocks.negative
+        let plainBlack = channelMeans(render(.neutral, stock, level: 0))
+        let plainWhite = channelMeans(render(.neutral, stock, level: 255))
+        let levels = ColorGrade(blackPoint: 0.2, whitePoint: 0.8)
+        let fadedBlack = channelMeans(render(levels, stock, level: 0))
+        let dimmedWhite = channelMeans(render(levels, stock, level: 255))
+        XCTAssertGreaterThan(fadedBlack.1, plainBlack.1 + 30)
+        XCTAssertLessThan(dimmedWhite.1, plainWhite.1 - 20)
     }
 
     func testNeutralGradeLeavesTheRenderByteIdentical() {

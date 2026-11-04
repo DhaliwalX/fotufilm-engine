@@ -37,19 +37,58 @@ public struct ColorGrade: Equatable, Sendable, Codable {
     public var shadows = Band()
     public var midtones = Band()
     public var highlights = Band()
+    /// The finished print's output levels, as fractions of the sRGB-encoded signal: where black
+    /// and white land after the rest of the grade, whatever the output medium. Raising the black
+    /// point fades black to a grey and lowering the white point dims white, with nothing clipped.
+    /// Between them the print is rescaled in the grade's own space: display-linear light by
+    /// default, or the encoded signal, where they act exactly as a grading suite's output levels.
+    public var blackPoint: Float = 0
+    public var whitePoint: Float = 1
 
     public init(shadows: Band = Band(), midtones: Band = Band(),
-                highlights: Band = Band()) {
+                highlights: Band = Band(), blackPoint: Float = 0, whitePoint: Float = 1) {
         self.shadows = shadows
         self.midtones = midtones
         self.highlights = highlights
+        self.blackPoint = blackPoint
+        self.whitePoint = whitePoint
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case shadows, midtones, highlights, blackPoint, whitePoint
+    }
+
+    /// Grades saved before the output levels existed decode with them at rest.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        shadows = try container.decode(Band.self, forKey: .shadows)
+        midtones = try container.decode(Band.self, forKey: .midtones)
+        highlights = try container.decode(Band.self, forKey: .highlights)
+        blackPoint = try container.decodeIfPresent(Float.self, forKey: .blackPoint) ?? 0
+        whitePoint = try container.decodeIfPresent(Float.self, forKey: .whitePoint) ?? 1
     }
 
     public static let neutral = ColorGrade()
 
     /// True when the grade would leave the print exactly as it found it.
     public var isNeutral: Bool {
-        shadows.isNeutral && midtones.isNeutral && highlights.isNeutral
+        shadows.isNeutral && midtones.isNeutral && highlights.isNeutral && levelsAtRest
+    }
+
+    /// The range each output level moves over; the two meet at mid-scale.
+    public static let blackPointRange: ClosedRange<Float> = 0...0.5
+    public static let whitePointRange: ClosedRange<Float> = 0.5...1
+
+    var levelsAtRest: Bool { clampedBlackPoint == 0 && clampedWhitePoint == 1 }
+
+    var clampedBlackPoint: Float {
+        blackPoint.isFinite
+            ? min(max(blackPoint, Self.blackPointRange.lowerBound), Self.blackPointRange.upperBound) : 0
+    }
+
+    var clampedWhitePoint: Float {
+        whitePoint.isFinite
+            ? min(max(whitePoint, Self.whitePointRange.lowerBound), Self.whitePointRange.upperBound) : 1
     }
 
     /// Lift at full shadow travel, as a fraction of paper white.
@@ -83,10 +122,33 @@ public struct ColorGrade: Equatable, Sendable, Codable {
                + Self.midtoneTilt * midtones.tilt))
     }
 
+    /// The lift and gain the kernel works with in `space`, the output levels folded in. The
+    /// kernel raises `lifted = working · (gain − lift) + lift` by the inverse gamma, so the
+    /// levels go in before the power, each at its own root: the band-free black then lands on
+    /// the black point and white on the white point exactly, at any midtone setting, and the
+    /// kernel needs nothing new. At rest they are the grade's own lift and gain, bit for bit.
+    func levelled(in space: Space) -> (lift: SIMD3<Float>, gain: SIMD3<Float>) {
+        let lift = self.lift, gain = self.gain
+        guard !levelsAtRest else { return (lift, gain) }
+        let exponent = inverseGamma
+        func working(_ encoded: Float) -> Float {
+            space == .encoded ? encoded : ColorScience.gradingDecode(encoded)
+        }
+        let black = working(clampedBlackPoint), white = working(clampedWhitePoint)
+        var levelledLift = SIMD3<Float>(), levelledGain = SIMD3<Float>()
+        for channel in 0..<3 {
+            let root = 1 / exponent[channel]
+            let low = pow(black, root), high = pow(white, root)
+            levelledLift[channel] = low + (high - low) * lift[channel]
+            levelledGain[channel] = low + (high - low) * gain[channel]
+        }
+        return (levelledLift, levelledGain)
+    }
+
     /// The nine floats the packed engine configuration carries, in the order
-    /// FOTUFILM_CONFIG_GRADE_LIFT, _GAIN and _INV_GAMMA expect.
-    var packed: [Float] {
-        let lift = self.lift, gain = self.gain, inverseGamma = self.inverseGamma
+    /// FOTUFILM_CONFIG_GRADE_LIFT, _GAIN and _INV_GAMMA expect, for a kernel grading in `space`.
+    func packed(in space: Space) -> [Float] {
+        let (lift, gain) = levelled(in: space), inverseGamma = self.inverseGamma
         return [lift.x, lift.y, lift.z,
                 gain.x, gain.y, gain.z,
                 inverseGamma.x, inverseGamma.y, inverseGamma.z]
@@ -108,7 +170,7 @@ public struct ColorGrade: Equatable, Sendable, Codable {
     /// FotufilmHalide/Stages/Transfer.h expression for expression.
     public func apply(_ value: SIMD3<Float>,
                       in space: Space = .linear) -> SIMD3<Float> {
-        let lift = self.lift, gain = self.gain, exponent = self.inverseGamma
+        let (lift, gain) = levelled(in: space), exponent = self.inverseGamma
         var result = SIMD3<Float>()
         for channel in 0..<3 {
             let working = space == .encoded

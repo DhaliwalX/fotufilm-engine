@@ -102,6 +102,8 @@ class Catalogue {
       for (final axis in const ['Warmth', 'Tint', 'Level'])
         SliderSpec(key: 'grade$band$axis', label: axis, min: -1, max: 1, step: .01, def: 0,
             group: band),
+    catalogueSlider('blackPoint', 'Output Levels', 0.005),
+    catalogueSlider('whitePoint', 'Output Levels', 0.005),
   ];
 
   // ── Profile controls (web/src/profile-settings.js) ──────────────────────────────────────
