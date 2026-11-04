@@ -33,6 +33,7 @@ import 'pipeline.dart';
 import 'plugins.dart';
 import 'presets.dart';
 import 'print_frame.dart';
+import 'tone_curve.dart';
 import 'renderer.dart';
 import 'selective.dart';
 import 'settings.dart';
@@ -238,6 +239,7 @@ class EditorModel extends ChangeNotifier implements RenderHost {
   /// The Expose panel's lens correction, and the Print panel's frame and receiver band sets.
   late final lens = LensCorrection(this);
   late final printFrame = PrintFrame(this);
+  late final toneCurve = ToneCurve(this);
   late final bandSets = BandSets(catalogue, settings);
 
   /// What the foreground develops ask the engine for beyond the edit: the crop tool's uncropped
