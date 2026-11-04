@@ -257,9 +257,10 @@ public struct FotufilmEngine {
         public var unexposedEdge: UnexposedEdge.Develop? = nil
         /// The contrast of the graded paper curve Digital Reference's graded styles print a
         /// negative through, as a variable-contrast paper grade 0…5. Grade 2 is the calibrated
-        /// curve; softer grades roll highlights off earlier, harder grades later, each holding
-        /// mid-grey at 18% and the film base at display black. Reference Exposure, positives and
-        /// other media ignore it.
+        /// curve; softer grades lower the contrast on both sides of mid-grey, rolling highlights
+        /// off earlier and opening the shadows, and harder grades raise it, each holding mid-grey
+        /// at 18% and the film base at display black. Reference Exposure, positives and other
+        /// media ignore it.
         public var screenGrade: Float = 2
         /// The peaks of the three bands Digital Reference reads a colour negative's dyes through,
         /// in nanometres. The paper's own measured bands by default; each placed elsewhere slides

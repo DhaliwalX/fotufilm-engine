@@ -81,8 +81,9 @@ white, the way a slide scanner normalises each frame.
 
 The output controls sit on top of the chosen style. **Paper Grade** (0–5, default 2) sets the
 contrast of the graded curve Graded Print and Auto Levels print a negative through, like a
-variable-contrast paper: softer grades roll highlights off earlier, harder grades later,
-while mid-grey and film-base black hold. **Screen Exposure** (±3 stops) lightens or
+variable-contrast paper: softer grades lower the contrast on both sides of mid-grey, rolling
+highlights off earlier and opening the shadows, harder grades raise it, while mid-grey and
+film-base black hold. **Screen Exposure** (±3 stops) lightens or
 darkens the conversion by the stated stops at mid-grey on any style — a negative's print
 exposure, a slide's scanner gain.
 

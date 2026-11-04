@@ -324,6 +324,21 @@ enum DigitalReferenceReceiver {
         return min(max((pow(10, -d) - black) / (1 - black), 0), 1)
     }
 
+    /// The read the graded styles' shadow half develops at a paper grade, from the levelled read
+    /// `relative` under mid-grey. Its slope at mid-grey scales with the grade as the highlight
+    /// line's does, so the two halves keep one contrast through grey, and it bends back onto the
+    /// read where the shadow half reaches black, `black`, so the film base still prints black at
+    /// every grade: a soft grade holds the shadows open and drops into black near the base, a hard
+    /// one darkens them sooner and settles onto black. Grade 2 is the read unchanged.
+    static func gradedShadowRead(_ relative: Float, black: Float, grade: Float) -> Float {
+        let ratio = gradedSlope(grade: grade) / gradedSlope(grade: referenceGrade)
+        guard ratio != 1 else { return relative }
+        guard relative > 0 else { return ratio * relative }
+        guard relative < black, black > 0 else { return relative }
+        let u = relative / black
+        return black * ratio * u / (1 + (ratio - 1) * u)
+    }
+
     // MARK: Levels
 
     /// The affine the kernel applies to the receiver's relative log exposure for the graded
@@ -593,7 +608,8 @@ enum DigitalReferenceReceiver {
             func mixed(_ relative: Float, _ value: Float) -> Float {
                 let highlight = gradedTransmittance(val: value, grade: grade)
                 let anchor = referenceCurve.logExposure(density: referenceCurve.dMin + anchorDensity)
-                let shadowRead = stretchShadows(relative, scale: baseTarget / gradedBaseRead)
+                let graded = gradedShadowRead(relative, black: gradedBaseRead, grade: grade)
+                let shadowRead = stretchShadows(graded, scale: baseTarget / gradedBaseRead)
                 let shadowDensity = referenceCurve.density(logExposure: anchor + shadowRead)
                     - referenceCurve.dMin
                 let floor = pow(10, -(referenceCurve.dMax - referenceCurve.dMin)) as Float
@@ -605,12 +621,14 @@ enum DigitalReferenceReceiver {
             }
             let relative = density - anchorDensity
             // Auto Levels' shadows fall along its log toe instead of the stretched reference
-            // curve, joined to the graded highlights through mid-grey the same way.
+            // curve, joined to the graded highlights through mid-grey the same way. Both shadow
+            // halves take the paper grade through `gradedShadowRead`.
             if style == .autoLevels {
                 let toe = ScreenShadowToe.shared(for: stock)
                 func logged(_ relative: Float, _ value: Float) -> Float {
                     let highlight = gradedTransmittance(val: value, grade: grade)
-                    let shadow = toe.transmittance(relative: relative)
+                    let shadow = toe.transmittance(relative: gradedShadowRead(
+                        relative, black: toe.blackRead, grade: grade))
                     let t = min(max((relative + 0.04) / 0.08, 0), 1)
                     let blend = t * t * (3 - 2 * t)
                     return highlight * (1 - blend) + shadow * blend
@@ -664,7 +682,7 @@ struct ScreenShadowToe {
     /// The finish: the levelled reads where it starts and where it reaches black, and the power
     /// it falls with, which matches the log curve's slope where they meet.
     private let finishRead: Float
-    private let blackRead: Float
+    let blackRead: Float
     private let finishPower: Float
 
     private static let lock = NSLock()
