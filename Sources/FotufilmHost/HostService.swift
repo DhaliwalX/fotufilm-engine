@@ -165,6 +165,8 @@ public final class HostService {
             return try answer(autoAdjust(params))
         case "sampleScene":
             return try answer(value: sampleScene(parameters))
+        case "toneCurve":
+            return try answer(value: toneCurve(parameters))
         case "export":
             return try answer(HostActivity.during("Exporting a photograph") {
                 try export(params, parameters: parameters)
@@ -966,6 +968,86 @@ public final class HostService {
             }
         }
         return [sum.x / count, sum.y / count, sum.z / count]
+    }
+
+    /// Steps of the tone curve's grey ramp, the pixels each step spans, and the strip's rows.
+    static let toneCurveSteps = 256, toneCurveStepWidth = 4, toneCurveRows = 4
+
+    /// The edit's tone curve: a neutral grey ramp of input codes 0…255, sRGB-encoded as a JPEG
+    /// holds them, developed exactly as the shown photograph is — its film, output medium, grade
+    /// and output levels, on the photograph's own Auto Levels readings — and read back as the
+    /// Display P3 codes the preview shows, 0…1 per channel. Grain, regional tone and veiling glare
+    /// are left off, so the strip shows tone alone. With it, the photograph's own tones binned on
+    /// the same input axis (Rec. 709 luma of its sRGB-encoded scene), for the chart's background.
+    /// Nil with no film or for a scanned negative, which prints its scan rather than a scene.
+    private func toneCurve(_ parameters: [String: Any]) throws -> Any {
+        guard var render = parameters["render"] as? [String: Any] else { return NSNull() }
+        render["viewport"] = nil
+        let prepared = try prepare(JSONSerialization.data(withJSONObject: render))
+        guard prepared.negativeMeasure == nil,
+              let film = engine.stock(prepared.edit.edit.stock) else { return NSNull() }
+        let scene = try sceneFor(prepared.image, geometry: prepared.geometry, sizes: prepared.sizes)
+        let (sceneWidth, sceneHeight) = prepared.sizes.output
+        var options = try engine.options(prepared.edit, stock: film,
+                                         contentHeadroom: prepared.image.contentHeadroom)
+        let metered = try scene.withUnsafeBufferPointer {
+            try UnexposedEdge.Develop.metering(
+                $0, width: sceneWidth, height: sceneHeight,
+                margins: .init(left: 0, right: 0, top: 0, bottom: 0), stock: film, options: options)
+        }
+        options.sceneHighlightStops = metered.sceneHighlightStops
+        options.sceneChannelMedians = metered.sceneChannelMedians
+        options.sceneToneStops = metered.sceneToneStops
+        options.grainScale = 0
+        options.localTone = false
+        options.flareScale = 0
+        options.unexposedEdge = nil
+
+        let steps = Self.toneCurveSteps, stepWidth = Self.toneCurveStepWidth
+        let width = steps * stepWidth, height = Self.toneCurveRows
+        var strip = [Float](repeating: 1, count: width * height * 4)
+        for x in 0..<width {
+            let grey = ColorScience.gradingDecode(Float(x / stepWidth) / Float(steps - 1))
+            for y in 0..<height {
+                let i = (y * width + x) * 4
+                strip[i] = grey; strip[i + 1] = grey; strip[i + 2] = grey
+            }
+        }
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        try pixels.withUnsafeMutableBytes { buffer in
+            try engine.develop(strip, width: width, height: height, film: film, options: options,
+                               into: .init(maxEdge: 0, format: .rgba8DisplayP3,
+                                           pixels: buffer.baseAddress!, rowBytes: width * 4,
+                                           capacity: buffer.count))
+        }
+        // Each step's mean, inside its edges, so the dither averages out.
+        var curve = [[Double]](repeating: [Double](repeating: 0, count: steps), count: 3)
+        for step in 0..<steps {
+            var sum = SIMD3<Double>(repeating: 0), count = 0.0
+            for y in 0..<height {
+                for x in (step * stepWidth + 1)..<(step * stepWidth + stepWidth - 1) {
+                    let i = (y * width + x) * 4
+                    sum += SIMD3(Double(pixels[i]), Double(pixels[i + 1]), Double(pixels[i + 2]))
+                    count += 1
+                }
+            }
+            for channel in 0..<3 { curve[channel][step] = sum[channel] / count / 255 }
+        }
+
+        var histogram = [Int](repeating: 0, count: steps)
+        let stride = max(1, Int((Double(sceneWidth * sceneHeight) / 65_536).squareRoot()))
+        for y in Swift.stride(from: 0, to: sceneHeight, by: stride) {
+            for x in Swift.stride(from: 0, to: sceneWidth, by: stride) {
+                let i = (y * sceneWidth + x) * 4
+                guard scene[i + 3] > 0 else { continue }
+                let linear = ColorScience.linearDisplayP3ToSRGB(ColorScience.linearRec2020ToDisplayP3(
+                    SIMD3(scene[i], scene[i + 1], scene[i + 2])))
+                let encoded = SIMD3((0..<3).map { ColorScience.gradingEncode(max(linear[$0], 0)) })
+                let luma = 0.2126 * encoded.x + 0.7152 * encoded.y + 0.0722 * encoded.z
+                histogram[Int((min(max(luma, 0), 1) * Float(steps - 1)).rounded())] += 1
+            }
+        }
+        return ["red": curve[0], "green": curve[1], "blue": curve[2], "histogram": histogram]
     }
 
     /// Develops the whole frame at the export size and writes it where the host's save panel said.

@@ -1,5 +1,5 @@
-// The Print panel: the output medium and its receiver bands, the screen conversion or the print's
-// controls, the enlarger's lamp, the frame, and export.
+// The Print panel: the tone curve the edit prints with, the output medium and its receiver bands,
+// the screen conversion or the print's controls, the enlarger's lamp, the frame, and export.
 import 'package:flutter/widgets.dart';
 
 import '../../model/catalogue.dart';
@@ -9,6 +9,7 @@ import '../workspace/export_dialog.dart';
 import 'controls.dart';
 import 'print_frame_section.dart';
 import 'receiver_bands.dart';
+import 'tone_curve_chart.dart';
 
 const _matchFilm = 'match-film';
 const _screenCMY = ['screenCyan', 'screenMagenta', 'screenYellow'];
@@ -30,6 +31,7 @@ List<Widget> printPanel(InspectorControls c) {
   final fixed = c.fixedSettings;
   return [
     Section(title: 'Output', children: [
+      ToneCurveChart(editor: editor),
       MediumRow(
         editor: editor,
         offersBands: !fixed && printMedium?['receiverBands'] == true,

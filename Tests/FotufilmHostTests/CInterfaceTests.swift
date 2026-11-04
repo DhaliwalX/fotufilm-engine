@@ -496,6 +496,54 @@ extension CInterfaceTests {
         XCTAssertNotEqual(try render(nil), try render("35mm"))
     }
 
+    /// The Output panel's chart: the edit's grey ramp through its film and medium, rising from
+    /// black to white, landing on the output levels, over the photograph's own tones.
+    func testToneCurveFollowsTheEditsOutput() throws {
+        let engine = try makeEngine()
+        defer { fotufilm_engine_destroy(engine) }
+        let service = Unmanaged<HostEngine>.fromOpaque(UnsafeRawPointer(engine))
+            .takeUnretainedValue().service
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("fotufilm-curve-\(UUID().uuidString).jpg")
+        try writeRamp(to: url, width: 240, height: 180, type: .jpeg)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let opened = try service.call("importPath", params: Data(#"{"path": "\#(url.path)"}"#.utf8),
+                                      payload: nil)
+        let descriptor = try XCTUnwrap(JSONSerialization.jsonObject(with: opened.json) as? [String: Any])
+        let handle = try XCTUnwrap(descriptor["handle"] as? Int)
+
+        func curve(stock: String?, params: [String: Any] = [:]) throws -> [String: Any]? {
+            let render: [String: Any] = [
+                "handle": handle, "maxEdge": 256,
+                "edit": ["stock": stock.map { $0 as Any } ?? NSNull(), "params": params],
+                "profileRequest": ["controls": [String: Any](), "medium": "screen"],
+            ]
+            let answer = try service.call("toneCurve", params: JSONSerialization.data(
+                withJSONObject: ["render": render]), payload: nil)
+            return try JSONSerialization.jsonObject(with: answer.json, options: [.fragmentsAllowed])
+                as? [String: Any]
+        }
+        XCTAssertNil(try curve(stock: nil), "Normal has no output medium to chart")
+
+        let plain = try XCTUnwrap(try curve(stock: "portra400"))
+        for channel in ["red", "green", "blue"] {
+            let values = try XCTUnwrap(plain[channel] as? [Double], channel)
+            XCTAssertEqual(values.count, 256)
+            XCTAssertLessThan(values[0], 0.05, channel)
+            XCTAssertGreaterThan(values[255], 0.8, channel)
+            for i in 1..<values.count { XCTAssertGreaterThan(values[i] + 0.01, values[i - 1]) }
+        }
+        let histogram = try XCTUnwrap(plain["histogram"] as? [Int])
+        XCTAssertEqual(histogram.count, 256)
+        XCTAssertGreaterThan(histogram.reduce(0, +), 1000)
+
+        let levelled = try XCTUnwrap(try curve(stock: "portra400",
+                                               params: ["blackPoint": 0.2, "whitePoint": 0.8]))
+        let green = try XCTUnwrap(levelled["green"] as? [Double])
+        XCTAssertEqual(green[0], 0.2, accuracy: 0.03, "black lands on the black point")
+        XCTAssertLessThan(green[255], 0.8)
+    }
+
     /// The editor's own calls: import a photograph's bytes, develop a cropped render of it.
     func testHostCallsImportAndRender() throws {
         let engine = try makeEngine()
