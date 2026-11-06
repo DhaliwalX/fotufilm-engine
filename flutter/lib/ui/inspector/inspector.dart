@@ -1,6 +1,6 @@
-// The inspector, compact: "Darkroom" and its help, the four panels as a segmented control, and the
-// chosen panel's sections; in the phone's dock, the sections alone. Collapsed, it is a rail of the
-// panels' buttons.
+// The inspector, compact: the edit's tone curve, "Darkroom" and its help, the four panels as a
+// segmented control, and the chosen panel's sections; in the phone's dock, the sections alone.
+// Collapsed, it is a rail of the panels' buttons.
 import 'package:flutter/widgets.dart';
 
 import '../../model/editor.dart';
@@ -10,6 +10,7 @@ import '../theme/theme.dart';
 import '../workspace/panel_layout.dart';
 import 'controls.dart';
 import 'panels.dart';
+import 'tone_curve_chart.dart';
 
 class EditorInspector extends StatefulWidget {
   const EditorInspector({super.key, required this.editor});
@@ -53,6 +54,9 @@ class _EditorInspectorState extends State<EditorInspector> {
     return ColoredBox(
       color: Palette.of(context).panel,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        // Above every panel, so the curve stays in view while any control changes it.
+        if (!compact)
+          ToneCurveChart(editor: editor, padding: const EdgeInsets.fromLTRB(12, 10, 12, 0)),
         if (heading)
           Padding(
             padding: Metrics.headingPadding,

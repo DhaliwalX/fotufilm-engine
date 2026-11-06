@@ -1,4 +1,4 @@
-// The Output panel's tone curve: the shown photograph's edit developed over a neutral grey ramp by
+// The inspector's tone curve: the shown photograph's edit developed over a neutral grey ramp by
 // the engine (`toneCurve`), as the codes the preview shows (Display P3 natively, sRGB in the
 // browser), with the photograph's own tones binned on the same input axis behind it.
 import 'dart:async';
