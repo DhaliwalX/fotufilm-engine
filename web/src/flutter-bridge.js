@@ -186,6 +186,19 @@ async function sampleScene({ render: request, point }) {
   return { json: await backend.sampleScene(await sampled(request), point) };
 }
 
+/// The shown photograph's tone curve (tone-curve.js), in the sRGB the browser's pictures come
+/// back in: null with no film or for a scanned negative, which prints its scan, as natively.
+async function toneCurve({ render: request }) {
+  if (!request?.edit?.stock || request.edit.negative) return { json: null };
+  const result = await develop(request, {
+    toneCurve: true,
+    encode: false,
+    comparison: false,
+    background: false,
+  });
+  return { json: result.toneCurve };
+}
+
 async function negativeSampleFilmBase({ render: request, point }) {
   return { json: await backend.negativeScans.sampleFilmBase(await sampled(request), point) };
 }
@@ -330,6 +343,7 @@ const methods = {
   render,
   autoAdjust,
   sampleScene,
+  toneCurve,
   negativeSampleFilmBase,
   printFrame,
   stages,
