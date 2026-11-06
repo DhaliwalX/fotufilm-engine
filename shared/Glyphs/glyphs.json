@@ -52,6 +52,14 @@
       "colours": [],
       "rendering": "hierarchical"
     },
+    "fotu.grain.clump": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.grain.film": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
     "fotu.slider.autoAdjustment.high": {
       "colours": [],
       "rendering": "hierarchical"
