@@ -29,9 +29,9 @@ inline Halide::Expr print_mtf_read(Halide::ImageParam &configuration,
 /// the film's mid-grey `mid`, the film extreme that prints darkest `black`, and the highlight
 /// `knee` and `white`.
 ///
-/// Shadows: the knee sits a fixed share of the way from mid-grey to black, and the hold is a
-/// smooth bump from there to black — nothing above the knee, nothing at black, most three fifths
-/// of the way down. Highlights: past the knee the exposure `x` beyond it is drawn in to
+/// Shadows: the hold eases in from nothing at mid-grey to its full height seven tenths of the way
+/// to black, and eases back out to nothing at black over the last quarter, each along
+/// `3t² − 2t³`. Highlights: past the knee the exposure `x` beyond it is drawn in to
 /// `W x / (x + W)`, `W` the knee's room to the white: the slope matches at the knee and falls off
 /// slowly, so highlights roll toward the white, still apart, rather than clip. Mirrors
 /// `PrintDetail.hold` expression for expression; zero strengths hold nothing, bit for bit.
@@ -41,14 +41,18 @@ inline Halide::Expr print_detail_hold(Halide::ImageParam &configuration, Halide:
     using Halide::Expr;
     Expr shadows = configuration(FOTUFILM_CONFIG_PRINT_DETAIL);
     Expr highlights = configuration(FOTUFILM_CONFIG_PRINT_DETAIL + 1);
-    // PrintDetail.shadowKneeShare, .reach and .peak.
-    constexpr float kShadowKneeShare = 0.2f, kReach = 0.3f, kPeak = 0.18592f;
-    Expr shadow_knee = mid + kShadowKneeShare * (black - mid);
-    Expr span = black - shadow_knee;
-    Expr u = Halide::clamp((at - shadow_knee) / Halide::max(span, 1.0e-3f), 0.0f, 1.0f);
-    Expr bump = u * Halide::sqrt(u) * (1.0f - u) * (1.0f / kPeak);
+    // PrintDetail.reach, .shadowRise and .shadowFall.
+    constexpr float kReach = 0.22f, kShadowRise = 0.7f, kShadowFall = 0.75f;
+    auto smoothstep = [](Expr t) {
+        t = Halide::clamp(t, 0.0f, 1.0f);
+        return t * t * (3.0f - 2.0f * t);
+    };
+    Expr span = black - mid;
+    Expr u = (at - mid) / Halide::max(span, 1.0e-3f);
+    Expr shape = smoothstep(u * (1.0f / kShadowRise))
+        * (1.0f - smoothstep((u - kShadowFall) * (1.0f / (1.0f - kShadowFall))));
     Expr hold = Halide::select(shadows > 0.0f && span > 0.05f,
-                               shadows * kReach * span * bump, 0.0f);
+                               shadows * kReach * span * shape, 0.0f);
 
     Expr room = knee - white;
     Expr past = Halide::max(knee - at, 0.0f);
