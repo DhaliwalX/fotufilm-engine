@@ -1,6 +1,6 @@
 // The Output panel's tone curve: the shown photograph's edit developed over a neutral grey ramp by
-// the engine (`toneCurve`), as the Display P3 codes the preview shows, with the photograph's own
-// tones binned on the same input axis behind it.
+// the engine (`toneCurve`), as the codes the preview shows (Display P3 natively, sRGB in the
+// browser), with the photograph's own tones binned on the same input axis behind it.
 import 'dart:async';
 import 'dart:convert';
 
@@ -42,7 +42,7 @@ class ToneCurve extends ChangeNotifier {
   String? _key, _pendingKey;
   Timer? _timer;
 
-  /// Whether this engine charts curves at all; the browser's does not.
+  /// Whether this engine charts curves at all: one without the call says so once.
   bool _answers = true;
 
   /// The curve of the picture last shown, or null while there is none to chart: no film, a

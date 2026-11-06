@@ -35,6 +35,7 @@ import {
   positiveSource,
 } from './negative-reading.js'
 import { rolledDenseEnd } from './negative-document.js'
+import { rampCurve, toneHistogram, toneRamp } from './tone-curve.js'
 import {
   assetUrl,
   sceneScreenMeter,
@@ -446,6 +447,8 @@ export class RenderSession {
     cacheSource = true,
     showMask = false,
     viewport = null,
+    // Develops the grey ramp of tone-curve.js as this photograph would develop, for its curve.
+    toneCurve = false,
     stale = () => false,
     onProgress = () => {},
   }) {
@@ -469,6 +472,7 @@ export class RenderSession {
       !cropMode &&
       stage === null &&
       !background &&
+      !toneCurve &&
       edit.printFrame &&
       edit.printFrame !== 'none'
     const frameConfiguration = framed
@@ -694,6 +698,19 @@ export class RenderSession {
         )
           output.toneGrid = await measuredTone(meterSource, controls)
         developer?.usePack(pack)
+        if (toneCurve) {
+          // On the photograph's own readings, with grain and regional tone left off, so the
+          // ramp shows tone alone.
+          const rampControls = { ...controls, grain: 0, localTone: false }
+          const toneGrid = pack?.screenMeter ? await measuredTone(meterSource, rampControls) : null
+          const ramp = toneRamp()
+          const rampOutput = { bitDepth: 8, colorSpace, toneGrid }
+          const developed = developer
+            ? await developer.develop(ramp, rampControls, rendering, stale, rampOutput)
+            : await developNormal(ramp, rampControls, rendering, stale, rampOutput)
+          if (!developed || stale()) return null
+          return { toneCurve: { ...rampCurve(developed.pixels), histogram: toneHistogram(source) } }
+        }
         const developed = developer
           ? await developer.develop(film, controls, rendering, stale, output)
           : await developNormal(film, controls, rendering, stale, output)
