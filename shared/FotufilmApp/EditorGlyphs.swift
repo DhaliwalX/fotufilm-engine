@@ -1,3 +1,6 @@
+#if canImport(FotufilmCore)
+import FotufilmCore
+#endif
 #if canImport(FotufilmEditModel)
 import FotufilmEditModel
 #endif
@@ -103,6 +106,12 @@ enum Glyph {
         case .frameLocal: return "fotu.tab.local"
         case .pipeline: return "fotu.tab.pipeline"
         }
+    }
+
+    /// Each grain model as its grain looks close up: the clump field's soft mottle, the film's
+    /// separate crystals.
+    static func grain(_ model: GrainModel) -> String {
+        "fotu.grain.\(model.rawValue)"
     }
 
     /// The symbols at a slider's low and high ends. The glyph set draws a pair for every
