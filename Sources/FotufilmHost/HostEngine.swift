@@ -223,14 +223,20 @@ public final class HostEngine {
     /// Where this person's film packs are installed; tests use their own. `reloadFilms` reads it.
     var filmPacks: HostFilmPackLibrary? = HostPlatform.current.filmPacks
 
-    public init() throws {
+    public convenience init() throws {
         if let gpu = HostPlatform.current.developer {
-            developer = gpu
+            try self.init(developer: gpu)
         } else if FotufilmEngine.isHalideBackendAvailable {
-            developer = HalideCPUDeveloper()
+            try self.init(developer: HalideCPUDeveloper())
         } else {
             throw Failure(description: "The Halide engine is not linked into this build.")
         }
+    }
+
+    /// An engine that develops on `developer` whatever the platform offers, so the render
+    /// baseline can develop the same requests on the CPU and on the GPU.
+    init(developer: HostDeveloper) throws {
+        self.developer = developer
         HostFilmPacks.publish(filmPacks)
         loadedStocks = FilmStock.presets
         guard !loadedStocks.isEmpty else {
