@@ -52,6 +52,46 @@
       "colours": [],
       "rendering": "hierarchical"
     },
+    "fotu.format.120": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.format.16mm": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.format.35mm": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.format.4x5": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.format.instaxmini": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.format.instaxsquare": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.format.instaxwide": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.format.stock": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.format.super35": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
+    "fotu.format.super8": {
+      "colours": [],
+      "rendering": "hierarchical"
+    },
     "fotu.grain.clump": {
       "colours": [],
       "rendering": "hierarchical"

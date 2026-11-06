@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <!-- Fotufilm glyphs, Copyright 2026 MUAStudio Inc., CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/), https://fotufilm.com, see licenses/GLYPHS.txt -->
+  <path d="M3 3.75h18M3 20.25h18" stroke-width="1.5" data-mode="stroke" data-layer="secondary" opacity="0.42"/>
+  <rect x="5.6" y="7.75" width="12.8" height="8.5" rx="0.75" stroke-width="1.5" data-mode="stroke" data-layer="primary"/>
+  <rect x="3.375" y="5.1" width="1.5" height="1.2" rx="0.3" data-mode="fill" data-layer="secondary" opacity="0.6"/>
+  <rect x="3.375" y="17.7" width="1.5" height="1.2" rx="0.3" data-mode="fill" data-layer="secondary" opacity="0.6"/>
+  <rect x="7.125" y="5.1" width="1.5" height="1.2" rx="0.3" data-mode="fill" data-layer="secondary" opacity="0.6"/>
+  <rect x="7.125" y="17.7" width="1.5" height="1.2" rx="0.3" data-mode="fill" data-layer="secondary" opacity="0.6"/>
+  <rect x="10.875" y="5.1" width="1.5" height="1.2" rx="0.3" data-mode="fill" data-layer="secondary" opacity="0.6"/>
+  <rect x="10.875" y="17.7" width="1.5" height="1.2" rx="0.3" data-mode="fill" data-layer="secondary" opacity="0.6"/>
+  <rect x="14.625" y="5.1" width="1.5" height="1.2" rx="0.3" data-mode="fill" data-layer="secondary" opacity="0.6"/>
+  <rect x="14.625" y="17.7" width="1.5" height="1.2" rx="0.3" data-mode="fill" data-layer="secondary" opacity="0.6"/>
+  <rect x="18.375" y="5.1" width="1.5" height="1.2" rx="0.3" data-mode="fill" data-layer="secondary" opacity="0.6"/>
+  <rect x="18.375" y="17.7" width="1.5" height="1.2" rx="0.3" data-mode="fill" data-layer="secondary" opacity="0.6"/>
+</svg>
