@@ -24,68 +24,91 @@ const _crosstalkDetail =
     'red, green and blue LED exposures have little crosstalk to undo.';
 
 List<Widget> negativePanel(InspectorControls c) {
-  final editor = c.editor;
-  final scans = editor.negatives;
-  final negative = scans.negative;
-  if (negative == null) return const [];
-  final suggestions = scans.suggestions;
-  final lightFrame = negative['lightFrame'] as String?;
-  final frames = scans.lightFrames;
+  if (c.editor.negatives.negative == null) return const [];
   return [
-    Section(title: 'Negative', children: [
-      InfoRow('Film', c.stock?['name'] as String? ?? 'Normal'),
-      if (suggestions.isNotEmpty) const InfoRow('Base looks like', ''),
-      for (final s in suggestions)
-        ScanButton(
-          suggestionName(s),
-          quiet: true,
-          onPressed: c.edit['stock'] == ((s['films'] as List).first as Map)['id']
-              ? null
-              : () => editor.chooseStock(((s['films'] as List).first as Map)['id'] as String),
-        ),
-    ]),
-    Section(title: 'Film Base', children: [
-      InfoRow('Clear film', negative['border'] != null ? 'Sampled' : 'Estimated'),
-      ScanButton(
-        'Pick Clear Film',
-        selected: scans.sampling,
-        onPressed: () => scans.setSampling(!scans.sampling),
-      ),
-      ScanButton(
-        'Estimate',
-        onPressed: negative['border'] == null ? null : () => scans.read({'border': null}),
-      ),
-    ]),
-    Section(title: 'Colour Separation', children: [
-      PickerField<String>(
-        label: 'Scanned Under',
-        value: negative['scanLight'] as String? ?? 'white',
-        options: _scanLights,
-        onChanged: (v) => scans.read({'scanLight': v}),
-      ),
-      AdjustmentRow(
-        label: 'Crosstalk Correction',
-        detail: _crosstalkDetail,
-        value: (negative['crosstalk'] as num? ?? 0).toDouble(),
-        range: const SliderRange(min: 0, max: 1, step: .01, def: 0),
-        onChanged: scans.setCrosstalk,
-        onEnd: editor.endEdit,
-      ),
-    ]),
-    // Light frames are kept by a host with a file system, not by a browser.
-    if (scans.keepsLightFrames)
-      Section(title: 'Light Source', children: [
-        PickerField<String?>(
-          value: frames.any((f) => f['id'] == lightFrame) ? lightFrame : null,
-          options: [
-            const PickerOption(null, 'As Scanned'),
-            for (final f in frames) PickerOption(f['id'] as String, f['name'] as String),
-          ],
-          onChanged: (id) => scans.read({'lightFrame': id}),
-        ),
-        ScanButton('Add Light Frame…', onPressed: scans.chooseLightFrame),
-        ScanButton('Remove Light Frame',
-            onPressed: lightFrame == null ? null : scans.removeLightFrame),
-      ]),
+    negativeFilmSection(c),
+    filmBaseSection(c),
+    scanColourSection(c),
+    ?lightSourceSection(c),
   ];
+}
+
+/// The film the scan is read as, and the films its base looks like.
+Section negativeFilmSection(InspectorControls c) {
+  final editor = c.editor;
+  final suggestions = editor.negatives.suggestions;
+  return Section(title: 'Negative', children: [
+    InfoRow('Film', c.stock?['name'] as String? ?? 'Normal'),
+    if (suggestions.isNotEmpty) const InfoRow('Base looks like', ''),
+    for (final s in suggestions)
+      ScanButton(
+        suggestionName(s),
+        quiet: true,
+        onPressed: c.edit['stock'] == ((s['films'] as List).first as Map)['id']
+            ? null
+            : () => editor.chooseStock(((s['films'] as List).first as Map)['id'] as String),
+      ),
+  ]);
+}
+
+/// The clear film the scan is measured against.
+Section filmBaseSection(InspectorControls c) {
+  final scans = c.editor.negatives;
+  final negative = scans.negative ?? const {};
+  return Section(title: 'Film Base', children: [
+    InfoRow('Clear film', negative['border'] != null ? 'Sampled' : 'Estimated'),
+    ScanButton(
+      'Pick Clear Film',
+      selected: scans.sampling,
+      onPressed: () => scans.setSampling(!scans.sampling),
+    ),
+    ScanButton(
+      'Estimate',
+      onPressed: negative['border'] == null ? null : () => scans.read({'border': null}),
+    ),
+  ]);
+}
+
+/// The light the scan was made under, and how far the dyes' crosstalk is undone.
+Section scanColourSection(InspectorControls c) {
+  final scans = c.editor.negatives;
+  final negative = scans.negative ?? const {};
+  return Section(title: 'Colour Separation', children: [
+    PickerField<String>(
+      label: 'Scanned Under',
+      value: negative['scanLight'] as String? ?? 'white',
+      options: _scanLights,
+      onChanged: (v) => scans.read({'scanLight': v}),
+    ),
+    AdjustmentRow(
+      label: 'Crosstalk Correction',
+      detail: _crosstalkDetail,
+      value: (negative['crosstalk'] as num? ?? 0).toDouble(),
+      range: const SliderRange(min: 0, max: 1, step: .01, def: 0),
+      onChanged: scans.setCrosstalk,
+      onEnd: c.editor.endEdit,
+    ),
+  ]);
+}
+
+/// The light frame that evens out the scan's light. Light frames are kept by a host with a file
+/// system, not by a browser.
+Section? lightSourceSection(InspectorControls c) {
+  final scans = c.editor.negatives;
+  if (!scans.keepsLightFrames) return null;
+  final lightFrame = scans.negative?['lightFrame'] as String?;
+  final frames = scans.lightFrames;
+  return Section(title: 'Light Source', children: [
+    PickerField<String?>(
+      value: frames.any((f) => f['id'] == lightFrame) ? lightFrame : null,
+      options: [
+        const PickerOption(null, 'As Scanned'),
+        for (final f in frames) PickerOption(f['id'] as String, f['name'] as String),
+      ],
+      onChanged: (id) => scans.read({'lightFrame': id}),
+    ),
+    ScanButton('Add Light Frame…', onPressed: scans.chooseLightFrame),
+    ScanButton('Remove Light Frame',
+        onPressed: lightFrame == null ? null : scans.removeLightFrame),
+  ]);
 }

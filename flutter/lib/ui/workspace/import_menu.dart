@@ -14,30 +14,27 @@ class ImportMenu extends StatelessWidget {
   final double size;
 
   @override
-  Widget build(BuildContext context) {
-    final scans = editor.negatives;
-    return Builder(
-      builder: (anchor) => QuietButton(
-        icon: 'plus',
-        tooltip: 'Add media',
-        size: size,
-        opensMenu: true,
-        onPressed: editor.exporting
-            ? null
-            : () => showMenu(anchor, width: 200, [
-                  MenuItem(label: 'Image', onSelected: editor.ready ? onImage : null),
-                  MenuItem(
-                      label: 'Video',
-                      onSelected: editor.ready ? editor.video.chooseMovies : null),
-                  MenuItem(
-                      label: 'Negative',
-                      onSelected: scans.canImport ? scans.chooseNegatives : null),
-                  if (editor.engine?.opensPaths ?? true)
-                    MenuItem(
-                        label: 'Trichromatic Negative',
-                        onSelected: scans.canMerge ? scans.chooseExposures : null),
-                ]),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Builder(
+        builder: (anchor) => QuietButton(
+          icon: 'plus',
+          tooltip: 'Add media',
+          size: size,
+          opensMenu: true,
+          onPressed: editor.exporting ? null : () => showImportMenu(anchor, editor, onImage),
+        ),
+      );
+}
+
+/// The menu of what to import, under `anchor`.
+void showImportMenu(BuildContext anchor, EditorModel editor, VoidCallback onImage) {
+  final scans = editor.negatives;
+  showMenu(anchor, width: 200, [
+    MenuItem(label: 'Image', onSelected: editor.ready ? onImage : null),
+    MenuItem(label: 'Video', onSelected: editor.ready ? editor.video.chooseMovies : null),
+    MenuItem(label: 'Negative', onSelected: scans.canImport ? scans.chooseNegatives : null),
+    if (editor.engine?.opensPaths ?? true)
+      MenuItem(
+          label: 'Trichromatic Negative',
+          onSelected: scans.canMerge ? scans.chooseExposures : null),
+  ]);
 }

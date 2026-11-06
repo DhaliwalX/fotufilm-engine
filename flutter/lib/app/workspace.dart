@@ -1,5 +1,6 @@
 // The editor's window: the toolbar over the film library, the viewer and the inspector, with the
-// panels' resizers, dropped files, the commands and their menus, and the keyboard.
+// panels' resizers, dropped files, the commands and their menus, and the keyboard. A phone has its
+// own editor in their place (ui/phone/phone_editor.dart).
 import 'dart:math' as math;
 
 import 'package:desktop_drop/desktop_drop.dart';
@@ -15,6 +16,7 @@ import '../model/panel_layout.dart';
 import '../ui/inspector/inspector.dart';
 import '../ui/kit/focus.dart' show KeyTarget, returnGoesPast;
 import '../ui/kit/popover.dart' show OverlayFocusScope;
+import '../ui/phone/phone_editor.dart';
 import '../ui/theme/theme.dart';
 import '../ui/workspace/app_dialogs.dart';
 import '../ui/workspace/editing_dialogs.dart';
@@ -38,8 +40,11 @@ const imageExtensions = [
 ];
 
 class Workspace extends StatefulWidget {
-  const Workspace({super.key, required this.editor});
+  const Workspace({super.key, required this.editor, this.phone = false});
   final EditorModel editor;
+
+  /// A phone's screen, which takes the phone's editor.
+  final bool phone;
 
   @override
   State<Workspace> createState() => _WorkspaceState();
@@ -203,11 +208,13 @@ class _WorkspaceState extends State<Workspace> {
                   child: Stack(children: [
                     Column(children: [
                       AppDialogHost(editor: editor),
-                      EditorToolbar(commands: commands),
+                      if (!widget.phone) EditorToolbar(commands: commands),
                       // The photo library covers the panels when it is shown.
                       Expanded(
                         child: Stack(children: [
-                          Positioned.fill(child: LayoutBuilder(builder: _panels)),
+                          Positioned.fill(
+                              child: LayoutBuilder(
+                                  builder: widget.phone ? _phonePanels : _panels)),
                           Positioned.fill(child: PhotoLibraryView(editor: editor)),
                         ]),
                       ),
@@ -224,16 +231,28 @@ class _WorkspaceState extends State<Workspace> {
     );
   }
 
+  /// The window's size chooses the layout; the model hears of it after this frame.
+  void _layOut(BoxConstraints constraints) {
+    final total = constraints.maxWidth;
+    final layout = editor.layout;
+    if (layout.window != total || layout.side != _beside(total, constraints.maxHeight)) {
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => layout.layOut(total, constraints.maxHeight));
+    }
+  }
+
+  /// The phone's editor, under the status bar and over the home indicator.
+  Widget _phonePanels(BuildContext context, BoxConstraints constraints) {
+    _layOut(constraints);
+    return PhoneEditor(commands: commands, dropping: _dropping);
+  }
+
   /// The panels, the inspector giving way first and then the film library, so the picture keeps
   /// its minimum width.
   Widget _panels(BuildContext context, BoxConstraints constraints) {
     final total = constraints.maxWidth;
     final layout = editor.layout;
-    // The window's width chooses the layout; the model hears of it after this frame.
-    if (layout.window != total || layout.side != _beside(total, constraints.maxHeight)) {
-      WidgetsBinding.instance
-          .addPostFrameCallback((_) => layout.layOut(total, constraints.maxHeight));
-    }
+    _layOut(constraints);
     if (total <= compactMaxWidth) return _compactPanels(context, constraints);
     final preferred = layout.preferred;
     var film = editor.filmOpen ? preferred.film : Metrics.filmCollapsed;

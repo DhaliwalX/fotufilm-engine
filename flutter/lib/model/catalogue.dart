@@ -61,6 +61,9 @@ class Catalogue {
     'degrees': '°',
   };
 
+  /// What a value in a catalogue `unit` is written with: `EV`, `K`, `×`; nothing for most.
+  static String unitSymbol(Object? unit) => _units[unit] ?? '';
+
   SliderSpec catalogueSlider(String field, String group, [double step = 0.01]) {
     final c = control(field);
     final scale = c['scale'] as Json;
@@ -74,7 +77,8 @@ class Catalogue {
       min: (scale['min'] as num).toDouble(),
       max: (scale['max'] as num).toDouble(),
       def: (scale['neutral'] as num).toDouble(),
-      unit: _units[scale['unit']] ?? '',
+      // A percentage is kept as a fraction and written ×100.
+      unit: scale['unit'] == 'percent' ? '%' : unitSymbol(scale['unit']),
     );
   }
 

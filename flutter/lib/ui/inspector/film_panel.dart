@@ -29,7 +29,6 @@ List<Widget> _following(EditorModel editor) {
 }
 
 List<Widget> filmPanel(InspectorControls c) {
-  final editor = c.editor;
   if (!c.hasFilm) {
     return const [
       Section(title: 'Normal', children: [InfoRow('Stock', 'None')]),
@@ -41,17 +40,32 @@ List<Widget> filmPanel(InspectorControls c) {
       if (fixed) const Note('Fixed profile: film settings are off.'),
       InfoRow('Stock', c.stock?['name'] as String? ?? ''),
     ]),
-    if (!fixed) Section(title: 'Film Format', children: [
-      FormatPicker(editor: editor),
-      SwitchRow(
-        label: 'Magnified Detail',
-        value: editor.formatDetail,
-        onChanged: editor.setFormatDetail,
-      ),
-      ..._following(editor),
-    ]),
-    if (!fixed) Section(title: 'Film Condition', children: c.profileControls(const ['expired'])),
-    Section(title: 'Halation', children: [
+    ?filmFormatSection(c),
+    ?filmConditionSection(c),
+    halationSection(c),
+  ];
+}
+
+/// The format chosen by eye; a fixed profile has none.
+Section? filmFormatSection(InspectorControls c) {
+  if (c.fixedSettings) return null;
+  final editor = c.editor;
+  return Section(title: 'Film Format', children: [
+    FormatPicker(editor: editor),
+    SwitchRow(
+      label: 'Magnified Detail',
+      value: editor.formatDetail,
+      onChanged: editor.setFormatDetail,
+    ),
+    ..._following(editor),
+  ]);
+}
+
+Section? filmConditionSection(InspectorControls c) => c.fixedSettings
+    ? null
+    : Section(title: 'Film Condition', children: c.profileControls(const ['expired']));
+
+Section halationSection(InspectorControls c) => Section(title: 'Halation', children: [
       PickerField<String>(
         label: 'Halation Model',
         detail: c.catalogue.detail('halationModel'),
@@ -60,7 +74,7 @@ List<Widget> filmPanel(InspectorControls c) {
           PickerOption('legacy', 'Legacy'),
           PickerOption('layered', 'Layered Transport'),
         ],
-        onChanged: (v) => editor.change({'halationModel': v}),
+        onChanged: (v) => c.editor.change({'halationModel': v}),
       ),
       ...c.profileControls(const [
         'halation',
@@ -73,6 +87,4 @@ List<Widget> filmPanel(InspectorControls c) {
         'pressurePlate',
         'estimatedHalation',
       ]),
-    ]),
-  ];
-}
+    ]);
