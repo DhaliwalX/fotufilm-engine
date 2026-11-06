@@ -2068,7 +2068,7 @@ public enum EditorControlCatalogue {
             web: .profile,
             commandLine: CommandLineFlag("--shadow-detail", placeholder: "<f>",
                                          help: "Print the shadows lighter, keeping their detail and colour (0...1, default: 0)"),
-            documentation: "Holds back the printing light where the film would print dark, the same amount on every colour record, so crushed shadows return with their own separation and colour while black stays black. Negatives, slides and black-and-white alike; not applied to the viewed negative or the Cineon Log scan."),
+            documentation: "Holds back the printing light where the film would print dark, the same amount on every colour record, so crushed shadows return with their own separation and colour while black stays black. The hold eases in from mid-grey, so the shadows lift smoothly rather than leaving a step in the tone curve. Negatives, slides and black-and-white alike; not applied to the viewed negative or the Cineon Log scan."),
         EditorControl(
             .enlarger, title: "Enlarger",
             detail: "Choose the enlarger lighting used to make the print.",

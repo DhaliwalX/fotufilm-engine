@@ -10,9 +10,11 @@ import Foundation
 /// pixel prints as that area would have printed lighter or darker, back on the paper's steeper
 /// part with the paper's own separation and colour.
 ///
-/// Shadows: the hold is a bump between a knee below the film's mid-grey and whichever end of the
-/// film prints black — a negative's clear base, a slide's densest — so mid-tones keep their place
-/// and black stays black while the shadow detail between opens.
+/// Shadows: the hold runs from the film's mid-grey to whichever end of the film prints black — a
+/// negative's clear base, a slide's densest. It eases in from mid-grey over most of the way down,
+/// so the upper shadows lift without flattening into a shelf, then eases back out over the last
+/// stretch, deep in the film's toe, so mid-grey keeps its place and black stays black while the
+/// shadow detail between opens.
 /// Highlights: past the exposure at which the paper prints a stop above its aim, the exposure is
 /// drawn in toward the paper's white along `W x / (x + W)`, so the negative's long highlight range
 /// rolls toward the white, still separated, instead of clipping. The shadows are placed by what
@@ -21,13 +23,12 @@ import Foundation
 /// has no paper: there the same curve runs on its displayed density, a stop above an 18% grey
 /// up to its clear film, and the hold is applied as light, the same factor on every channel.
 public enum PrintDetail {
-    /// Where the shadow knee sits, as a share of the way from the negative's mid-grey to its base.
-    public static let shadowKneeShare: Float = 0.2
-    /// The shadow hold at its peak, at full strength, as a share of the knee-to-base span. Above
-    /// about 0.41 the print would reverse on the bump's rising side.
-    public static let reach: Float = 0.3
-    /// The bump `u^1.5 (1 - u)` at its maximum, u = 0.6, so it peaks at one.
-    static let peak: Float = 0.18592
+    /// The shadow hold at full strength, as a share of the span from mid-grey to black. Above
+    /// about 0.47 the print would reverse where the hold eases in.
+    public static let reach: Float = 0.22
+    /// How far from mid-grey to black the shadow hold has fully eased in, and from where it eases
+    /// back out to nothing at black, as shares of that span.
+    public static let shadowRise: Float = 0.7, shadowFall: Float = 0.75
     /// The highlight knee: how many display stops above its aim the paper prints there.
     public static let highlightKneeStops: Float = 1
     /// The paper's white, as the density above its D-min the highlights roll toward.
@@ -113,12 +114,12 @@ public enum PrintDetail {
                             packed: [Float]) -> Float {
         guard packed.count >= 4 else { return 0 }
         var hold: Float = 0
-        let shadowKnee = mid + shadowKneeShare * (black - mid)
-        let span = black - shadowKnee
+        let span = black - mid
         if packed[0] > 0, span > 0.05 {
-            let u = min(max((at - shadowKnee) / max(span, 1e-3), 0), 1)
-            let bump = u * u.squareRoot() * (1 - u) / peak
-            hold = packed[0] * reach * span * bump
+            let u = (at - mid) / max(span, 1e-3)
+            let shape = smoothstep(u / shadowRise)
+                * (1 - smoothstep((u - shadowFall) / (1 - shadowFall)))
+            hold = packed[0] * reach * span * shape
         }
         let room = knee - white
         if packed[1] > 0, room > 0.05 {
@@ -126,5 +127,11 @@ public enum PrintDetail {
             hold -= packed[1] * past * past / (past + room)
         }
         return hold
+    }
+
+    /// `3t² − 2t³` of `t` held to 0...1: zero slope at both ends.
+    static func smoothstep(_ t: Float) -> Float {
+        let t = min(max(t, 0), 1)
+        return t * t * (3 - 2 * t)
     }
 }

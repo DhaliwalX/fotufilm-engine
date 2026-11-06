@@ -16,12 +16,34 @@ final class PrintDetailTests: XCTestCase {
                          packed: [shadows, highlights, knee, white])
     }
 
-    func testShadowHoldIsZeroBetweenTheKneesAndAtBlack() {
-        let knee = PrintDetail.shadowKneeShare * 0.8
-        for offset: Float in [-0.2, 0, knee - 0.001, knee, 0.8, 1.2] {
+    func testShadowHoldIsZeroAboveMidGreyAndAtBlack() {
+        for offset: Float in [-0.2, -0.001, 0, 0.8, 1.2] {
             XCTAssertEqual(hold(at: offset), 0, accuracy: 1e-9, "offset \(offset)")
         }
+        XCTAssertGreaterThan(hold(at: 0.001), 0)
         XCTAssertGreaterThan(hold(at: 0.5), 0)
+        XCTAssertGreaterThan(hold(at: 0.799), 0)
+    }
+
+    func testShadowHoldEasesInWithoutAShelf() {
+        // Mid-grey keeps its slope, and the hold climbs without ever pressing the printed
+        // exposure flatter than about half its slope, so the upper shadows lift rather than
+        // flatten into a step; it is full and flat between the ease-in and the ease-out.
+        let step: Float = 0.001
+        func slope(_ offset: Float) -> Float {
+            1 - (hold(at: offset + step, highlights: 0) - hold(at: offset - step, highlights: 0))
+                / (2 * step)
+        }
+        XCTAssertEqual(slope(0.002), 1, accuracy: 0.01)
+        let rise = PrintDetail.shadowRise * 0.8
+        for offset in stride(from: Float(0.01), to: rise, by: 0.01) {
+            XCTAssertGreaterThan(slope(offset), 0.5, "offset \(offset)")
+        }
+        let full = PrintDetail.reach * 0.8
+        let fall = PrintDetail.shadowFall * 0.8
+        XCTAssertEqual(hold(at: rise, highlights: 0), full, accuracy: 1e-6)
+        XCTAssertEqual(hold(at: (rise + fall) / 2, highlights: 0), full, accuracy: 1e-6)
+        XCTAssertEqual(hold(at: fall, highlights: 0), full, accuracy: 1e-6)
     }
 
     func testHighlightsBurnInPastTheirKneeAndNeverReachTheWhite() {
