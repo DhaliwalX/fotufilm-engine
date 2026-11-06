@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 
 import '../ui/theme/metrics.dart';
 import 'editor.dart';
+import 'phone_decks.dart';
 
 /// The widest window that takes the compact layout (`(max-width: 833px)`).
 const compactMaxWidth = 833.0;
@@ -64,6 +65,9 @@ double clampedWidth(PanelSide side, double? width, double other, double? window)
 class PanelLayout extends ChangeNotifier {
   PanelLayout(this.editor) : preferred = keptWidths(editor.settings.get('panelWidths'));
   final EditorModel editor;
+
+  /// The phone's editing groups and the one open (phone_decks.dart).
+  late final decks = PhoneDecks(editor);
 
   /// Where the widths are kept, apart from the settings so Reset All Settings leaves them.
   static const key = 'panelWidths';

@@ -1,5 +1,5 @@
 // The app: the editor's palette for the system's appearance, around the workspace, drawn larger
-// on a phone.
+// on a phone, where it takes the phone's editor and its dark palette.
 import 'package:flutter/material.dart' show MaterialApp, ThemeData;
 import 'package:flutter/widgets.dart';
 
@@ -21,6 +21,9 @@ class FotufilmApp extends StatelessWidget {
     final dark = forced == null || forced.isEmpty
         ? MediaQuery.platformBrightnessOf(context) == Brightness.dark
         : forced == 'dark';
+    // A phone takes the phone's editor, always dark (FOTUFILM_PHONE=1 forces it).
+    final phone = phoneScreen(MediaQuery.sizeOf(context),
+        mobile: mobilePlatform, forced: environment('FOTUFILM_PHONE') == '1');
     return MaterialApp(
       title: 'Fotufilm',
       debugShowCheckedModeBanner: false,
@@ -28,8 +31,8 @@ class FotufilmApp extends StatelessWidget {
       // A phone draws everything larger, the menus and dialogs too (touch_scale.dart).
       builder: (context, child) => TouchScale(child: child!),
       home: PaletteScope(
-        palette: dark ? Palette.darkPalette : Palette.light,
-        child: Workspace(editor: editor),
+        palette: phone ? phonePalette : (dark ? Palette.darkPalette : Palette.light),
+        child: Workspace(editor: editor, phone: phone),
       ),
     );
   }

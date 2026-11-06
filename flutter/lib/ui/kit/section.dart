@@ -1,10 +1,24 @@
 // An inspector section: a quiet, compact Spectrum Disclosure with a bold title, open by default,
-// whose controls stack with the editor's control gap.
+// whose controls stack with the editor's control gap. Under FlatSections, as on a phone's sheet
+// page, a section is its controls alone.
 import 'package:flutter/widgets.dart';
 
 import '../theme/theme.dart';
 import 'buttons.dart';
 import 'icons.dart';
+
+/// Sections drawn as their controls alone, with no title to fold them under: a phone's sheet
+/// page names them in its tab. The sections inside them keep their disclosures.
+class FlatSections extends InheritedWidget {
+  const FlatSections({super.key, this.flat = true, required super.child});
+  final bool flat;
+
+  static bool of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<FlatSections>()?.flat ?? false;
+
+  @override
+  bool updateShouldNotify(FlatSections oldWidget) => oldWidget.flat != flat;
+}
 
 class Section extends StatefulWidget {
   const Section({super.key, required this.title, required this.children, this.initiallyOpen = true});
@@ -21,8 +35,18 @@ class Section extends StatefulWidget {
 class _SectionState extends State<Section> with PointerTint {
   late bool _open = widget.initiallyOpen;
 
+  Widget _controls(double gap) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        for (var i = 0; i < widget.children.length; i++) ...[
+          if (i > 0) SizedBox(height: gap),
+          widget.children[i],
+        ],
+      ]);
+
   @override
   Widget build(BuildContext context) {
+    if (FlatSections.of(context)) {
+      return FlatSections(flat: false, child: _controls(PhoneMetrics.controlGap));
+    }
     final palette = Palette.of(context);
     return Padding(
       padding: Metrics.sectionPadding,
@@ -49,12 +73,7 @@ class _SectionState extends State<Section> with PointerTint {
         if (_open)
           Padding(
             padding: Metrics.sectionBodyPadding,
-            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              for (var i = 0; i < widget.children.length; i++) ...[
-                if (i > 0) const SizedBox(height: Metrics.controlGap),
-                widget.children[i],
-              ],
-            ]),
+            child: _controls(Metrics.controlGap),
           ),
       ]),
     );

@@ -34,6 +34,8 @@ class InspectorControls {
               value: (params[s.key] as num?)?.toDouble() ?? s.def,
               range: SliderRange(min: s.min, max: s.max, step: s.step, def: s.def),
               ends: catalogue.sliderEnds(s.key),
+              unit: s.unit,
+              readoutScale: s.unit == '%' ? 100 : 1,
               reciprocal: s.key == 'temperature',
               onChanged: (v) => editor.setParam(s.key, v),
               onEnd: editor.endEdit,
@@ -161,6 +163,7 @@ class InspectorControls {
         def: neutral * factor,
       ),
       ends: catalogue.sliderEnds(field),
+      unit: percent ? '%' : Catalogue.unitSymbol(scale['unit']),
       enabled: enabled,
       onChanged: (next) {
         final v = next / factor;

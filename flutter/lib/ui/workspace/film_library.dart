@@ -22,6 +22,21 @@ class FilmLibrary extends StatefulWidget {
   State<FilmLibrary> createState() => _FilmLibraryState();
 }
 
+/// Normal (null) first, then the films of the chosen type whose names match the search. A
+/// negative is read only as a film that has a negative.
+List<Json?> libraryFilms(EditorModel editor) {
+  final query = editor.search.trim().toLowerCase();
+  bool matches(Json? stock) =>
+      editor.filmType.holds(stock) &&
+      (query.isEmpty || (stock?['name'] as String? ?? 'normal').toLowerCase().contains(query));
+  final negative = isNegative(editor.edit);
+  return [
+    if (matches(null)) null,
+    for (final s in editor.stocks)
+      if (matches(s) && (!negative || readsNegative(s))) s,
+  ];
+}
+
 class _FilmLibraryState extends State<FilmLibrary> {
   final _scroll = ScrollController();
   final _strip = ScrollController();
@@ -36,23 +51,6 @@ class _FilmLibraryState extends State<FilmLibrary> {
     _strip.dispose();
     _search.dispose();
     super.dispose();
-  }
-
-  /// Normal (null) first, then the films of the chosen type whose names match the search.
-  List<Json?> _films() {
-    final editor = widget.editor;
-    final query = editor.search.trim().toLowerCase();
-    bool matches(Json? stock) =>
-        editor.filmType.holds(stock) &&
-        (query.isEmpty ||
-            (stock?['name'] as String? ?? 'normal').toLowerCase().contains(query));
-    // A negative is read only as a film that has a negative.
-    final negative = isNegative(editor.edit);
-    return [
-      if (matches(null)) null,
-      for (final s in editor.stocks)
-        if (matches(s) && (!negative || readsNegative(s))) s,
-    ];
   }
 
   @override
@@ -126,7 +124,7 @@ class _FilmLibraryState extends State<FilmLibrary> {
 
   Widget _list(bool open) {
     final editor = widget.editor;
-    final films = _films();
+    final films = libraryFilms(widget.editor);
     if (films.isEmpty) return const LibraryEmpty('No matching films.');
     final selected = editor.edit['stock'] as String?;
     final doc = editor.active;
@@ -146,7 +144,7 @@ class _FilmLibraryState extends State<FilmLibrary> {
           return Padding(
             padding: EdgeInsets.only(
                 bottom: stock == null ? Metrics.normalRowGap : Metrics.stockRowGap),
-            child: _ShownRow(
+            child: ShownFilmRow(
               editor: editor,
               id: id ?? '',
               child: StockRow(
@@ -192,7 +190,7 @@ class _FilmLibraryState extends State<FilmLibrary> {
         final id = stock?['id'] as String?;
         return Padding(
           padding: const EdgeInsets.only(right: Metrics.filmStripGap),
-          child: _ShownRow(
+          child: ShownFilmRow(
             editor: editor,
             id: id ?? '',
             child: StripTile(
@@ -443,17 +441,17 @@ class _StockRowState extends State<StockRow> with PointerTint {
 }
 
 /// Tells the editor while a film row is on screen, so only shown rows develop their pictures.
-class _ShownRow extends StatefulWidget {
-  const _ShownRow({required this.editor, required this.id, required this.child});
+class ShownFilmRow extends StatefulWidget {
+  const ShownFilmRow({super.key, required this.editor, required this.id, required this.child});
   final EditorModel editor;
   final String id;
   final Widget child;
 
   @override
-  State<_ShownRow> createState() => _ShownRowState();
+  State<ShownFilmRow> createState() => _ShownFilmRowState();
 }
 
-class _ShownRowState extends State<_ShownRow> {
+class _ShownFilmRowState extends State<ShownFilmRow> {
   @override
   void initState() {
     super.initState();
@@ -461,7 +459,7 @@ class _ShownRowState extends State<_ShownRow> {
   }
 
   @override
-  void didUpdateWidget(_ShownRow old) {
+  void didUpdateWidget(ShownFilmRow old) {
     super.didUpdateWidget(old);
     if (old.id == widget.id) return;
     widget.editor

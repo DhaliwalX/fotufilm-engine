@@ -67,15 +67,21 @@ class FieldLabel extends StatelessWidget {
   final String? detail;
 
   @override
-  Widget build(BuildContext context) => Row(children: [
-        Flexible(
-          child: Text(label,
-              overflow: TextOverflow.ellipsis,
-              style: editorText(context, size: TextSizes.label,
-                  color: Palette.of(context).text.withValues(alpha: .75))),
-        ),
-        HelpButton(detail: detail),
-      ]);
+  Widget build(BuildContext context) {
+    // A phone names its controls in caps.
+    final phone = PhoneStyle.of(context);
+    return Row(children: [
+      Flexible(
+        child: Text(phone ? label.toUpperCase() : label,
+            overflow: TextOverflow.ellipsis,
+            style: phone
+                ? capsText(context)
+                : editorText(context,
+                    size: TextSizes.label, color: Palette.of(context).text.withValues(alpha: .75))),
+      ),
+      HelpButton(detail: detail, size: phone ? 12 : 14),
+    ]);
+  }
 }
 
 /// Spectrum's Switch at size S, with its label and help.
