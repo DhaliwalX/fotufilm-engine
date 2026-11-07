@@ -104,22 +104,33 @@ public struct PreviewViewport: Equatable, Sendable {
                 - floor(visible.minY / gridY) * gridY
         ).intersection(frame)
 
+        // The snapped edges in virtual pixels. A grid edge is a whole pixel, but the unit-space
+        // round trip can leave it a few ulps either side; rounding those away keeps the tile and
+        // its apron cut from the same edges, so the tile never outgrows the developed region.
+        func pixel(_ unit: CGFloat, _ size: CGFloat) -> CGFloat {
+            let exact = unit * size
+            let whole = exact.rounded()
+            return abs(exact - whole) < 1e-6 ? whole : exact
+        }
+        let left = pixel(snapped.minX, virtual.width)
+        let top = pixel(snapped.minY, virtual.height)
+        let right = pixel(snapped.maxX, virtual.width)
+        let bottom = pixel(snapped.maxY, virtual.height)
+
         let support = CGFloat(max(0, spatialSupport))
         let expanded = CGRect(
-            x: floor(snapped.minX * virtual.width - support),
-            y: floor(snapped.minY * virtual.height - support),
-            width: ceil(snapped.maxX * virtual.width + support)
-                - floor(snapped.minX * virtual.width - support),
-            height: ceil(snapped.maxY * virtual.height + support)
-                - floor(snapped.minY * virtual.height - support)
+            x: floor(left - support),
+            y: floor(top - support),
+            width: ceil(right + support) - floor(left - support),
+            height: ceil(bottom + support) - floor(top - support)
         ).intersection(CGRect(origin: .zero, size: virtual))
         guard expanded.width > 0, expanded.height > 0 else { return nil }
 
         let tilePixels = CGRect(
-            x: (snapped.minX * virtual.width).rounded(.down),
-            y: (snapped.minY * virtual.height).rounded(.down),
-            width: (snapped.width * virtual.width).rounded(.up),
-            height: (snapped.height * virtual.height).rounded(.up))
+            x: floor(left),
+            y: floor(top),
+            width: ceil(right) - floor(left),
+            height: ceil(bottom) - floor(top))
         let origin = expanded.origin
 
         self.visibleUnitRect = visible

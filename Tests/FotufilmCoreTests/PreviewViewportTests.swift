@@ -47,6 +47,39 @@ final class PreviewViewportTests: XCTestCase {
                                  opposite.renderPixelSize.height)
     }
 
+    /// A pan-grid edge that lands a few ulps off its pixel must not round the published tile a
+    /// pixel wider than the apron-bearing region that was developed around it.
+    func testApronSurroundsTileAtEveryPanPosition() throws {
+        let support = 16
+        for (aspect, longEdge) in [(CGFloat(666) / 1000, 1000), (CGFloat(1000) / 666, 1000),
+                                   (CGFloat(4) / 3, 4032), (CGFloat(2) / 3, 6000)] {
+            let frame = aspect >= 1
+                ? CGSize(width: CGFloat(longEdge), height: (CGFloat(longEdge) / aspect).rounded())
+                : CGSize(width: (CGFloat(longEdge) * aspect).rounded(), height: CGFloat(longEdge))
+            let unit = CGSize(width: 164 / frame.width, height: 164 / frame.height)
+            for step in 1..<40 {
+                let x = CGFloat(step) / 41 * (1 - unit.width)
+                let y = CGFloat(40 - step) / 41 * (1 - unit.height)
+                let viewport = try XCTUnwrap(PreviewViewport(
+                    visibleUnitRect: CGRect(x: x, y: y, width: unit.width, height: unit.height),
+                    targetPixelSize: CGSize(width: 164, height: 164),
+                    frameAspect: aspect, baseLongEdge: longEdge))
+                    .addingSpatialSupport(support)
+                // The apron gives way only where the frame itself ends.
+                let crop = viewport.displayCropPixelRect
+                let origin = viewport.origin, virtual = viewport.virtualFrameSize
+                let apron = CGFloat(support)
+                let context = "aspect \(aspect) long edge \(longEdge) step \(step)"
+                XCTAssertGreaterThanOrEqual(crop.minX, min(apron, origin.x + crop.minX), context)
+                XCTAssertGreaterThanOrEqual(crop.minY, min(apron, origin.y + crop.minY), context)
+                XCTAssertLessThanOrEqual(min(crop.maxX + apron, virtual.width - origin.x),
+                                         viewport.renderPixelSize.width, context)
+                XCTAssertLessThanOrEqual(min(crop.maxY + apron, virtual.height - origin.y),
+                                         viewport.renderPixelSize.height, context)
+            }
+        }
+    }
+
     func testPanBucketReusesTileUntilViewportLeavesIt() throws {
         let standing = try XCTUnwrap(PreviewViewport(
             visibleUnitRect: CGRect(x: 0.2, y: 0.2, width: 0.4, height: 0.4),
