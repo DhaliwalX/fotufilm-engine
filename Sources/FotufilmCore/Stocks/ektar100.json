@@ -1,11 +1,11 @@
 {
   "adjacencyRadiusMM": 0.030904,
-  "adjacencyStrength": 1.02186,
-  "couplerDiffusionMM": 0.009,
+  "adjacencyStrength": 0.0,
+  "couplerDiffusionMM": 0.032,
   "couplerGeometry": {
     "interlayerTransmission": [
-      0.4799,
-      0.2044
+      0.8106,
+      0.6897
     ],
     "layerDepthUM": [
       14.0,
@@ -13,28 +13,33 @@
       3.0
     ],
     "release": [
-      1.3114,
-      0.7644,
-      0.0
+      0.5983,
+      0.8462,
+      0.4503
     ],
-    "selfRetention": 0.291
+    "selfRetention": 0.9958
   },
   "couplerInhibition": [
     [
-      0.381617,
-      0.366836,
-      0.0
+      0.595787,
+      0.68593,
+      0.25175
     ],
     [
-      0.629341,
-      0.22244,
-      0.0
+      0.484982,
+      0.842646,
+      0.310572
     ],
     [
-      0.128637,
-      0.156243,
-      0.0
+      0.334492,
+      0.583624,
+      0.448409
     ]
+  ],
+  "couplerReleaseGamma": [
+    0.47,
+    0.49,
+    0.46
   ],
   "crystalGrainPopulation": {
     "coatingDensityScale": 1,

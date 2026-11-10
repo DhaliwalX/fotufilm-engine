@@ -64,14 +64,17 @@ final class SpectrumSceneTests: XCTestCase {
                                        render(scene.image, stock: entry.stock, gaps: gaps),
                                        scene: scene)
                 let weakest = SpectrumScene.colourZones.map { delta[$0]! }.min()!
-                let ramp = delta[.neutral]!
+                let ramp = mean(base, render(scene.image, stock: entry.stock, gaps: gaps),
+                                over: rampCore(scene))
                 print(String(format: "%-20@ %@ | %6.3f %6.3f %6.3f %6.3f %6.3f %6.1f",
                              entry.id as NSString, label as NSString,
                              delta[.redGreen]!, delta[.greenBlue]!, delta[.redBlue]!,
                              delta[.wheel]!, ramp, weakest / ramp))
 
                 // The coupler warp is solved on the grey axis, so raising a barrier must not drag
-                // the ramp with it. This is what would catch an anchor that stopped holding.
+                // the ramp with it. This is what would catch an anchor that stopped holding. It is
+                // read on the core of the ramp: an inhibitor that travels far reaches the ramp's
+                // rim from the black around it, and that border effect follows the reach by design.
                 XCTAssertLessThan(ramp, Self.rampHolds,
                                   "\(entry.id): the neutral anchor is not holding under \(label)")
                 XCTAssertGreaterThan(
@@ -162,8 +165,8 @@ final class SpectrumSceneTests: XCTestCase {
     /// Set from the numbers these tests print, not guessed at. Measured over all 21 packs that
     /// carry a geometry, one control at 1.8:
     ///
-    ///   grey ramp                    0.000 … 0.443
-    ///   weakest third ÷ ramp         12.2 or more    (worst: PRO 160NS under R-G)
+    ///   grey ramp, core              0.000 … 0.004
+    ///   weakest third ÷ ramp         130 or more     (worst: F-64D under R-G)
     ///   edge contrast, lit pixels     0.268 … 0.277  across 256×171 … 768×513
     ///   scene ÷ ColorChecker          0.98×
     ///
@@ -198,6 +201,20 @@ final class SpectrumSceneTests: XCTestCase {
 
     private func lit(_ scene: SpectrumScene) -> [Int] {
         SpectrumScene.litZones.flatMap { scene.indices(of: $0) }
+    }
+
+    /// The ramp's middle rows and inner columns: greys whose whole neighbourhood is grey.
+    private func rampCore(_ scene: SpectrumScene) -> [Int] {
+        let ramp = scene.indices(of: .neutral)
+        let rows = ramp.map { $0 / scene.width }, columns = ramp.map { $0 % scene.width }
+        guard let top = rows.min(), let bottom = rows.max(),
+              let left = columns.min(), let right = columns.max() else { return [] }
+        let rowInset = (bottom - top + 1) / 3, columnInset = (right - left + 1) / 10
+        return ramp.filter {
+            let row = $0 / scene.width, column = $0 % scene.width
+            return row >= top + rowInset && row <= bottom - rowInset
+                && column >= left + columnInset && column <= right - columnInset
+        }
     }
 
     private func meanDeltaITP(_ a: RGBAImage, _ b: RGBAImage) -> Double {
