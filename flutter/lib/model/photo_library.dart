@@ -46,12 +46,16 @@ class LibraryFolder {
 
 /// The opened photo's picture flying from its tile to the viewer.
 class LibraryHandoff {
-  const LibraryHandoff({required this.image, required this.rect, required this.path});
+  const LibraryHandoff(
+      {required this.image, required this.rect, required this.path, this.window});
   final ui.Image image;
 
   /// The tile's picture on screen, in the window's coordinates.
   final ui.Rect rect;
   final String path;
+
+  /// The part of it the tile shows, where a tile crops its picture: the flight opens it out.
+  final ui.Rect? window;
 }
 
 class PhotoLibrary extends ChangeNotifier {
@@ -385,6 +389,9 @@ class PhotoLibrary extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  /// Flies a picture from somewhere else (the gallery's tile) to the viewer.
+  void beginHandoff(LibraryHandoff value) => _set(() => handoff = value);
 
   void endHandoff() {
     if (handoff == null) return;

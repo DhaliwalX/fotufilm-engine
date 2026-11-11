@@ -22,12 +22,13 @@ each other.
 | `lib/app/` | The window: workspace layout, commands (one list for the macOS menu bar, its native menu, and Ctrl shortcuts elsewhere), keyboard dispatch, the host window's services |
 | `lib/model/editor.dart` | The open photographs and their histories, the panels, the view, and the features it attaches |
 | `lib/model/renderer.dart` | What the engine develops and when: the shown picture, the magnified detail, and background thumbnails for rows on screen |
-| `lib/model/<feature>.dart` | One file per feature: crop, selective, pipeline, negatives, lens, print frame, band sets, edit history, presets, kept edits, Auto Adjust, film suggestions, export, video, the photo library and strip, settings, film packs, plug-ins, updates, panel layout, the previous desktop app's profile brought over once (`cef_profile/`) |
+| `lib/model/<feature>.dart` | One file per feature: crop, selective, pipeline, negatives, lens, print frame, band sets, edit history, presets, kept edits, Auto Adjust, film suggestions, export, video, the photo library and strip, the phone's gallery, settings, film packs, plug-ins, updates, panel layout, the previous desktop app's profile brought over once (`cef_profile/`) |
 | `lib/engine/` | The engine connection (`engine.dart`): native (`dart:ffi` isolate) and browser (JS bridge); the native presenter channel |
 | `lib/ui/theme/` | Colours, every size and space (`metrics.dart`), type |
 | `lib/ui/kit/` | Spectrum-style controls: buttons, fields, sliders, menus, popovers |
 | `lib/ui/inspector/` | The inspector shell, `panels.dart` (which sections each panel shows) and one file per panel or section |
 | `lib/ui/workspace/` | Toolbar, film library, viewer and `viewer_tools.dart` (the canvas tools' overlays), photo strip, histogram, dialogs, the photo library (`library/`) |
+| `lib/ui/phone/` | The phone's layout: the editor with its docked sheet and bar of groups, the films, and the gallery the app opens on |
 | `lib/debug/` | The scripted-check driver, with a file of commands per area |
 | `macos/Runner/` | The presenter (IOSurface-backed textures), its Metal colour conversion, the native menu and the window's services |
 
@@ -79,9 +80,11 @@ page's address overrides the system appearance. The browser engine needs WebGPU.
 
 With `FOTUFILM_DRIVER_DIR=<dir>` set, the app reads commands from `<dir>/commands`, one JSON object
 a line, and answers in `<dir>/log`. The commands drive every feature (opening, films, panels, the
-canvas tools, negatives, editing, export, the library, video, menus and keys), take snapshots, and
-time opening, films and slider drags; see `lib/debug/driver.dart` and the files beside it.
-`FOTUFILM_EXPORT_DIR` saves exports there without asking.
+canvas tools, negatives, editing, export, the library, the gallery, video, menus and keys), take
+snapshots, and time opening, films and slider drags; see `lib/debug/driver.dart` and the files
+beside it. `FOTUFILM_EXPORT_DIR` saves exports there without asking. `FOTUFILM_PHONE=1` gives any
+window the phone's layout, and `FOTUFILM_GALLERY_DIR` names a folder for its gallery, so both can
+be checked on a desk.
 
 ## Building on Linux
 
@@ -147,5 +150,11 @@ profiles as assets, which the app unpacks before the engine opens its library
 build, `com.muastudio.fotufilm.flutter`; an official one (`FOTUFILM_SOURCE_BUILD=0`) takes the
 Android app's identity. `FOTUFILM_ANDROID_KEYSTORE`, with `FOTUFILM_ANDROID_KEYSTORE_PASSWORD`,
 `FOTUFILM_ANDROID_KEY_ALIAS` and `FOTUFILM_ANDROID_KEY_PASSWORD`, signs a release; without it the app
-is signed with the debug keys. Exporting movies and HEIC, and the photo library, are not there yet
-on Android.
+is signed with the debug keys.
+
+On a phone the app opens on its gallery (`lib/model/gallery.dart`): a photograph joins once it is
+edited and a scanned negative as it opens, each copied into the app's own files with its developed
+picture, and negatives can be filed in rolls. Its editor shows one photograph at a time, without
+the photo strip. The app comes back to the photograph it was closed on, and Back leaves the editor
+for the gallery. A tablet has the desktop's layout and no gallery. Exporting movies and HEIC, and
+the desktop's photo library, are not there yet on Android.

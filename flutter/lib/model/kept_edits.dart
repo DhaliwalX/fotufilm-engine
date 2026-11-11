@@ -84,6 +84,15 @@ class KeptEdits {
     if (job != null) _save(job.key, job.text);
   }
 
+  /// Forgets the edit kept under `key` (its photograph was deleted from the gallery).
+  void forget(String key) {
+    if (_pending?.key == key) {
+      _timer?.cancel();
+      _pending = null;
+    }
+    _save(key, null);
+  }
+
   /// Keeps the edit of a photograph other than the one shown (a paste onto several).
   void keep(PhotoDocument doc) {
     final key = doc.identity;

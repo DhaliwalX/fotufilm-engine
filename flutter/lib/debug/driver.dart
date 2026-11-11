@@ -49,6 +49,7 @@
 //   {"difference": true}            shows the stage as its change from the one before
 //   {"tools": true}                 logs the selection, the subjects and the pipeline's stages
 //   and scanned negatives' commands (negative_driver.dart)
+//   and the phone's gallery's commands (gallery_driver.dart)
 //   {"crop": "rotate"}              the crop tool: rotate, flip, corners, reset or done
 //   {"cropRatio": "3:2"}            chooses the crop's aspect ratio
 //   {"cropGeometry": ["straighten", 5]}  sets straighten, perspectiveV or perspectiveH
@@ -101,6 +102,7 @@ import '../ui/workspace/picture.dart' show PresentedLayer;
 import '../ui/workspace/settings_dialog.dart';
 import 'commands_driver.dart';
 import 'editing_driver.dart';
+import 'gallery_driver.dart';
 import 'negative_driver.dart';
 import 'video_driver.dart';
 
@@ -349,6 +351,7 @@ class Driver {
           '${[for (var i = 0; i < pipeline.stages.length; i++) pipeline.stageName(i)].join(', ')}');
     }
     await driveNegatives(editor, c, _log);
+    await driveGallery(editor, c, _log);
     if (c['crop'] case final String action) {
       final crop = editor.crop;
       switch (action) {

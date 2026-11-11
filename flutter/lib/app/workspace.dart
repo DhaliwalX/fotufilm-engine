@@ -1,6 +1,7 @@
 // The editor's window: the toolbar over the film library, the viewer and the inspector, with the
 // panels' resizers, dropped files, the commands and their menus, and the keyboard. A phone has its
-// own editor in their place (ui/phone/phone_editor.dart).
+// own editor in their place (ui/phone/phone_editor.dart), under its gallery where it keeps one
+// (ui/phone/phone_gallery.dart).
 import 'dart:math' as math;
 
 import 'package:desktop_drop/desktop_drop.dart';
@@ -15,8 +16,9 @@ import '../model/film_packs.dart';
 import '../model/panel_layout.dart';
 import '../ui/inspector/inspector.dart';
 import '../ui/kit/focus.dart' show KeyTarget, returnGoesPast;
-import '../ui/kit/popover.dart' show OverlayFocusScope;
+import '../ui/kit/popover.dart' show OverlayFocusScope, dismissTopOverlay, openOverlays;
 import '../ui/phone/phone_editor.dart';
+import '../ui/phone/phone_gallery.dart';
 import '../ui/theme/theme.dart';
 import '../ui/workspace/app_dialogs.dart';
 import '../ui/workspace/editing_dialogs.dart';
@@ -76,10 +78,16 @@ class _WorkspaceState extends State<Workspace> {
     editor.addListener(_changed);
     editor.library.addListener(_libraryChanged);
     editor.layout.addListener(_changed);
-    // The window put behind ends the comparison and a slider's drag.
+    editor.gallery
+      ..phone = widget.phone
+      ..addListener(_changed);
+    openOverlays.addListener(_changed);
+    // The window put behind ends the comparison and a slider's drag, and what was edited is kept
+    // in the gallery.
     _lifecycle = AppLifecycleListener(onInactive: () {
       editor.setComparing(false);
       editor.endEdit();
+      editor.gallery.keep();
     });
     FocusManager.instance.addListener(_keepKeys);
     // Return applies the crop whatever control the keyboard is at (editor_shortcuts.dart).
@@ -104,10 +112,18 @@ class _WorkspaceState extends State<Workspace> {
   }
 
   @override
+  void didUpdateWidget(Workspace old) {
+    super.didUpdateWidget(old);
+    editor.gallery.phone = widget.phone;
+  }
+
+  @override
   void dispose() {
     editor.removeListener(_changed);
     editor.library.removeListener(_libraryChanged);
     editor.layout.removeListener(_changed);
+    editor.gallery.removeListener(_changed);
+    openOverlays.removeListener(_changed);
     _lifecycle.dispose();
     FocusManager.instance.removeListener(_keepKeys);
     _focus.dispose();
@@ -139,10 +155,11 @@ class _WorkspaceState extends State<Workspace> {
 
   Future<void> _open() async {
     if (!editor.ready) return;
+    // A phone's gallery opens one photograph at a time: its editor has no strip of the others.
     final files = await chooseFiles([
       fileType('Images', imageExtensions),
       fileType('Videos', videoExtensions),
-    ]);
+    ], single: editor.gallery.available);
     if (!kIsWeb && files.isNotEmpty) HostWindow.noteRecent([for (final f in files) f.path]);
     // One file brings its folder into the strip.
     await editor.strip.open([for (final f in files) _photo(f)]);
@@ -181,8 +198,37 @@ class _WorkspaceState extends State<Workspace> {
     editor.openFiles([for (final f in photos) _photo(f)]);
   }
 
+  /// Whether a phone's Back has something to close before it leaves the app: a menu or a
+  /// dialog, the editor over the gallery, or the gallery's open roll.
+  bool get _backCloses {
+    final gallery = editor.gallery;
+    if (!gallery.available || editor.startupError != null) return false;
+    return openOverlays.value > 0 || !gallery.shown || gallery.rollOpen != null;
+  }
+
+  void _back() {
+    final gallery = editor.gallery;
+    if (dismissTopOverlay()) return;
+    if (!gallery.shown) {
+      gallery.closeEditor();
+    } else {
+      gallery.showRoll(null);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    return PopScope(
+      canPop: !_backCloses,
+      onPopInvokedWithResult: (popped, _) {
+        if (!popped) _back();
+      },
+      child: _window(context),
+    );
+  }
+
+  Widget _window(BuildContext context) {
+    final gallery = widget.phone && editor.gallery.shown;
     return NativeMenuBar(
       commands: commands,
       child: Focus(
@@ -216,6 +262,18 @@ class _WorkspaceState extends State<Workspace> {
                               child: LayoutBuilder(
                                   builder: widget.phone ? _phonePanels : _panels)),
                           Positioned.fill(child: PhotoLibraryView(editor: editor)),
+                          // A phone's gallery covers its editor until a photograph is opened.
+                          if (widget.phone)
+                            Positioned.fill(
+                              child: AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 220),
+                                layoutBuilder: (current, previous) => Stack(
+                                    fit: StackFit.expand, children: [...previous, ?current]),
+                                child: gallery
+                                    ? PhoneGallery(commands: commands)
+                                    : const SizedBox.shrink(),
+                              ),
+                            ),
                         ]),
                       ),
                     ]),

@@ -22,6 +22,7 @@ import 'export.dart';
 import 'film_packs.dart';
 import 'film_suggestion.dart';
 import 'film_types.dart';
+import 'gallery.dart';
 import 'histogram.dart';
 import 'kept_edits.dart';
 import 'lens.dart';
@@ -46,6 +47,7 @@ import 'view.dart';
 export 'catalogue.dart' show Json;
 export 'document.dart';
 export 'film_types.dart';
+export 'gallery.dart';
 export 'photo_library.dart';
 export 'photo_strip.dart';
 export 'settings.dart';
@@ -75,11 +77,12 @@ enum Panel {
 }
 
 class EditorModel extends ChangeNotifier implements RenderHost {
-  EditorModel(this.catalogue, {AppSettings? settings})
-      : settings = settings ?? AppSettings.memory() {
+  EditorModel(this.catalogue, {AppSettings? settings, String? galleryFolder})
+      : settings = settings ?? AppSettings.memory(),
+        _galleryFolder = galleryFolder {
     // The features attach now: they add to the render options before anything develops, and
     // listen to edits before the first one.
-    [crop, selective, pipeline, negatives, printFrame, keptEdits, auto, library, video];
+    [crop, selective, pipeline, negatives, printFrame, keptEdits, auto, library, video, gallery];
   }
 
   /// The crop tool (crop.dart).
@@ -113,6 +116,11 @@ class EditorModel extends ChangeNotifier implements RenderHost {
   /// The photo library, and the strip of open and waiting photos.
   late final library = PhotoLibrary(this);
   late final strip = PhotoStripModel(this);
+
+  /// The photographs kept in the app, on a phone (gallery.dart); `galleryFolder` names where,
+  /// in place of the device's own.
+  late final gallery = Gallery(this, folder: _galleryFolder);
+  final String? _galleryFolder;
 
   // ── App services (Settings, film packs, plug-ins, updates, the panels' layout) ────────────
   late final dialogs = AppDialogs();
@@ -388,13 +396,14 @@ class EditorModel extends ChangeNotifier implements RenderHost {
           break;
         }
         // A photograph opened before starts from the edit it was left with.
-        final start = keptEdits.startingEdit(json['identity'] as String?, stock);
+        final identity = file.identity ?? json['identity'] as String?;
+        final start = keptEdits.startingEdit(identity, stock);
         final doc = PhotoDocument(
           path: key,
           handle: (json['handle'] as num).toInt(),
           width: (json['naturalWidth'] as num).toInt(),
           height: (json['naturalHeight'] as num).toInt(),
-          identity: json['identity'] as String?,
+          identity: identity,
           raw: json['original'] != null,
           headroom: ((json['hdr'] as Map?)?['headroom'] as num?)?.toDouble() ?? 1,
           // A new scan starts as a negative; one opened before keeps the edit it was left with.
@@ -409,6 +418,7 @@ class EditorModel extends ChangeNotifier implements RenderHost {
         final preview = answer.bytes('preview');
         if (preview != null) doc.importPicture = await decodePng(preview);
         documents.add(doc);
+        gallery.opened(doc);
         _activate(documents.length - 1);
       } catch (e) {
         failed.add(file);
@@ -712,11 +722,16 @@ class EditChange {
 
 /// A photograph to open: its name, and its path where there is a file system, or its bytes.
 class PhotoFile {
-  PhotoFile(this.name, {this.path, this.read, this.negative = false});
+  PhotoFile(this.name, {this.path, this.read, this.negative = false, this.identity});
   final String name;
   final String? path;
   final Future<Uint8List> Function()? read;
 
   /// A scanned negative, imported as one (a library negatives folder).
   final bool negative;
+
+  /// What the file's edit is kept under, where that is already known: the gallery's copy of a
+  /// photograph opened before. Without a digest of its bytes (Android, and a movie anywhere) the
+  /// engine knows a copy by its own date, as another file.
+  final String? identity;
 }

@@ -46,9 +46,13 @@ class EditorViewer extends StatelessWidget {
             WidgetsBinding.instance.addPostFrameCallback((_) => editor.updateViewer(size, dpr));
             return Stack(children: [
               Positioned.fill(
-                child: doc == null
-                    ? EmptyCanvas(onOpen: onOpen, ready: editor.ready, error: editor.startupError)
-                    : PhotoCanvas(editor: editor, doc: doc),
+                child: doc != null
+                    ? PhotoCanvas(editor: editor, doc: doc)
+                    // A phone's gallery is what there is with nothing open.
+                    : editor.gallery.available && editor.startupError == null
+                        ? const SizedBox.shrink()
+                        : EmptyCanvas(
+                            onOpen: onOpen, ready: editor.ready, error: editor.startupError),
               ),
               if (editor.comparing) const OriginalBadge(),
               if (editor.status != null)
@@ -80,8 +84,8 @@ class EditorViewer extends StatelessWidget {
         ),
         // A movie's transport.
         if (doc != null && doc.isMovie) VideoControls(editor: editor, doc: doc),
-        // Shown once it holds more than one photo.
-        PhotoStrip(editor: editor),
+        // Shown once it holds more than one photo. A phone's gallery stands in for it.
+        if (!editor.gallery.available) PhotoStrip(editor: editor),
       ])),
     );
   }

@@ -1,5 +1,5 @@
-// The opened photo's picture flies from its library tile to where the viewer will fit it, and stays
-// there until the developed photograph is on screen.
+// The opened photo's picture flies from its tile, in the library or the phone's gallery, to where
+// the viewer will fit it, and stays there until the developed photograph is on screen.
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -96,19 +96,41 @@ class _LibraryHandoffLayerState extends State<LibraryHandoffLayer> with TickerPr
         animation: Listenable.merge([_flight, _fade]),
         builder: (context, child) {
           final layer = context.findRenderObject() as RenderBox?;
-          final origin = layer == null || !layer.attached
-              ? handoff.rect
-              : handoff.rect.shift(-layer.localToGlobal(Offset.zero));
-          final rect = Rect.lerp(origin, target, _ease.transform(_flight.value))!;
-          return Stack(children: [
+          // The window's coordinates in the layer's own, which a phone draws larger.
+          final inward = layer == null || !layer.attached
+              ? Matrix4.identity()
+              : Matrix4.inverted(layer.getTransformTo(null));
+          final flown = _ease.transform(_flight.value);
+          final rect =
+              Rect.lerp(MatrixUtils.transformRect(inward, handoff.rect), target, flown)!;
+          final window = handoff.window;
+          final flight = Stack(children: [
             Positioned.fromRect(
               rect: rect,
               child: Opacity(opacity: 1 - Curves.easeOut.transform(_fade.value), child: child),
             ),
           ]);
+          if (window == null) return flight;
+          // A cropped tile's picture opens out to the whole of it as it flies.
+          return ClipRect(
+            clipper: _Shown(Rect.lerp(MatrixUtils.transformRect(inward, window), target, flown)!),
+            child: flight,
+          );
         },
         child: EnginePicture(handoff.image),
       ),
     );
   }
+}
+
+/// The part of the layer the flying picture shows through.
+class _Shown extends CustomClipper<Rect> {
+  const _Shown(this.rect);
+  final Rect rect;
+
+  @override
+  Rect getClip(Size size) => rect;
+
+  @override
+  bool shouldReclip(_Shown old) => old.rect != rect;
 }

@@ -7,13 +7,21 @@ import 'package:flutter/services.dart' show MethodChannel;
 /// Files chosen in the system's open panel. On Android, the activity's own picker
 /// (OpenedFiles.kt), showing the files of the `android` media types: file_selector holds each
 /// chosen file in memory on its way across, which a camera's RAW or a scan runs out of, where the
-/// activity copies each into the cache and answers its path.
+/// activity copies each into the cache and answers its path. With `single`, the panel takes one
+/// file.
 Future<List<XFile>> chooseFiles(List<XTypeGroup> groups,
-    {String? confirmButtonText, List<String> android = const ['image/*', 'video/*']}) async {
+    {String? confirmButtonText,
+    List<String> android = const ['image/*', 'video/*'],
+    bool single = false}) async {
   if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-    final paths =
-        await _androidFiles.invokeListMethod<String>('open', {'types': android}) ?? const [];
+    final paths = await _androidFiles
+            .invokeListMethod<String>('open', {'types': android, 'single': single}) ??
+        const [];
     return [for (final path in paths) XFile(path, name: path.split('/').last)];
+  }
+  if (single) {
+    final file = await openFile(acceptedTypeGroups: groups, confirmButtonText: confirmButtonText);
+    return [?file];
   }
   return openFiles(acceptedTypeGroups: groups, confirmButtonText: confirmButtonText);
 }
