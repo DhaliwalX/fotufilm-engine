@@ -17,7 +17,12 @@ vec3 encode(vec3 c) {
 }
 
 void main() {
-  vec4 texel = texture(u_texture, FlutterFragCoord().xy / u_size);
+  vec2 uv = FlutterFragCoord().xy / u_size;
+  // Under OpenGL ES (an Android phone without Vulkan) the filter's picture arrives bottom row first.
+#ifdef IMPELLER_TARGET_OPENGLES
+  uv.y = 1.0 - uv.y;
+#endif
+  vec4 texel = texture(u_texture, uv);
   if (texel.a <= 0.0) {
     fragColor = vec4(0.0);
     return;
