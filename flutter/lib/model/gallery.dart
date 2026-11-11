@@ -309,7 +309,9 @@ class Gallery extends ChangeNotifier {
     if (!isFile(path)) return editor.showError('${entry.name} is no longer on this device.');
     if (handoff != null) editor.library.beginHandoff(handoff);
     _show(false);
-    await editor.openFiles([PhotoFile(entry.name, path: path, negative: entry.negative)]);
+    // The copy opens as the photograph it was made from, so the edit kept for that one is its own.
+    await editor.openFiles(
+        [PhotoFile(entry.name, path: path, negative: entry.negative, identity: entry.identity)]);
     // One that could not be opened leaves its message over the gallery.
     if (editor.documents.isEmpty) {
       editor.library.endHandoff();

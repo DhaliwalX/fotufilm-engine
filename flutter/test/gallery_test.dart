@@ -17,6 +17,10 @@ class _Engine implements EngineConnection {
   final imported = <String>[];
   var handles = 0, renders = 0;
 
+  /// Without a digest of a file's bytes, the engine knows it by where and when it was written: a
+  /// copy is another file to it (Android, and a movie anywhere).
+  var digests = true;
+
   /// Develops to cancel before one is answered, as the renderer does for a newer edit.
   var cancelling = 0;
 
@@ -33,7 +37,7 @@ class _Engine implements EngineConnection {
           'handle': ++handles,
           'naturalWidth': 600,
           'naturalHeight': 400,
-          'identity': File(path).readAsStringSync(),
+          'identity': digests ? File(path).readAsStringSync() : 'file:$path',
           if (path.endsWith('.mov')) 'video': {'start': 0, 'duration': 2, 'frameRate': 24},
           // The picture shown while the photograph first develops.
           'payloads': {
@@ -265,6 +269,29 @@ void main() {
     await edit(1);
     await gallery().closeEditor();
     expect(gallery().entries, [entry]);
+  });
+
+  test('an entry keeps its edit where the engine takes its copy for another file', () async {
+    engine.digests = false;
+    final entry = await keepPhoto('a.jpg', ev: 0.75);
+    final identity = entry.identity;
+    expect(identity, isNot('file:${gallery().pathOf(entry)}'));
+
+    await gallery().open(entry);
+    expect((editor.edit['params'] as Map)['ev'], 0.75);
+    expect(editor.active?.identity, identity);
+    await edit(1);
+    await gallery().closeEditor();
+    expect(gallery().entries, [entry]);
+    expect(entry.identity, identity);
+
+    // And when the app starts again on it.
+    await gallery().open(entry);
+    editor = launch();
+    engine.digests = false;
+    await gallery().restore();
+    expect((editor.edit['params'] as Map)['ev'], 1);
+    expect(gallery().entries.single.identity, identity);
   });
 
   test('a photograph picked again is the entry it already is', () async {

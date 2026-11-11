@@ -396,13 +396,14 @@ class EditorModel extends ChangeNotifier implements RenderHost {
           break;
         }
         // A photograph opened before starts from the edit it was left with.
-        final start = keptEdits.startingEdit(json['identity'] as String?, stock);
+        final identity = file.identity ?? json['identity'] as String?;
+        final start = keptEdits.startingEdit(identity, stock);
         final doc = PhotoDocument(
           path: key,
           handle: (json['handle'] as num).toInt(),
           width: (json['naturalWidth'] as num).toInt(),
           height: (json['naturalHeight'] as num).toInt(),
-          identity: json['identity'] as String?,
+          identity: identity,
           raw: json['original'] != null,
           headroom: ((json['hdr'] as Map?)?['headroom'] as num?)?.toDouble() ?? 1,
           // A new scan starts as a negative; one opened before keeps the edit it was left with.
@@ -721,11 +722,16 @@ class EditChange {
 
 /// A photograph to open: its name, and its path where there is a file system, or its bytes.
 class PhotoFile {
-  PhotoFile(this.name, {this.path, this.read, this.negative = false});
+  PhotoFile(this.name, {this.path, this.read, this.negative = false, this.identity});
   final String name;
   final String? path;
   final Future<Uint8List> Function()? read;
 
   /// A scanned negative, imported as one (a library negatives folder).
   final bool negative;
+
+  /// What the file's edit is kept under, where that is already known: the gallery's copy of a
+  /// photograph opened before. Without a digest of its bytes (Android, and a movie anywhere) the
+  /// engine knows a copy by its own date, as another file.
+  final String? identity;
 }

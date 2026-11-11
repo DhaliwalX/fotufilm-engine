@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.provider.DocumentsContract.Document
 import android.provider.OpenableColumns
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodChannel
@@ -58,7 +59,8 @@ class OpenedFiles(private val activity: Activity, messenger: BinaryMessenger) {
     }
 
     /** `uri` in a folder of its own under the cache, under its own name (its extension says what
-     *  it is to the engine). */
+     *  it is to the engine) and with its own date: the engine knows a file here by its name, size
+     *  and date, so one chosen again is the photograph it was, with the edit it was left with. */
     private fun copy(uri: Uri): String {
         val name = displayName(uri)?.replace('/', '_') ?: "photo"
         val folder = File(activity.cacheDir, "opened/${System.nanoTime()}").apply { mkdirs() }
@@ -66,12 +68,20 @@ class OpenedFiles(private val activity: Activity, messenger: BinaryMessenger) {
         activity.contentResolver.openInputStream(uri)!!.use { input ->
             target.outputStream().use { input.copyTo(it, 1 shl 20) }
         }
+        lastModified(uri)?.let(target::setLastModified)
         return target.path
     }
 
     private fun displayName(uri: Uri): String? =
         activity.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
             ?.use { if (it.moveToFirst()) it.getString(0) else null }
+
+    /** When the document was last changed, where its provider says. */
+    private fun lastModified(uri: Uri): Long? = runCatching {
+        activity.contentResolver
+            .query(uri, arrayOf(Document.COLUMN_LAST_MODIFIED), null, null, null)
+            ?.use { if (it.moveToFirst() && !it.isNull(0)) it.getLong(0) else null }
+    }.getOrNull()?.takeIf { it > 0 }
 
     private companion object {
         const val REQUEST = 0x0f07
