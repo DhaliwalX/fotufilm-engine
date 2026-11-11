@@ -5,6 +5,7 @@ import Foundation
 /// (`NegativeScanSetup`). A reading of a scan is right for this model when it returns the record
 /// densities that make the scan, since the print stage then prints the same film.
 public struct NegativeScanModel: Sendable {
+    public let stock: FilmStock
     /// What each scan channel sees per `SpectralGrid` wavelength, three rows.
     let response: [[Float]]
     private let dyes: [[Float]]
@@ -22,6 +23,7 @@ public struct NegativeScanModel: Sendable {
     init(stock: FilmStock, response: [[Float]]) {
         precondition(response.count == 3
                      && response.allSatisfy { $0.count == SpectralGrid.count })
+        self.stock = stock
         self.response = response
         dyes = stock.spectralProfile.imageDyeDensity
         offset = SpectralRuntime.filmDensityOffset(for: stock)
