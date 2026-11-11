@@ -77,7 +77,9 @@ node tool/serve-web.mjs --assets <a browser build's web/public>
 The bridge fetches the engine's runtime assets (its WASM modules and film packs, built by
 `tools/build-wasm.sh`) from `engine/`; `serve-web.mjs` serves them from `--assets` without
 copying. Deploying copies them to `engine/` beside the build. `?FOTUFILM_APPEARANCE=dark` in the
-page's address overrides the system appearance. The browser engine needs WebGPU.
+page's address overrides the system appearance. The browser engine needs WebGPU. Flutter's loader
+keeps the WebAssembly build to Chromium by default; `web/flutter_bootstrap.js` lets Safari and
+Firefox run it too, and a browser without what it needs still gets the JavaScript build.
 
 ## Scripted checks
 
