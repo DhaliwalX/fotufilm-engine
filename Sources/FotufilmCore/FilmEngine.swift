@@ -908,8 +908,11 @@ public struct FilmEngineInvocation {
                                    maximumSigmaPixels: Float(min(width, height)) / 8)
             return halo.isIdentity ? nil : halo
         }
+        // The halo rides halation's box pyramid, whose radius is the box's own: three passes of
+        // it carry a Gaussian of about that many pixels. A Gaussian's truncation radius here
+        // would be read as the width and lay every scale some three times too wide.
         let diffusionRadii = diffusionHalo.map { halo in
-            halo.sigmasPixels.map { Self.gaussianRadius($0) }
+            halo.sigmasPixels.map { Self.halationBoxRadius(sigmaPixels: $0) }
         } ?? [0, 0, 0]
 
         let mtfSigmas = stock.emulsionDiffusionMM.map { $0 * pxPerMM }

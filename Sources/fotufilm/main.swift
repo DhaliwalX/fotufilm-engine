@@ -1454,7 +1454,13 @@ if flags["--stages"] != nil {
     exit(0)
 }
 let out: ImageBuffer
-do { out = try FotufilmEngine(stock: stock, options: options).processChecked(linearRGB: linear) }
+// A command-line render has the machine to itself, so a halo that reaches across a large frame
+// gets the memory its overlap needs rather than the 192 MiB a host sharing memory would hold to.
+let engine = FotufilmEngine(stock: stock, options: options)
+let cpuMemoryBudget: Int
+do { cpuMemoryBudget = try engine.cpuMemoryBudget(width: width, height: height) }
+catch { fail("Render failed: \(error.localizedDescription)") }
+do { out = try engine.processChecked(linearRGB: linear, cpuMemoryBudget: cpuMemoryBudget) }
 catch { fail("Render failed: \(error.localizedDescription)") }
 var reflectance = [Float](repeating: 1, count: width * height * 4)
 for i in 0..<(width * height) {
@@ -1486,7 +1492,7 @@ if benchmarkIterations > 1 {
     var times = [Double]()
     for iter in 2...count {
         let t0 = DispatchTime.now().uptimeNanoseconds
-        do { _ = try FotufilmEngine(stock: stock, options: options).processChecked(linearRGB: linear) }
+        do { _ = try engine.processChecked(linearRGB: linear, cpuMemoryBudget: cpuMemoryBudget) }
         catch { fail("Benchmark run \(iter) failed: \(error.localizedDescription)") }
         let dt = Double(DispatchTime.now().uptimeNanoseconds - t0) / 1_000_000_000
         times.append(dt)

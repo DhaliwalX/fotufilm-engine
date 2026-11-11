@@ -32,6 +32,32 @@ final class CPUProcessMemoryTests: XCTestCase {
         }
     }
 
+    func testAWorkableBudgetCoversAHaloTheDefaultCannot() throws {
+        let stock = try XCTUnwrap(FilmStock.named("portra400"))
+        var options = FotufilmEngine.Options()
+        let (width, height) = (6000, 4000)
+        // Nothing broad fitted: the default is enough and is what comes back.
+        XCTAssertEqual(try FotufilmEngine(stock: stock, options: options)
+            .cpuMemoryBudget(width: width, height: height), HalideBackend.defaultMemoryBudget)
+
+        // A mist's halo reaches across the frame, further than tiles inside the default overlap.
+        options.diffusionFilter = DiffusionFilter.preset(.proMist, grade: .quarter)
+        options.focalLengthMM = 50
+        let apron = max(1, FilmEngineInvocation(stock: stock, options: options,
+                                                width: width, height: height).spatialSupport)
+        XCTAssertThrowsError(try HalideBackend.tileSize(
+            width: width, height: height, apron: apron,
+            budget: HalideBackend.defaultMemoryBudget))
+        let budget = try FotufilmEngine(stock: stock, options: options)
+            .cpuMemoryBudget(width: width, height: height)
+        XCTAssertGreaterThan(budget, HalideBackend.defaultMemoryBudget)
+        let tile = try HalideBackend.tileSize(width: width, height: height, apron: apron,
+                                              budget: budget)
+        // Tiles that do real work, not slivers a pixel wide between their aprons.
+        XCTAssertTrue(tile.width == width || tile.width >= apron)
+        XCTAssertTrue(tile.height == height || tile.height >= apron)
+    }
+
     func testPlannerHandlesFullFramesNarrowFramesAndInsufficientBudgets() throws {
         let whole = try HalideBackend.tileSize(width: 100, height: 50, apron: 1000, budget: 320_000)
         XCTAssertEqual(whole.width, 100)
