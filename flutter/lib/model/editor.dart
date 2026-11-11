@@ -22,6 +22,7 @@ import 'export.dart';
 import 'film_packs.dart';
 import 'film_suggestion.dart';
 import 'film_types.dart';
+import 'gallery.dart';
 import 'histogram.dart';
 import 'kept_edits.dart';
 import 'lens.dart';
@@ -46,6 +47,7 @@ import 'view.dart';
 export 'catalogue.dart' show Json;
 export 'document.dart';
 export 'film_types.dart';
+export 'gallery.dart';
 export 'photo_library.dart';
 export 'photo_strip.dart';
 export 'settings.dart';
@@ -75,11 +77,12 @@ enum Panel {
 }
 
 class EditorModel extends ChangeNotifier implements RenderHost {
-  EditorModel(this.catalogue, {AppSettings? settings})
-      : settings = settings ?? AppSettings.memory() {
+  EditorModel(this.catalogue, {AppSettings? settings, String? galleryFolder})
+      : settings = settings ?? AppSettings.memory(),
+        _galleryFolder = galleryFolder {
     // The features attach now: they add to the render options before anything develops, and
     // listen to edits before the first one.
-    [crop, selective, pipeline, negatives, printFrame, keptEdits, auto, library, video];
+    [crop, selective, pipeline, negatives, printFrame, keptEdits, auto, library, video, gallery];
   }
 
   /// The crop tool (crop.dart).
@@ -113,6 +116,11 @@ class EditorModel extends ChangeNotifier implements RenderHost {
   /// The photo library, and the strip of open and waiting photos.
   late final library = PhotoLibrary(this);
   late final strip = PhotoStripModel(this);
+
+  /// The photographs kept in the app, on a phone (gallery.dart); `galleryFolder` names where,
+  /// in place of the device's own.
+  late final gallery = Gallery(this, folder: _galleryFolder);
+  final String? _galleryFolder;
 
   // ── App services (Settings, film packs, plug-ins, updates, the panels' layout) ────────────
   late final dialogs = AppDialogs();
@@ -409,6 +417,7 @@ class EditorModel extends ChangeNotifier implements RenderHost {
         final preview = answer.bytes('preview');
         if (preview != null) doc.importPicture = await decodePng(preview);
         documents.add(doc);
+        gallery.opened(doc);
         _activate(documents.length - 1);
       } catch (e) {
         failed.add(file);

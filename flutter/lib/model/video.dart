@@ -414,8 +414,8 @@ class VideoPlayer extends ChangeNotifier {
   /// Chooses movies to open; one brings its folder into the strip, as Open… does.
   Future<void> chooseMovies() async {
     if (!editor.ready || editor.exporting) return;
-    final files =
-        await chooseFiles([fileType('Videos', videoExtensions)], android: const ['video/*']);
+    final files = await chooseFiles([fileType('Videos', videoExtensions)],
+        android: const ['video/*'], single: editor.gallery.available);
     await editor.strip.open([
       for (final f in files) PhotoFile(f.name, path: kIsWeb ? null : f.path, read: f.readAsBytes),
     ]);

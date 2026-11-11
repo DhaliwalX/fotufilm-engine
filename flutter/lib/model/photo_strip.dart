@@ -149,8 +149,21 @@ class PhotoStripModel extends ChangeNotifier {
     for (final item in items) {
       final doc = item.doc;
       if (doc != null && editor.documents.contains(doc)) {
+        await editor.gallery.leaving(doc);
+        if (!editor.documents.contains(doc)) continue;
         await editor.closeDocument(editor.documents.indexOf(doc));
       }
+    }
+    notifyListeners();
+  }
+
+  /// Closes every photograph and empties the strip (the gallery takes the editor's place). The
+  /// shown one goes last, so no other is developed on the way.
+  Future<void> clear() async {
+    _entries.clear();
+    while (editor.documents.isNotEmpty) {
+      final last = editor.documents.length - 1;
+      await editor.closeDocument(last == editor.activeIndex && last > 0 ? last - 1 : last);
     }
     notifyListeners();
   }

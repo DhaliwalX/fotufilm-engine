@@ -33,7 +33,7 @@ class OpenedFiles(private val activity: Activity, messenger: BinaryMessenger) {
                 .addCategory(Intent.CATEGORY_OPENABLE)
                 .setType("*/*")
                 .putExtra(Intent.EXTRA_MIME_TYPES, types.toTypedArray())
-                .putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                .putExtra(Intent.EXTRA_ALLOW_MULTIPLE, call.argument<Boolean>("single") != true)
             activity.startActivityForResult(intent, REQUEST)
         }
     }

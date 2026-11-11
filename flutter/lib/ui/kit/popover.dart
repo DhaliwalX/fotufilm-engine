@@ -54,6 +54,8 @@ class AnchoredOverlay {
     if (!_open) return;
     _open = false;
     _leaving.value = true;
+    _overlays.remove(this);
+    openOverlays.value = _overlays.length;
     if (_modal) {
       _modals.removeWhere((m) => m.$1 == this);
       openModals.value--;
@@ -75,6 +77,21 @@ bool dismissTopModal() {
   if (_modals.isEmpty) return false;
   final (modal, dismissible) = _modals.last;
   if (dismissible) modal.close();
+  return true;
+}
+
+/// How many overlays are open, menus and popovers with the modals.
+final openOverlays = ValueNotifier<int>(0);
+
+/// The open overlays, the newest last.
+final List<AnchoredOverlay> _overlays = [];
+
+/// A phone's Back: closes the newest overlay, a modal only where it may be dismissed; answers
+/// whether one was open to take it.
+bool dismissTopOverlay() {
+  if (_overlays.isEmpty) return false;
+  final top = _overlays.last;
+  if (!top._modal || !dismissTopModal()) top.close();
   return true;
 }
 
@@ -116,6 +133,8 @@ AnchoredOverlay showOverlay(BuildContext context,
     ),
   );
   Overlay.of(context).insert(handle._entry);
+  _overlays.add(handle);
+  openOverlays.value = _overlays.length;
   // A field that focuses itself keeps it; otherwise the overlay takes the keys.
   WidgetsBinding.instance.addPostFrameCallback((_) {
     if (handle.isOpen && !scope.hasFocus) scope.requestFocus();

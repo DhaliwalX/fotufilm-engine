@@ -37,4 +37,6 @@ Future<void> main(List<String> arguments) async {
   // Photographs from the Finder or the command line, then as they arrive.
   await editor.openPaths(
       await HostWindow.takeOpenedFiles(editor.openPaths, arguments: arguments));
+  // A phone comes back to the photograph it was closed on.
+  await editor.gallery.restore();
 }

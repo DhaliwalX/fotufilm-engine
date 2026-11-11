@@ -1,6 +1,7 @@
 // The editor on a phone: a top bar with Add, Undo and Redo while there is something to undo,
 // More and Export; the picture; a docked sheet of the open group's pages; and the bar of groups
-// along the bottom.
+// along the bottom. Where the phone keeps a gallery (phone_gallery.dart) the editor is opened from
+// it, and Close, in Add's place, goes back to it.
 import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
@@ -117,7 +118,7 @@ class _PhoneEditorState extends State<PhoneEditor> {
   }
 }
 
-/// Add media, Undo and Redo, More and Export.
+/// Add media, or Close where there is a gallery to go back to, Undo and Redo, More and Export.
 class _TopBar extends StatelessWidget {
   const _TopBar({required this.commands});
   final EditorCommands commands;
@@ -133,17 +134,24 @@ class _TopBar extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10),
         child: Row(children: [
-          Builder(
-            builder: (anchor) => RoundButton(
-              glyph: 'fotu.ui.add',
-              label: 'Add media',
-              onPressed: exporting
-                  ? null
-                  : () => showImportMenu(anchor, editor, commands.actions.open),
+          if (editor.gallery.available)
+            RoundButton(
+              glyph: 'fotu.ui.close',
+              label: 'Close editor',
+              onPressed: exporting ? null : editor.gallery.closeEditor,
+            )
+          else
+            Builder(
+              builder: (anchor) => RoundButton(
+                glyph: 'fotu.ui.add',
+                label: 'Add media',
+                onPressed: exporting
+                    ? null
+                    : () => showImportMenu(anchor, editor, commands.actions.open),
+              ),
             ),
-          ),
-          // A browser reads no folders, so it has no library.
-          if (libraryFilesAvailable) ...[
+          // A browser reads no folders, so it has no library; a gallery stands in for one.
+          if (libraryFilesAvailable && !editor.gallery.available) ...[
             const SizedBox(width: 6),
             RoundButton(
               glyph: 'fotu.ui.photos',
