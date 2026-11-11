@@ -1,6 +1,7 @@
 // What an export just saved: a dark card at the window's foot with Open (the system's viewer for
 // it), Show in Finder and Dismiss. Export All saved many files, so only Show in Finder is offered
-// for it. In a browser the export is a download, so only Dismiss is.
+// for it. In a browser the export is a download, so only Dismiss is. The card keeps to the window's
+// width: a long filename is cut short, so the buttons stay in reach on a phone.
 import 'package:flutter/widgets.dart';
 
 import '../../app/host_window.dart';
@@ -19,8 +20,8 @@ class SavedExportNotice extends StatelessWidget {
     if (saved == null) return const SizedBox.shrink();
     return Positioned(
         bottom: 24,
-        left: 0,
-        right: 0,
+        left: 16,
+        right: 16,
         child: Appear(key: ValueKey(saved), rise: 8, child: _saved(context, saved)));
   }
 
@@ -36,8 +37,11 @@ class SavedExportNotice extends StatelessWidget {
 
   Widget _saved(BuildContext context, SavedExport saved) => Center(
         child: _card(Row(mainAxisSize: MainAxisSize.min, children: [
-            Text('Saved ${saved.filename}',
-                style: editorText(context, color: const Color(0xFFFFFFFF))),
+            Flexible(
+                child: Text('Saved ${saved.filename}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: editorText(context, color: const Color(0xFFFFFFFF)))),
             const SizedBox(width: 16),
             if (HostWindow.showsFiles) ...[
               if (saved.count == null) ...[
