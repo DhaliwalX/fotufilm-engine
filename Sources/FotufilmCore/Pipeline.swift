@@ -449,6 +449,20 @@ public struct FotufilmEngine {
                            additionalRecordExposure: additionalRecordExposure)
     }
 
+    /// The intermediate memory a combined Legacy CPU render of a frame this size needs, for
+    /// `processChecked(linearRGB:cpuMemoryBudget:)`: the default 192 MiB wherever that is
+    /// enough, and more only where a broad spatial effect — a mist filter's halo across a large
+    /// frame — reaches further than tiles inside the default could overlap. For hosts with the
+    /// memory to spend; one without it should let the default throw.
+    public func cpuMemoryBudget(width: Int, height: Int) throws -> Int {
+        guard width > 0, height > 0 else { return HalideBackend.defaultMemoryBudget }
+        var plain = stock; plain.layeredTransport = nil
+        let invocation = try FilmEngineInvocation(validating: plain, options: options,
+                                                  width: width, height: height, noFilm: false)
+        return HalideBackend.workableMemoryBudget(width: width, height: height,
+                                                  apron: max(1, invocation.spatialSupport))
+    }
+
     /// Combined Legacy CPU rendering with an explicit intermediate-memory estimate in bytes.
     /// The default overload uses 192 MiB, excluding input/output frames and compilation caches.
     /// Broad spatial effects may need a larger budget; insufficient budgets throw before rendering.

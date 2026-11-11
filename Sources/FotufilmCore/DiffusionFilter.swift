@@ -11,13 +11,23 @@ public struct DiffusionFilter: Equatable, Sendable, Codable, Identifiable {
     /// 1/8, 1/4, 1/2 and 1 of a product line are increasing particle loadings of one formulation.
     public var interactedFraction: Float
     /// Single scattering albedo of the particles, 0…1. 1 is a transparent particle that scatters
-    /// everything it intercepts — a white mist; low values are the absorbing carbon-loaded
+    /// everything it intercepts — a white mist; lower values are the absorbing carbon-loaded
     /// particles of a black mist. What is neither transmitted nor scattered is absorbed, so a
     /// black mist genuinely takes light out of the picture rather than moving it around.
+    ///
+    /// A particle much larger than the wavelength cannot go below one half. It takes twice its
+    /// own silhouette out of the beam: the light that hits it, and as much again diffracted
+    /// round its edge (Babinet's principle). A perfectly black particle absorbs the first half
+    /// and still scatters the second, into the same forward lobe this model lays. Values under
+    /// one half describe soot far smaller than the wavelength, which makes no such lobe.
     public var albedo: Float
     /// Median particle radius in micrometres, and the width of the log-normal spread about it.
     /// The radius sets how tight the glow is; the spread smooths the diffraction rings of a
     /// single size into the featureless halo a real filter makes.
+    ///
+    /// The distribution is the one the light sees: each size counted by the silhouette area it
+    /// presents, not by how many particles have it. A count of the same particles under a
+    /// microscope has its median lower by `exp(2 · sizeSpread²)`, about a third at the default.
     public var particleRadiusUM: Float
     public var sizeSpread: Float
     public var substrate: OpticalMaterial
@@ -181,8 +191,11 @@ extension DiffusionFilter {
         func sigma(forQuantile p: Float, _ wavelength: Float) -> Float {
             quantile(p, wavelength) / (-2 * log(1 - p)).squareRoot()
         }
+        // Over every record there is, a donor capture layer included: a stock with a fourth
+        // record must not have its ladder stretched by a sum of four divided by three.
         func meanSigma(_ p: Float) -> Float {
-            wavelengths.map { sigma(forQuantile: p, $0) }.reduce(0, +) / 3
+            wavelengths.map { sigma(forQuantile: p, $0) }.reduce(0, +)
+                / Float(max(wavelengths.count, 1))
         }
 
         let tightest = clamp(meanSigma(Self.coreQuantile), 0.5, maximumSigmaPixels)
@@ -224,7 +237,8 @@ extension DiffusionFilter {
     /// Log spacing rather than linear because the profile's whole character is in its tail, and a
     /// linear grid would spend all its samples on the core and fit the part that was never in
     /// doubt. The weights are *not* forced to sum to one: what they fall short by is the light
-    /// that scattered past the widest scale, which the caller hands to veiling glare. Solved by
+    /// that scattered past the widest scale, which the caller reports as `truncatedShare` and
+    /// renormalises back into the scales that exist. Solved by
     /// projected coordinate descent — three unknowns on a simplex, where a general solver would
     /// be more machinery than the problem.
     static func solveWeights(sigmas: [Float], reachPixels: Float,
@@ -359,7 +373,8 @@ extension DiffusionFilter {
         /// A broad, soft bloom around highlights. The workhorse.
         case proMist = "promist"
         /// The same halo with absorbing particles: the blacks still lift and the highlights
-        /// bloom much less, which is why it is the one that survives a colourist's eye.
+        /// bloom much less, which is why it is the one that survives a colourist's eye. The
+        /// black families sit at the floor an opaque particle allows — see `albedo`.
         case blackProMist = "blackpromist"
         /// Tighter, brighter — a sparkle close in to the highlight rather than a wash.
         case glimmerglass = "glimmerglass"
@@ -380,11 +395,11 @@ extension DiffusionFilter {
         var albedo: Float {
             switch self {
             case .proMist: return 0.95
-            case .blackProMist: return 0.30
+            case .blackProMist: return 0.50
             case .glimmerglass: return 0.92
-            case .blackGlimmerglass: return 0.35
+            case .blackGlimmerglass: return 0.50
             case .fog: return 0.97
-            case .blackFog: return 0.35
+            case .blackFog: return 0.50
             }
         }
 

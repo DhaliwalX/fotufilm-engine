@@ -246,6 +246,25 @@ enum HalideBackend {
                 paddedHeight == height ? height : paddedHeight - 2 * apron)
     }
 
+    /// A budget `tileSize` accepts for this frame and apron with tiles that still do useful
+    /// work: the default where that already fits, otherwise room for tiles whose interior is as
+    /// wide as the two aprons round it, or for the whole frame where the frame is smaller than
+    /// that. A frame-wide blur has an apron of the frame's own order, so this is then the
+    /// whole frame's worth.
+    static func workableMemoryBudget(width: Int, height: Int, apron: Int,
+                                     additionalBytesPerPixel: Int = 0) -> Int {
+        if (try? tileSize(width: width, height: height, apron: apron,
+                          budget: defaultMemoryBudget,
+                          additionalBytesPerPixel: additionalBytesPerPixel)) != nil {
+            return defaultMemoryBudget
+        }
+        let bytesPerPixel = processBytesPerPixel + additionalBytesPerPixel
+            + 3 * MemoryLayout<Float>.stride
+        let side = 4 * max(apron, 1)
+        return max(defaultMemoryBudget,
+                   (min(width, side) + 1) * (min(height, side) + 1) * bytesPerPixel)
+    }
+
     /// Lends the input planes and a freshly allocated set of output planes to
     /// one of the C entry points.
     private static func run(

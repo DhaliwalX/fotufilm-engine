@@ -132,7 +132,62 @@ final class DiffusionFilterTests: XCTestCase {
         }
     }
 
+    func testADonorRecordDoesNotStretchTheScaleLadder() {
+        var donorStock = Self.stock
+        donorStock.donorLayers = [TestStocks.donor]
+        let plain = filter().halo(stock: Self.stock, focalLengthMM: 50, pixelPitchMM: pitch)
+        let donated = filter().halo(stock: donorStock, focalLengthMM: 50, pixelPitchMM: pitch)
+        func mean(_ values: [Float]) -> Float { values.reduce(0, +) / Float(values.count) }
+        // The profile is self-similar in wavelength, so the ladder moves with the records' mean
+        // wavelength and with nothing else. Four records summed and divided by three would put
+        // it a third wider.
+        let expected = mean(DiffusionFilter.recordWavelengths(stock: donorStock))
+            / mean(DiffusionFilter.recordWavelengths(stock: Self.stock))
+        for scale in 0..<3 {
+            XCTAssertEqual(donated.sigmasPixels[scale] / plain.sigmasPixels[scale], expected,
+                           accuracy: 0.02, "scale \(scale)")
+        }
+    }
+
+    func testNoFamilyAbsorbsMoreThanAnOpaqueParticleCan() {
+        // A particle far larger than the wavelength diffracts as much light as it blocks, so even
+        // a perfectly black one scatters half of what it takes from the beam.
+        for family in DiffusionFilter.Family.allCases {
+            let preset = DiffusionFilter.preset(family, grade: .one)
+            XCTAssertGreaterThanOrEqual(preset.albedo, 0.5, family.rawValue)
+            XCTAssertLessThanOrEqual(preset.absorbedShare, preset.scatteredShare + 1e-6,
+                                     family.rawValue)
+        }
+    }
+
     // MARK: Through the engine
+
+    func testThePackedRadiiCarryTheHalosOwnSigmas() {
+        // The halo is blurred by the box pyramid, which reads each radius as a box's and lays a
+        // Gaussian about that wide. A Gaussian's cut-off radius in these slots would be laid as
+        // the width itself, some three times too wide.
+        var options = FotufilmEngine.Options()
+        options.focalLengthMM = 50
+        for family in [DiffusionFilter.Family.proMist, .glimmerglass] {
+            let f = DiffusionFilter.preset(family, grade: .one)
+            options.diffusionFilter = f
+            let width = 1500, height = 1000
+            let invocation = FilmEngineInvocation(stock: Self.stock, options: options,
+                                                  width: width, height: height)
+            let halo = f.halo(stock: Self.stock, focalLengthMM: 50,
+                              pixelPitchMM: 1 / options.pixelsPerMM(width: width, height: height),
+                              maximumSigmaPixels: Float(height) / 8)
+            for scale in 0..<3 {
+                let radius = invocation.configuration[
+                    FilmEngineInvocation.diffusionRadiusOffset + scale]
+                let side = 2 * radius + 1
+                let laid = ((side * side - 1) / 4).squareRoot()
+                XCTAssertEqual(laid, halo.sigmasPixels[scale],
+                               accuracy: max(0.05 * halo.sigmasPixels[scale], 0.75),
+                               "\(family.rawValue) scale \(scale)")
+            }
+        }
+    }
 
     func testNoFilterChangesNothing() {
         let bare = FilmEngineInvocation(stock: Self.stock, options: FotufilmEngine.Options(),
@@ -193,7 +248,12 @@ final class DiffusionFilterTests: XCTestCase {
                 FilmEngineInvocation.donorDiffusionKernelOffset + $0]
         }
         XCTAssertEqual(packed.reduce(0, +), f.scatteredShare, accuracy: 1e-4)
-        XCTAssertEqual(packed, halo.weights[3].map { $0 * f.scatteredShare })
+        // The engine sizes its pixel from the format and this test from the pitch, which agree
+        // to a rounding once the ladder is no longer pinned to its cap.
+        for (scale, weight) in halo.weights[3].enumerated() {
+            XCTAssertEqual(packed[scale], weight * f.scatteredShare, accuracy: 1e-4,
+                           "scale \(scale)")
+        }
     }
 
     func testDonorCaptureRecordDevelopsThroughDiffusion() throws {
