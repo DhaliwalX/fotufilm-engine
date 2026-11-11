@@ -183,10 +183,12 @@ final class NegativeScanCrosstalkTests: XCTestCase {
                    SIMD3(7.733554e-09, -0.0008941038, 1.0008941)],
         ]
         for light in NegativeScanCrosstalk.Light.allCases {
+            // Every one-light scan goes through this correction's flat lamp.
+            let pinned = browser[light == .rgb ? .rgb : .white]!
             let weights = NegativeScanCrosstalk.plainWeights(
                 correction: .init(strength: 1, light: light), neutral: nil)
             for r in 0..<3 { for c in 0..<3 {
-                XCTAssertEqual(weights[r][c], browser[light]![r][c], accuracy: 1e-5, "\(light)")
+                XCTAssertEqual(weights[r][c], pinned[r][c], accuracy: 1e-5, "\(light)")
             } }
         }
     }
