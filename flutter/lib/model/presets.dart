@@ -11,6 +11,7 @@ import 'package:file_selector/file_selector.dart';
 import 'edit.dart';
 import 'edit_settings.dart';
 import 'editor.dart';
+import 'file_types.dart';
 import 'saved_edits.dart';
 
 export 'edit_settings.dart' show CopiedSettings, Preset, SettingsSection, pasteTitle;
@@ -195,9 +196,14 @@ class Presets {
   Future<void> export(List<String> ids) async {
     final chosen = [for (final p in list) if (ids.contains(p.id)) p];
     if (chosen.isEmpty) return;
-    final location = await getSaveLocation(
-        suggestedName: lookFileName(chosen), acceptedTypeGroups: _lookTypes);
-    if (location != null) await exportTo(location.path, ids);
+    final location = await chooseSaveFile(lookFileName(chosen), types: _lookTypes);
+    if (location == null) return;
+    await exportTo(location.path, ids);
+    try {
+      await location.finish();
+    } catch (e) {
+      editor.showError('The look could not be saved. $e');
+    }
   }
 
   Future<void> exportTo(String path, List<String> ids) async {

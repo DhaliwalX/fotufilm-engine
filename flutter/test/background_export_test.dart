@@ -1,6 +1,7 @@
 import 'dart:async';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fotufilm_flutter/engine/engine.dart';
 import 'package:fotufilm_flutter/model/catalogue.dart';
@@ -127,5 +128,53 @@ void main() {
     await saved;
     await settle();
     expect(engine.calls.where((c) => c.$1 == 'release').single.$2['handle'], 1);
+  });
+
+  group('on Android, where the save panel answers a document', () {
+    const files = MethodChannel('fotufilm/files');
+    final asked = <MethodCall>[];
+
+    setUp(() {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      asked.clear();
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(files, (call) async {
+        asked.add(call);
+        return switch (call.method) {
+          'create' => {'path': '/cache/saving/1/${call.arguments['name']}', 'document': 'doc:1'},
+          'save' => 'a (1).png',
+          _ => null,
+        };
+      });
+    });
+
+    tearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(files, null);
+    });
+
+    test('the engine writes in the cache and the file is moved into the document', () async {
+      final saved = editor.exporter.exportPhoto();
+      await settle();
+      expect(asked.single.method, 'create');
+      expect(asked.single.arguments['type'], 'image/png');
+      final (_, params, answer) = engine.background.single;
+      expect(params['path'], '/cache/saving/1/${params['filename']}');
+
+      answer.complete(EngineReply(<String, dynamic>{}, null));
+      expect((await saved)?.filename, 'a (1).png', reason: 'the name the system saved it under');
+      expect(asked.last.method, 'save');
+      expect(asked.last.arguments, {'path': params['path'], 'document': 'doc:1'});
+    });
+
+    test('an export that fails leaves no document', () async {
+      final saved = editor.exporter.exportPhoto();
+      await settle();
+      engine.background.single.$3.completeError(const FotufilmCancelled());
+      expect(await saved, isNull);
+      expect(asked.last.method, 'discard');
+      expect(asked.last.arguments['document'], 'doc:1');
+    });
   });
 }
