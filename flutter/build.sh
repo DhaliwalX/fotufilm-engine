@@ -32,7 +32,7 @@ tool_dir="$PWD/flutter"
 # (tools/audit-apple-bundle.sh).
 stage="$(mktemp -d /tmp/fotufilm.XXXXXX)"
 trap 'rm -rf "$stage"' EXIT
-rsync -a --exclude /build --exclude /.dart_tool --exclude /macos/Pods \
+rsync -a --exclude /build --exclude /.dart_tool \
   --exclude /macos/Flutter/ephemeral --exclude /macos/Runner/Configs/Build.xcconfig \
   "$tool_dir/" "$stage/flutter/"
 # What the Xcode project reads from beside it: the engine's C header.

@@ -11,6 +11,9 @@ editor, from one UI.
 - **Browser:** the UI is compiled to WebAssembly and calls the WASM and WebGPU engine in `web/src`
   through `web/src/flutter-bridge.js`, which answers the same host calls the native engine does.
 
+It builds with Flutter 3.50 or newer, the version CI uses. On the desktop and on Android Flutter
+draws through Impeller: Metal on a Mac, OpenGL ES on Linux, Vulkan or OpenGL ES on Android.
+
 ## Layout
 
 Each feature keeps its state and actions in one model file and its UI in its own files. The
