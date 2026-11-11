@@ -44,12 +44,18 @@ public struct NegativeScanSetup: Equatable, Sendable {
     /// The white balance the camera's file was decoded on, in kelvin, which sets how its channels
     /// were mixed into the scan's. Nil takes it as balanced on the lamp.
     public var kelvin: Float?
+    /// The matrix the file's decoder mixed a measured camera's balanced channels into the scan's
+    /// with: rows the scan's red, green and blue over the sensor's. Decoders each bring their own,
+    /// and a dense negative's blue is a small difference of the sensor's green and blue that
+    /// follows it closely. Nil takes the camera's own for `kelvin` (`DualIlluminantMatrices`).
+    public var matrix: [SIMD3<Float>]?
 
     public init(light: NegativeScanCrosstalk.Light = .white, camera: Camera = .generic,
-                kelvin: Float? = nil) {
+                kelvin: Float? = nil, matrix: [SIMD3<Float>]? = nil) {
         self.light = light
         self.camera = camera
         self.kelvin = kelvin
+        self.matrix = matrix
     }
 
     /// What each channel of the scan sees per `SpectralGrid` wavelength: three rows, red, green
@@ -87,7 +93,7 @@ public struct NegativeScanSetup: Equatable, Sendable {
         // Rec. 2020 with the camera's matrix for that white.
         let cct = kelvin.flatMap { $0.isFinite && $0 > 0 ? $0 : nil } ?? light.kelvin
         let white = Illuminant.atLocus(kelvin: cct)
-        let matrix = CameraProfileCorrection.matrices(for: profile).matrix(cct: cct)
+        let matrix = decoderMatrix ?? CameraProfileCorrection.matrices(for: profile).matrix(cct: cct)
         let balanced: [[Float]] = profile.sensitivity.map { sensor in
             let level = zip(sensor, white).reduce(Float(0)) { $0 + $1.0 * $1.1 }
             return level > 0 ? sensor.map { $0 / level } : sensor
@@ -98,6 +104,13 @@ public struct NegativeScanSetup: Equatable, Sendable {
                     + matrix[channel].z * balanced[2][i]
             }
         }
+    }
+
+    /// `matrix` where it is one a decoder could have used: three finite rows.
+    private var decoderMatrix: [SIMD3<Float>]? {
+        guard let matrix, matrix.count == 3,
+              matrix.allSatisfy({ $0.x.isFinite && $0.y.isFinite && $0.z.isFinite }) else { return nil }
+        return matrix
     }
 
     /// A film scanner's channels: narrow bands near a densitometer's, peaks and full widths at

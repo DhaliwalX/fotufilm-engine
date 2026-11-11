@@ -92,6 +92,47 @@ final class NegativeScanModelTests: XCTestCase {
         XCTAssertEqual(same.response(), camera.response())
     }
 
+    /// A decoder's own matrix sets what the scan's channels see of a measured camera, and a
+    /// reading fitted for another matrix misses the film the scan was made of.
+    func testADecodersMatrixSetsAMeasuredCamerasChannels() throws {
+        let profile = try XCTUnwrap(CameraSpectralProfileStore.profile(id: "sony-ilce-7cm2"))
+        let own = CameraProfileCorrection.matrices(for: profile).matrix(cct: 5500)
+        var decoded = camera
+        decoded.matrix = own
+        XCTAssertEqual(decoded.response(), camera.response())
+        // A decoder that takes less of the sensor's green out of its blue.
+        decoded.matrix = [SIMD3(1.2, -0.1, -0.1), SIMD3(-0.05, 1.5, -0.45), SIMD3(0, -0.25, 1.25)]
+        XCTAssertNotEqual(decoded.response()[2], camera.response()[2])
+
+        let stock = try stock("gold200")
+        let model = NegativeScanModel(stock: stock, setup: decoded)
+        let patches = NegativeScanModel.patches(stock: stock)
+        func error(_ weights: [SIMD3<Float>]) throws -> NegativeScanModel.ReadingError {
+            model.error(of: try ApproximateNegativeScan(stock: stock, border: model.clear,
+                                                        gains: .one, weights: weights),
+                        patches: patches)
+        }
+        let fitted = try error(model.weights(separation: 1))
+        let assumed = try error(NegativeScanModel(stock: stock, setup: camera).weights(separation: 1))
+        XCTAssertLessThan(fitted.greys, 0.02)
+        XCTAssertGreaterThan(assumed.greys, 2 * fitted.greys)
+        XCTAssertGreaterThan(assumed.colours, 1.5 * fitted.colours)
+
+        // A matrix no decoder could have used is left out, and only a measured camera has one.
+        for matrix in [[SIMD3<Float>(1, 0, 0), SIMD3(0, 1, 0)],
+                       [SIMD3(.nan, 0, 0), SIMD3(0, 1, 0), SIMD3(0, 0, 1)]] {
+            var invalid = camera
+            invalid.matrix = matrix
+            XCTAssertEqual(invalid.response(), camera.response())
+        }
+        for setup in [NegativeScanSetup(camera: .generic), NegativeScanSetup(camera: .scanner),
+                      NegativeScanSetup(light: .rgb, camera: .profile("sony-ilce-7cm2"))] {
+            var mixed = setup
+            mixed.matrix = decoded.matrix
+            XCTAssertEqual(mixed.response(), setup.response())
+        }
+    }
+
     /// A reading's error is how far the densities it reads lie from the film the scan was
     /// made of.
     func testAReadingsErrorIsItsDistanceFromTheFilm() throws {
