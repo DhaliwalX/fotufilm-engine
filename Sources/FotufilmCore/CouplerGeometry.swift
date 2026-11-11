@@ -22,6 +22,12 @@ public struct CouplerGeometry: Sendable, Equatable, Codable {
     /// effect, rather than one already absorbed elsewhere.
     public var selfRetention: Float
 
+    /// Relative susceptibility of each dye-forming receiver layer to released inhibitor, in R, G, B
+    /// order. Scales row `receiver` of the 3x3 coupler matrix (both cross-layer arrivals and
+    /// intra-layer self-retention), while leaving explicit `donorLayers` rows untouched.
+    /// `[1, 1, 1]` is the historical geometry.
+    public var receiverSusceptibility: [Float]
+
     /// The stack a colour negative is coated in, in micrometres of depth.
     public static let colorNegativeDepthUM: [Float] = [14, 8, 3]
 
@@ -31,15 +37,19 @@ public struct CouplerGeometry: Sendable, Equatable, Codable {
     public init(layerDepthUM: [Float] = CouplerGeometry.colorNegativeDepthUM,
                 interlayerTransmission: [Float],
                 release: [Float],
-                selfRetention: Float = CouplerGeometry.houseSelfRetention) {
+                selfRetention: Float = CouplerGeometry.houseSelfRetention,
+                receiverSusceptibility: [Float] = [1, 1, 1]) {
         precondition(layerDepthUM.count == 3, "layerDepthUM must have 3 entries")
         precondition(release.count == 3, "release must have 3 entries")
+        precondition(receiverSusceptibility.count == 3,
+                     "receiverSusceptibility must have 3 entries")
         precondition(interlayerTransmission.count == layerDepthUM.count - 1,
                      "interlayerTransmission needs one entry per gap")
         self.layerDepthUM = layerDepthUM
         self.interlayerTransmission = interlayerTransmission
         self.release = release
         self.selfRetention = selfRetention
+        self.receiverSusceptibility = receiverSusceptibility
     }
 
     /// The per-gap transmissions an exponential decay of `rangeUM` through the stack implies.
@@ -78,15 +88,19 @@ public struct CouplerGeometry: Sendable, Equatable, Codable {
         }
 
         return (0..<layers).map { receiver in
-            (0..<layers).map { donor in
+            let susceptibility = receiver < receiverSusceptibility.count
+                ? receiverSusceptibility[receiver] : 1
+            return (0..<layers).map { donor in
                 if receiver == donor {
-                    return release[receiver] * selfRetention * selfScale
+                    let base = release[receiver] * selfRetention * selfScale
+                    return susceptibility == 1 ? base : base * susceptibility
                 }
                 // The inhibitor crosses every interlayer between the two, so the survivals
                 // multiply. Sealing one gap therefore also cuts the crossings that span it.
                 let span = min(receiver, donor)..<max(receiver, donor)
                 let crossing = span.reduce(Float(1)) { $0 * transmitted($1) }
-                return release[donor] * crossing
+                let base = release[donor] * crossing
+                return susceptibility == 1 ? base : base * susceptibility
             }
         }
     }
@@ -101,6 +115,7 @@ public struct CouplerGeometry: Sendable, Equatable, Codable {
         case interlayerTransmission
         case release
         case selfRetention
+        case receiverSusceptibility
     }
 
     /// Reject malformed layer counts before they reach the renderer.
@@ -129,11 +144,32 @@ public struct CouplerGeometry: Sendable, Equatable, Codable {
                 debugDescription: "interlayerTransmission needs two entries, got \(transmission.count)")
         }
 
+        let susceptibility = try container.decodeIfPresent(
+            [Float].self, forKey: .receiverSusceptibility) ?? [1, 1, 1]
+        guard susceptibility.count == 3 else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .receiverSusceptibility, in: container,
+                debugDescription:
+                    "receiverSusceptibility needs one entry per layer (3), got \(susceptibility.count)")
+        }
+
         self.layerDepthUM = depths
         self.interlayerTransmission = transmission
         self.release = release
         self.selfRetention = try container.decodeIfPresent(
             Float.self, forKey: .selfRetention) ?? Self.houseSelfRetention
+        self.receiverSusceptibility = susceptibility
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(layerDepthUM, forKey: .layerDepthUM)
+        try container.encode(interlayerTransmission, forKey: .interlayerTransmission)
+        try container.encode(release, forKey: .release)
+        try container.encode(selfRetention, forKey: .selfRetention)
+        if receiverSusceptibility != [1, 1, 1] {
+            try container.encode(receiverSusceptibility, forKey: .receiverSusceptibility)
+        }
     }
 }
 
@@ -236,6 +272,39 @@ public extension CouplerGeometry {
                 a[c][j] = w * slopes[j] * ratios[c]
             }
             a[c][c] -= selfRetention * slopes[c]
+            b[c] = ratios[c] - 1
+        }
+
+        guard let release = solve3x3(a, b), release.allSatisfy({ $0 >= 0 })
+        else { return nil }
+        return release
+    }
+
+    /// Per-layer release strengths solved from a stock's measured inter-image effect under the
+    /// forward-compensated QDI model (`ratio_c = 1 + sum_{j != c} K_cj q_j`), holding the
+    /// interlayers and receiver susceptibility fixed.
+    static func releaseSolvedFromInterImage(
+        _ ratios: [Float],
+        releaseSlopes slopes: [Float],
+        interlayerTransmission: [Float],
+        receiverSusceptibility: [Float] = [1, 1, 1],
+        layerDepthUM: [Float] = CouplerGeometry.colorNegativeDepthUM
+    ) -> [Float]? {
+        guard ratios.count == 3, slopes.count == 3,
+              receiverSusceptibility.count == 3,
+              interlayerTransmission.count == layerDepthUM.count - 1,
+              interlayerTransmission.allSatisfy({ $0 > 0 }),
+              ratios.allSatisfy({ $0 >= 1 }) else { return nil }
+
+        var a = [[Float]](repeating: [Float](repeating: 0, count: 3), count: 3)
+        var b = [Float](repeating: 0, count: 3)
+        for c in 0..<3 {
+            for j in 0..<3 where c != j {
+                let crossing = (min(c, j)..<max(c, j)).reduce(Float(1)) {
+                    $0 * interlayerTransmission[$1]
+                }
+                a[c][j] = receiverSusceptibility[c] * crossing * slopes[j]
+            }
             b[c] = ratios[c] - 1
         }
 

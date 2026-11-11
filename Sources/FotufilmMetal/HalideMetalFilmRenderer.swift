@@ -1758,6 +1758,11 @@ public final class HalideMetalFilmRenderer {
             validating: stock, options: options, width: width, height: height,
             bindsFilmGrain: false)
         else { return nil }
+        if fotufilm_halide_available() == 0,
+           invocation.featureMask & FilmEngineFeature.donorLayer != 0,
+           Int(invocation.configuration[FilmEngineInvocation.donorCountOffset]) > 1 {
+            return nil
+        }
         invocation.featureMask |= FilmEngineFeature.floatIO
         if exactMath { invocation.featureMask |= FilmEngineFeature.exactMath }
         let pixels = width * height

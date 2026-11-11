@@ -432,6 +432,28 @@ public struct FilmEngineInvocation {
     /// film's clear and densest corners (`PrintDetail.packed`, `.corners`); mirrors
     /// FOTUFILM_CONFIG_PRINT_DETAIL.
     public static let printDetailOffset = Int(FOTUFILM_CONFIG_PRINT_DETAIL)
+    /// DIR coupler model selector (`0` = legacy inverted warp, `1` = forward-compensated QDI),
+    /// gain-clamped scale, row normalizers, competitive QDI kappas, secondary donor curve terms,
+    /// and multi-donor (`0...3`) slots.
+    public static let couplerModelOffset = Int(FOTUFILM_CONFIG_COUPLER_MODEL)
+    public static let couplerEffectiveScaleOffset = Int(FOTUFILM_CONFIG_COUPLER_EFFECTIVE_SCALE)
+    public static let couplerRowNormOffset = Int(FOTUFILM_CONFIG_COUPLER_ROW_NORM)
+    public static let couplerReleaseKappaOffset = Int(FOTUFILM_CONFIG_COUPLER_RELEASE_KAPPA)
+    public static let donorReleaseKappaOffset = Int(FOTUFILM_CONFIG_DONOR_RELEASE_KAPPA)
+    public static let donorCurveSecondaryOffset = Int(FOTUFILM_CONFIG_DONOR_CURVE_SECONDARY)
+    public static let donorExtraCurveOffset = Int(FOTUFILM_CONFIG_DONOR_EXTRA_CURVE)
+    public static let donorExtraReleaseOffset = Int(FOTUFILM_CONFIG_DONOR_EXTRA_RELEASE)
+    public static let donorExtraGammaOffset = Int(FOTUFILM_CONFIG_DONOR_EXTRA_GAMMA)
+    public static let donorReceiverOffset = Int(FOTUFILM_CONFIG_DONOR_RECEIVER)
+    public static let donorCountOffset = Int(FOTUFILM_CONFIG_DONOR_COUNT)
+    public static let donorExtraLUTIDOffset = Int(FOTUFILM_CONFIG_DONOR_EXTRA_LUT_ID)
+    public static let couplerCrossPointwiseShareOffset =
+        Int(FOTUFILM_CONFIG_COUPLER_CROSS_POINTWISE_SHARE)
+    /// Monotonicity loop-gain ceiling for forward-compensated DIR couplers (`schemaVersion >= 4`).
+    public static let maximumLoopGain: Float = 0.85
+    /// Sanity ceiling on unscaled push development condition loop gain (`condition.couplerScale == nil`);
+    /// runtime `effectiveCouplerRowScales` clamps each receiver row to `maximumLoopGain` independently.
+    public static let maximumUnscaledConditionLoopGain: Float = 1.5
     /// The primaries of the byte frames on the encoded-byte road, input then output: 0 is
     /// Display P3, 1 is sRGB; mirrors FOTUFILM_CONFIG_BYTE_BASIS.
     public static let byteBasisOffset = Int(FOTUFILM_CONFIG_BYTE_BASIS)
@@ -467,9 +489,79 @@ public struct FilmEngineInvocation {
     public static let toneGridAOffset = Int(FOTUFILM_CONFIG_TONE_GRID_A)
     public static let toneGridBOffset = Int(FOTUFILM_CONFIG_TONE_GRID_B)
 
+    public final class ExtraDonorBinding: Sendable {
+        public let id: Int32
+        public let key: UInt64
+        public let table: SpectralLUT
+        let registrationStatus: Int32
+
+        fileprivate init(id: Int32, key: UInt64, table: SpectralLUT) {
+            self.id = id
+            self.key = key
+            self.table = table
+            self.registrationStatus = table.values.withUnsafeBufferPointer {
+                fotufilm_halide_set_extra_donor_lut(id, $0.baseAddress, Int64($0.count))
+            }
+        }
+
+        deinit {
+            if registrationStatus == 0 {
+                _ = fotufilm_halide_set_extra_donor_lut(id, nil, 0)
+            }
+        }
+    }
+
+    private final class ExtraDonorRegistry: @unchecked Sendable {
+        private final class WeakBinding {
+            weak var value: ExtraDonorBinding?
+            init(_ value: ExtraDonorBinding) { self.value = value }
+        }
+
+        private static let maxFloatExactID: Int32 = 16_777_215
+        private let lock = NSLock()
+        private var entries: [(key: UInt64, binding: ExtraDonorBinding)] = []
+        private var live: [Int32: WeakBinding] = [:]
+        private var nextID: Int32 = 1
+
+        func entry(key: UInt64, table: SpectralLUT) -> ExtraDonorBinding {
+            lock.lock()
+            if let hit = entries.first(where: { $0.key == key }) {
+                lock.unlock()
+                return hit.binding
+            }
+            live = live.filter { $0.value.value != nil }
+            var id: Int32 = 1
+            for _ in 0..<Self.maxFloatExactID {
+                let candidate = nextID
+                nextID = nextID >= Self.maxFloatExactID ? 1 : nextID + 1
+                if live[candidate] == nil {
+                    id = candidate
+                    break
+                }
+            }
+            lock.unlock()
+
+            let binding = ExtraDonorBinding(id: id, key: key, table: table)
+            lock.lock()
+            defer { lock.unlock() }
+            if let hit = entries.first(where: { $0.key == key }) { return hit.binding }
+            live = live.filter { $0.value.value != nil }
+            live[binding.id] = WeakBinding(binding)
+            entries.append((key, binding))
+            if entries.count > 8 { entries.removeFirst() }
+            return binding
+        }
+    }
+
+    private static let extraDonorRegistry = ExtraDonorRegistry()
+
     public var configuration: [Float]
     /// Keeps the frame's canonical Film bank registered across cache eviction and tile calls.
     public let filmTileBinding: FilmGrain.TileBinding?
+    /// Keeps any extra donor capture layers' 3D exposure LUT (`donorLayers[1..2]`) registered.
+    public let extraDonorBinding: ExtraDonorBinding?
+    public var extraDonorExposure: SpectralLUT? { extraDonorBinding?.table }
+    public var extraDonorCacheKey: UInt64 { extraDonorBinding?.key ?? 0 }
     /// The Film grain population this develop draws, bound or not; nil under another model.
     public let filmGrainPopulation: FilmGrain.Population?
     public var spectral: SpectralPipelineTables
@@ -736,6 +828,12 @@ public struct FilmEngineInvocation {
     /// the two-sample threshold at which a blur is run on a decimated grid, so no resampling is
     /// left behind either. What a spatial stage is given when it has been switched off.
     static let noSpatialReachPixels: Float = 0.1
+    /// Minimum lattice Gaussian sigma (`0.85 px`, `gaussianRadius == 3`) applied to forward-compensated
+    /// QDI coupler diffusion when `couplerDiffusionMM > 0` and `.adjacency` is active. Keeps micro-edge
+    /// self-inhibition (`Edge Contrast`) responsive in downsampled live previews while cancelling
+    /// identically (`q_c - blur(q_c) == 0`) on uniform colour and leaving full-resolution exports
+    /// (`physical >= 0.85 px`) bit-for-bit physical.
+    public static let couplerPreviewSigmaFloorPixels: Float = 0.85
 
     /// How far a sampled Gaussian of `sigma` has to reach before the taps left out carry less than
     /// 0.27% of its weight — the share a continuous Gaussian leaves outside three sigma, which is
@@ -983,8 +1081,17 @@ public struct FilmEngineInvocation {
         // up, which is a blur by any other name — so they are turned off at the reach instead.
         // Not at zero: the Gaussian's own kernel divides by the sigma, and zero returns NaN where
         // `noSpatialReachPixels` returns the identity.
-        let couplerSigma = selected(.adjacency)
-            ? stock.couplerDiffusionMM * pxPerMM : Self.noSpatialReachPixels
+        let (couplerSigma, couplerCrossPointwiseShare): (Float, Float) = {
+            guard selected(.adjacency) else { return (Self.noSpatialReachPixels, 0) }
+            let physical = stock.couplerDiffusionMM * pxPerMM
+            if !noFilm && stock.useForwardCouplerModel && stock.couplerDiffusionMM > 0,
+               physical < Self.couplerPreviewSigmaFloorPixels {
+                let floored = Self.couplerPreviewSigmaFloorPixels
+                let ratio = max(physical / floored, 0)
+                return (floored, 1 - ratio * ratio)
+            }
+            return (physical, 0)
+        }()
         let couplerRadius = Self.gaussianRadius(couplerSigma)
         let adjacencyReferenceSigma = selected(.adjacency)
             ? stock.adjacencyRadiusMM * pxPerMM : Self.noSpatialReachPixels
@@ -1256,7 +1363,9 @@ public struct FilmEngineInvocation {
             return geometry.matrix(gapReachScales: reach,
                                    selfScale: options.couplerSelfScale)
         } ?? stock.couplerInhibition
-        let couplerScale = Self.effectiveCouplerScale(options.couplerScale)
+        let userCouplerScale = Self.effectiveCouplerScale(options.couplerScale)
+        let couplerScale = Self.effectiveCouplerScale(
+            options.couplerScale * stock.developmentCouplerScale)
         let couplersActive = couplerScale > 0
             && inhibition.contains { $0.contains { $0 != 0 } }
         let requestedFringeAmount = options.chromaticFringeAmount ?? stock.chromaticFringeAmount
@@ -1269,31 +1378,38 @@ public struct FilmEngineInvocation {
         let fringeActive = selected(.adjacency) && couplersActive && !stock.isMonochrome
             && hasCrossLayerInhibition && fringeAmount > 0
             && fringeMM > stock.couplerDiffusionMM
+            && fringeMM * pxPerMM > couplerSigma
             && Self.gaussianRadius(fringeMM * pxPerMM) > 0
         let fringeSigma = fringeActive ? fringeMM * pxPerMM : Self.noSpatialReachPixels
         let fringeRadius = fringeActive ? Self.gaussianRadius(fringeSigma) : 0
         if couplersActive { featureMask |= FilmEngineFeature.couplers }
-        // The donor capture layer rides the coupler stage: its release row joins the
-        // inhibition sum, its activation joins the diffusion blur, and `couplerScale` scales
-        // it like the rest. Gated on the reconstruction model being loaded, because the
-        // exposure cube's fourth channel is integrated with it — the compact RGB fallback has
-        // no spectrum to expose a fourth record, and a donor whose exposure never rose would
-        // leave the warp table adding back an inhibition no pixel released.
-        let donor = stock.donorLayers.first
-        let donorActive = couplerScale > 0
-            && donor?.inhibition.contains { $0 != 0 } == true
+        // The donor capture layers ride the coupler stage: their release rows join the
+        // inhibition sum, their activations join the diffusion blur, and `couplerScale` scales
+        // them like the rest. Gated on the reconstruction model being loaded, because the
+        // exposure cubes are integrated with it — the compact RGB fallback has no spectrum to
+        // expose extra records, and a donor whose exposure never rose would leave neutral
+        // compensation adding back an inhibition no pixel released.
+        let donorEligible = couplerScale > 0
             && SpectralRuntime.hasReconstructionModel
-            // A 4th Color Layer is an inter-image device between colour records that modulates
-            // how much *dye* each one forms, so it belongs to a chromogenic colour emulsion and
+            // Donor capture layers are inter-image devices between colour records that modulate
+            // how much *dye* each one forms, so they belong to a chromogenic colour emulsion and
             // to nothing else: the monochrome schedule develops one record, and a silver emulsion's
             // image is opaque silver rather than a dye cloud. Both are gated here rather than left
             // to the stocks.
             && !stock.isMonochrome && stock.grainDensityLaw != .silver
+        let activeDonors = donorEligible ? Array(stock.donorLayers.prefix(3)) : []
+        let donorActive = activeDonors.contains { $0.inhibition.contains { $0 != 0 } }
+        let uncolouredDonors = activeDonors.map { layer -> DonorCaptureLayer in
+            var copy = layer
+            copy.curve = labScanSetup.uncoloured(layer.curve)
+            return copy
+        }
+        let donor = uncolouredDonors.first
         if donorActive { featureMask |= FilmEngineFeature.donorLayer }
         if (couplersActive || donorActive) && max(couplerRadius, fringeRadius) > 0 {
             featureMask |= FilmEngineFeature.couplerDiffusion
         }
-        if couplerScale > 0 && adjacencyStrength > 0
+        if userCouplerScale > 0 && adjacencyStrength > 0
             && max(adjacencyRadius, adjacencySecondaryRadius) > 0 {
             featureMask |= FilmEngineFeature.adjacency
         }
@@ -1339,18 +1455,23 @@ public struct FilmEngineInvocation {
         configuration += [adjacencySigma, Float(adjacencyRadius)]
         configuration += [grainSigma, Float(grainRadius)]
         configuration += [veilingGlare, couplerScale,
-                          stock.adjacencyStrength * couplerScale,
+                          stock.adjacencyStrength * userCouplerScale,
                           clumpsPerPixel, exp2(options.exposureEV + filmBoost), xMid]
         configuration += [-1, -1, -1]
-        // The warp mirrors exactly what a neutral pixel releases per-pixel: the matrix only
-        // when the coupler stage runs, the donor row only when the donor does.
-        configuration += Self.couplerWarp(
-            curves: stock.curves,
-            inhibition: couplersActive ? inhibition
-                : inhibition.map { $0.map { _ in 0 } },
-            scale: (couplersActive || donorActive) ? couplerScale : 0,
-            releaseGamma: stock.couplerReleaseGamma,
-            donor: donorActive ? donor : nil)
+        // The warp mirrors exactly what a neutral pixel releases per-pixel on the legacy
+        // (`COUPLER_MODEL == 0`) path; forward-compensated (`COUPLER_MODEL == 1`) stocks evaluate
+        // `W_c(L_c)` directly in-kernel from the active curve tables.
+        let useForwardCouplerModel = !noFilm && stock.useForwardCouplerModel
+        configuration += useForwardCouplerModel
+            ? [Float](repeating: 0, count: 3 * Self.couplerWarpSamples)
+            : Self.couplerWarp(
+                curves: filmCurves,
+                inhibition: couplersActive ? inhibition
+                    : inhibition.map { $0.map { _ in 0 } },
+                scale: (couplersActive || donorActive) ? couplerScale : 0,
+                releaseKappa: stock.couplerReleaseKappa,
+                releaseGamma: stock.couplerReleaseGamma,
+                donor: donorActive ? donor : nil)
         let balance = noFilm ? options.sceneLightGains : (r: Float(1), g: Float(1), b: Float(1))
         configuration += [balance.r, balance.g, balance.b]
         // A source that declares recorded light above diffuse white has the range its edit keeps
@@ -1431,7 +1552,7 @@ public struct FilmEngineInvocation {
         configuration += diffusionRadii.map(Float.init)
         // The donor capture layer's own curve and its per-receiver release. Read only when
         // FOTUFILM_FRAME_DONOR_LAYER is set, so a stock without one leaves harmless zeros.
-        configuration += donorActive ? Self.parameters(labScanSetup.uncoloured(donor!.curve))
+        configuration += donorActive ? Self.parameters(donor!.curve)
                                      : [Float](repeating: 0, count: 6)
         configuration += donorActive ? donor!.inhibition : [0, 0, 0]
         configuration += halationRingRadii
@@ -1518,6 +1639,77 @@ public struct FilmEngineInvocation {
                 grade: SpectralRuntime.effectiveScreenGrade(
                     options.screenGrade, stock: stock, paper: printMedium,
                     digitalReference: options.digitalReference)) : nil)
+        let activeInhibition = couplersActive
+            ? inhibition : [[0, 0, 0], [0, 0, 0], [0, 0, 0]]
+        let rowGains = (useForwardCouplerModel && (couplersActive || donorActive))
+            ? Self.loopGainPerRow(
+                curves: filmCurves,
+                couplerReleaseKappa: stock.couplerReleaseKappa,
+                couplerReleaseGamma: stock.couplerReleaseGamma,
+                inhibition: activeInhibition,
+                donors: donorActive ? uncolouredDonors : [])
+            : [0, 0, 0]
+        let effectiveCouplerScales = Self.effectiveCouplerRowScales(
+            requestedScale: couplerScale,
+            rowGains: rowGains,
+            active: couplersActive || donorActive)
+        let crossBlurShare = 1 - couplerCrossPointwiseShare
+        let uNorm: [Float] = (0..<3).map { receiver in
+            var sum: Float = 0
+            if couplersActive {
+                for j in 0..<3 {
+                    let share: Float = j == receiver ? 1 : crossBlurShare
+                    sum += share * abs(inhibition[receiver][j])
+                }
+            }
+            if donorActive {
+                for layer in uncolouredDonors where receiver < layer.inhibition.count {
+                    sum += abs(layer.inhibition[receiver])
+                }
+            }
+            return sum > 1e-6 ? sum : 1
+        }
+        let vNorm: [Float] = (0..<3).map { receiver in
+            guard fringeActive, couplersActive else { return 1 }
+            var sum: Float = 0
+            for j in 0..<3 where j != receiver {
+                sum += fringeAmount * abs(inhibition[receiver][j])
+            }
+            return sum > 1e-6 ? sum : 1
+        }
+        let runsDonor = featureMask & FilmEngineFeature.donorLayer != 0
+        configuration += [useForwardCouplerModel ? 1 : 0]
+        configuration += effectiveCouplerScales
+        configuration += uNorm + vNorm
+        configuration += stock.couplerReleaseKappa
+        configuration += (0..<3).map { m in
+            donorActive && m < uncolouredDonors.count ? uncolouredDonors[m].releaseKappa : 1
+        }
+        configuration += (0..<3).flatMap { m in
+            donorActive && m < uncolouredDonors.count
+                ? Self.secondaryParameters(uncolouredDonors[m].curve)
+                : [0, 0, 1, 0, 1]
+        }
+        configuration += (1..<3).flatMap { m in
+            donorActive && m < uncolouredDonors.count
+                ? Self.parameters(uncolouredDonors[m].curve)
+                : [Float](repeating: 0, count: 6)
+        }
+        configuration += (1..<3).map { m in
+            guard donorActive, m < uncolouredDonors.count else { return 0 }
+            let receiver = Self.primaryDonorReceiver(uncolouredDonors[m].inhibition)
+            return uncolouredDonors[m].inhibition[receiver]
+        }
+        configuration += (1..<3).map { m in
+            donorActive && m < uncolouredDonors.count ? uncolouredDonors[m].releaseGamma : 1
+        }
+        configuration += (0..<3).map { m in
+            donorActive && m < uncolouredDonors.count
+                ? Float(Self.primaryDonorReceiver(uncolouredDonors[m].inhibition)) : 0
+        }
+        configuration += [runsDonor ? Float(uncolouredDonors.count) : 0]
+        configuration += [0] // DONOR_EXTRA_LUT_ID, populated below once scene illuminant resolves
+        configuration += [couplerCrossPointwiseShare]
         precondition(configuration.count == Self.configurationCount)
 
         var optical = 0
@@ -1551,7 +1743,7 @@ public struct FilmEngineInvocation {
         // The coupler, fringe and adjacency fields blur on decimated grids, and a decimated blur
         // reads past its nominal radius: the reach is what the schedule really touches.
         var diffusion = 0
-        if featureMask & FilmEngineFeature.couplers != 0 {
+        if featureMask & FilmEngineFeature.couplerDiffusion != 0 {
             diffusion = max(diffusion,
                             Int(fotufilm_gaussian_grid_reach(couplerSigma, Int32(couplerRadius))),
                             Int(fotufilm_gaussian_grid_reach(fringeSigma, Int32(fringeRadius))))
@@ -1658,6 +1850,22 @@ public struct FilmEngineInvocation {
                 self.spectralCacheID = (self.spectralCacheID
                     ^ options.lensFilters.signature) &* 0x100000001b3
             }
+            if runsDonor, uncolouredDonors.count > 1,
+               let extra = SpectralRuntime.extraDonorExposure(
+                   for: stock, illuminant: illuminant, stack: options.lensFilters) {
+                let binding = Self.extraDonorRegistry.entry(key: extra.key, table: extra.table)
+                if binding.registrationStatus == -1 {
+                    throw TransportError.backend(
+                        "Extra donor LUT registration failed (status \(binding.registrationStatus))")
+                }
+                self.extraDonorBinding = binding
+                self.configuration[Self.donorExtraLUTIDOffset] = Float(binding.id)
+                self.spectralCacheID = (self.spectralCacheID ^ extra.key) &* 0x100000001b3
+            } else {
+                self.extraDonorBinding = nil
+            }
+        } else {
+            self.extraDonorBinding = nil
         }
         // Only a print that takes the hold reads the film's corners; any other leaves them zero.
         if featureMask & FilmEngineFeature.printDetail != 0 {
@@ -1947,7 +2155,7 @@ public struct FilmEngineInvocation {
         return record
     }
 
-    /// Re-packs the film's records, and the donor's when it has one, as `setup` exposes them:
+    /// Re-packs the film's records, and the donors' when it has any, as `setup` exposes them:
     /// every slot a curve occupies, so a metered frame's setup reaches each renderer.
     mutating func packFilmCurves(of stock: FilmStock, setup: LabScanTiming.Setup) {
         let curves = setup.curves(for: stock)
@@ -1957,8 +2165,65 @@ public struct FilmEngineInvocation {
         write(curves.flatMap(Self.parameters), at: Int(FOTUFILM_CONFIG_CURVES))
         write(curves.flatMap(Self.secondaryParameters), at: Self.curveSecondaryOffset)
         write(curves.flatMap(Self.sampledParameters), at: Self.sampledCurvesOffset)
-        if let donor = stock.donorLayers.first, featureMask & FilmEngineFeature.donorLayer != 0 {
-            write(Self.parameters(setup.uncoloured(donor.curve)), at: Int(FOTUFILM_CONFIG_DONOR_CURVE))
+        let runsDonor = featureMask & FilmEngineFeature.donorLayer != 0
+        let uncolouredDonors: [DonorCaptureLayer] = runsDonor
+            ? stock.donorLayers.prefix(3).map { layer in
+                var copy = layer
+                copy.curve = setup.uncoloured(layer.curve)
+                return copy
+            }
+            : []
+        if let first = uncolouredDonors.first {
+            write(Self.parameters(first.curve), at: Int(FOTUFILM_CONFIG_DONOR_CURVE))
+        }
+        if runsDonor {
+            write((0..<3).flatMap { m in
+                m < uncolouredDonors.count
+                    ? Self.secondaryParameters(uncolouredDonors[m].curve)
+                    : [0, 0, 1, 0, 1]
+            }, at: Self.donorCurveSecondaryOffset)
+            write((1..<3).flatMap { m in
+                m < uncolouredDonors.count
+                    ? Self.parameters(uncolouredDonors[m].curve)
+                    : [Float](repeating: 0, count: 6)
+            }, at: Self.donorExtraCurveOffset)
+        }
+        let runsCouplers = featureMask & FilmEngineFeature.couplers != 0
+        let couplerBase = Int(FOTUFILM_CONFIG_COUPLER)
+        let activeInhibition: [[Float]] = runsCouplers
+            ? (0..<3).map { row in
+                Array(configuration[(couplerBase + row * 3)..<(couplerBase + row * 3 + 3)])
+            }
+            : [[0, 0, 0], [0, 0, 0], [0, 0, 0]]
+        let scale = (runsCouplers || runsDonor)
+            ? configuration[Int(FOTUFILM_CONFIG_COUPLER_SCALE)] : 0
+        let releaseKappa = Array(
+            configuration[Self.couplerReleaseKappaOffset..<(Self.couplerReleaseKappaOffset + 3)])
+        let releaseGamma = Array(
+            configuration[Self.couplerReleaseGammaOffset..<(Self.couplerReleaseGammaOffset + 3)])
+        if configuration[Self.couplerModelOffset] != 0 {
+            let rowGains = (runsCouplers || runsDonor)
+                ? Self.loopGainPerRow(
+                    curves: curves,
+                    couplerReleaseKappa: releaseKappa,
+                    couplerReleaseGamma: releaseGamma,
+                    inhibition: activeInhibition,
+                    donors: uncolouredDonors)
+                : [0, 0, 0]
+            let effectiveScales = Self.effectiveCouplerRowScales(
+                requestedScale: scale,
+                rowGains: rowGains,
+                active: runsCouplers || runsDonor)
+            write(effectiveScales, at: Self.couplerEffectiveScaleOffset)
+        } else {
+            write(Self.couplerWarp(
+                curves: curves,
+                inhibition: activeInhibition,
+                scale: scale,
+                releaseKappa: releaseKappa,
+                releaseGamma: releaseGamma,
+                donor: uncolouredDonors.first),
+                at: Self.couplerWarpOffset)
         }
     }
 
@@ -1994,12 +2259,115 @@ public struct FilmEngineInvocation {
             m0: value(low, 2), m1: value(high, 2))
     }
 
+    private static func primaryDonorReceiver(_ inhibition: [Float]) -> Int {
+        var bestChannel = 0
+        var bestMagnitude: Float = -1
+        for channel in 0..<min(3, inhibition.count) {
+            let magnitude = abs(inhibition[channel])
+            if magnitude > bestMagnitude {
+                bestMagnitude = magnitude
+                bestChannel = channel
+            }
+        }
+        return bestChannel
+    }
+
+    /// Evaluates the small-signal chromatic loop gain `Gamma_{1,c}` per receiver row (`c in 0..<3`)
+    /// on the 2048-sample `[-8, 8]` curve domain (4-step chord with 5% analytic headroom).
+    public static func loopGainPerRow(
+        curves: [CharacteristicCurve],
+        couplerReleaseKappa: [Float] = [1, 1, 1],
+        couplerReleaseGamma: [Float] = [1, 1, 1],
+        inhibition: [[Float]],
+        donors: [DonorCaptureLayer] = []
+    ) -> [Float] {
+        let count = 2048
+        let low: Float = -8
+        let step: Float = 16 / Float(count - 1)
+        let chordSpan = 4 * step
+
+        func peakReleaseSlope(curve: CharacteristicCurve, kappa: Float, gamma: Float) -> Float {
+            let range = curve.dMax - curve.dMin
+            guard range > 0 else { return 0 }
+            var values = [Float](repeating: 0, count: count)
+            for i in 0..<count {
+                let l = low + Float(i) * step
+                let a = (curve.density(logExposure: l) - curve.dMin) / range
+                values[i] = inhibitorRelease(activation: a, kappa: kappa, gamma: gamma)
+            }
+            var peak: Float = 0
+            for i in 0..<(count - 4) {
+                peak = max(peak, abs(values[i + 4] - values[i]) / chordSpan)
+            }
+            return 1.05 * peak
+        }
+
+        let layerSlope: [Float] = (0..<3).map { layer in
+            guard layer < curves.count else { return 0 }
+            let kappa = layer < couplerReleaseKappa.count ? couplerReleaseKappa[layer] : 1
+            let gamma = layer < couplerReleaseGamma.count ? couplerReleaseGamma[layer] : 1
+            return peakReleaseSlope(curve: curves[layer], kappa: kappa, gamma: gamma)
+        }
+        let donorSlope: [Float] = donors.prefix(3).map { donor in
+            peakReleaseSlope(curve: donor.curve, kappa: donor.releaseKappa, gamma: donor.releaseGamma)
+        }
+
+        return (0..<3).map { receiver in
+            guard receiver < inhibition.count else { return 0 }
+            var rowGain: Float = 0
+            let row = inhibition[receiver]
+            for donor in 0..<min(3, row.count) {
+                if donor == receiver {
+                    if row[donor] < 0 { rowGain += -row[donor] * layerSlope[donor] }
+                } else {
+                    rowGain += abs(row[donor]) * layerSlope[donor]
+                }
+            }
+            for (m, donor) in donors.prefix(3).enumerated() where receiver < donor.inhibition.count {
+                rowGain += abs(donor.inhibition[receiver]) * donorSlope[m]
+            }
+            return rowGain
+        }
+    }
+
+    /// Evaluates the worst-case small-signal chromatic loop gain `Gamma_1 = max_c Gamma_{1,c}`.
+    public static func loopGainGamma1(
+        curves: [CharacteristicCurve],
+        couplerReleaseKappa: [Float] = [1, 1, 1],
+        couplerReleaseGamma: [Float] = [1, 1, 1],
+        inhibition: [[Float]],
+        donors: [DonorCaptureLayer] = []
+    ) -> Float {
+        loopGainPerRow(
+            curves: curves,
+            couplerReleaseKappa: couplerReleaseKappa,
+            couplerReleaseGamma: couplerReleaseGamma,
+            inhibition: inhibition,
+            donors: donors
+        ).max() ?? 0
+    }
+
+    /// Clamps `requestedScale` (`effectiveCouplerScale`) independently per receiver row so an
+    /// overdriven gap reach or push slope on one row never collaterally attenuates untouched rows.
+    public static func effectiveCouplerRowScales(
+        requestedScale: Float,
+        rowGains: [Float],
+        active: Bool
+    ) -> [Float] {
+        guard active else { return [0, 0, 0] }
+        return (0..<3).map { receiver in
+            let gain = receiver < rowGains.count ? rowGains[receiver] : 0
+            return gain > 0 ? min(requestedScale, maximumLoopGain / gain) : requestedScale
+        }
+    }
+
     /// Solves the neutral anchor for the DIR coupler stage. `donor` joins the release sum the
     /// way it joins the per-pixel one: the published curves already carry every inter-image
     /// effect a neutral develops — the donor's included — so a donor outside the warp would
     /// develop its inhibition twice on the grey axis.
     static func couplerWarp(curves: [CharacteristicCurve],
                             inhibition: [[Float]], scale: Float,
+                            releaseKappa: [Float] = [1, 1, 1],
                             releaseGamma: [Float] = [1, 1, 1],
                             donor: DonorCaptureLayer? = nil) -> [Float] {
         let samples = couplerWarpSamples
@@ -2018,11 +2386,12 @@ public struct FilmEngineInvocation {
             let curve = curves[layer]
             let range = curve.dMax - curve.dMin
             guard range > 0 else { continue }
+            let kappa = layer < releaseKappa.count ? releaseKappa[layer] : 1
             for i in 0..<solveCount {
                 let l = solveLow + Float(i) * solveStep
                 let developed = (curve.density(logExposure: l) - curve.dMin) / range
                 activation[layer][i] = inhibitorRelease(
-                    activation: developed, gamma: releaseGamma[layer])
+                    activation: developed, kappa: kappa, gamma: releaseGamma[layer])
             }
         }
         // On the neutral axis the donor is exposed exactly as the layers are — that is what
@@ -2035,7 +2404,7 @@ public struct FilmEngineInvocation {
                 let developed =
                     (donor.curve.density(logExposure: l) - donor.curve.dMin) / range
                 donorActivation[i] = inhibitorRelease(
-                    activation: developed, gamma: donor.releaseGamma)
+                    activation: developed, kappa: donor.releaseKappa, gamma: donor.releaseGamma)
             }
         }
 
@@ -2072,15 +2441,16 @@ public struct FilmEngineInvocation {
         return table
     }
 
-    /// Threshold-and-saturation law for development-inhibitor release. The normalized Hill form
-    /// fixes 0, 0.5 and 1, so it changes chromatic inter-image response without moving the neutral
-    /// anchor's midpoint. Gamma 1 is kept as an exact linear compatibility mode.
-    static func inhibitorRelease(activation: Float, gamma: Float) -> Float {
+    /// Competitive QDI-Hill law for development-inhibitor release:
+    /// `r(a; kappa, gamma) = a^gamma / max(a^gamma + kappa * (1 - a)^gamma, 1e-8)`.
+    /// `kappa == 1, gamma == 1` preserves the historical linear path bit-for-bit.
+    static func inhibitorRelease(activation: Float, kappa: Float = 1, gamma: Float) -> Float {
         let a = min(max(activation, 0), 1)
-        guard gamma != 1 else { return a }
-        let released = Float(pow(Double(a), Double(gamma)))
-        let retained = Float(pow(Double(1 - a), Double(gamma)))
-        return released / max(released + retained, Float.leastNonzeroMagnitude)
+        if gamma == 1 && kappa == 1 { return a }
+        let released = gamma == 1 ? a : Float(pow(Double(a), Double(gamma)))
+        let retained = gamma == 1 ? (1 - a) : Float(pow(Double(1 - a), Double(gamma)))
+        let denom = kappa == 1 ? (released + retained) : (released + kappa * retained)
+        return released / max(denom, 1e-8)
     }
 
     /// Lends the exposure, film-output, and paper-output LUT storage to a C call.
@@ -2088,7 +2458,7 @@ public struct FilmEngineInvocation {
         _ body: (UnsafePointer<Float>?, UnsafePointer<Float>?, UnsafePointer<Float>?) -> Result
     ) -> Result {
         let paper = spectral.paperOutput ?? spectral.filmOutput
-        return withExtendedLifetime(filmTileBinding) {
+        return withExtendedLifetime((filmTileBinding, extraDonorBinding)) {
             spectral.exposure.values.withUnsafeBufferPointer { exposure in
                 spectral.filmOutput.values.withUnsafeBufferPointer { film in
                     paper.values.withUnsafeBufferPointer { paper in

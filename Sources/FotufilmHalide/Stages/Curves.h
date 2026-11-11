@@ -249,6 +249,62 @@ inline Halide::Expr film_curve_range(Halide::ImageParam &configuration,
             * (configuration(secondary + 3) - configuration(secondary + 1));
 }
 
+inline Halide::Expr donor_primary_base(Halide::Expr donor_index) {
+    return Halide::select(
+        donor_index == 0, FOTUFILM_CONFIG_DONOR_CURVE,
+        FOTUFILM_CONFIG_DONOR_EXTRA_CURVE + Halide::clamp(donor_index - 1, 0, 1) * 6);
+}
+
+inline Halide::Expr donor_secondary_base(Halide::Expr donor_index) {
+    return FOTUFILM_CONFIG_DONOR_CURVE_SECONDARY + Halide::clamp(donor_index, 0, 2) * 5;
+}
+
+inline Halide::Expr donor_density(Halide::ImageParam &configuration,
+                                  Halide::Expr donor_index,
+                                  Halide::Expr log_exposure,
+                                  bool approximate = false) {
+    return curve_density(configuration, donor_primary_base(donor_index),
+                         log_exposure, approximate)
+        + curve_component_density(configuration, donor_secondary_base(donor_index),
+                                  log_exposure, approximate);
+}
+
+inline Halide::Expr donor_curve_dmin(Halide::ImageParam &configuration,
+                                     Halide::Expr donor_index) {
+    return configuration(donor_primary_base(donor_index));
+}
+
+inline Halide::Expr donor_curve_range(Halide::ImageParam &configuration,
+                                      Halide::Expr donor_index) {
+    Halide::Expr base = donor_primary_base(donor_index);
+    Halide::Expr secondary = donor_secondary_base(donor_index);
+    return curve_range(configuration, base)
+        + configuration(secondary)
+            * (configuration(secondary + 3) - configuration(secondary + 1));
+}
+
+inline Halide::Func donor_curve_table(Halide::ImageParam &configuration,
+                                      int channels, const std::string &name,
+                                      Halide::DeviceAPI gpu = Halide::DeviceAPI::None,
+                                      bool approximate = false) {
+    Halide::Var i(name + "_i"), c(name + "_c");
+    Halide::Func table(name);
+    Halide::Expr log_exposure = kCurveMin
+        + (kCurveMax - kCurveMin) * (Halide::cast<float>(i)
+                                     / float(kCurveSamples - 1));
+    table(i, c) = donor_density(configuration, c, log_exposure, approximate);
+    table.compute_root().bound(i, 0, kCurveSamples).bound(c, 0, channels);
+    if (gpu != Halide::DeviceAPI::None) {
+        Halide::Var block_i(name + "_block_i"), thread_i(name + "_thread_i");
+        table.reorder(c, i).unroll(c)
+            .gpu_tile(i, block_i, thread_i, 64,
+                      Halide::TailStrategy::GuardWithIf, gpu);
+    } else {
+        table.reorder(i, c).unroll(c);
+    }
+    return table;
+}
+
 }
 
 #endif

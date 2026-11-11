@@ -2093,6 +2093,12 @@ public enum SpectralRuntime {
                 h = h &* 0x100000001b3
             }
             for v in donor.inhibition { h = (h ^ UInt64(v.bitPattern)) &* 0x100000001b3 }
+            if donor.releaseGamma != 1 {
+                h = (h ^ UInt64(donor.releaseGamma.bitPattern)) &* 0x100000001b3
+            }
+            if donor.releaseKappa != 1 {
+                h = (h ^ UInt64(donor.releaseKappa.bitPattern)) &* 0x100000001b3
+            }
         }
         return h
     }
@@ -2920,6 +2926,56 @@ extension SpectralRuntime {
         BoundedCache<UInt64, (warm: SpectralLUT, cool: SpectralLUT)>(limit: 16)
     nonisolated(unsafe) private static var filteredExposureCache =
         BoundedCache<UInt64, SpectralLUT>(limit: 32)
+    private static let extraDonorLock = NSLock()
+    nonisolated(unsafe) private static var extraDonorExposureCache =
+        BoundedCache<UInt64, SpectralLUT>(limit: 16)
+
+    /// Exposure-domain LUT for extra donor capture layers (`donorLayers[1]` in `.x`,
+    /// `donorLayers[2]` in `.y`). Nil when the stock coats at most one donor or when the
+    /// spectral reconstruction model is unavailable.
+    public static func extraDonorExposure(
+        for stock: FilmStock,
+        illuminant: [Float],
+        stack: LensFilterStack = LensFilterStack()
+    ) -> (key: UInt64, table: SpectralLUT)? {
+        guard stock.donorLayers.count > 1, hasReconstructionModel else { return nil }
+        let gain: Float = stack.isEmpty ? 1 : stack.exposureGain(stock: stock, illuminant: illuminant)
+        var key = (filterKey(for: stock) ^ illuminantSignature(illuminant)) &* 0x100000001b3
+        key = (key ^ stack.signature) &* 0x100000001b3
+        key = (key ^ UInt64(gain.bitPattern) ^ 0x4558545241444E52) &* 0x100000001b3
+        extraDonorLock.lock()
+        if let found = extraDonorExposureCache.value(for: key) {
+            extraDonorLock.unlock()
+            return (key, found)
+        }
+        extraDonorLock.unlock()
+
+        let reference = filmReferenceIlluminant(for: stock)
+        var filter: SpectralFilter? = nil
+        if !stack.isEmpty {
+            var resolved = spectralFilter(for: stock, stack: stack, illuminant: illuminant)
+            resolved.gain = gain
+            filter = resolved
+        }
+        let donor1 = stock.donorLayers[1]
+        let donor2 = stock.donorLayers.count > 2 ? stock.donorLayers[2] : nil
+        let table = buildLUT { point in
+            let e1 = domainDonorExposure(
+                point, donor: donor1, illuminant: illuminant,
+                referenceIlluminant: reference, filter: filter)
+            let e2 = donor2.map {
+                domainDonorExposure(
+                    point, donor: $0, illuminant: illuminant,
+                    referenceIlluminant: reference, filter: filter)
+            } ?? 0
+            return SIMD3(e1, e2, 0)
+        }
+
+        extraDonorLock.lock()
+        extraDonorExposureCache.insert(table, for: key)
+        extraDonorLock.unlock()
+        return (key, table)
+    }
 
     /// The two anchor exposure tables for a stock behind a filter, built with the metering scale
     /// left out so that one pair serves every colour temperature. Each anchor carries the

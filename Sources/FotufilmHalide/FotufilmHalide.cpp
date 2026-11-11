@@ -128,6 +128,23 @@ extern "C" int32_t fotufilm_halide_set_film_tiles(int32_t id, const float *tiles
     return FilmTileStore::shared().set(id, tiles, count) ? 0 : -1;
 }
 
+extern "C" int32_t fotufilm_halide_set_extra_donor_lut(int32_t id, const float *lut,
+                                                       int64_t count) {
+    return ExtraDonorLutStore::shared().set(id, lut, count) ? 0 : -1;
+}
+
+namespace {
+
+bool valid_donor_count(const float *configuration, int32_t feature_mask) {
+    if ((feature_mask & FOTUFILM_FRAME_DONOR_LAYER) == 0) return true;
+    if ((feature_mask & (FOTUFILM_FRAME_NO_FILM | FOTUFILM_FRAME_DENSITY_IN | FOTUFILM_FRAME_LIGHT_OUT)) != 0)
+        return true;
+    const float count = configuration[FOTUFILM_CONFIG_DONOR_COUNT];
+    return std::isfinite(count) && count >= 0.0f && int32_t(count) <= 3;
+}
+
+}
+
 extern "C" int32_t fotufilm_halide_develop(
     const float *input_r, const float *input_g, const float *input_b,
     float *output_r, float *output_g, float *output_b,
@@ -142,6 +159,7 @@ extern "C" int32_t fotufilm_halide_develop(
     // reading the granularity of this film is not looking through a lens either. The full frame
     // path keeps the bit, because there the print really does follow.
     const int32_t film_only = feature_mask & ~FOTUFILM_FRAME_PRINT_MTF;
+    if (!valid_donor_count(configuration, film_only)) return -1;
     return translate_exceptions([&] {
         Buffer<float> density(width, height, 3);
         develop_pipeline_for(film_only)->run(
@@ -235,7 +253,8 @@ static int32_t process_tile_output(
         interior_left > width - interior_width ||
         interior_top < 0 || interior_height <= 0 || interior_height > height ||
         interior_top > height - interior_height ||
-        lut_dimension != kLutDimension) return -1;
+        lut_dimension != kLutDimension ||
+        !valid_donor_count(configuration, feature_mask)) return -1;
     if (additional_record_exposure) {
         const int32_t unsupported = FOTUFILM_FRAME_NO_FILM | FOTUFILM_FRAME_DENSITY_IN
             | FOTUFILM_FRAME_RECORD_EXPOSURE_IN | FOTUFILM_FRAME_LIGHT_OUT | FOTUFILM_FRAME_TEXTURE;
@@ -367,6 +386,11 @@ extern "C" FOTUFILM_FALLBACK int32_t fotufilm_halide_available(void) { return 0;
 
 extern "C" FOTUFILM_FALLBACK int32_t fotufilm_halide_set_film_tiles(
     int32_t, const float *, int64_t) { return -1; }
+extern "C" FOTUFILM_FALLBACK int32_t fotufilm_halide_set_extra_donor_lut(
+    int32_t, const float *lut, int64_t count) {
+    if (!lut || count == 0) return 0;
+    return count == 33LL * 33 * 33 * 4 ? -2 : -1;
+}
 extern "C" FOTUFILM_FALLBACK int32_t fotufilm_halide_develop(
     const float *, const float *, const float *, float *, float *, float *,
     int32_t, int32_t, const float *, const float *, int32_t, int32_t,

@@ -147,18 +147,22 @@ public struct DonorCaptureLayer: Sendable {
     /// Exponent of the donor's normalized Hill release curve. 1 is the historical linear
     /// activation; values above 1 add a threshold and saturate toward full release.
     public var releaseGamma: Float
+    /// Competitive QDI coupling ratio in `a^gamma / (a^gamma + kappa * (1 - a)^gamma)`. 1 is the
+    /// symmetric Hill curve; values below 1 model fast QDI coupling relative to the image coupler.
+    public var releaseKappa: Float
     /// Centre depth below the emulsion surface in micrometres, where the publication shows
     /// the stack. Descriptive; the release row above is what renders.
     public var depthUM: Float?
 
     public init(name: String, sensitivity: [Float], curve: CharacteristicCurve,
                 inhibition: [Float], releaseGamma: Float = 1,
-                depthUM: Float? = nil) {
+                depthUM: Float? = nil, releaseKappa: Float = 1) {
         self.name = name
         self.sensitivity = sensitivity
         self.curve = curve
         self.inhibition = inhibition
         self.releaseGamma = releaseGamma
+        self.releaseKappa = releaseKappa
         self.depthUM = depthUM
     }
 }
@@ -180,11 +184,9 @@ public struct FilmStock: Sendable {
     /// 3 is reserved for the shared grain field. Donor layers use the separate `donorLayers` path.
     public static let supportedCaptureLayerCounts: ClosedRange<Int> = 3...3
 
-    /// How many donor layers the render path can carry: the packed kernel configuration
-    /// appends six curve parameters and three release weights for exactly one
-    /// (`FOTUFILM_CONFIG_DONOR_CURVE`/`FOTUFILM_CONFIG_DONOR_RELEASE`). A second donor is more
-    /// appended slots and a wider blur, not a new mechanism.
-    public static let supportedDonorLayerCounts: ClosedRange<Int> = 0...1
+    /// How many donor layers the render path can carry: up to three donor capture layers
+    /// (`DONOR_CURVE` plus two appended `DONOR_EXTRA_CURVE` records).
+    public static let supportedDonorLayerCounts: ClosedRange<Int> = 0...3
 
     /// How many image dyes a colour stock forms. Not the same quantity as `captureLayerCount`,
     /// and equal to it only because every stock shipped so far coats three layers:
@@ -237,6 +239,14 @@ public struct FilmStock: Sendable {
     /// Per-donor exponents for the normalized inhibitor-release curve. 1 is linear; values above
     /// 1 model the chemical threshold and saturation before the released inhibitor diffuses.
     public var couplerReleaseGamma: [Float]
+    /// Per-donor competitive QDI coupling ratios `kappa > 0` in `a^gamma / (a^gamma + kappa * (1 - a)^gamma)`.
+    /// `[1, 1, 1]` is the historical symmetric release law.
+    public var couplerReleaseKappa: [Float]
+    /// Selects the schema-v4 forward-compensated QDI coupler model (`COUPLER_MODEL = 1`) rather
+    /// than the legacy inverted warp table (`COUPLER_MODEL = 0`).
+    public var useForwardCouplerModel: Bool
+    /// Multiplier applied to coupler inhibition by a non-reference development condition (`pushed`).
+    public var developmentCouplerScale: Float
     /// Where `couplerInhibition` came from, when it came from somewhere.
     public var couplerGeometry: CouplerGeometry? {
         didSet {
@@ -426,7 +436,10 @@ public struct FilmStock: Sendable {
         isMonochrome: Bool = false,
         isReversal: Bool = false,
         isReflectionPrint: Bool = false,
-        nativePrintMedium: PrintPaper? = nil
+        nativePrintMedium: PrintPaper? = nil,
+        couplerReleaseKappa: [Float] = [1, 1, 1],
+        useForwardCouplerModel: Bool = false,
+        developmentCouplerScale: Float = 1
     ) {
         self.name = name
         self.sensitivity = FilmStock.rowNormalized(sensitivity)
@@ -457,6 +470,9 @@ public struct FilmStock: Sendable {
         self.couplerGeometry = couplerGeometry
         self.couplerInhibition = couplerGeometry?.matrix() ?? couplerInhibition
         self.couplerReleaseGamma = couplerReleaseGamma
+        self.couplerReleaseKappa = couplerReleaseKappa
+        self.useForwardCouplerModel = useForwardCouplerModel
+        self.developmentCouplerScale = developmentCouplerScale
         self.couplerDiffusionMM = couplerDiffusionMM
         self.chromaticFringeAmount = chromaticFringeAmount
         self.chromaticFringeRadiusMM = chromaticFringeRadiusMM

@@ -195,6 +195,11 @@ extern "C" int32_t fotufilm_halide_android_gpu_process_rgba8(
     int32_t origin_x, int32_t origin_y) {
     if (vulkan_unusable) return -4;
     if (!input || !output || !configuration || width <= 0 || height <= 0) return -1;
+    if ((feature_mask & FOTUFILM_FRAME_DONOR_LAYER) != 0
+        && (feature_mask & (FOTUFILM_FRAME_NO_FILM | FOTUFILM_FRAME_DENSITY_IN | FOTUFILM_FRAME_LIGHT_OUT)) == 0) {
+        const float count = configuration[FOTUFILM_CONFIG_DONOR_COUNT];
+        if (!(count >= 0.0f && int32_t(count) <= 1)) return -1;
+    }
     std::lock_guard<std::mutex> lock(pipeline_mutex());
     install_error_handler();
     if (!spectral_cache().valid) return -2;

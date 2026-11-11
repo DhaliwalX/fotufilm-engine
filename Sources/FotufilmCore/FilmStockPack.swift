@@ -49,6 +49,9 @@ public struct FilmStockDefinition: Codable, Sendable {
     /// Per-donor Hill exponents for inhibitor release. Absent is [1, 1, 1], preserving the
     /// historical linear law for older and third-party packs.
     public var couplerReleaseGamma: [Float]? = nil
+    /// Per-donor competitive QDI coupling ratios. Absent is [1, 1, 1]; non-unit values require
+    /// schema version 4.
+    public var couplerReleaseKappa: [Float]? = nil
     /// Optional, and where it is present it is what the engine actually uses — `couplerInhibition`
     /// above is then the matrix this produces, written out so the file still says plainly what it
     /// renders.
@@ -201,6 +204,8 @@ public struct FilmStockDefinition: Codable, Sendable {
         public var inhibition: [Float]
         /// Hill exponent for inhibitor release. Absent is the historical linear law.
         public var releaseGamma: Float? = nil
+        /// Competitive QDI coupling ratio. Absent is 1; non-unit values require schema version 4.
+        public var releaseKappa: Float? = nil
         /// Centre depth below the emulsion surface in micrometres, descriptive.
         public var depthUM: Float?
 
@@ -210,6 +215,7 @@ public struct FilmStockDefinition: Codable, Sendable {
             curve = CurveSpec(layer.curve)
             inhibition = layer.inhibition
             releaseGamma = layer.releaseGamma
+            releaseKappa = layer.releaseKappa == 1 ? nil : layer.releaseKappa
             depthUM = layer.depthUM
         }
 
@@ -217,7 +223,8 @@ public struct FilmStockDefinition: Codable, Sendable {
             DonorCaptureLayer(name: name, sensitivity: sensitivity,
                               curve: curve.curve, inhibition: inhibition,
                               releaseGamma: releaseGamma ?? 1,
-                              depthUM: depthUM)
+                              depthUM: depthUM,
+                              releaseKappa: releaseKappa ?? 1)
         }
     }
 
@@ -246,6 +253,8 @@ public struct FilmStockDefinition: Codable, Sendable {
             public var grainLayerWeights: [Float]?
             public var grainFogDensity: Float?
             public var adjacencyStrength: Float?
+            public var couplerScale: Float?
+            public var couplerGeometry: CouplerGeometry?
 
             public init(_ condition: FilmDevelopmentCondition) {
                 stops = condition.stops
@@ -258,13 +267,18 @@ public struct FilmStockDefinition: Codable, Sendable {
                 case .estimated: basis = "estimated"
                 }
                 curves = condition.curves.map(CurveSpec.init)
-                donorCurves = condition.donorCurves.isEmpty
-                    ? nil : condition.donorCurves.map(CurveSpec.init)
+                if let explicitDonors = condition.donorCurves, !explicitDonors.isEmpty {
+                    donorCurves = explicitDonors.map(CurveSpec.init)
+                } else {
+                    donorCurves = nil
+                }
                 grainStrength = condition.grainStrength
                 grainSizeMM = condition.grainSizeMM
                 grainLayerWeights = condition.grainLayerWeights
                 grainFogDensity = condition.grainFogDensity
                 adjacencyStrength = condition.adjacencyStrength
+                couplerScale = condition.couplerScale
+                couplerGeometry = condition.couplerGeometry
             }
 
             /// Nil for a basis the validator rejects.
@@ -282,11 +296,13 @@ public struct FilmStockDefinition: Codable, Sendable {
                     stops: stops, label: label, timeMinutes: timeMinutes,
                     exposureIndex: exposureIndex, basis: resolvedBasis ?? .estimated,
                     curves: curves.map(\.curve),
-                    donorCurves: donorCurves?.map(\.curve) ?? [],
+                    donorCurves: donorCurves?.map(\.curve),
                     grainStrength: grainStrength, grainSizeMM: grainSizeMM,
                     grainLayerWeights: grainLayerWeights,
                     grainFogDensity: grainFogDensity,
-                    adjacencyStrength: adjacencyStrength)
+                    adjacencyStrength: adjacencyStrength,
+                    couplerScale: couplerScale,
+                    couplerGeometry: couplerGeometry)
             }
         }
 
@@ -417,6 +433,7 @@ public struct FilmStockDefinition: Codable, Sendable {
 public extension FilmStockDefinition {
     static let currentSchemaVersion = 2
     static let layeredTransportSchemaVersion = 3
+    static let dirChemistrySchemaVersion = 4
 
     /// Materialise the definition into a renderable stock. `FilmStock.init` re-normalises the RGB
     /// matrix and validates layer counts, so a malformed pack fails here rather than part-way
@@ -471,14 +488,29 @@ public extension FilmStockDefinition {
             isMonochrome: isMonochrome ?? false,
             isReversal: isReversal ?? false,
             isReflectionPrint: isReflectionPrint ?? false,
-            nativePrintMedium: nativePrintMedium.flatMap(PrintPaper.preset(id:)))
+            nativePrintMedium: nativePrintMedium.flatMap(PrintPaper.preset(id:)),
+            couplerReleaseKappa: couplerReleaseKappa ?? [1, 1, 1],
+            useForwardCouplerModel: schemaVersion >= Self.dirChemistrySchemaVersion)
     }
 
     /// Capture a stock in its exact rendered form.
     init(id: String, stock: FilmStock, subtitle: String? = nil,
          nativeFormatID: String? = nil) {
-        self.schemaVersion = stock.layeredTransport == nil
-            ? FilmStockDefinition.currentSchemaVersion : FilmStockDefinition.layeredTransportSchemaVersion
+        let usesDirChemistrySchema = stock.useForwardCouplerModel
+            || stock.donorLayers.count > 1
+            || stock.couplerReleaseKappa != [1, 1, 1]
+            || stock.donorLayers.contains { $0.releaseKappa != 1 }
+            || (stock.couplerGeometry?.receiverSusceptibility ?? [1, 1, 1]) != [1, 1, 1]
+            || stock.developmentProfile?.conditions.contains {
+                $0.couplerScale != nil || $0.couplerGeometry != nil
+            } == true
+            || (stock.spectralProfile.minimumDensity != nil
+                && stock.spectralProfile.imageDyeDensity.contains { $0.contains { $0 < 0 } })
+        self.schemaVersion = usesDirChemistrySchema
+            ? FilmStockDefinition.dirChemistrySchemaVersion
+            : (stock.layeredTransport == nil
+                ? FilmStockDefinition.currentSchemaVersion
+                : FilmStockDefinition.layeredTransportSchemaVersion)
         self.id = id
         self.name = stock.name
         self.subtitle = subtitle
@@ -506,6 +538,8 @@ public extension FilmStockDefinition {
         self.lumaDiffusionMM = stock.lumaDiffusionMM
         self.couplerInhibition = stock.couplerInhibition
         self.couplerReleaseGamma = stock.couplerReleaseGamma
+        self.couplerReleaseKappa = stock.couplerReleaseKappa == [1, 1, 1]
+            ? nil : stock.couplerReleaseKappa
         self.couplerGeometry = stock.couplerGeometry
         self.couplerDiffusionMM = stock.couplerDiffusionMM
         self.chromaticFringeAmount = stock.chromaticFringeAmount == 0 ? nil : stock.chromaticFringeAmount

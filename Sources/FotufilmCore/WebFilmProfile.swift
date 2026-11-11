@@ -4,7 +4,7 @@ import Foundation
 /// prebuilt size ladder. The configuration and spectral tables are the native invocation's.
 public enum WebFilmProfile {
     public enum Failure: Error, CustomStringConvertible {
-        case invalidDimensions, donorTransport, transportOptics
+        case invalidDimensions, donorTransport, transportOptics, multiDonor
         public var description: String {
             switch self {
             case .invalidDimensions: return "Invalid profile dimensions."
@@ -12,6 +12,8 @@ public enum WebFilmProfile {
                 return "Layered Transport in the browser does not yet carry a donor stock's fourth record."
             case .transportOptics:
                 return "Layered Transport in the browser needs lens flare and diffusion filters off."
+            case .multiDonor:
+                return "Browser profiles support at most one donor capture layer."
             }
         }
     }
@@ -21,6 +23,9 @@ public enum WebFilmProfile {
         guard width > 0, height > 0, width <= 120_000, height <= 120_000,
               Int64(width) * Int64(height) <= 120_000_000 else {
             throw Failure.invalidDimensions
+        }
+        guard stock.donorLayers.count <= 1 else {
+            throw Failure.multiDonor
         }
         var options = options
         // The rendering worker supplies a tone base measured from the photograph.

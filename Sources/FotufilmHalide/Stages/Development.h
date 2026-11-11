@@ -15,6 +15,43 @@ inline Halide::Expr film_activation(Halide::ImageParam &configuration,
     return (formed - configuration(base)) / film_curve_range(configuration, channel);
 }
 
+inline Halide::Expr donor_activation(Halide::ImageParam &configuration,
+                                     Halide::Expr donor_index, Halide::Expr formed) {
+    return (formed - donor_curve_dmin(configuration, donor_index))
+        / Halide::max(donor_curve_range(configuration, donor_index), 1.0e-6f);
+}
+
+template <typename FilmCurveFn, typename DonorCurveFn>
+inline Halide::Expr forward_neutral_compensation(
+    Halide::ImageParam &configuration, Halide::Expr channel, Halide::Expr log_exposure,
+    FilmCurveFn &&film_curve_fn, DonorCurveFn &&donor_curve_fn,
+    Halide::Expr on_couplers, Halide::Expr on_donor, int max_donors) {
+    Halide::Expr coupler_sum = 0.0f;
+    for (int j = 0; j < 3; ++j) {
+        Halide::Expr act_j = film_activation(configuration, j, film_curve_fn(j, log_exposure));
+        Halide::Expr rel_j = coupler_release(configuration, j, act_j);
+        coupler_sum = coupler_sum
+            + configuration(FOTUFILM_CONFIG_COUPLER + channel * 3 + j) * rel_j;
+    }
+    Halide::Expr sum = Halide::select(on_couplers, coupler_sum, 0.0f);
+    if (max_donors > 0) {
+        Halide::Expr donor_count = Halide::clamp(
+            Halide::cast<int32_t>(configuration(FOTUFILM_CONFIG_DONOR_COUNT)), 0, max_donors);
+        Halide::Expr donor_sum = 0.0f;
+        for (int m = 0; m < max_donors; ++m) {
+            Halide::Expr act_m = donor_activation(
+                configuration, m, donor_curve_fn(m, log_exposure));
+            Halide::Expr rel_m = donor_release(configuration, m, act_m);
+            donor_sum = donor_sum + Halide::select(
+                m < donor_count,
+                donor_release_amplitude(configuration, channel, m) * rel_m,
+                0.0f);
+        }
+        sum = sum + Halide::select(on_donor, donor_sum, 0.0f);
+    }
+    return configuration(FOTUFILM_CONFIG_COUPLER_EFFECTIVE_SCALE + channel) * sum;
+}
+
 inline Halide::Expr donor_inhibition(Halide::ImageParam &configuration,
                                      Halide::Expr channel, Halide::Expr donor_released) {
     return configuration(FOTUFILM_CONFIG_DONOR_RELEASE + channel) * donor_released

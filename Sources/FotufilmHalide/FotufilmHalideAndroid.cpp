@@ -100,6 +100,24 @@ extern "C" int32_t fotufilm_halide_set_film_tiles(int32_t id, const float *tiles
     return FilmTileStore::shared().set(id, tiles, count) ? 0 : -1;
 }
 
+extern "C" int32_t fotufilm_halide_set_extra_donor_lut(int32_t, const float *lut,
+                                                       int64_t count) {
+    if (!lut || count == 0) return 0;
+    return count == int64_t(kLutValueCount) ? -2 : -1;
+}
+
+namespace {
+
+bool valid_donor_count(const float *configuration, int32_t feature_mask) {
+    if ((feature_mask & FOTUFILM_FRAME_DONOR_LAYER) == 0) return true;
+    if ((feature_mask & (FOTUFILM_FRAME_NO_FILM | FOTUFILM_FRAME_DENSITY_IN | FOTUFILM_FRAME_LIGHT_OUT)) != 0)
+        return true;
+    const float count = configuration[FOTUFILM_CONFIG_DONOR_COUNT];
+    return std::isfinite(count) && count >= 0.0f && int32_t(count) <= 1;
+}
+
+}
+
 extern "C" int32_t fotufilm_halide_develop(
     const float *input_r, const float *input_g, const float *input_b,
     float *output_r, float *output_g, float *output_b,
@@ -112,6 +130,7 @@ extern "C" int32_t fotufilm_halide_develop(
     Buffer<float> density(width, height, 3);
     // The negative on its own: no enlarger images it. See the note on the reference entry point.
     const int32_t film_only = feature_mask & ~FOTUFILM_FRAME_PRINT_MTF;
+    if (!valid_donor_count(configuration, film_only)) return -1;
     const int error = run_develop(input_r, input_g, input_b, density, width, height,
                                   configuration, exposure_lut, film_only, seed, 0, 0);
     if (error) return error;
@@ -210,7 +229,8 @@ static int32_t process_tile_output(
         interior_left > width - interior_width ||
         interior_top < 0 || interior_height <= 0 || interior_height > height ||
         interior_top > height - interior_height ||
-        lut_dimension != kLutDimension) return -1;
+        lut_dimension != kLutDimension ||
+        !valid_donor_count(configuration, feature_mask)) return -1;
     if (additional_record_exposure) {
         const int32_t unsupported = FOTUFILM_FRAME_NO_FILM | FOTUFILM_FRAME_DENSITY_IN
             | FOTUFILM_FRAME_RECORD_EXPOSURE_IN | FOTUFILM_FRAME_LIGHT_OUT | FOTUFILM_FRAME_TEXTURE;

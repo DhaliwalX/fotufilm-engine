@@ -505,6 +505,71 @@
       "name": "PRINT_DETAIL",
       "count": 10,
       "doc": "Shadow and Highlight Detail: how a print moves its printing light at the two ends of its tone scale, the same log exposure on every record so each pixel keeps the paper's own colour. Shadow strength (0...1) first: a hold shaped as a bump on the luminance-weighted paper exposure between a knee, a fixed share of the way from the film's mid-grey to whichever extreme prints black (a negative's clear base, a slide's densest), and that extreme, which keeps its black. Then highlight strength (0...1), the luminance-weighted paper exposure of the highlight knee, where the paper prints a stop above its aim, and of the paper's white: past the knee the exposure x is drawn in to W x / (x + W), W the knee's room to the white, so highlights roll toward the white instead of clipping. A directly viewed transparency runs the same curve on its displayed density and takes the hold as light. Then the film's clear (every activation zero) and densest (every activation one) relative exposures, red, green and blue each, read once from the film cube's corners so a pixel does not sample them. Zero strengths leave the print unchanged. Appended without renumbering earlier fields."
+    },
+    {
+      "name": "COUPLER_MODEL",
+      "count": 1,
+      "doc": "Which chemical development-inhibitor model evaluates inter-image and spatial coupler inhibition: 0 is the legacy inverted-warp model (schemaVersion <= 3), and 1 is the forward-compensated QDI model (schemaVersion == 4) with in-kernel neutral compensation W_c(L_c), per-receiver sum blur, and gate log-ratio donor transport. Appended without renumbering earlier fields."
+    },
+    {
+      "name": "COUPLER_EFFECTIVE_SCALE",
+      "count": 3,
+      "doc": "Per-receiver-row host loop-gain-clamped coupler scales s_eff_c = min(effectiveCouplerScale(s), 0.85 / Gamma_{1,c}) for c in 0..2, multiplying each receiver row's coupler release, donor release, and forward neutral compensation W_c under COUPLER_MODEL == 1 without collaterally attenuating untouched rows, while leaving silver-halide adjacency strength on its own slider scale. Appended without renumbering earlier fields."
+    },
+    {
+      "name": "COUPLER_ROW_NORM",
+      "count": 6,
+      "doc": "Positive per-receiver row normalizers under COUPLER_MODEL == 1: first three slots normalize the core coupler-sum field u_c into [0, 1] before Float16 spatial diffusion, and next three slots normalize the broad chromatic-fringe field v_c into [0, 1]. Appended without renumbering earlier fields."
+    },
+    {
+      "name": "COUPLER_RELEASE_KAPPA",
+      "count": 3,
+      "doc": "Competitive QDI coupling/depletion ratios kappa_0, kappa_1, kappa_2 > 0 for the three dye-forming records in r(a; kappa, gamma) = a^gamma / (a^gamma + kappa * (1 - a)^gamma). Default [1, 1, 1] with gamma == 1 reduces to identity release r(a) = a. Appended without renumbering earlier fields."
+    },
+    {
+      "name": "DONOR_RELEASE_KAPPA",
+      "count": 3,
+      "doc": "Competitive QDI coupling/depletion ratios kappa > 0 for non-dye-forming donor layers 0..2. Default [1, 1, 1]. Appended without renumbering earlier fields."
+    },
+    {
+      "name": "DONOR_CURVE_SECONDARY",
+      "count": 15,
+      "doc": "Optional second H&D speed-group parameters (gamma, toe, toeWidth, shoulder, shoulderWidth) for donor layers 0..2, matching CURVE_SECONDARY on dye-forming records. Zero gamma ([0, 0, 1, 0, 1]) contributes nothing. Appended without renumbering earlier fields."
+    },
+    {
+      "name": "DONOR_EXTRA_CURVE",
+      "count": 12,
+      "doc": "Six-parameter primary H&D curves (dMin, gamma, toe, toeWidth, shoulder, shoulderWidth) for additional donor layers 1 and 2 when DONOR_COUNT > 1; donor layer 0 remains in DONOR_CURVE. Appended without renumbering earlier fields."
+    },
+    {
+      "name": "DONOR_EXTRA_RELEASE",
+      "count": 2,
+      "doc": "Scalar inhibition amplitudes k_{c*(m), m} for additional donor layers 1 and 2 at their primary receiver channels DONOR_RECEIVER[1..2] when DONOR_COUNT > 1. Appended without renumbering earlier fields."
+    },
+    {
+      "name": "DONOR_EXTRA_GAMMA",
+      "count": 2,
+      "doc": "Release Hill exponents gamma >= 1 for additional donor layers 1 and 2 when DONOR_COUNT > 1; donor layer 0 remains in DONOR_RELEASE_GAMMA. Appended without renumbering earlier fields."
+    },
+    {
+      "name": "DONOR_RECEIVER",
+      "count": 3,
+      "doc": "Primary dye-forming receiver channel index c*(m) in {0, 1, 2} for donor layers 0..2 under COUPLER_MODEL == 1, anchoring gate log-exposure ratio transport L_m = L_{c*(m)} + lambda_m. Appended without renumbering earlier fields."
+    },
+    {
+      "name": "DONOR_COUNT",
+      "count": 1,
+      "doc": "Active donor capture layer count (0...3). Values above 1 evaluate extra donors on JIT CPU and generic Metal and are cleanly refused by AOT and WebGPU shims. Appended without renumbering earlier fields."
+    },
+    {
+      "name": "DONOR_EXTRA_LUT_ID",
+      "count": 1,
+      "doc": "Positive cache identifier of the registered 33^3 spectral exposure table for additional donor layers 1 and 2 when DONOR_COUNT > 1 on JIT backends, or 0 when unused. Appended without renumbering earlier fields."
+    },
+    {
+      "name": "COUPLER_CROSS_POINTWISE_SHARE",
+      "count": 1,
+      "doc": "Pointwise share beta = 1 - min((sigma_phys / sigma_coupler)^2, 1) in [0, 1] for cross-layer 3x3 coupler terms (j != c) under COUPLER_MODEL == 1 when sigma_coupler applies the 0.85 px preview floor. Zero at full resolution (sigma_phys >= 0.85 px) and on legacy models; on sub-pixel previews, 100% of intra-layer self-retention K[c][c] blurs at sigma_coupler for visible Edge Contrast while cross-layer terms conserve exact physical variance sigma_phys^2. Appended without renumbering earlier fields."
     }
   ]
 }
