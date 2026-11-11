@@ -1,7 +1,8 @@
 // Export and output on the desktop: one photograph to a file, every photograph into a folder
 // (Export All), a camera RAW as itself (Export Original), the developed picture to the clipboard
 // (Copy Photo), and a movie frame by frame (`exportVideo`). The engine develops, encodes and
-// writes; the editor chooses where.
+// writes; the editor chooses where. On Android the system's save panel answers a document, not a
+// path: the engine writes into the app's cache and the file is moved into the document.
 //
 // Where the engine runs exports beside its develops (the desktop), still exports wait in a
 // queue and run one after another while the person keeps editing: each takes its photographs'
@@ -17,6 +18,7 @@ import '../engine/engine.dart';
 import 'edit.dart';
 import 'editor.dart';
 import 'export_sizes.dart';
+import 'file_types.dart';
 
 export 'export_sizes.dart';
 
@@ -489,9 +491,8 @@ class ExportTool {
     if (doc.isMovie) return exportMovie(path: path);
     if (type == originalType) return exportOriginal(path: path, onStarted: onStarted);
     final filename = stillFilename(doc.name, doc.edit, type);
-    path ??= await _chooseFile(filename, type);
-    if (path == null) return null;
-    final destination = path;
+    final destination = path == null ? await _chooseFile(filename, type) : SaveLocation(path);
+    if (destination == null) return null;
     final request = {
       ..._request(doc, maxEdge: exportMaxEdge(sizeId(batch: false), cropSize(doc))),
       'type': type,
@@ -500,15 +501,16 @@ class ExportTool {
       'hdr': hdr,
       'photoQuality': photoQuality,
       'filename': filename,
-      'path': destination,
+      'path': destination.path,
     };
     _remember(batch: false);
     return _queue(filename, [doc.handle], (engine, job) async {
       _report(job, 'Exporting $filename');
-      final answer = await engine.callInBackground('export', request);
+      final (answer, name) =
+          await _written(destination, () => engine.callInBackground('export', request));
       return SavedExport(
-          filename: answer.json['filename'] as String? ?? filename,
-          path: answer.json['path'] as String? ?? destination);
+          filename: name ?? answer.json['filename'] as String? ?? filename,
+          path: answer.json['path'] as String? ?? destination.path);
     }, onStarted: onStarted);
   }
 
@@ -519,8 +521,8 @@ class ExportTool {
     final engine = _engine;
     final docs = _batch;
     if (engine == null || docs.isEmpty || editor.exporting) return null;
-    directory ??= await _chooseFolder();
-    if (directory == null) return null;
+    final destination = directory == null ? await _chooseFolder() : SaveLocation(directory);
+    if (destination == null) return null;
     final request = {
       'items': [
         for (final doc in docs)
@@ -536,12 +538,13 @@ class ExportTool {
       'metadata': metadata,
       'hdr': hdr,
       'photoQuality': photoQuality,
-      'directory': directory,
+      'directory': destination.path,
     };
     _remember(batch: true);
     return _queue('${docs.length} photos', [for (final d in docs) d.handle], (engine, job) async {
       _report(job, 'Preparing export', 0);
-      final answer = await engine.callInBackground('exportBatch', request, (progress) {
+      final (answer, folder) = await _written(destination, partial: true,
+          () => engine.callInBackground('exportBatch', request, (progress) {
         final total = progress['total'], name = progress['name'], current = progress['current'];
         // The engine counts photos written; the one developing counts as half done.
         final written = (progress['progress'] as num?)?.toDouble() ?? 0;
@@ -554,7 +557,7 @@ class ExportTool {
                 ? 'Exporting $name · $current of $total'
                 : 'Exported ${progress['done']} of $total',
             written > developing ? written : developing);
-      });
+      }));
       final written = ((answer.json['written'] as List?) ?? const []).cast<Json>();
       final failed = ((answer.json['failed'] as List?) ?? const []).cast<Json>();
       final reduced = ((answer.json['reduced'] as List?) ?? const []).cast<String>();
@@ -570,7 +573,7 @@ class ExportTool {
         filename: '${written.length} photos',
         path: written.first['path'] as String,
         count: written.length,
-        directory: answer.json['directory'] as String? ?? directory,
+        directory: folder ?? answer.json['directory'] as String? ?? destination.path,
       );
     }, onStarted: onStarted);
   }
@@ -589,11 +592,14 @@ class ExportTool {
     final stock = doc.edit['stock'] as String?;
     final filename = '${cleanName(doc.name)}-${stock == null || stock.isEmpty ? 'normal' : stock}'
         '.${type['extension'] ?? videoFormat}';
-    path ??= await _chooseFile(filename, '');
-    if (path == null) return null;
+    final destination = path == null
+        ? await _chooseFile(filename, type['type'] as String? ?? 'video/mp4')
+        : SaveLocation(path);
+    if (destination == null) return null;
     editor.video.pause();
     return _run('Preparing export', () async {
-      final answer = await engine.callWithProgress('exportVideo', {
+      final (answer, name) =
+          await _written(destination, () => engine.callWithProgress('exportVideo', {
         ..._request(doc, maxEdge: exportMaxEdge(sizeId(batch: false), cropSize(doc))),
         'format': videoFormat,
         'bitrate': videoBitrate,
@@ -601,17 +607,17 @@ class ExportTool {
         'videoProcessing': videoProcessing == 'fast' ? 'fast' : 'full',
         'type': type['type'] ?? 'video/mp4',
         'hdr': videoHDR,
-        'path': path,
+        'path': destination.path,
       }, (progress) {
         _setStatus(progress['finalizing'] == true
             ? 'Finalizing video file'
             : 'Exporting video · ${(((progress['progress'] as num?) ?? 0) * 100).floor()}% · '
                 '${progress['frames']} frames');
-      });
+      }));
       _settings.set('lastVideoExport', current);
       return _show(SavedExport(
-          filename: answer.json['filename'] as String? ?? filename,
-          path: answer.json['path'] as String? ?? path!));
+          filename: name ?? answer.json['filename'] as String? ?? filename,
+          path: answer.json['path'] as String? ?? destination.path));
     });
   }
 
@@ -619,16 +625,18 @@ class ExportTool {
   Future<SavedExport?> exportOriginal({String? path, void Function()? onStarted}) async {
     final doc = editor.active, engine = _engine;
     if (doc == null || engine == null || !originalAvailable(doc) || editor.exporting) return null;
-    path ??= await _chooseFile(doc.name, '');
-    if (path == null) return null;
-    final destination = path, name = doc.name, handle = doc.handle;
+    final destination = path == null ? await _chooseFile(doc.name, '') : SaveLocation(path);
+    if (destination == null) return null;
+    final name = doc.name, handle = doc.handle;
     return _queue(name, [handle], (engine, job) async {
       _report(job, 'Copying the original');
-      final answer = await engine.callInBackground(
-          'exportOriginal', {'handle': handle, 'filename': name, 'type': '', 'path': destination});
+      final (answer, saved) = await _written(
+          destination,
+          () => engine.callInBackground('exportOriginal',
+              {'handle': handle, 'filename': name, 'type': '', 'path': destination.path}));
       return SavedExport(
-          filename: answer.json['filename'] as String? ?? name,
-          path: answer.json['path'] as String? ?? destination);
+          filename: saved ?? answer.json['filename'] as String? ?? name,
+          path: answer.json['path'] as String? ?? destination.path);
     }, onStarted: onStarted);
   }
 
@@ -688,22 +696,41 @@ class ExportTool {
 
   // ── Destinations ──────────────────────────────────────────────────────────────────────────
 
-  Future<String?> _chooseFile(String filename, String type) async {
-    if (fixedDirectory case final dir? when dir.isNotEmpty) return '$dir/$filename';
+  /// Where a file named `filename` goes; `type` is its media type, where it has one.
+  Future<SaveLocation?> _chooseFile(String filename, String type) async {
+    if (fixedDirectory case final dir? when dir.isNotEmpty) return SaveLocation('$dir/$filename');
     // A browser saves to its downloads.
-    if (kIsWeb) return filename;
+    if (kIsWeb) return SaveLocation(filename);
     final ext = filename.contains('.') ? filename.split('.').last : '';
-    final location = await getSaveLocation(
-      suggestedName: filename,
-      acceptedTypeGroups: [
-        if (ext.isNotEmpty) XTypeGroup(label: ext.toUpperCase(), extensions: [ext]),
-      ],
+    return chooseSaveFile(
+      filename,
+      types: [if (ext.isNotEmpty) XTypeGroup(label: ext.toUpperCase(), extensions: [ext])],
+      // Android names a document by its type; one it does not know keeps the name it is given.
+      mediaType: type == dpxType ? '' : type,
     );
-    return location?.path;
   }
 
-  Future<String?> _chooseFolder() async {
-    if (fixedDirectory case final dir? when dir.isNotEmpty) return dir;
-    return getDirectoryPath(confirmButtonText: 'Export');
+  Future<SaveLocation?> _chooseFolder() async {
+    if (fixedDirectory case final dir? when dir.isNotEmpty) return SaveLocation(dir);
+    return chooseSaveFolder(confirmButtonText: 'Export');
+  }
+
+  /// What the engine answers to `write`, once what it wrote is where the person chose, with
+  /// the name it has there where that is not its own. A write that fails leaves nothing behind,
+  /// but for `partial`: Export All keeps the photographs it wrote before it stopped.
+  Future<(EngineReply, String?)> _written(SaveLocation to, Future<EngineReply> Function() write,
+      {bool partial = false}) async {
+    final EngineReply answer;
+    try {
+      answer = await write();
+    } catch (_) {
+      if (partial) {
+        await to.finish().catchError((_) => null);
+      } else {
+        await to.discard();
+      }
+      rethrow;
+    }
+    return (answer, await to.finish());
   }
 }

@@ -41,8 +41,9 @@ abstract final class HostWindow {
     return paths;
   }
 
-  /// Files are on a disk the system can open and show; in a browser an export is a download.
-  static bool get showsFiles => !kIsWeb;
+  /// Files are on a disk the system can open and show; in a browser an export is a download,
+  /// and on Android a document in the folder the person chose.
+  static bool get showsFiles => !kIsWeb && defaultTargetPlatform != TargetPlatform.android;
 
   /// What showing a file in the system's file manager is called.
   static String get revealLabel =>

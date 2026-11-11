@@ -10,6 +10,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/widgets.dart' show AppLifecycleListener;
 
 import 'editor.dart';
+import 'file_types.dart';
 import 'saved_edits.dart';
 
 class KeptEdits {
@@ -119,9 +120,15 @@ class KeptEdits {
   Future<void> saveFile() async {
     final doc = editor.active;
     if (doc == null) return;
-    final location =
-        await getSaveLocation(suggestedName: fileName(doc.name), acceptedTypeGroups: _types);
-    if (location != null) await writeFile(location.path);
+    final location = await chooseSaveFile(fileName(doc.name),
+        types: _types, mediaType: 'application/json');
+    if (location == null) return;
+    await writeFile(location.path);
+    try {
+      await location.finish();
+    } catch (e) {
+      editor.showError('The edit could not be saved. $e');
+    }
   }
 
   Future<void> writeFile(String path) async {
