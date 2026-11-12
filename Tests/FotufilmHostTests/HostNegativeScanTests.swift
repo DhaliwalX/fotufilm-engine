@@ -552,7 +552,13 @@ final class HostNegativeScanTests: XCTestCase {
         let negative = try XCTUnwrap(opened.json["negative"] as? [String: Any])
         XCTAssertNotNil(negative["suggestions"] as? [Any])
         XCTAssertNotNil(negative["lightFrames"] as? [Any])
-        XCTAssertNotNil(service.negativeScans.scan(handle))
+        // A new document's edit is made with the current reading, and a file that names no
+        // camera is read as the generic one.
+        XCTAssertEqual(negative["reading"] as? Int, WebNativeEdit.Negative.currentReading)
+        XCTAssertEqual((negative["camera"] as? [String: Any])?["id"] as? String, "generic")
+        XCTAssertNil((negative["camera"] as? [String: Any])?["name"])
+        let scan = try XCTUnwrap(service.negativeScans.scan(handle))
+        XCTAssertEqual(scan.source, NegativeScanSource())
 
         // The clear film reads back as it was written, through the file's linear profile.
         let sampled = try JSONSerialization.jsonObject(with: service.call(
@@ -659,6 +665,25 @@ final class HostNegativeScanTests: XCTestCase {
         }
     }
 
+    /// A document names the camera its scan is read as taken with: a measured one where the
+    /// decoder says the matrix it used, the generic one otherwise.
+    func testADocumentSaysWhatItsScanIsReadAsTakenWith() {
+        let matrix: [Float] = [1.18, -0.09, -0.09, -0.04, 1.52, -0.48, 0.01, -0.25, 1.24]
+        let measured = HostService.readCamera(NegativeScanSource(
+            camera: CameraIdentity(make: "SONY", model: "ILCE-7CM2"), kelvin: 5100, matrix: matrix))
+        XCTAssertEqual(measured["id"] as? String, "sony-ilce-7cm2")
+        XCTAssertEqual(measured["name"] as? String, "SONY ILCE-7CM2")
+        // A measured camera whose decoder's matrix is not known, one nobody measured, and a
+        // decoder that says nothing are all read as the generic camera.
+        for source in [NegativeScanSource(camera: CameraIdentity(make: "SONY", model: "ILCE-7CM2")),
+                       NegativeScanSource(camera: CameraIdentity(make: "Unmeasured", model: "Camera"),
+                                          matrix: matrix), nil] {
+            let read = HostService.readCamera(source)
+            XCTAssertEqual(read["id"] as? String, "generic")
+            XCTAssertNil(read["name"])
+        }
+    }
+
     /// A scan with no colour profile is the scanner's raw output: its samples are linear light,
     /// though ImageIO would read them as sRGB.
     func testAnUntaggedScanIsReadAsLinearSamples() throws {
@@ -688,6 +713,8 @@ final class HostNegativeScanTests: XCTestCase {
         XCTAssertFalse(NegativeScanImport.statesEncoding(Data(bytes)))
 
         let scan = try CoreImageScanDecoder().decodeScan(url)
+        // A file that names no camera says nothing of one.
+        XCTAssertEqual(scan.scanSource, NegativeScanSource())
         let rgba = scan.scene(width: width, height: height)
         let expected = ColorScience.linearSRGBToRec2020(SIMD3(sample[0], sample[1], sample[2]))
         for c in 0..<3 { XCTAssertEqual(rgba[c], expected[c], accuracy: 0.002) }

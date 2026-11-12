@@ -42,6 +42,9 @@ public final class HostImage {
     var originalFile: URL?
     /// The frame the file says its camera exposed, which a gauge nobody picked follows.
     var sensorFrame: SensorFrame?
+    /// What a scanned negative's file says of its camera and of how it was decoded
+    /// (`HostScanDecoder.decodeScan`), nil where the decoder cannot say.
+    var scanSource: NegativeScanSource?
     /// Decodes the file again no larger than needed for a long edge (twice it, for a RAW's
     /// demosaic), as the Mac app decodes an uncropped preview; nil where it reduces the full decode.
     var decodeReduced: ((_ longEdge: Int) throws -> (rgba: [Float], width: Int, height: Int))?

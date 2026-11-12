@@ -235,17 +235,37 @@ extension HostService {
         } else {
             image = try HostImage.open(url)
         }
+        let source = image.scanSource
         let lights = negativeScans.lights
         var descriptor = image.descriptor
         let handle = register(image)
-        negativeScans.add(HostNegativeScan(scan: image) { lights.frame($0)?.measured },
-                          handle: handle)
+        negativeScans.add(
+            HostNegativeScan(scan: image, source: source) { lights.frame($0)?.measured },
+            handle: handle)
         descriptor["handle"] = handle
         descriptor["negative"] = [
             "suggestions": negativeFilmSuggestions(image),
             "lightFrames": lights.all().map { ["id": $0.id, "name": $0.name] },
+            "reading": WebNativeEdit.Negative.currentReading,
+            "camera": Self.readCamera(source),
         ]
         return try answer(descriptor, images: ["preview": previewPNG(image)])
+    }
+
+    /// What a scan is read as taken with where its edit leaves that to the file: `id` as an edit
+    /// names a camera (`NegativeScanSetup.Camera.name`), and for a measured camera its `name`.
+    static func readCamera(_ source: NegativeScanSource?) -> [String: Any] {
+        let camera = (source ?? NegativeScanSource()).setup(light: .white).camera
+        var read: [String: Any] = ["id": camera.name]
+        guard case .profile = camera, let identity = source?.camera else { return read }
+        let make = identity.make?.trimmingCharacters(in: .whitespaces) ?? ""
+        let model = identity.model?.trimmingCharacters(in: .whitespaces) ?? ""
+        // Some cameras' models begin with their makers' names.
+        let name = model.lowercased().hasPrefix(make.lowercased()) ? model : "\(make) \(model)"
+        if !name.trimmingCharacters(in: .whitespaces).isEmpty {
+            read["name"] = name.trimmingCharacters(in: .whitespaces)
+        }
+        return read
     }
 
     /// A negative document's develop: the scan evened under the edit's light frame, and its

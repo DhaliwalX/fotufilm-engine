@@ -2,6 +2,9 @@
 import CoreImage
 import Foundation
 import UniformTypeIdentifiers
+#if canImport(FotufilmCore)
+import FotufilmCore
+#endif
 #if canImport(FotufilmImaging)
 import FotufilmImaging
 #endif
@@ -25,7 +28,9 @@ struct CoreImageScanDecoder: HostScanDecoder {
             .render(image, toBitmap: &rgba, rowBytes: width * 16,
                     bounds: CGRect(x: 0, y: 0, width: width, height: height), format: .RGBAf,
                     colorSpace: NegativeScanImport.filmSpace)
-        return HostImage(rgba: rgba, width: width, height: height, contentHeadroom: 1)
+        let scan = HostImage(rgba: rgba, width: width, height: height, contentHeadroom: 1)
+        scan.scanSource = NegativeScanImport.source(data: data, identifierHint: hint)
+        return scan
     }
 
     func decodeExposure(_ url: URL) throws -> (rgba: [Float], width: Int, height: Int) {

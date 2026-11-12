@@ -222,7 +222,9 @@ extension HostService {
             if (item["edit"] as? [String: Any])?["negative"] is [String: Any] {
                 let scan = try HostPlatform.current.scans?.decodeScan(url) ?? HostImage.open(url)
                 let lights = negativeScans.lights
-                negative = HostNegativeScan(scan: scan) { lights.frame($0)?.measured }
+                negative = HostNegativeScan(scan: scan, source: scan.scanSource) {
+                    lights.frame($0)?.measured
+                }
                 source = scan
             } else {
                 source = try HostImage.open(url)
