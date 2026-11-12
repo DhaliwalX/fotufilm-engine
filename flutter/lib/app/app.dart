@@ -1,6 +1,6 @@
 // The app: the editor's palette for the system's appearance, around the workspace, drawn larger
 // on a phone, where it takes the phone's editor and its dark palette.
-import 'package:flutter/material.dart' show MaterialApp, ThemeData;
+import 'package:material_ui/material_ui.dart' show MaterialApp, ThemeData;
 import 'package:flutter/widgets.dart';
 
 import '../model/editor.dart';

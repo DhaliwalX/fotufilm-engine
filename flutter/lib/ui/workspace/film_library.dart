@@ -135,7 +135,7 @@ class _FilmLibraryState extends State<FilmLibrary> {
       child: ListView.builder(
         controller: _scroll,
         // Rows are built as they come into view, which is when their pictures develop.
-        cacheExtent: 0,
+        scrollCacheExtent: const ScrollCacheExtent.pixels(0),
         padding: open ? Metrics.stockListPadding : Metrics.stockListCollapsedPadding,
         itemCount: films.length,
         itemBuilder: (context, index) {
@@ -181,7 +181,7 @@ class _FilmLibraryState extends State<FilmLibrary> {
       controller: _strip,
       scrollDirection: Axis.horizontal,
       // Tiles are built as they come into view, which is when their pictures develop.
-      cacheExtent: 0,
+      scrollCacheExtent: const ScrollCacheExtent.pixels(0),
       itemExtent: extent,
       padding: Metrics.filmStripPadding,
       itemCount: films.length,
