@@ -20,6 +20,10 @@ enum PortableCodecs {
         var isRAW: Bool
         var contentHeadroom: Float
         var sceneKelvin: Float?
+        /// A RAW's as-shot white (CIE x and y), and the matrix its channels balanced on that
+        /// white were mixed into Rec. 2020 with, nine values by rows; nil where unknown.
+        var white: [Float]?
+        var cameraMatrix: [Float]?
         var camera: CameraIdentity?
         var lensShot: LensShot?
         var sensorFrame: SensorFrame?
@@ -77,6 +81,11 @@ enum PortableCodecs {
                 focalLength: capture.focal_length > 0 ? capture.focal_length : nil,
                 aperture: capture.f_number > 0 ? capture.f_number : nil)
         }
+        if image.as_shot_x > 0, image.as_shot_y > 0 {
+            decoded.white = [image.as_shot_x, image.as_shot_y]
+        }
+        let matrix = withUnsafeBytes(of: image.camera_matrix) { Array($0.bindMemory(to: Float.self)) }
+        if matrix.contains(where: { $0 != 0 }) { decoded.cameraMatrix = matrix }
         decoded.sensorFrame = sensorFrame(capture)
         if let exif = capture.exif, capture.exif_length > 0 {
             decoded.exif = Data(bytes: exif, count: capture.exif_length)
@@ -211,8 +220,11 @@ struct PortableScanDecoder: HostScanDecoder {
             throw HostEngine.Failure(description: "This negative could not be decoded. Try an "
                                      + "unadjusted TIFF or a supported camera RAW file.")
         }
-        return HostImage(rgba: scan.rgba, width: scan.width, height: scan.height,
-                         contentHeadroom: 1)
+        let image = HostImage(rgba: scan.rgba, width: scan.width, height: scan.height,
+                              contentHeadroom: 1)
+        image.scanSource = NegativeScanSource(camera: scan.camera, kelvin: scan.sceneKelvin,
+                                              white: scan.white, matrix: scan.cameraMatrix)
+        return image
     }
 
     func decodeExposure(_ url: URL) throws -> (rgba: [Float], width: Int, height: Int) {

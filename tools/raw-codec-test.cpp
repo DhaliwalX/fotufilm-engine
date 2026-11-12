@@ -113,6 +113,18 @@ int main(int argc, char **argv) {
     const float wide[3] = {1.388549f, 0.878000f, 2.604304f}; // linear sRGB [1.6,.8,2.8] -> BT.2020
     for (int c = 0; c < 3; ++c)
         close(headroom.value.rgba[(96 * 320 + 160) * 4 + c], wide[c], 0.002f, "unclipped sensor headroom");
+    // The matrix a scan's reading takes the camera through: this camera's channels are sRGB's
+    // primaries balanced on its white, so it is sRGB's into BT.2020, every row adding up to one.
+    const float toWide[9] = {0.627404f, 0.329283f, 0.043313f, 0.069097f, 0.919540f, 0.011362f,
+                             0.016391f, 0.088013f, 0.895595f};
+    for (int k = 0; k < 9; ++k) close(headroom.value.camera_matrix[k], toWide[k], 0.001f, "camera matrix");
+    for (int row = 0; row < 3; ++row)
+        close(headroom.value.camera_matrix[row * 3] + headroom.value.camera_matrix[row * 3 + 1]
+              + headroom.value.camera_matrix[row * 3 + 2], 1, 1e-4f, "camera matrix keeps white");
+    // An exposure under one coloured light is balanced on daylight: its matrix is not reported.
+    Image exposure;
+    decode("headroom", exposure, 0, FFC_DECODE_SCAN | FFC_DECODE_EXPOSURE);
+    for (float value : exposure.value.camera_matrix) require(value == 0, "exposure reports no matrix");
     Image sceneHeadroom;
     decode("headroom", sceneHeadroom);
     const auto *bright = sceneHeadroom.value.rgba + (96 * 320 + 160) * 4;
