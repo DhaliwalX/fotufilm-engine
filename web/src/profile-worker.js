@@ -1,5 +1,6 @@
 import { createProfileRuntime } from "./profile-runtime.js";
 import { relatedAssetUrl } from "./runtime-assets.js";
+import { cameraKey } from "./camera-profile.js";
 
 let assets;
 async function loadAssets(base) {
@@ -29,12 +30,43 @@ async function loadAssets(base) {
   return {
     runtime: await createProfileRuntime(binary, reflectance),
     read,
+    has: (name) => Object.hasOwn(hashes, name),
     stocks: new Map(),
+    cameras: new Map(),
   };
 }
 
-self.onmessage = async ({ data: { id, request, base } }) => {
+// The measured channels of the camera a scanned negative's file names, as the record the desktop
+// app carries of it (tools/build-web-profile.sh ships them beside the builder, which carries
+// none): null for a camera nobody measured, or assets built before the records shipped.
+const CAMERAS = "cameras.json";
+async function cameraRecord({ read, has, cameras }, camera) {
+  const key = cameraKey(camera?.make, camera?.model);
+  if (!key || !has(CAMERAS)) return null;
+  if (!cameras.has(CAMERAS))
+    cameras.set(CAMERAS, JSON.parse(new TextDecoder().decode(await read(CAMERAS))));
+  const found = cameras.get(CAMERAS).find(({ make, model }) => cameraKey(make, model) === key);
+  if (!found) return null;
+  if (!cameras.has(found.file))
+    cameras.set(found.file, new TextDecoder().decode(await read(found.file)));
+  return cameras.get(found.file);
+}
+
+// A request that reads a negative, with the record of the camera its scan's file names.
+async function withCamera(assets, request) {
+  const negative = request.kind === "negative-camera" ? request : request.negative;
+  const cameraProfile = negative?.source
+    ? await cameraRecord(assets, negative.source.camera)
+    : null;
+  if (!cameraProfile) return request;
+  return negative === request
+    ? { ...request, cameraProfile }
+    : { ...request, negative: { ...negative, cameraProfile } };
+}
+
+self.onmessage = async ({ data: { id, request: asked, base } }) => {
   try {
+    let request = asked;
     const lensRequest = [
       "lens",
       "lens-plan",
@@ -45,7 +77,7 @@ self.onmessage = async ({ data: { id, request, base } }) => {
     const autoRequest = request.kind === "auto-adjust";
     const frameRequest = request.kind === "print-frame";
     const needsStock =
-      request.kind !== "negative-film" &&
+      !["negative-film", "negative-plain", "negative-camera"].includes(request.kind) &&
       !perspectiveRequest &&
       !lensRequest &&
       !((autoRequest || frameRequest) && request.stock == null);
@@ -67,7 +99,9 @@ self.onmessage = async ({ data: { id, request, base } }) => {
       assets = null;
       throw error;
     });
-    const { runtime, read, stocks } = await assets;
+    const loaded = await assets;
+    const { runtime, read, stocks } = loaded;
+    request = await withCamera(loaded, request);
     if (!needsStock) {
       const profile = runtime.prepare(request);
       self.postMessage({ id, profile }, [profile]);
