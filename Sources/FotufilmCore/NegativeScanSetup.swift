@@ -44,6 +44,9 @@ public struct NegativeScanSetup: Equatable, Sendable {
     /// The white balance the camera's file was decoded on, in kelvin, which sets how its channels
     /// were mixed into the scan's. Nil takes it as balanced on the lamp.
     public var kelvin: Float?
+    /// The chromaticity (CIE xy) of that white where the decoder says it, which a camera's own
+    /// balance on a negative can leave well off the lamps' colours. Nil is the white of `kelvin`.
+    public var white: SIMD2<Float>?
     /// The matrix the file's decoder mixed a measured camera's balanced channels into the scan's
     /// with: rows the scan's red, green and blue over the sensor's. Decoders each bring their own,
     /// and a dense negative's blue is a small difference of the sensor's green and blue that
@@ -51,10 +54,11 @@ public struct NegativeScanSetup: Equatable, Sendable {
     public var matrix: [SIMD3<Float>]?
 
     public init(light: NegativeScanCrosstalk.Light = .white, camera: Camera = .generic,
-                kelvin: Float? = nil, matrix: [SIMD3<Float>]? = nil) {
+                kelvin: Float? = nil, white: SIMD2<Float>? = nil, matrix: [SIMD3<Float>]? = nil) {
         self.light = light
         self.camera = camera
         self.kelvin = kelvin
+        self.white = white
         self.matrix = matrix
     }
 
@@ -92,7 +96,8 @@ public struct NegativeScanSetup: Equatable, Sendable {
         // The file's decoder balances each sensor channel on its white, then mixes the three into
         // Rec. 2020 with the camera's matrix for that white.
         let cct = kelvin.flatMap { $0.isFinite && $0 > 0 ? $0 : nil } ?? light.kelvin
-        let white = Illuminant.atLocus(kelvin: cct)
+        let locus = Illuminant.atLocus(kelvin: cct)
+        let white = self.white.flatMap { Illuminant.matched($0, base: locus) } ?? locus
         let matrix = decoderMatrix ?? CameraProfileCorrection.matrices(for: profile).matrix(cct: cct)
         let balanced: [[Float]] = profile.sensitivity.map { sensor in
             let level = zip(sensor, white).reduce(Float(0)) { $0 + $1.0 * $1.1 }

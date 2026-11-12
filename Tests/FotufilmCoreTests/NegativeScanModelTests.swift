@@ -92,6 +92,41 @@ final class NegativeScanModelTests: XCTestCase {
         XCTAssertEqual(same.response(), camera.response())
     }
 
+    /// The white a decoder balanced on sets how much of each sensor channel its matrix mixes:
+    /// one off the lamps' colours moves a measured camera's channels, one on them does not.
+    func testTheDecodingWhitesChromaticityMovesAMeasuredCamera() {
+        var decoded = camera
+        decoded.kelvin = 5000
+        let onLocus = decoded.response()
+        decoded.white = Illuminant.chromaticity(Illuminant.atLocus(kelvin: 5000))
+        for (row, expected) in zip(decoded.response(), onLocus) {
+            for (value, other) in zip(row, expected) {
+                XCTAssertEqual(value, other, accuracy: 1e-5)
+            }
+        }
+        // A greener white takes less of the sensor's green: what the scan's blue sees changes.
+        decoded.white = WhiteBalance.chromaticity(kelvin: 5000, tint: 60)
+        XCTAssertNotEqual(decoded.response()[2], onLocus[2])
+        XCTAssertNotEqual(decoded.response(),
+                          { var other = decoded
+                            other.white = WhiteBalance.chromaticity(kelvin: 5000, tint: -60)
+                            return other.response() }())
+        // A chromaticity that is none is left out, and only a measured camera has a white.
+        for white in [SIMD2<Float>(.nan, 0.3), SIMD2(0, 0.3), SIMD2(-0.2, 0.3), SIMD2(0.3, .infinity)] {
+            decoded.white = white
+            XCTAssertEqual(decoded.response(), onLocus)
+        }
+        // One no light has is brought back to the nearest a spectrum can make.
+        decoded.white = SIMD2(0.7, 0.4)
+        XCTAssertTrue(decoded.response().allSatisfy { $0.allSatisfy(\.isFinite) })
+        for setup in [NegativeScanSetup(camera: .generic), NegativeScanSetup(camera: .scanner),
+                      NegativeScanSetup(light: .rgb, camera: .profile("sony-ilce-7cm2"))] {
+            var tinted = setup
+            tinted.white = WhiteBalance.chromaticity(kelvin: 5000, tint: 60)
+            XCTAssertEqual(tinted.response(), setup.response())
+        }
+    }
+
     /// A decoder's own matrix sets what the scan's channels see of a measured camera, and a
     /// reading fitted for another matrix misses the film the scan was made of.
     func testADecodersMatrixSetsAMeasuredCamerasChannels() throws {
