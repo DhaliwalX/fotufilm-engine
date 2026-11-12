@@ -65,14 +65,8 @@ final class NegativeScanModelTests: XCTestCase {
         XCTAssertEqual(peaks, [625, 520, 455])
     }
 
-    func testACameraIsResolvedFromTheEditThenTheFileThenGeneric() {
+    func testACamerasNameIsWhatAnEditKeeps() {
         typealias Camera = NegativeScanSetup.Camera
-        let file = CameraIdentity(make: "SONY", model: "ILCE-7CM2")
-        XCTAssertEqual(Camera.resolved(nil, file: file), .profile("sony-ilce-7cm2"))
-        XCTAssertEqual(Camera.resolved(.scanner, file: file), .scanner)
-        XCTAssertEqual(Camera.resolved(nil, file: CameraIdentity(make: "Unmeasured", model: "Camera")),
-                       .generic)
-        XCTAssertEqual(Camera.resolved(nil, file: nil), .generic)
         for camera in [Camera.generic, .scanner, .profile("nikon-d850")] {
             XCTAssertEqual(Camera(name: camera.name), camera)
         }

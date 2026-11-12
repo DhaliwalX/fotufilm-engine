@@ -30,13 +30,6 @@ public struct NegativeScanSetup: Equatable, Sendable {
             default: self = .profile(name)
             }
         }
-
-        /// The camera a scan is read as: `chosen` where the edit names one, else the measured
-        /// profile of the camera that made the `file`, else `generic`.
-        public static func resolved(_ chosen: Camera?, file: CameraIdentity?) -> Camera {
-            if let chosen { return chosen }
-            return CameraSpectralProfileStore.resolve(file).map { .profile($0.id) } ?? .generic
-        }
     }
 
     public var light: NegativeScanCrosstalk.Light
