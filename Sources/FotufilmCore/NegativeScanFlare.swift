@@ -46,21 +46,30 @@ extension ApproximateNegativeScan {
 
     /// A framed picture with the scan's holder left out, for what a reading measures of the
     /// frame: its densest end, which times the print, would otherwise be the holder's, where a
-    /// scan shows much of one. A pixel is the holder's where every channel is within a stop of
-    /// `holder`, the light it shows (`holderLight`); it is made no number, which the measures
-    /// pass over.
-    public static func withoutHolder(_ preview: ImageBuffer, holder: SIMD3<Float>) -> ImageBuffer {
+    /// scan shows much of one. A pixel is the holder's where its density over `border`, the mean
+    /// of its channels', is past `limit` (`holder(border:preview:)`), or it passes no light; it
+    /// is made no number, which the measures pass over.
+    public static func withoutHolder(_ preview: ImageBuffer, border: SIMD3<Float>,
+                                     limit: Float) -> ImageBuffer {
         var film = preview
-        for i in 0..<preview.pixelCount
-        where (0..<3).allSatisfy({ !(preview.planes[$0][i] > 2 * holder[$0]) }) {
+        for i in 0..<preview.pixelCount {
+            let pixel = SIMD3((0..<3).map { preview.planes[$0][i] })
+            if (0..<3).allSatisfy({ pixel[$0].isFinite && pixel[$0] > 0 }),
+               (0..<3).reduce(Float(0), { $0 - log10(pixel[$1] / border[$1]) }) / 3 <= limit {
+                continue
+            }
             for c in 0..<3 { film.planes[c][i] = .nan }
         }
         return film
     }
 
-    /// Both of the above from one look at the scan.
+    /// Both of the above from one look at the scan, and where the holder ends: `limit` is the
+    /// density over the clear film, the mean of a pixel's channels', past which a pixel is the
+    /// holder's. A holder's light is uneven and its edge is blurred into the film's, so the
+    /// limit is where the fewest pixels lie between the densest film in the scan's middle and
+    /// the holder: film denser than the middle's, a sky at the picture's edge, stays film.
     public static func holder(border: SIMD3<Float>, preview: ImageBuffer)
-        -> (light: SIMD3<Float>, stray: SIMD3<Float>)? {
+        -> (light: SIMD3<Float>, stray: SIMD3<Float>, limit: Float)? {
         let width = preview.width, height = preview.height
         guard width >= 16, height >= 16,
               (0..<3).allSatisfy({ border[$0].isFinite && border[$0] > 0 }) else { return nil }
@@ -98,16 +107,49 @@ extension ApproximateNegativeScan {
             for c in 0..<3 { middle[c].append(pixel[c]) }
         }
         guard middle[0].count >= 16 else { return nil }
-        var light = SIMD3<Float>.zero, stray = SIMD3<Float>.zero
+        var light = SIMD3<Float>.zero, stray = SIMD3<Float>.zero, densest = SIMD3<Float>.zero
         for c in 0..<3 {
             let values = dark.map { preview.planes[c][$0.index] }.map { max($0, 0) }.sorted()
             let holder = values[(count - 1) / 4]
             let film = middle[c].sorted()
-            guard holder * 2 <= film[(film.count - 1) / 1000] else { return nil }
+            densest[c] = film[(film.count - 1) / 1000]
+            guard holder * 2 <= densest[c] else { return nil }
             let mean = film.reduce(Float(0), +) / Float(film.count)
             light[c] = holder
             stray[c] = min(holder, flareShares.upperBound * mean)
         }
-        return light.max() > 0 ? (light, stray) : nil
+        guard light.min() > 0, densest.min() > 0 else { return nil }
+        // The fewest pixels between the middle's densest film and the holder.
+        let density = { (v: SIMD3<Float>) -> Float in
+            (0..<3).reduce(Float(0)) { $0 - log10(v[$1] / border[$1]) } / 3
+        }
+        let from = density(densest), to = density(light)
+        let bins = Int((to - from) / holderBin)
+        guard bins >= 2 else { return (light, stray, (from + to) / 2) }
+        var counts = [Float](repeating: 0, count: bins)
+        for i in 0..<preview.pixelCount {
+            guard let pixel = sample(i), pixel.min() > 0 else { continue }
+            let bin = Int(((density(pixel) - from) / holderBin).rounded(.down))
+            if bin >= 0, bin < bins { counts[bin] += 1 }
+        }
+        let smoothed = counts.indices.map { i in
+            (counts[max(i - 1, 0)] + 2 * counts[i] + counts[min(i + 1, bins - 1)]) / 4
+        }
+        // The middle of the widest stretch as empty as the emptiest step, so film a little
+        // denser than the scan's middle shows stays on the film's side.
+        let empty = (smoothed.min() ?? 0) + Float(preview.pixelCount) * 0.0005
+        var best = 0..<1, run: Range<Int>? = nil
+        for i in 0...bins {
+            if i < bins, smoothed[i] <= empty {
+                run = (run?.lowerBound ?? i)..<(i + 1)
+            } else if let ended = run {
+                if ended.count > best.count || smoothed[best.lowerBound] > empty { best = ended }
+                run = nil
+            }
+        }
+        return (light, stray, from + Float(best.lowerBound + best.upperBound) / 2 * holderBin)
     }
+
+    /// The width, in density, of the steps the holder's limit is looked for in.
+    static let holderBin: Float = 0.05
 }

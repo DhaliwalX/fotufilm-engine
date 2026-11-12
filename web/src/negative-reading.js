@@ -135,8 +135,9 @@ export function strayLight(border, pixels, width, height) {
   return holder(border, pixels, width, height)?.stray ?? null;
 }
 
-// The light a whole scan's holder shows (`light`) and the stray light read from it (`stray`,
-// above): both from one look at the scan. Null where no holder shows.
+// The light a whole scan's holder shows (`light`), the stray light read from it (`stray`,
+// above) and where the holder ends (`limit`, a density over the clear film): all from one look
+// at the scan. Null where no holder shows. Mirrors ApproximateNegativeScan.holder.
 export function holder(border, pixels, width, height) {
   if (width < 16 || height < 16 || !border.every((v) => Number.isFinite(v) && v > 0)) return null;
   const lit = [];
@@ -170,29 +171,70 @@ export function holder(border, pixels, width, height) {
   }
   if (middle[0].length < 16) return null;
   const light = [0, 0, 0],
-    stray = [0, 0, 0];
+    stray = [0, 0, 0],
+    densest = [0, 0, 0];
   for (let c = 0; c < 3; c++) {
     const values = dark.map(({ index }) => Math.max(pixels[index * 4 + c], 0)).sort((a, b) => a - b);
     const shown = values[Math.floor((count - 1) / 4)];
     const film = middle[c].sort((a, b) => a - b);
-    if (shown * 2 > film[Math.floor((film.length - 1) / 1000)]) return null;
+    densest[c] = film[Math.floor((film.length - 1) / 1000)];
+    if (shown * 2 > densest[c]) return null;
     const mean = film.reduce((a, b) => a + b, 0) / film.length;
     light[c] = shown;
     stray[c] = Math.min(shown, FLARE_SHARES[1] * mean);
   }
-  return Math.max(...light) > 0 ? { light, stray } : null;
+  if (!(Math.min(...light) > 0) || !(Math.min(...densest) > 0)) return null;
+  // Where the holder ends: the fewest pixels between the middle's densest film and the holder,
+  // by the mean of a pixel's channels' densities over the clear film.
+  const density = (v) => -(Math.log10(v[0] / border[0]) + Math.log10(v[1] / border[1]) + Math.log10(v[2] / border[2])) / 3;
+  const from = density(densest),
+    to = density(light);
+  const bins = Math.trunc((to - from) / HOLDER_BIN);
+  if (bins < 2) return { light, stray, limit: (from + to) / 2 };
+  const counts = new Array(bins).fill(0);
+  for (let i = 0; i < width * height * 4; i += 4) {
+    if (!finite(pixels, i) || !positive(pixels, i)) continue;
+    const bin = Math.floor((density([pixels[i], pixels[i + 1], pixels[i + 2]]) - from) / HOLDER_BIN);
+    if (bin >= 0 && bin < bins) counts[bin]++;
+  }
+  const smoothed = counts.map(
+    (_, i) => (counts[Math.max(i - 1, 0)] + 2 * counts[i] + counts[Math.min(i + 1, bins - 1)]) / 4,
+  );
+  // The middle of the widest stretch as empty as the emptiest step.
+  const empty = Math.min(...smoothed) + width * height * 0.0005;
+  let best = [0, 1],
+    run = null;
+  for (let i = 0; i <= bins; i++) {
+    if (i < bins && smoothed[i] <= empty) run = [run ? run[0] : i, i + 1];
+    else if (run) {
+      if (run[1] - run[0] > best[1] - best[0] || smoothed[best[0]] > empty) best = run;
+      run = null;
+    }
+  }
+  return { light, stray, limit: from + ((best[0] + best[1]) / 2) * HOLDER_BIN };
 }
+
+const HOLDER_BIN = 0.05;
 
 // A framed picture with the scan's holder left out, for what a reading measures of the frame:
 // its densest end, which times the print, would otherwise be the holder's where a scan shows
-// much of one. A pixel is the holder's where every channel is within a stop of the light the
-// holder shows; it is made no number, which the measures pass over. Mirrors
-// ApproximateNegativeScan.withoutHolder.
-export function withoutHolder(pixels, light) {
+// much of one. A pixel is the holder's where its density over `border`, the mean of its
+// channels', is past `limit` (holder), or it passes no light; it is made no number, which the
+// measures pass over. Mirrors ApproximateNegativeScan.withoutHolder.
+export function withoutHolder(pixels, border, limit) {
   const film = new Float32Array(pixels);
-  for (let i = 0; i < film.length; i += 4)
-    if ([0, 1, 2].every((c) => !(pixels[i + c] > 2 * light[c])))
-      for (let c = 0; c < 3; c++) film[i + c] = NaN;
+  for (let i = 0; i < film.length; i += 4) {
+    const kept =
+      positive(pixels, i) &&
+      -(
+        Math.log10(pixels[i] / border[0]) +
+        Math.log10(pixels[i + 1] / border[1]) +
+        Math.log10(pixels[i + 2] / border[2])
+      ) /
+        3 <=
+        limit;
+    if (!kept) for (let c = 0; c < 3; c++) film[i + c] = NaN;
+  }
   return film;
 }
 

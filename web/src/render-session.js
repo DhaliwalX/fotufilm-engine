@@ -434,12 +434,12 @@ export class RenderSession {
       }
       shown = kept.holders.get(key)
     }
-    const framing = JSON.stringify([framingOf, shown?.light ?? null])
+    const framing = JSON.stringify([framingOf, shown?.limit ?? null])
     let framed = kept.framings.find((item) => item.key === framing)
     if (!framed) {
       const preview = await read(edit)
       if (!preview) return null
-      if (shown) preview.pixels = withoutHolder(preview.pixels, shown.light)
+      if (shown) preview.pixels = withoutHolder(preview.pixels, border, shown.limit)
       framed = {
         key: framing,
         border,

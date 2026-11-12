@@ -256,7 +256,8 @@ test("a scan's stray light is read from its holder only where it plainly shows o
   shown.light.forEach((v, c) => assert.ok(Math.abs(v - stray[c]) < 0.06 * stray[c]));
   assert.deepEqual(shown.stray, strayLight(border, wide, width, height));
   assert.ok(denseEnd(border, wide, width, height)[1] > 3);
-  const film = withoutHolder(wide, shown.light);
+  assert.ok(shown.limit > 1.6 && shown.limit < 3.1, String(shown.limit));
+  const film = withoutHolder(wide, border, shown.limit);
   const dense = denseEnd(border, film, width, height);
   assert.ok(dense[1] > 1.1 && dense[1] < 1.6, String(dense[1]));
   assert.equal(holder(border, draw(0, null), width, height), null);

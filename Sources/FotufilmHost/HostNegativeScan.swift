@@ -32,7 +32,7 @@ final class HostNegativeScan {
     private var measures: [(key: String, measure: ApproximateNegativeScan.RollBalance.Measure)] = []
     /// The light the whole scan's holder shows and the stray light read from it, by clear film
     /// and light frame; none where it shows no holder.
-    private var holders: [String: (light: SIMD3<Float>, stray: SIMD3<Float>)?] = [:]
+    private var holders: [String: (light: SIMD3<Float>, stray: SIMD3<Float>, limit: Float)?] = [:]
     /// The newest plain positive asked for (`positive`), by its framing's key.
     private var plain: (key: String, image: HostImage)?
 
@@ -84,7 +84,7 @@ final class HostNegativeScan {
     /// and the stray light read from it (`ApproximateNegativeScan.holderLight`, `.strayLight`);
     /// nil where the scan shows no holder.
     func holder(border: SIMD3<Float>, light id: String?) throws
-        -> (light: SIMD3<Float>, stray: SIMD3<Float>)? {
+        -> (light: SIMD3<Float>, stray: SIMD3<Float>, limit: Float)? {
         let key = "\(id ?? "")|\(border)"
         if let kept = lock.withLock({ holders[key] }) { return kept }
         let found = ApproximateNegativeScan.holder(
@@ -131,7 +131,7 @@ final class HostNegativeScan {
         // A reading through the scan's light and camera leaves the scan's holder out of what
         // it measures of the frame; the first reading measures as it did.
         let holder = negative.readsModel ? try self.holder(border: border, light: id) : nil
-        let frameKey = "\(key)|\(holder.map { "\($0.light)" } ?? "")"
+        let frameKey = "\(key)|\(holder.map { "\($0.limit)" } ?? "")"
         let frame: (planes: ImageBuffer, light: SIMD3<Float>?)
         if let kept = lock.withLock({ frames.first { $0.key == frameKey } }) {
             frame = (kept.planes, kept.light)
@@ -139,7 +139,8 @@ final class HostNegativeScan {
             let framed = try preview()
             var planes = Self.planes(framed.rgba, width: framed.width, height: framed.height)
             if let holder {
-                planes = ApproximateNegativeScan.withoutHolder(planes, holder: holder.light)
+                planes = ApproximateNegativeScan.withoutHolder(planes, border: border,
+                                                               limit: holder.limit)
             }
             frame = (planes, ApproximateNegativeScan.frameLight(preview: planes))
             lock.withLock {

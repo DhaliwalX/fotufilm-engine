@@ -58,7 +58,11 @@ final class NegativeScanFlareTests: XCTestCase {
         // With the holder in the frame's central part, its densest end is the holder's.
         let timed = try XCTUnwrap(ApproximateNegativeScan.denseEnd(border: border, preview: image))
         XCTAssertGreaterThan(timed.y, 3)
-        let film = ApproximateNegativeScan.withoutHolder(image, holder: holder)
+        let found = try XCTUnwrap(ApproximateNegativeScan.holder(border: border, preview: image))
+        // The holder ends between the picture's densest film and the holder's own light.
+        XCTAssertGreaterThan(found.limit, 1.6)
+        XCTAssertLessThan(found.limit, 3.1)
+        let film = ApproximateNegativeScan.withoutHolder(image, border: border, limit: found.limit)
         let dense = try XCTUnwrap(ApproximateNegativeScan.denseEnd(border: border, preview: film))
         let own = try XCTUnwrap(ApproximateNegativeScan.denseEnd(
             border: border, preview: scan(margin: 0, holder: nil, density: picture)))
@@ -70,6 +74,22 @@ final class NegativeScanFlareTests: XCTestCase {
         // The picture's own pixels are all kept.
         let kept = (0..<film.pixelCount).filter { !film.planes[1][$0].isNaN }.count
         XCTAssertEqual(Float(kept) / Float(film.pixelCount), 0.36, accuracy: 0.02)
+
+        // A real holder's light is uneven, several times brighter in places, and it still ends
+        // short of the film.
+        var uneven = image
+        for y in 0..<height { for x in 0..<width {
+            let u = (Float(x) + 0.5) / Float(width), v = (Float(y) + 0.5) / Float(height)
+            guard !(u > 0.2 && u < 0.8 && v > 0.2 && v < 0.8) else { continue }
+            let lift = 1 + 5 * Float((x * 7 + y * 13) % 10) / 10
+            for c in 0..<3 { uneven.planes[c][y * width + x] = stray[c] * lift }
+        } }
+        let rough = try XCTUnwrap(ApproximateNegativeScan.holder(border: border, preview: uneven))
+        let left = ApproximateNegativeScan.withoutHolder(uneven, border: border, limit: rough.limit)
+        let roughDense = try XCTUnwrap(ApproximateNegativeScan.denseEnd(border: border, preview: left))
+        XCTAssertLessThan(roughDense.y, own.y + 0.01)
+        XCTAssertEqual(Float((0..<left.pixelCount).filter { !left.planes[1][$0].isNaN }.count)
+            / Float(left.pixelCount), 0.36, accuracy: 0.02)
     }
 
     func testAScanThatShowsNoHolderHasNoneToMeasure() {
