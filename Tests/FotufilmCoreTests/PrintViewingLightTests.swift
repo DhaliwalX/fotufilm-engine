@@ -147,9 +147,11 @@ final class PrintViewingLightTests: XCTestCase {
                 for amounts in [SIMD3<Float>(1, 1, 1), SIMD3(0.3, 1.2, 0.5), SIMD3(1.1, 0.4, 0.8)] {
                     let density = Densitometry.statusADensity(amounts: amounts, dyes: paper.analyticalDyes)
                     let actual = receiver.rgb(density: density)
+                    // The same dye under this lamp; a release print's adapted white and
+                    // display headroom belong to the viewing, not to the development.
                     let expected = SpectralRuntime.transmissionRGB(
                         density: [amounts.x, amounts.y, amounts.z], dyes: paper.analyticalDyes,
-                        illuminant: light)
+                        illuminant: light, adaptedWhite: receiver.adaptedWhite) * receiver.gain
                     for channel in 0..<3 {
                         XCTAssertEqual(actual[channel], expected[channel], accuracy: 2e-5,
                                        "\(paper): a viewing lamp must not retime dye")

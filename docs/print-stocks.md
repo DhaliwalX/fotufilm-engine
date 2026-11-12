@@ -21,7 +21,7 @@ stock or its process instead of switching on the case.
 | Process | Examples | Rules it implies |
 | --- | --- | --- |
 | `photoPaper` | Ektacolor Edge, Endura Premier, Crystal Archive | Negative film on still gauges. Reflection viewing under D50, with a visual setup trim solved under that lamp. Print borders. 0.004 mm printing blur. Layer sensitivities normalized per layer. |
-| `releasePrintFilm` | Vision 2383, Vision 2393, ETERNA-CP | Negative film on motion-picture gauges. Projected under xenon and timed to gross Status A LAD aims through the additive printer. No borders. 0.003 mm printing blur. Inter-layer sensitivity scale kept. |
+| `releasePrintFilm` | Vision 2383, Vision 2393, ETERNA-CP | Negative film on motion-picture gauges. Projected under xenon and timed to gross Status A LAD aims through the additive printer; a colour negative's print is viewed adapted to that LAD grey. No borders. 0.003 mm printing blur. Inter-layer sensitivity scale kept. |
 | `positivePaper` | Ilfochrome Classic CPS.1K and CLM.1K | Reversal film. Reflection viewing; more exposure gives a lighter print. Borders at maximum density. |
 
 Choose the process that matches how the material is really used. If a new material does not

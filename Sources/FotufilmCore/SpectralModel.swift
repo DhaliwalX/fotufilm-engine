@@ -2114,7 +2114,23 @@ public enum SpectralRuntime {
     static func transmissionRGB(density: [Float], dyes: [[Float]],
                                 neutralDensity: Float = 0,
                                 illuminant: [Float]? = nil,
-                                densityOffset: [Float]? = nil) -> SIMD3<Float> {
+                                densityOffset: [Float]? = nil,
+                                adaptedWhite: SIMD3<Float>? = nil) -> SIMD3<Float> {
+        let spectrum = transmission(density: density, dyes: dyes,
+                                    neutralDensity: neutralDensity,
+                                    densityOffset: densityOffset)
+        guard let illuminant else {
+            return SpectralGrid.toLinearDisplayP3(reflectance: spectrum)
+        }
+        return SpectralGrid.toLinearDisplayP3(reflectance: spectrum,
+                                              under: illuminant,
+                                              adaptedTo: adaptedWhite)
+    }
+
+    /// The spectral transmittance `transmissionRGB` integrates.
+    static func transmission(density: [Float], dyes: [[Float]],
+                             neutralDensity: Float = 0,
+                             densityOffset: [Float]? = nil) -> [Float] {
         assert(density.count == dyes.count,
                "density must be dye-aligned: \(density.count) records, \(dyes.count) dyes")
         var spectrum = [Float](repeating: 0, count: SpectralGrid.count)
@@ -2124,11 +2140,7 @@ public enum SpectralRuntime {
             if let densityOffset { d += densityOffset[i] }
             spectrum[i] = pow(10, -d)
         }
-        guard let illuminant else {
-            return SpectralGrid.toLinearDisplayP3(reflectance: spectrum)
-        }
-        return SpectralGrid.toLinearDisplayP3(reflectance: spectrum,
-                                              under: illuminant)
+        return spectrum
     }
 
     // Internal so the crossover tests can mirror the print exposure path.
@@ -2381,6 +2393,10 @@ public enum SpectralRuntime {
         let dyes: [[Float]]
         let viewingLight: [Float]?
         let unmix: PrintDyeUnmix?
+        /// The white the viewer has adapted to, as XYZ. Nil is the bare viewing light.
+        var adaptedWhite: SIMD3<Float>?
+        /// Places the clear medium's brightest channel on the display's peak.
+        var gain: Float = 1
 
         func rgb(density: SIMD3<Float>) -> SIMD3<Float> {
             guard let unmix else {
@@ -2391,7 +2407,7 @@ public enum SpectralRuntime {
             let amounts = unmix.amounts(forStatusA: density)
             return SpectralRuntime.transmissionRGB(
                 density: [amounts.x, amounts.y, amounts.z], dyes: dyes,
-                illuminant: viewingLight)
+                illuminant: viewingLight, adaptedWhite: adaptedWhite) * gain
         }
     }
 
@@ -2406,8 +2422,26 @@ public enum SpectralRuntime {
                                  viewingLight: viewingLight, unmix: nil)
         }
         let unmix = PrintDyeUnmix(dyes: paper.analyticalDyes)
-        return PrintReceiver(dyes: paper.analyticalDyes,
-                             viewingLight: viewingLight, unmix: unmix)
+        var receiver = PrintReceiver(dyes: paper.analyticalDyes,
+                                     viewingLight: viewingLight, unmix: unmix)
+        // A release print is timed until its LAD patch looks neutral on the screen, and that
+        // patch is not the colour of the lamp through clear film: the gross Status A aims are
+        // unequal and the dyes are not flat. A theatre audience sees nothing but the print, so
+        // the patch as lit is the white its eyes settle on. Adapting to the bare lamp instead
+        // made every normally exposed grey read blue. The developed dyes are not touched; clear
+        // film then stands warmer than grey, and the gain keeps it inside the display.
+        if let aim = paper.ladStatusA(for: stock), let viewingLight {
+            let curves = paper.printCurves(for: stock)
+            let patch = unmix.amounts(forStatusA: SIMD3((0..<3).map {
+                aim[$0] - curves[$0].dMin
+            }))
+            let transmitted = transmission(density: [patch.x, patch.y, patch.z],
+                                           dyes: paper.analyticalDyes)
+            receiver.adaptedWhite = SpectralGrid.xyz(
+                spectrum: (0..<SpectralGrid.count).map { viewingLight[$0] * transmitted[$0] })
+            receiver.gain = 1 / max(receiver.rgb(density: .zero).max(), 1e-6)
+        }
+        return receiver
     }
 
     /// The reflection print's visual setup is solved once, under D50. These density targets
@@ -3287,14 +3321,19 @@ public enum SpectralGrid {
     /// reflectance reads the same grey under every illuminant, while the paper dyes' spectral
     /// metamerism remains. Dividing Display P3 channels directly is not a von Kries transform;
     /// display primaries are not cone-response channels and produce hue errors away from neutral.
+    ///
+    /// `adaptedWhite` names what the viewer has adapted to when that is not the light itself,
+    /// as XYZ of any scale: only its chromaticity is used. Luminance stays relative to the light.
     static func toLinearDisplayP3(reflectance: [Float],
-                                  under illuminant: [Float]) -> SIMD3<Float> {
+                                  under illuminant: [Float],
+                                  adaptedTo adaptedWhite: SIMD3<Float>? = nil) -> SIMD3<Float> {
         precondition(reflectance.count == count)
         var reflected = [Float](repeating: 0, count: count)
         for i in 0..<count { reflected[i] = illuminant[i] * reflectance[i] }
         var reflectedXYZ = xyz(spectrum: reflected)
-        var whiteXYZ = xyz(spectrum: illuminant)
-        reflectedXYZ /= max(whiteXYZ.y, 1e-12)
+        let lightXYZ = xyz(spectrum: illuminant)
+        reflectedXYZ /= max(lightXYZ.y, 1e-12)
+        var whiteXYZ = adaptedWhite ?? lightXYZ
         whiteXYZ /= max(whiteXYZ.y, 1e-12)
         let sourceLMS = bradfordLMS(fromXYZ: whiteXYZ)
         let destinationLMS = bradfordLMS(fromXYZ: d65WhiteXYZ)
