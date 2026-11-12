@@ -8,12 +8,22 @@ import {
   denseEnd,
   estimatedBorder,
   filmBase,
+  pickedNeutral,
   plainReading,
   plainCrosstalk,
   PLAIN_CROSSTALK,
   positiveSource,
+  tonalSlopes,
 } from "../../src/negative-reading.js";
-import { rollBalance, rolledDenseEnd } from "../../src/negative-document.js";
+import {
+  newNegative,
+  parseNegative,
+  readingRequest,
+  readsModel,
+  rollBalance,
+  rolledDenseEnd,
+} from "../../src/negative-document.js";
+import { NEGATIVE } from "../../src/engine-constants.js";
 
 // A scan of `width`×`height` linear RGBA, each pixel from `at(x, y)`.
 function scan(width, height, at) {
@@ -47,6 +57,27 @@ test("picked clear film is the patch's median, and must be film", () => {
   const source = scan(160, 100, (x) => (x < 80 ? border : [0, 0, 0]));
   filmBase(source, [0.1, 0.5]).forEach((v, c) => assert.ok(Math.abs(v - border[c]) < 1e-6));
   assert.throws(() => filmBase(source, [0.9, 0.5]), /clear, unexposed film/);
+  // Something neutral in the picture is picked the same way, and says so where it cannot be.
+  pickedNeutral(source, [0.1, 0.5]).forEach((v, c) => assert.ok(Math.abs(v - border[c]) < 1e-6));
+  assert.throws(() => pickedNeutral(source, [0.9, 0.5]), /grey or white in the picture/);
+});
+
+test("a frame's tonal steps say how red and blue rise against green", () => {
+  // Steps of 0.15 in green every five pixels, red rising 0.8 and blue 1.2 times as far, inside
+  // a dark holder.
+  const stepped = scan(200, 100, (x, y) => {
+    if (x < 10 || y < 5 || x >= 190 || y >= 95) return film(3);
+    const green = 0.2 + Math.floor(x / 5) * 0.15;
+    return border.map((v, c) => v * 10 ** -(green * [0.8, 1, 1.2][c]));
+  });
+  const slopes = tonalSlopes(border, stepped.read(0, 0, 200, 100), 200, 100);
+  assert.ok(Math.abs(slopes[0] - 0.8) < 1e-3, String(slopes[0]));
+  assert.ok(Math.abs(slopes[1] - 1.2) < 1e-3, String(slopes[1]));
+  // A frame without steps, one too small, and a base that is no film say nothing.
+  const flat = scan(200, 100, () => film(1));
+  assert.equal(tonalSlopes(border, flat.read(0, 0, 200, 100), 200, 100), null);
+  assert.equal(tonalSlopes(border, new Float32Array(4), 1, 1), null);
+  assert.equal(tonalSlopes([0.8, 0, 0.25], stepped.read(0, 0, 200, 100), 200, 100), null);
 });
 
 test("readings draw a scan down by area, never past its own extremes", () => {
@@ -159,15 +190,117 @@ test("a roll's colour is the median of its frames' highlight colours", () => {
     [0.01, 0.02, 0.03],
     null,
   ];
-  const roll = rollBalance(ends);
+  const measures = ends.map((denseEnd) => ({ denseEnd }));
+  const roll = rollBalance(measures);
   assert.equal(roll.frames, 4);
   // Medians of red/green {0.9, 0.9, 0.9, 1.5} and blue/green {1.2, 1.2, 1.2, 0.6}.
   assert.ok(Math.abs(roll.colour[0] - 0.9) < 1e-6, String(roll.colour[0]));
   assert.ok(Math.abs(roll.colour[1] - 1.2) < 1e-6, String(roll.colour[1]));
+  // Its level is the median green of those ends, and with their colour its neutral.
+  assert.ok(Math.abs(roll.level - 1.25) < 1e-6, String(roll.level));
   // An even count takes the middle two.
-  assert.deepEqual(rollBalance([[1, 1, 1], [2, 1, 3]]).colour, [1.5, 2]);
-  assert.equal(rollBalance([[1, 1, 1]]), null);
+  assert.deepEqual(
+    rollBalance([{ denseEnd: [1, 1, 1] }, { denseEnd: [2, 1, 3] }]).colour,
+    [1.5, 2],
+  );
+  assert.equal(rollBalance([{ denseEnd: [1, 1, 1] }]), null);
   assert.equal(rollBalance([]), null);
+
+  // How steep its records read comes from six frames' tonal steps or more, never fewer.
+  assert.equal(roll.slopes, undefined);
+  const steps = [
+    [0.8, 1.1],
+    [0.9, 1.2],
+    [1.0, 1.3],
+    [0.85, 1.25],
+    [0.95, 1.15],
+    [0.9, 1.2],
+  ];
+  const stepped = steps.map((slopes, i) => ({ denseEnd: ends[i % 3], slopes }));
+  assert.equal(rollBalance(stepped.slice(0, 5)).slopes, undefined);
+  const contrast = rollBalance([...stepped, { denseEnd: ends[0], slopes: [NaN, 1] }, null]);
+  assert.ok(Math.abs(contrast.slopes[0] - 0.9) < 1e-6);
+  assert.ok(Math.abs(contrast.slopes[1] - 1.2) < 1e-6);
+  assert.equal(contrast.frames, 7);
+});
+
+test("a new negative is read with the current reading, an older one as it was", () => {
+  const fresh = newNegative("screen");
+  assert.equal(fresh.reading, NEGATIVE.currentReading);
+  assert.equal(fresh.crosstalk, 1);
+  assert.ok(readsModel(fresh));
+  assert.deepEqual(parseNegative(fresh), fresh);
+  const first = { border: null, lightFrame: null, roll: null, crosstalk: 0.4, scanLight: "rgb" };
+  assert.ok(!readsModel(first));
+  assert.deepEqual(parseNegative(first), first);
+  assert.deepEqual(newNegative("white", 1), { ...first, crosstalk: 0, scanLight: "white" });
+
+  // What the current reading keeps crosses a save and back.
+  const kept = {
+    ...fresh,
+    border: [0.8, 0.5, 0.25],
+    roll: { colour: [0.9, 1.2], frames: 7, level: 1.25, slopes: [0.9, 1.2] },
+    camera: "scanner",
+    balance: "roll",
+    neutral: [0.2, 0.1, 0.05],
+  };
+  assert.deepEqual(parseNegative(kept), kept);
+  for (const change of [
+    { reading: 0 },
+    { camera: "" },
+    { balance: "page" },
+    { neutral: [0.2, 0.1] },
+    { neutral: [0.2, 0, 0.05] },
+    { scanLight: "uv" },
+    { roll: { colour: [0.9, 1.2], frames: 7, slopes: [0.9, -1] } },
+    { roll: { colour: [0.9, 1.2], frames: 7, level: 0 } },
+  ])
+    assert.throws(() => parseNegative({ ...kept, ...change }), /Invalid negative reading/);
+});
+
+test("a request says of a reading what its edit keeps and its frame measures", () => {
+  const measured = { border, dense: [1.5, 1.0, 0.6], slopes: [0.9, 1.2] };
+  const roll = { colour: [0.9, 1.2], frames: 4, level: 1.25 };
+  // The first reading: the frame's densest end on its roll's colour, as before.
+  const first = readingRequest(
+    { border: null, lightFrame: null, roll, crosstalk: 0.4, scanLight: "rgb" },
+    measured,
+    { camera: { make: "SONY", model: "ILCE-7CM2" } },
+  );
+  assert.deepEqual(Object.keys(first), ["border", "denseEnd", "crosstalk", "scanLight"]);
+  assert.deepEqual(first.denseEnd.map((v) => Number(v.toFixed(6))), [0.9, 1, 1.2]);
+  assert.deepEqual([first.border, first.crosstalk, first.scanLight], [border, 0.4, "rgb"]);
+  assert.deepEqual(readingRequest({ roll: null }, measured), {
+    border,
+    denseEnd: measured.dense,
+    crosstalk: 0,
+    scanLight: "white",
+  });
+
+  // The current one: the frame's own densest end, the roll beside it, and the scan's source.
+  const source = { camera: { make: "SONY", model: "ILCE-7CM2" }, kelvin: 5100 };
+  const current = readingRequest(
+    { ...newNegative("screen"), roll, balance: "roll", neutral: [0.2, 0.1, 0.05], lightFrame: "a" },
+    measured,
+    source,
+  );
+  assert.deepEqual(current, {
+    border,
+    denseEnd: measured.dense,
+    reading: NEGATIVE.currentReading,
+    crosstalk: 1,
+    scanLight: "screen",
+    balance: "roll",
+    neutral: [0.2, 0.1, 0.05],
+    roll,
+    source,
+  });
+  // A scan whose file says nothing sends no source, and an edit only what it keeps.
+  assert.deepEqual(readingRequest({ reading: 2, roll: null }, { border, dense: null }), {
+    border,
+    denseEnd: null,
+    reading: 2,
+  });
 });
 
 test("a frame on its roll keeps its own green and takes the roll's colour", () => {

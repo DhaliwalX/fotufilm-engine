@@ -203,6 +203,10 @@ async function negativeSampleFilmBase({ render: request, point }) {
   return { json: await backend.negativeScans.sampleFilmBase(await sampled(request), point) };
 }
 
+async function negativeSampleNeutral({ render: request, point }) {
+  return { json: await backend.negativeScans.sampleNeutral(await sampled(request), point) };
+}
+
 async function printFrame(request) {
   const plan = new TextDecoder().decode(
     await loadFilmProfile({
@@ -345,6 +349,7 @@ const methods = {
   sampleScene,
   toneCurve,
   negativeSampleFilmBase,
+  negativeSampleNeutral,
   printFrame,
   stages,
   lensCatalogue,

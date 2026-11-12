@@ -96,6 +96,47 @@ export function denseEnd(border, pixels, width, height) {
   });
 }
 
+// How red and blue rise per unit of green across the framed picture's tonal steps, in the scan
+// channels' densities over `border`: the medians over pairs of pixels a little apart in the
+// central 80% whose green differs by a tenth of a density or more. A roll's frames give it how
+// steep its records read against each other. Null for a frame with too few steps to tell.
+// Mirrors ApproximateNegativeScan.tonalSlopes in Sources/FotufilmCore/NegativeScanContrast.swift.
+export function tonalSlopes(border, pixels, width, height) {
+  if (width < 2 || height < 2 || !border.every((v) => Number.isFinite(v) && v > 0)) return null;
+  const mx = Math.floor(width / 10),
+    my = Math.floor(height / 10);
+  const w = width - 2 * mx,
+    h = height - 2 * my;
+  const density = [0, 1, 2].map(() => new Float32Array(w * h).fill(NaN));
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const i = ((y + my) * width + x + mx) * 4;
+      if (!positive(pixels, i)) continue;
+      for (let c = 0; c < 3; c++) density[c][y * w + x] = -Math.log10(pixels[i + c] / border[c]);
+    }
+  // Far enough apart to span an edge the preview has softened.
+  const apart = Math.max(1, Math.floor(Math.max(width, height) / 170));
+  const red = [],
+    blue = [];
+  const step = (from, to) => {
+    const green = density[1][to] - density[1][from];
+    if (!(Math.abs(green) >= 0.1)) return;
+    const rises = [0, 2].map((c) => (density[c][to] - density[c][from]) / green);
+    if (!rises.every(Number.isFinite)) return;
+    red.push(rises[0]);
+    blue.push(rises[1]);
+  };
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      if (x + apart < w) step(y * w + x, y * w + x + apart);
+      if (y + apart < h) step(y * w + x, (y + apart) * w + x);
+    }
+  if (red.length < 256) return null;
+  red.sort((a, b) => a - b);
+  blue.sort((a, b) => a - b);
+  return [red[red.length >> 1], blue[blue.length >> 1]];
+}
+
 // The full crosstalk correction of a scan read without a film, by the light it was scanned under:
 // what each channel reads from the three channels' densities, rows summing to one, before the
 // frame's densest end is kept. NegativeScanCrosstalk.plainWeights in
@@ -157,9 +198,13 @@ export function plainReading(border, raw, crosstalk = 0, scanLight = "white") {
   return { border, gains, reference, weights };
 }
 
-// The median clear film over a patch of framed scan around `point`, normalised to the frame,
-// each channel read from the positive, finite samples, which must be nine in ten of them.
-export function filmBase(source, point) {
+// The median of the scan over a patch of the framed picture around `point`, normalised to the
+// frame, each channel read from the positive, finite samples, which must be nine in ten of them:
+// clear film to read the scan against, or something neutral in the picture to balance it on.
+export const filmBase = (source, point) => scanPatch(source, point, INVALID_BORDER);
+export const pickedNeutral = (source, point) => scanPatch(source, point, INVALID_NEUTRAL);
+
+function scanPatch(source, point, unreadable) {
   const { width, height } = source;
   const radius = Math.max(2, Math.floor(Math.max(width, height) / 80));
   const x = Math.floor(point[0] * width),
@@ -168,7 +213,7 @@ export function filmBase(source, point) {
     y0 = Math.max(0, y - radius);
   const x1 = Math.min(width, x + radius + 1),
     y1 = Math.min(height, y + radius + 1);
-  if (x1 - x0 < 2 || y1 - y0 < 2) throw new Error(INVALID_BORDER);
+  if (x1 - x0 < 2 || y1 - y0 < 2) throw new Error(unreadable);
   const pixels = decodeRGBA(source.read(x0, y0, x1 - x0, y1 - y0));
   const count = (x1 - x0) * (y1 - y0);
   return [0, 1, 2].map((c) => {
@@ -178,13 +223,15 @@ export function filmBase(source, point) {
       if (Number.isFinite(v) && v > 0) values.push(v);
     }
     if (!values.length || values.length < Math.floor((count * 9) / 10))
-      throw new Error(INVALID_BORDER);
+      throw new Error(unreadable);
     return values.sort((a, b) => a - b)[Math.floor(values.length / 2)];
   });
 }
 
 export const INVALID_BORDER =
   "Pick clear, unexposed film: the gap between frames or the film's edge, away from the holder, sprocket holes and lettering.";
+export const INVALID_NEUTRAL =
+  "Pick something grey or white in the picture, where the scan shows the film.";
 
 // The engine's scan preparation (Sources/FotufilmHalide/Pipeline/NegativeScan.h), built by
 // tools/build-negative-wasm.sh and loaded once.

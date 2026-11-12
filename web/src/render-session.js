@@ -29,12 +29,13 @@ import {
   INVALID_BORDER,
   areaPreview,
   denseEnd,
+  tonalSlopes,
   estimatedBorder,
   loadScanPreparation,
   plainReading,
   positiveSource,
 } from './negative-reading.js'
-import { rolledDenseEnd } from './negative-document.js'
+import { readingRequest, readsModel } from './negative-document.js'
 import { rampCurve, toneHistogram, toneRamp } from './tone-curve.js'
 import {
   assetUrl,
@@ -413,6 +414,7 @@ export class RenderSession {
         key: framing,
         border,
         dense: denseEnd(border, preview.pixels, preview.width, preview.height),
+        slopes: tonalSlopes(border, preview.pixels, preview.width, preview.height),
       }
       kept.framings.push(framed)
       if (kept.framings.length > 8) kept.framings.shift()
@@ -577,18 +579,29 @@ export class RenderSession {
           ? await this.negativeFraming(image, edit, report, stale)
           : null
         if (edit.negative && (!reading || stale())) return null
-        // The frame read on its roll's colour, when it is balanced on its roll.
-        const dense = reading && rolledDenseEnd(reading.dense, edit.negative.roll)
-        // What this frame measures for its roll (useRollActions), before any roll's colour.
+        // What this frame measures for its roll, before any roll's colour.
         const negativeMeasure = reading
-          ? { border: reading.border, denseEnd: reading.dense }
+          ? { border: reading.border, denseEnd: reading.dense, slopes: reading.slopes }
           : undefined
-        // A negative without a film is a positive photograph (plainReading); one read as a film
-        // prints from its scan, which the kernels read as the film.
+        // What a request says of the reading: the edit's, what the frame measures, and what the
+        // scan's file says of its camera.
+        const asked = reading
+          ? readingRequest(edit.negative, reading, image.raw?.scanSource)
+          : null
+        // A negative without a film is a positive photograph; one read as a film prints from its
+        // scan, which the kernels read as the film. The current reading is the engine's own
+        // (WebNegativePlainRequest), with the scan's light and camera; the first is plainReading.
         const plain =
           edit.negative && !negative
-            ? plainReading(reading.border, dense, edit.negative.crosstalk, edit.negative.scanLight)
+            ? readsModel(edit.negative)
+              ? JSON.parse(
+                  new TextDecoder().decode(
+                    await loadFilmProfile({ kind: 'negative-plain', negative: asked }, report),
+                  ),
+                )
+              : plainReading(asked.border, asked.denseEnd, asked.crosstalk, asked.scanLight)
             : null
+        if (stale()) return null
         const preparation = plain ? await loadScanPreparation() : null
         if (stale()) return null
         const scene = (pixels) => (plain ? positiveSource(pixels, plain, preparation) : pixels)
@@ -656,13 +669,7 @@ export class RenderSession {
                   filterMetering: edit.filterMetering,
                   ...(negative
                     ? {
-                        negative: {
-                          border: reading.border,
-                          denseEnd: dense,
-                          light: negativeLight(edit.params),
-                          crosstalk: edit.negative.crosstalk ?? 0,
-                          scanLight: edit.negative.scanLight ?? 'white',
-                        },
+                        negative: { ...asked, light: negativeLight(edit.params) },
                       }
                     : await sceneScreenMeter(
                         meterSource,
