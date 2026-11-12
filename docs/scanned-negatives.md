@@ -134,6 +134,12 @@ in one place (`WebNativeEdit.Negative.balance`, `.plain` and `.strayLight`):
   so the densities read are the ones that made the scan: within 0.025 of a density on the
   greys and 0.035 on the colours in the model, under every lamp and camera. Colour Separation
   (`crosstalk`) runs from one channel per record, scaled to hold the greys, to the full fit.
+- **What the model knows.** A measured camera, a film scanner's bands and LEDs that light one
+  channel each say how much density a channel reads of a dye (`NegativeScanSetup.knowsScale`).
+  A camera nobody measured, under a lamp of unknown spectrum, is modelled as reading colour as
+  the eye does, which says which dyes a channel sees but not how strongly: a white lamp's red
+  end alone moves that by a third. Such a reading keeps the scan's own density of green as the
+  film's, as the first reading did, and the editor starts it with the dyes unseparated.
 - **Stray light.** `flare` is the scan's stray light as a share of the frame's average light, or
   is left to be measured from the holder (`ApproximateNegativeScan.strayLight`): the holder is
   taken to be in view only where the darkest twentieth of the scan lies around its edge, is even
@@ -154,7 +160,9 @@ in one place (`WebNativeEdit.Negative.balance`, `.plain` and `.strayLight`):
   of the scan, or where the scan shows its bare light through sprocket holes or around a strip,
   the film's base under that light (`ApproximateNegativeScan.estimatedFilmBase`). A holder the
   scan shows is left out of what the frame measures, so the print is timed on the picture's
-  highlights and not on the holder (`ApproximateNegativeScan.withoutHolder`).
+  highlights and not on the holder (`ApproximateNegativeScan.withoutHolder`), and prints black.
+  The holder ends where the fewest pixels lie between it and the densest film in the scan's
+  middle (`ApproximateNegativeScan.holder`).
 - **A roll's contrast.** A frame's tonal steps, where light falls off across a surface or a
   shadow lies on it, change every record's exposure alike, so the rises of red and blue per unit
   of green across them say how steep the roll's records read against each other
