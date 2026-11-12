@@ -1,0 +1,75 @@
+import Foundation
+#if canImport(FotufilmCore)
+import FotufilmCore
+#endif
+
+/// How an edit's negative is read from what its frame measures, the one way every surface reads
+/// it: the desktop host, the browser's profile request and the command line. An edit saved with
+/// the first reading keeps it, so it prints as it did.
+extension WebNativeEdit.Negative {
+    /// Whether the edit reads the film through the scan's light and camera (`NegativeScanModel`)
+    /// and balances as `balance` says, or with the first reading.
+    public var readsModel: Bool { (reading ?? 1) >= 2 }
+
+    /// How far the reading separates the dyes: all the way where a reading through the scan's
+    /// light and camera does not say, not at all where the first reading does not.
+    public var separation: Float { crosstalk ?? (readsModel ? 1 : 0) }
+
+    /// What the reading sees the film through: the edit's light and camera, the camera left to
+    /// what the scan's file says of it (`NegativeScanSource`).
+    public func setup(source: NegativeScanSource? = nil) -> NegativeScanSetup {
+        (source ?? NegativeScanSource()).setup(
+            light: scanLight ?? .white, camera: camera.map(NegativeScanSetup.Camera.init(name:)))
+    }
+
+    /// The frame's tones over `border`: its densest end as measured, and the neutral picked on
+    /// it, each the scan channels' densities over the clear film.
+    public func tones(border: SIMD3<Float>, denseEnd: SIMD3<Float>?) -> ApproximateNegativeScan.Tones {
+        let picked = neutral.flatMap { neutral -> SIMD3<Float>? in
+            guard neutral.count == 3,
+                  (0..<3).allSatisfy({ neutral[$0].isFinite && neutral[$0] > 0 && border[$0] > 0 })
+            else { return nil }
+            return SIMD3((0..<3).map { -log10(neutral[$0] / border[$0]) })
+        }
+        return .init(denseEnd: denseEnd, picked: picked)
+    }
+
+    /// The frame's balance read as `stock`: `denseEnd` is its own densest end over `border`
+    /// (`ApproximateNegativeScan.denseEnd(border:preview:)`), before any roll's colour, and
+    /// `source` what the scan's file says of its camera.
+    public func balance(stock: FilmStock, border: SIMD3<Float>, denseEnd: SIMD3<Float>?,
+                        source: NegativeScanSource? = nil) -> ApproximateNegativeScan.Balance {
+        guard readsModel else {
+            return ApproximateNegativeScan.balance(
+                stock: stock, denseEnd: ApproximateNegativeScan.denseEnd(denseEnd, roll: roll),
+                correction: correction)
+        }
+        return ApproximateNegativeScan.balance(
+            stock: stock, setup: setup(source: source), separation: separation,
+            mode: balance ?? .frame, tones: tones(border: border, denseEnd: denseEnd), roll: roll)
+    }
+
+    /// The frame read without a film, as Normal reads a negative. Arguments as
+    /// `balance(stock:border:denseEnd:source:)`.
+    public func plain(border: SIMD3<Float>, denseEnd: SIMD3<Float>?,
+                      source: NegativeScanSource? = nil) -> PlainNegativeScan {
+        guard readsModel else {
+            return PlainNegativeScan(
+                border: border, denseEnd: ApproximateNegativeScan.denseEnd(denseEnd, roll: roll),
+                correction: correction)
+        }
+        return PlainNegativeScan(
+            border: border, setup: setup(source: source), separation: separation,
+            mode: balance ?? .frame, tones: tones(border: border, denseEnd: denseEnd), roll: roll)
+    }
+
+    /// Everything of the edit a reading turns on, for keeping one made before: two edits with
+    /// the same key read the same frame of the same scan alike.
+    public var readingKey: String {
+        let roll = roll.map { "\($0.colour),\($0.level.map { "\($0)" } ?? ""),\($0.slopes ?? [])" }
+        return [
+            "\(reading ?? 1)", camera ?? "", balance?.rawValue ?? "", "\(neutral ?? [])",
+            roll ?? "", crosstalk.map { "\($0)" } ?? "", scanLight?.rawValue ?? "",
+        ].joined(separator: "|")
+    }
+}
