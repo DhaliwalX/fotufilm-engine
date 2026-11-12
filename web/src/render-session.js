@@ -439,7 +439,8 @@ export class RenderSession {
     if (!framed) {
       const preview = await read(edit)
       if (!preview) return null
-      if (shown) preview.pixels = withoutHolder(preview.pixels, border, shown.limit)
+      if (shown)
+        preview.pixels = withoutHolder(preview.pixels, preview.width, preview.height, border, shown.limit)
       framed = {
         key: framing,
         border,

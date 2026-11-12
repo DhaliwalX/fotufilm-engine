@@ -47,21 +47,38 @@ extension ApproximateNegativeScan {
     /// A framed picture with the scan's holder left out, for what a reading measures of the
     /// frame: its densest end, which times the print, would otherwise be the holder's, where a
     /// scan shows much of one. A pixel is the holder's where its density over `border`, the mean
-    /// of its channels', is past `limit` (`holder(border:preview:)`), or it passes no light; it
-    /// is made no number, which the measures pass over.
+    /// of its channels', is past `limit` (`holder(border:preview:)`), or it passes no light, or
+    /// it lies beside one that is; it is made no number, which the measures pass over.
     public static func withoutHolder(_ preview: ImageBuffer, border: SIMD3<Float>,
                                      limit: Float) -> ImageBuffer {
-        var film = preview
+        let width = preview.width, height = preview.height
+        var holder = [Bool](repeating: false, count: preview.pixelCount)
         for i in 0..<preview.pixelCount {
             let pixel = SIMD3((0..<3).map { preview.planes[$0][i] })
-            if (0..<3).allSatisfy({ pixel[$0].isFinite && pixel[$0] > 0 }),
-               (0..<3).reduce(Float(0), { $0 - log10(pixel[$1] / border[$1]) }) / 3 <= limit {
-                continue
-            }
-            for c in 0..<3 { film.planes[c][i] = .nan }
+            holder[i] = !((0..<3).allSatisfy({ pixel[$0].isFinite && pixel[$0] > 0 })
+                && (0..<3).reduce(Float(0), { $0 - log10(pixel[$1] / border[$1]) }) / 3 <= limit)
         }
+        // The holder's edge is blurred into the film beside it: those pixels read denser than
+        // any film and off its colour, so the holder is grown over them, by a hundredth of the
+        // frame's long edge.
+        let reach = max(2, max(width, height) / holderEdge)
+        var across = holder
+        for y in 0..<height { for x in 0..<width where !holder[y * width + x] {
+            let from = max(0, x - reach), to = min(width - 1, x + reach)
+            across[y * width + x] = (from...to).contains { holder[y * width + $0] }
+        } }
+        var film = preview
+        for y in 0..<height { for x in 0..<width {
+            let from = max(0, y - reach), to = min(height - 1, y + reach)
+            if (from...to).contains(where: { across[$0 * width + x] }) {
+                for c in 0..<3 { film.planes[c][y * width + x] = .nan }
+            }
+        } }
         return film
     }
+
+    /// The frame's long edge over how far a holder is grown past its limit.
+    static let holderEdge = 100
 
     /// Both of the above from one look at the scan, and where the holder ends: `limit` is the
     /// density over the clear film, the mean of a pixel's channels', past which a pixel is the

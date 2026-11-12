@@ -219,11 +219,14 @@ const HOLDER_BIN = 0.05;
 // A framed picture with the scan's holder left out, for what a reading measures of the frame:
 // its densest end, which times the print, would otherwise be the holder's where a scan shows
 // much of one. A pixel is the holder's where its density over `border`, the mean of its
-// channels', is past `limit` (holder), or it passes no light; it is made no number, which the
-// measures pass over. Mirrors ApproximateNegativeScan.withoutHolder.
-export function withoutHolder(pixels, border, limit) {
-  const film = new Float32Array(pixels);
-  for (let i = 0; i < film.length; i += 4) {
+// channels', is past `limit` (holder), or it passes no light, or it lies beside one that is;
+// it is made no number, which the measures pass over. Mirrors
+// ApproximateNegativeScan.withoutHolder.
+export function withoutHolder(pixels, width, height, border, limit) {
+  const count = width * height;
+  const shown = new Uint8Array(count);
+  for (let p = 0; p < count; p++) {
+    const i = p * 4;
     const kept =
       positive(pixels, i) &&
       -(
@@ -233,8 +236,32 @@ export function withoutHolder(pixels, border, limit) {
       ) /
         3 <=
         limit;
-    if (!kept) for (let c = 0; c < 3; c++) film[i + c] = NaN;
+    shown[p] = kept ? 0 : 1;
   }
+  // The holder's edge is blurred into the film beside it, so the holder is grown over those
+  // pixels, by a hundredth of the frame's long edge.
+  const reach = Math.max(2, Math.floor(Math.max(width, height) / 100));
+  const across = new Uint8Array(shown);
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++) {
+      if (shown[y * width + x]) continue;
+      const to = Math.min(width - 1, x + reach);
+      for (let k = Math.max(0, x - reach); k <= to; k++)
+        if (shown[y * width + k]) {
+          across[y * width + x] = 1;
+          break;
+        }
+    }
+  const film = new Float32Array(pixels);
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++) {
+      const to = Math.min(height - 1, y + reach);
+      for (let k = Math.max(0, y - reach); k <= to; k++)
+        if (across[k * width + x]) {
+          for (let c = 0; c < 3; c++) film[(y * width + x) * 4 + c] = NaN;
+          break;
+        }
+    }
   return film;
 }
 

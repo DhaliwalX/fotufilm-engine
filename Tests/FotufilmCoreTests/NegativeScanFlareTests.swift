@@ -71,9 +71,12 @@ final class NegativeScanFlareTests: XCTestCase {
             XCTAssertLessThan(dense[c], own[c] + 0.01)
             XCTAssertGreaterThan(dense[c], own[c] - 0.2)
         }
-        // The picture's own pixels are all kept.
+        // The picture's own pixels are kept, but for a rim of two beside the holder, whose edge
+        // a real scan blurs into the film.
         let kept = (0..<film.pixelCount).filter { !film.planes[1][$0].isNaN }.count
-        XCTAssertEqual(Float(kept) / Float(film.pixelCount), 0.36, accuracy: 0.02)
+        XCTAssertEqual(Float(kept) / Float(film.pixelCount), 0.36 * 0.94, accuracy: 0.03)
+        XCTAssertFalse(film.planes[1][(height / 2) * width + width / 2].isNaN)
+        XCTAssertTrue(film.planes[1][(height / 2) * width + Int(0.2 * Float(width)) + 1].isNaN)
 
         // A real holder's light is uneven, several times brighter in places, and it still ends
         // short of the film.
@@ -89,7 +92,7 @@ final class NegativeScanFlareTests: XCTestCase {
         let roughDense = try XCTUnwrap(ApproximateNegativeScan.denseEnd(border: border, preview: left))
         XCTAssertLessThan(roughDense.y, own.y + 0.01)
         XCTAssertEqual(Float((0..<left.pixelCount).filter { !left.planes[1][$0].isNaN }.count)
-            / Float(left.pixelCount), 0.36, accuracy: 0.02)
+            / Float(left.pixelCount), 0.36 * 0.94, accuracy: 0.03)
     }
 
     func testAScanThatShowsNoHolderHasNoneToMeasure() {

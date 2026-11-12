@@ -257,7 +257,10 @@ test("a scan's stray light is read from its holder only where it plainly shows o
   assert.deepEqual(shown.stray, strayLight(border, wide, width, height));
   assert.ok(denseEnd(border, wide, width, height)[1] > 3);
   assert.ok(shown.limit > 1.6 && shown.limit < 3.1, String(shown.limit));
-  const film = withoutHolder(wide, border, shown.limit);
+  const film = withoutHolder(wide, width, height, border, shown.limit);
+  // The picture's middle is kept; a pixel beside the holder is not.
+  assert.ok(!Number.isNaN(film[((height / 2) * width + width / 2) * 4 + 1]));
+  assert.ok(Number.isNaN(film[((height / 2) * width + 0.2 * width + 1) * 4 + 1]));
   const dense = denseEnd(border, film, width, height);
   assert.ok(dense[1] > 1.1 && dense[1] < 1.6, String(dense[1]));
   assert.equal(holder(border, draw(0, null), width, height), null);
