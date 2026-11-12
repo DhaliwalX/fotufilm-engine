@@ -45,12 +45,20 @@ public struct ApproximateNegativeScan: Encodable, Equatable, Sendable {
     public static let balanceSamples = 65
     public static let balanceRange: ClosedRange<Float> = 0...4
 
+    /// How far past where a scan's holder begins, in density, a channel still counts as film:
+    /// the holder's limit is the mean of a pixel's channels, and the densest film's densest
+    /// channel lies past it.
+    public static let holderMargin: Float = 0.3
+
     /// Reads `stock` against `border` with the frame's `gains`, its balance as an `exposure`
     /// added to each record in log exposure, crosstalk `weights` (`Balance.weights`), each
-    /// record from its own channel alone when nil, and the scan's `flare`.
+    /// record from its own channel alone when nil, and the scan's `flare`. `holder` is where
+    /// the scan's holder begins, a density over the clear film (`holder(border:preview:)`): a
+    /// sample `holderMargin` past it in any channel is the holder's and prints black, where
+    /// otherwise the holder reads as the film's densest highlight.
     public init(stock: FilmStock, border: SIMD3<Float>, gains: SIMD3<Float> = .one,
                 exposure: SIMD3<Float> = .zero, weights: [SIMD3<Float>]? = nil,
-                flare: SIMD3<Float> = .zero) throws {
+                flare: SIMD3<Float> = .zero, holder: Float? = nil) throws {
         guard !stock.isReversal else { throw ScannedNegativeError.positiveOutputRequired }
         _ = try ScannedNegativeConverter(dark: .zero, light: border, reference: .filmBase)
         guard (0..<3).allSatisfy({ gains[$0].isFinite && Self.gainRange.contains(gains[$0]) }),
@@ -83,6 +91,12 @@ public struct ApproximateNegativeScan: Encodable, Equatable, Sendable {
             let high = clear[channel] * pow(10, (filmBase[record] - NegativeInterchange.range.lowerBound) / gain - 0.0001)
             minimum[channel] = max(minimum[channel], low)
             maximum[channel] = min(maximum[channel], high)
+        }
+        if let holder, holder.isFinite, holder > 0 {
+            for channel in 0..<3 {
+                minimum[channel] = max(minimum[channel],
+                                       clear[channel] * pow(10, -(holder + Self.holderMargin)))
+            }
         }
         minimumSample = minimum
         maximumSample = maximum

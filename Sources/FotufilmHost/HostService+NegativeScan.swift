@@ -301,7 +301,7 @@ extension HostService {
                                                negative: reading, preview: preview)
         }
         // What this frame measures for its roll, kept from the reading above.
-        let (read, flare, measure) = try scan.measure(key, border: border, light: light,
+        let (read, flare, _, measure) = try scan.measure(key, border: border, light: light,
                                                       negative: reading, preview: preview)
         prepared.negativeMeasure = [
             "border": (0..<3).map { Double(read[$0]) },

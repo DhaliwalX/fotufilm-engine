@@ -467,7 +467,7 @@ export class RenderSession {
         slopes: tonalSlopes(clear, pixels, preview.width, preview.height),
       })
     }
-    return { border, flare, ...framed.measures.get(measured) }
+    return { border, flare, holder: shown?.limit ?? null, ...framed.measures.get(measured) }
   }
   async capturePack(pack, stock, kelvin, report) {
     if (!pack || !Number.isFinite(kelvin) || kelvin <= 0) return pack

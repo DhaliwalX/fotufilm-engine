@@ -112,7 +112,7 @@ final class HostNegativeScan {
             balance: negative.balance(stock: stock, border: read.border,
                                       denseEnd: read.measure.denseEnd, source: source,
                                       flare: read.flare),
-            flare: read.flare)
+            flare: read.flare, holder: read.holder)
     }
 
     /// What a framing measures for its reading and its roll: the clear film it is read against,
@@ -122,7 +122,7 @@ final class HostNegativeScan {
     func measure(_ key: String, border: [Float], light id: String? = nil,
                  negative: WebNativeEdit.Negative = .init(),
                  preview: () throws -> (rgba: [Float], width: Int, height: Int)) throws
-        -> (border: SIMD3<Float>, flare: SIMD3<Float>,
+        -> (border: SIMD3<Float>, flare: SIMD3<Float>, holder: Float?,
             measure: ApproximateNegativeScan.RollBalance.Measure) {
         guard border.count == 3, border.allSatisfy({ $0.isFinite && $0 > 0 }) else {
             throw Self.invalidBorder
@@ -154,7 +154,7 @@ final class HostNegativeScan {
                                         holder: negative.flare == nil ? holder?.stray : nil)
         let measured = "\(frameKey)|\(flare)"
         if let kept = lock.withLock({ measures.first { $0.key == measured } }) {
-            return (border, flare, kept.measure)
+            return (border, flare, holder?.limit, kept.measure)
         }
         var planes = frame.planes
         if flare != .zero {
@@ -169,7 +169,7 @@ final class HostNegativeScan {
             measures.append((measured, measure))
             if measures.count > 8 { measures.removeFirst() }
         }
-        return (border, flare, measure)
+        return (border, flare, holder?.limit, measure)
     }
 
     /// The scan read without a film (`PlainNegativeScan`), evened under the light frame `light`:

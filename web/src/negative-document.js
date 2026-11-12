@@ -131,11 +131,12 @@ export function rolledDenseEnd(dense, roll) {
 export const readsModel = (negative) => (negative?.reading ?? 1) >= 2;
 
 // What a request says of a negative's reading (WebProfileRequest.Negative), from its edit, what
-// its framing measures (`border`, its own densest end `dense`, and the stray light `flare` the
-// reading takes off, which `dense` is net of) and what the scan's file says of its camera
+// its framing measures (`border`, its own densest end `dense`, the stray light `flare` the
+// reading takes off, which `dense` is net of, and where the scan's `holder` begins, a density
+// over the clear film past which the scan prints black) and what the scan's file says of its camera
 // (`source`). The first reading takes the frame's densest end on its roll's colour; the current
 // one takes the frame's own and the roll beside it.
-export function readingRequest(negative, { border, dense, flare = null }, source = null) {
+export function readingRequest(negative, { border, dense, flare = null, holder = null }, source = null) {
   if (!readsModel(negative))
     return {
       border,
@@ -151,6 +152,7 @@ export function readingRequest(negative, { border, dense, flare = null }, source
     denseEnd: dense,
     ...kept,
     ...(flare?.some((v) => v > 0) ? { strayLight: flare } : {}),
+    ...(Number.isFinite(holder) ? { holder } : {}),
     ...(source ? { source } : {}),
   };
 }

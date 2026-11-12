@@ -62,6 +62,10 @@ public struct WebProfileRequest: Decodable {
         /// (`WebNativeEdit.Negative.strayLight`). `border` still carries it; `denseEnd` is net
         /// of it. Nil takes none off, and the first reading never does.
         public let strayLight: [Float]?
+        /// Where the scan's holder begins, a density over the clear film, where the browser
+        /// found one (`ApproximateNegativeScan.holder(border:preview:)`): past it the scan prints
+        /// black. The first reading has none.
+        public let holder: Float?
 
         /// The keys `light` may hold.
         static let lightKeys: Set<String> = ["ev", "temperature", "tint"]
@@ -204,7 +208,8 @@ public struct WebProfileRequest: Decodable {
             // Exposure and development, which transport belongs to, already happened to the film.
             stock.layeredTransport = nil
             options = try NegativeScanPrint.Reading(
-                stock: stock, border: measured.border, balance: balance, flare: measured.flare)
+                stock: stock, border: measured.border, balance: balance, flare: measured.flare,
+                holder: measured.edit.readsModel ? negative.holder : nil)
                 .printing(options, stock: stock)
         }
         return (stock, options)

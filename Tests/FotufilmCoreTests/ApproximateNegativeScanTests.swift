@@ -159,6 +159,27 @@ final class ApproximateNegativeScanTests: XCTestCase {
         XCTAssertNil(ApproximateNegativeScan.estimatedFilmBase(preview: ImageBuffer(width: 2, height: 2)))
     }
 
+    /// Past where a scan's holder begins, a sample is the holder's and prints black, where
+    /// otherwise it reads as the film's densest highlight.
+    func testASamplePastTheHoldersLimitIsNotFilm() throws {
+        let stock = TestStocks.negative
+        let border = SIMD3<Float>(0.4, 0.6, 0.2)
+        let plain = try ApproximateNegativeScan(stock: stock, border: border)
+        let held = try ApproximateNegativeScan(stock: stock, border: border, holder: 1.6)
+        let margin = ApproximateNegativeScan.holderMargin
+        for c in 0..<3 {
+            XCTAssertEqual(held.minimumSample[c], border[c] * pow(10, -(1.6 + margin)),
+                           accuracy: 1e-7)
+        }
+        let holder = border * pow(10, -2.8), film = border * pow(10, -1.5)
+        XCTAssertNotNil(plain.density(of: holder))
+        XCTAssertNil(held.density(of: holder))
+        XCTAssertEqual(held.density(of: film), plain.density(of: film))
+        // The densest film's densest channel, a little past the limit, is still film.
+        XCTAssertNotNil(held.density(of: border * SIMD3(pow(10, -1.3), pow(10, -1.5), pow(10, -1.8))))
+        XCTAssertEqual(try ApproximateNegativeScan(stock: stock, border: border, holder: nil), plain)
+    }
+
     func testMonochromeUsesGreenForEveryFilmRecord() throws {
         let stock = try XCTUnwrap(FilmStock.presetDefinitions["hp5plus400"]).validated().stock
         let plan = try ApproximateNegativeScan(stock: stock, border: SIMD3(0.4, 0.6, 0.2))
