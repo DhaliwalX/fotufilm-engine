@@ -202,6 +202,9 @@ public enum LayeredTransportRenderer {
     /// A donor stock's components carry its fourth record in each exposure table's fourth lane.
     public static func renderPlan(stock: FilmStock, options: FotufilmEngine.Options,
                                   width: Int, height: Int) throws -> TransportRenderPlan {
+        guard stock.donorLayers.count <= 1 else {
+            throw TransportError.unsupported("layered transport supports at most one donor layer")
+        }
         guard let model = options.transportConstruction(for: stock),
               options.stage == .full, !options.localTone else {
             throw TransportError.unsupported("transport pack requires full stage without image-dependent local tone")
@@ -291,6 +294,9 @@ public enum LayeredTransportRenderer {
                               invocation suppliedInvocation: FilmEngineInvocation? = nil,
                               pixelPitchMM: Double? = nil) throws -> Exposure {
         try scene.validate()
+        guard stock.donorLayers.count <= 1 else {
+            throw TransportError.unsupported("layered transport supports at most one donor layer")
+        }
         let backend = execution?.backend ?? options.transportBackend
         guard backend.isAvailable, execution != nil || HalideBackend.isAvailable else {
             throw TransportError.backend("requested transport backend is unavailable")

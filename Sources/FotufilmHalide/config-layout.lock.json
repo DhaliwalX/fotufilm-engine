@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "count": 18479,
+  "count": 18532,
   "fields": {
     "CURVES": {
       "offset": 0,
@@ -418,12 +418,64 @@
       "offset": 18271,
       "count": 10
     },
-    "SCAN_FLARE": {
+    "COUPLER_MODEL": {
       "offset": 18281,
+      "count": 1
+    },
+    "COUPLER_EFFECTIVE_SCALE": {
+      "offset": 18282,
+      "count": 3
+    },
+    "COUPLER_ROW_NORM": {
+      "offset": 18285,
+      "count": 6
+    },
+    "COUPLER_RELEASE_KAPPA": {
+      "offset": 18291,
+      "count": 3
+    },
+    "DONOR_RELEASE_KAPPA": {
+      "offset": 18294,
+      "count": 3
+    },
+    "DONOR_CURVE_SECONDARY": {
+      "offset": 18297,
+      "count": 15
+    },
+    "DONOR_EXTRA_CURVE": {
+      "offset": 18312,
+      "count": 12
+    },
+    "DONOR_EXTRA_RELEASE": {
+      "offset": 18324,
+      "count": 2
+    },
+    "DONOR_EXTRA_GAMMA": {
+      "offset": 18326,
+      "count": 2
+    },
+    "DONOR_RECEIVER": {
+      "offset": 18328,
+      "count": 3
+    },
+    "DONOR_COUNT": {
+      "offset": 18331,
+      "count": 1
+    },
+    "DONOR_EXTRA_LUT_ID": {
+      "offset": 18332,
+      "count": 1
+    },
+    "COUPLER_CROSS_POINTWISE_SHARE": {
+      "offset": 18333,
+      "count": 1
+    },
+    "SCAN_FLARE": {
+      "offset": 18334,
       "count": 3
     },
     "SCAN_BALANCE": {
-      "offset": 18284,
+      "offset": 18337,
       "count": 195
     }
   }

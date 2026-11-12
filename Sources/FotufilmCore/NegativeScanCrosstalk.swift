@@ -148,4 +148,19 @@ public enum NegativeScanCrosstalk {
         let c2 = cross(rows[0], rows[1]) / determinant
         return [SIMD3(c0.x, c1.x, c2.x), SIMD3(c0.y, c1.y, c2.y), SIMD3(c0.z, c1.z, c2.z)]
     }
+
+    /// Diagnostics for `FilmStockDefinition.validate()`'s `(V3)` signed-dye unmixing check:
+    /// the channel-density determinant and the equal-density row scales `(A^-1 * 1)_c^-1`
+    /// (`target[c] / (unmix[c] * target).sum()` at `target = (1, 1, 1)`), or `(det, nil)` if
+    /// singular. Note that `(unmix[c] * .one).sum()` and its reciprocal share `0.5...2`.
+    static func unmixDiagnostics(dyes: [[Float]], light: Light)
+        -> (determinant: Float, equalDensityRowSums: [Float]?) {
+        func cross(_ a: SIMD3<Float>, _ b: SIMD3<Float>) -> SIMD3<Float> {
+            SIMD3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x)
+        }
+        let rows = channelDensities(dyes: dyes, light: light)
+        let determinant = (rows[0] * cross(rows[1], rows[2])).sum()
+        guard let unmix = invert(rows) else { return (determinant, nil) }
+        return (determinant, (0..<3).map { (unmix[$0] * .one).sum() })
+    }
 }

@@ -170,6 +170,26 @@ void arm_configuration(std::vector<float> &configuration) {
     }
     const float donor_release[3] = {0.62f, 0.0f, 0.0f};
     for (int i = 0; i < 3; ++i) c[FOTUFILM_CONFIG_DONOR_RELEASE + i] = donor_release[i];
+    if (c[FOTUFILM_CONFIG_COUPLER_MODEL] > 0.5f) {
+        c[FOTUFILM_CONFIG_DONOR_COUNT] = 1.0f;
+        c[FOTUFILM_CONFIG_DONOR_RECEIVER] = 0.0f;
+        for (int row = 0; row < 3; ++row) {
+            if (c[FOTUFILM_CONFIG_COUPLER_EFFECTIVE_SCALE + row] <= 0.0f) {
+                c[FOTUFILM_CONFIG_COUPLER_EFFECTIVE_SCALE + row] =
+                    c[FOTUFILM_CONFIG_COUPLER_SCALE];
+            }
+            float u_norm = std::fabs(donor_release[row]);
+            float cross_norm = 0.0f;
+            for (int col = 0; col < 3; ++col) {
+                const float k = std::fabs(c[FOTUFILM_CONFIG_COUPLER + row * 3 + col]);
+                u_norm += k;
+                if (col != row) cross_norm += k;
+            }
+            c[FOTUFILM_CONFIG_COUPLER_ROW_NORM + row] = std::max(u_norm, 1.0e-6f);
+            c[FOTUFILM_CONFIG_COUPLER_ROW_NORM + 3 + row] =
+                std::max(c[FOTUFILM_CONFIG_CHROMATIC_FRINGE_AMOUNT] * cross_norm, 1.0e-6f);
+        }
+    }
 
     // Current physical halation uses centered continuous Gaussian mixtures. The three legacy
     // annular-radius slots remain zero to preserve the packed-configuration ABI.

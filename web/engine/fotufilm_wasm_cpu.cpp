@@ -171,6 +171,11 @@ int fotufilm_wasm_cpu_render(float *input, float *output, int32_t width, int32_t
 
     if (feature_mask & FOTUFILM_FRAME_NO_FILM)
         return plain_float(&in_r, &in_g, &in_b, &config_buf, origin_x, origin_y, &out_buf);
+    if ((feature_mask & FOTUFILM_FRAME_DONOR_LAYER) != 0
+        && (feature_mask & (FOTUFILM_FRAME_DENSITY_IN | FOTUFILM_FRAME_LIGHT_OUT)) == 0) {
+        const float donor_count = configuration[FOTUFILM_CONFIG_DONOR_COUNT];
+        if (!(donor_count >= 0.0f && int32_t(donor_count) <= 1)) return -2;
+    }
 
     const float *c = configuration;
     const fotufilm::ResolvedFrameParams resolved(configuration, width, height, seed,

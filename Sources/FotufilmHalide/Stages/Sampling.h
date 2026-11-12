@@ -174,6 +174,22 @@ inline Halide::Expr lut_sample(Halide::ImageParam &lut, Halide::Expr px,
         px, py, pz, channel, half_math);
 }
 
+/// Bounds-safe counterpart of `lut_sample` for optional LUTs backed by a 1-float stand-in when
+/// `on` is false (`ExtraDonorLutStore`). Clamping the flat index to `select(on, kLutValueCount - 1, 0)`
+/// lets Halide bounds inference prove index 0 when `on` is 0.
+inline Halide::Expr lut_sample_guarded(Halide::ImageParam &lut, Halide::Expr px,
+                                       Halide::Expr py, Halide::Expr pz,
+                                       Halide::Expr channel, Halide::Expr on,
+                                       bool half_math = false) {
+    return lut_sample_with(
+        [&](Halide::Expr x, Halide::Expr y, Halide::Expr z, Halide::Expr c) {
+            Halide::Expr raw = (((z * kLutDimension + y) * kLutDimension + x) * 4) + c;
+            Halide::Expr limit = Halide::select(on, kLutValueCount - 1, 0);
+            return Halide::cast<float>(lut(Halide::clamp(raw, 0, limit)));
+        },
+        px, py, pz, channel, half_math);
+}
+
 /// The same sampler over a cube that shares a buffer with other data, `base` floats in. WebGPU
 /// counts every bound storage buffer against a small per-stage budget, so a backend that runs out
 /// of bindings can carry a cube inside another parameter rather than give it one of its own.

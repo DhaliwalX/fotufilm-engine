@@ -9,15 +9,22 @@
 
 namespace fotufilm {
 
-/// Normalized Hill law for development-inhibitor release. It is applied before diffusion because
-/// the released species diffuses, not the donor layer's latent activation. Gamma 1 preserves the
-/// historical linear path exactly.
-inline Halide::Expr inhibitor_release(Halide::Expr activation, Halide::Expr gamma) {
+/// Competitive QDI-Hill law for development-inhibitor release:
+/// `a^gamma / max(a^gamma + kappa * (1 - a)^gamma, 1e-8)`.
+/// `kappa == 1, gamma == 1` preserves the historical linear path bit-for-bit.
+inline Halide::Expr inhibitor_release(Halide::Expr activation, Halide::Expr kappa,
+                                      Halide::Expr gamma) {
     Halide::Expr a = Halide::clamp(activation, 0.0f, 1.0f);
-    Halide::Expr released = Halide::pow(a, gamma);
-    Halide::Expr retained = Halide::pow(1.0f - a, gamma);
-    Halide::Expr nonlinear = released / Halide::max(released + retained, 1.0e-8f);
-    return Halide::select(gamma == 1.0f, a, nonlinear);
+    Halide::Expr released = Halide::select(gamma == 1.0f, a, Halide::pow(a, gamma));
+    Halide::Expr retained = Halide::select(gamma == 1.0f, 1.0f - a, Halide::pow(1.0f - a, gamma));
+    Halide::Expr denom = Halide::select(kappa == 1.0f, released + retained,
+                                        released + kappa * retained);
+    Halide::Expr nonlinear = released / Halide::max(denom, 1.0e-8f);
+    return Halide::select(gamma == 1.0f && kappa == 1.0f, a, nonlinear);
+}
+
+inline Halide::Expr inhibitor_release(Halide::Expr activation, Halide::Expr gamma) {
+    return inhibitor_release(activation, 1.0f, gamma);
 }
 
 /// Positive Gaussian mixture for the isotropic screened-diffusion transport kernel.
@@ -46,13 +53,54 @@ inline Halide::Expr adjacency_density(Halide::ImageParam &configuration,
 inline Halide::Expr coupler_release(Halide::ImageParam &configuration,
                                     Halide::Expr donor, Halide::Expr activation) {
     return inhibitor_release(
-        activation, configuration(FOTUFILM_CONFIG_COUPLER_RELEASE_GAMMA + donor));
+        activation,
+        configuration(FOTUFILM_CONFIG_COUPLER_RELEASE_KAPPA + donor),
+        configuration(FOTUFILM_CONFIG_COUPLER_RELEASE_GAMMA + donor));
+}
+
+inline Halide::Expr donor_release_gamma(Halide::ImageParam &configuration,
+                                        Halide::Expr donor_index) {
+    return Halide::select(
+        donor_index == 0, configuration(FOTUFILM_CONFIG_DONOR_RELEASE_GAMMA),
+        configuration(FOTUFILM_CONFIG_DONOR_EXTRA_GAMMA
+                      + Halide::clamp(donor_index - 1, 0, 1)));
+}
+
+inline Halide::Expr donor_release(Halide::ImageParam &configuration,
+                                  Halide::Expr donor_index,
+                                  Halide::Expr activation) {
+    return inhibitor_release(
+        activation,
+        configuration(FOTUFILM_CONFIG_DONOR_RELEASE_KAPPA + Halide::clamp(donor_index, 0, 2)),
+        donor_release_gamma(configuration, donor_index));
 }
 
 inline Halide::Expr donor_release(Halide::ImageParam &configuration,
                                   Halide::Expr activation) {
-    return inhibitor_release(
-        activation, configuration(FOTUFILM_CONFIG_DONOR_RELEASE_GAMMA));
+    return donor_release(configuration, 0, activation);
+}
+
+inline Halide::Expr donor_receiver_channel(Halide::ImageParam &configuration,
+                                           Halide::Expr donor_index) {
+    return Halide::clamp(
+        Halide::cast<int32_t>(Halide::round(
+            configuration(FOTUFILM_CONFIG_DONOR_RECEIVER + Halide::clamp(donor_index, 0, 2)))),
+        0, 2);
+}
+
+inline Halide::Expr donor_release_amplitude(Halide::ImageParam &configuration,
+                                            Halide::Expr channel,
+                                            Halide::Expr donor_index) {
+    Halide::Expr receiver = donor_receiver_channel(configuration, donor_index);
+    Halide::Expr extra = Halide::select(
+        channel == receiver,
+        configuration(FOTUFILM_CONFIG_DONOR_EXTRA_RELEASE
+                      + Halide::clamp(donor_index - 1, 0, 1)),
+        0.0f);
+    return Halide::select(
+        donor_index == 0,
+        configuration(FOTUFILM_CONFIG_DONOR_RELEASE + channel),
+        extra);
 }
 
 /// DIR coupler inhibition applied to `channel`, in log-exposure units: the inhibitor released by
@@ -117,7 +165,11 @@ inline Halide::Expr coupler_warp(Halide::ImageParam &configuration,
         configuration(FOTUFILM_CONFIG_COUPLER_RELEASE_GAMMA) != 1.0f
         || configuration(FOTUFILM_CONFIG_COUPLER_RELEASE_GAMMA + 1) != 1.0f
         || configuration(FOTUFILM_CONFIG_COUPLER_RELEASE_GAMMA + 2) != 1.0f
-        || configuration(FOTUFILM_CONFIG_DONOR_RELEASE_GAMMA) != 1.0f;
+        || configuration(FOTUFILM_CONFIG_DONOR_RELEASE_GAMMA) != 1.0f
+        || configuration(FOTUFILM_CONFIG_COUPLER_RELEASE_KAPPA) != 1.0f
+        || configuration(FOTUFILM_CONFIG_COUPLER_RELEASE_KAPPA + 1) != 1.0f
+        || configuration(FOTUFILM_CONFIG_COUPLER_RELEASE_KAPPA + 2) != 1.0f
+        || configuration(FOTUFILM_CONFIG_DONOR_RELEASE_KAPPA) != 1.0f;
     return Halide::select(nonlinear, cubic, linear);
 }
 

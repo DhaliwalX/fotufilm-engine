@@ -324,6 +324,34 @@ inline Halide::Expr scene_exposure(Halide::ImageParam &configuration,
     return Halide::select(flash > 0.0f, raw_exp + flash, raw_exp);
 }
 
+/// Scene exposure for extra donor capture layers (`donors[1]` at `extra_channel == 0`,
+/// `donors[2]` at `extra_channel == 1`), guarded for the 1-float stand-in when `on` is false.
+inline Halide::Expr extra_donor_scene_exposure(Halide::ImageParam &configuration,
+                                               Halide::ImageParam &extra_lut,
+                                               Halide::Expr red, Halide::Expr green,
+                                               Halide::Expr blue,
+                                               Halide::Expr extra_channel,
+                                               Halide::Expr receiver_channel,
+                                               Halide::Expr frame_x, Halide::Expr frame_y,
+                                               Halide::Expr on,
+                                               bool approximate = false,
+                                               bool half_lut_math = false) {
+    CreativeScene scene = creative_exposure(configuration, red, green, blue,
+                                            frame_x, frame_y, approximate);
+    ExposureDomain domain = exposure_domain(configuration, scene.r, scene.g, scene.b);
+    Halide::Expr sampled = Halide::max(
+        lut_sample_guarded(extra_lut, domain.x, domain.y, domain.z, extra_channel,
+                           on, half_lut_math) * domain.scale,
+        0.0f);
+    Halide::Expr fallback = Halide::mux(
+        Halide::clamp(receiver_channel, 0, 2), {red, green, blue});
+    Halide::Expr raw_exp = Halide::select(
+        configuration(FOTUFILM_CONFIG_RECORD_INPUT) != 0.0f || !on,
+        fallback, sampled);
+    Halide::Expr flash = configuration(FOTUFILM_CONFIG_CAMERA_PREFLASH);
+    return Halide::select(flash > 0.0f, raw_exp + flash, raw_exp);
+}
+
 /// Share of a uniform disc of `radius` on the open side of a straight edge `distance` beyond it
 /// (negative inside): `(acos(v) - v sqrt(1 - v^2)) / pi` for `v` the distance in radii, with acos by
 /// Abramowitz and Stegun 4.4.45 so that every renderer computes it in the same exact arithmetic.

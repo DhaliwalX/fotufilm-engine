@@ -21,6 +21,13 @@ extension FilmStock {
     /// separately by `grainFogDensity`.
     static let expiredGrainPerFog: Float = 1
 
+    /// Maximum fog density per layer that can consume coloured masking coupler (30 years at the
+    /// standard ageing rate: `[0.168, 0.240, 0.312]`). Any fog past this ceiling adds positive dye
+    /// absorption only, matching `FilmStockDefinition.validate()`'s `(V1)` mask headroom.
+    public static let maskFogHeadroom: [Float] = expiredLayerWeights.map {
+        expiredFogPerStopLost * 3 * $0
+    }
+
     /// The stock as `years` past its process-by date leaves it. 0 is `self`, exactly.
     public func expired(years: Float) -> FilmStock {
         guard years > 0 else { return self }
@@ -40,9 +47,14 @@ extension FilmStock {
             aged.curves[layer].dMin += fog
             // A separately specified minimum must gain the same developed fog. Otherwise
             // subtracting the aged record minima would remove the new absorption again.
+            // Coloured mask depletion saturates once the coated mask is spent (`maskFogHeadroom`).
             if let minimum = aged.spectralProfile.minimumDensity {
-                aged.spectralProfile.minimumDensity = zip(minimum,
-                    spectralProfile.imageDyeDensity[layer]).map { $0 + fog * $1 }
+                let dye = spectralProfile.imageDyeDensity[layer]
+                let masked = min(fog, FilmStock.maskFogHeadroom[layer])
+                let spent = fog - masked
+                aged.spectralProfile.minimumDensity = zip(minimum, dye).map {
+                    max(0, $0 + masked * $1 + spent * max($1, 0))
+                }
             }
             aged.curves[layer].sampled = curves[layer].sampled?.shifted(
                 logExposure: lostStops * perStop, density: fog)

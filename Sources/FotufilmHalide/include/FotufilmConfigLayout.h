@@ -310,11 +310,71 @@ enum {
     /// pixel does not sample them. Zero strengths leave the print unchanged. Appended without
     /// renumbering earlier fields.
     FOTUFILM_CONFIG_PRINT_DETAIL = 18271,
+    /// Which chemical development-inhibitor model evaluates inter-image and spatial coupler
+    /// inhibition: 0 is the legacy inverted-warp model (schemaVersion <= 3), and 1 is the forward-
+    /// compensated QDI model (schemaVersion == 4) with in-kernel neutral compensation W_c(L_c),
+    /// per-receiver sum blur, and gate log-ratio donor transport. Appended without renumbering
+    /// earlier fields.
+    FOTUFILM_CONFIG_COUPLER_MODEL = 18281,
+    /// Per-receiver-row host loop-gain-clamped coupler scales s_eff_c =
+    /// min(effectiveCouplerScale(s), 0.85 / Gamma_{1,c}) for c in 0..2, multiplying each receiver
+    /// row's coupler release, donor release, and forward neutral compensation W_c under
+    /// COUPLER_MODEL == 1 without collaterally attenuating untouched rows, while leaving silver-
+    /// halide adjacency strength on its own slider scale. Appended without renumbering earlier
+    /// fields.
+    FOTUFILM_CONFIG_COUPLER_EFFECTIVE_SCALE = 18282,
+    /// Positive per-receiver row normalizers under COUPLER_MODEL == 1: first three slots normalize
+    /// the core coupler-sum field u_c into [0, 1] before Float16 spatial diffusion, and next three
+    /// slots normalize the broad chromatic-fringe field v_c into [0, 1]. Appended without
+    /// renumbering earlier fields.
+    FOTUFILM_CONFIG_COUPLER_ROW_NORM = 18285,
+    /// Competitive QDI coupling/depletion ratios kappa_0, kappa_1, kappa_2 > 0 for the three dye-
+    /// forming records in r(a; kappa, gamma) = a^gamma / (a^gamma + kappa * (1 - a)^gamma). Default
+    /// [1, 1, 1] with gamma == 1 reduces to identity release r(a) = a. Appended without renumbering
+    /// earlier fields.
+    FOTUFILM_CONFIG_COUPLER_RELEASE_KAPPA = 18291,
+    /// Competitive QDI coupling/depletion ratios kappa > 0 for non-dye-forming donor layers 0..2.
+    /// Default [1, 1, 1]. Appended without renumbering earlier fields.
+    FOTUFILM_CONFIG_DONOR_RELEASE_KAPPA = 18294,
+    /// Optional second H&D speed-group parameters (gamma, toe, toeWidth, shoulder, shoulderWidth)
+    /// for donor layers 0..2, matching CURVE_SECONDARY on dye-forming records. Zero gamma ([0, 0,
+    /// 1, 0, 1]) contributes nothing. Appended without renumbering earlier fields.
+    FOTUFILM_CONFIG_DONOR_CURVE_SECONDARY = 18297,
+    /// Six-parameter primary H&D curves (dMin, gamma, toe, toeWidth, shoulder, shoulderWidth) for
+    /// additional donor layers 1 and 2 when DONOR_COUNT > 1; donor layer 0 remains in DONOR_CURVE.
+    /// Appended without renumbering earlier fields.
+    FOTUFILM_CONFIG_DONOR_EXTRA_CURVE = 18312,
+    /// Scalar inhibition amplitudes k_{c*(m), m} for additional donor layers 1 and 2 at their
+    /// primary receiver channels DONOR_RECEIVER[1..2] when DONOR_COUNT > 1. Appended without
+    /// renumbering earlier fields.
+    FOTUFILM_CONFIG_DONOR_EXTRA_RELEASE = 18324,
+    /// Release Hill exponents gamma >= 1 for additional donor layers 1 and 2 when DONOR_COUNT > 1;
+    /// donor layer 0 remains in DONOR_RELEASE_GAMMA. Appended without renumbering earlier fields.
+    FOTUFILM_CONFIG_DONOR_EXTRA_GAMMA = 18326,
+    /// Primary dye-forming receiver channel index c*(m) in {0, 1, 2} for donor layers 0..2 under
+    /// COUPLER_MODEL == 1, anchoring gate log-exposure ratio transport L_m = L_{c*(m)} + lambda_m.
+    /// Appended without renumbering earlier fields.
+    FOTUFILM_CONFIG_DONOR_RECEIVER = 18328,
+    /// Active donor capture layer count (0...3). Values above 1 evaluate extra donors on JIT CPU
+    /// and generic Metal and are cleanly refused by AOT and WebGPU shims. Appended without
+    /// renumbering earlier fields.
+    FOTUFILM_CONFIG_DONOR_COUNT = 18331,
+    /// Positive cache identifier of the registered 33^3 spectral exposure table for additional
+    /// donor layers 1 and 2 when DONOR_COUNT > 1 on JIT backends, or 0 when unused. Appended
+    /// without renumbering earlier fields.
+    FOTUFILM_CONFIG_DONOR_EXTRA_LUT_ID = 18332,
+    /// Pointwise share beta = 1 - min((sigma_phys / sigma_coupler)^2, 1) in [0, 1] for cross-layer
+    /// 3x3 coupler terms (j != c) under COUPLER_MODEL == 1 when sigma_coupler applies the 0.85 px
+    /// preview floor. Zero at full resolution (sigma_phys >= 0.85 px) and on legacy models; on sub-
+    /// pixel previews, 100% of intra-layer self-retention K[c][c] blurs at sigma_coupler for
+    /// visible Edge Contrast while cross-layer terms conserve exact physical variance sigma_phys^2.
+    /// Appended without renumbering earlier fields.
+    FOTUFILM_CONFIG_COUPLER_CROSS_POINTWISE_SHARE = 18333,
     /// Stray light a scanned negative's scan carries (FOTUFILM_CONFIG_SCAN_READING mode 1), red,
     /// green and blue as linear scan RGB: taken off each sample before it is read, the clear film
     /// and the usable range in FOTUFILM_CONFIG_SCAN_READING being net of it already. Zero takes
     /// nothing off. Appended without renumbering earlier fields.
-    FOTUFILM_CONFIG_SCAN_FLARE = 18281,
+    FOTUFILM_CONFIG_SCAN_FLARE = 18334,
     /// A scanned negative's balance (ApproximateNegativeScan.balance): the density each record
     /// gains over its base plus its gain times its weighted density, by that weighted density over
     /// the clear film. FOTUFILM_SCAN_BALANCE_SAMPLES values for red, then green, then blue, evenly
@@ -322,7 +382,7 @@ enum {
     /// An exposure moves a record along the film's own curve, so the values are none at the clear
     /// film and grow through the toe. All zero reads as before. Appended without renumbering
     /// earlier fields.
-    FOTUFILM_CONFIG_SCAN_BALANCE = 18284,
+    FOTUFILM_CONFIG_SCAN_BALANCE = 18337,
 };
 
 enum {
@@ -430,10 +490,23 @@ enum {
     FOTUFILM_CONFIG_SCAN_READING_COUNT = 19,
     FOTUFILM_CONFIG_SCAN_CROSSTALK_COUNT = 9,
     FOTUFILM_CONFIG_PRINT_DETAIL_COUNT = 10,
+    FOTUFILM_CONFIG_COUPLER_MODEL_COUNT = 1,
+    FOTUFILM_CONFIG_COUPLER_EFFECTIVE_SCALE_COUNT = 3,
+    FOTUFILM_CONFIG_COUPLER_ROW_NORM_COUNT = 6,
+    FOTUFILM_CONFIG_COUPLER_RELEASE_KAPPA_COUNT = 3,
+    FOTUFILM_CONFIG_DONOR_RELEASE_KAPPA_COUNT = 3,
+    FOTUFILM_CONFIG_DONOR_CURVE_SECONDARY_COUNT = 15,
+    FOTUFILM_CONFIG_DONOR_EXTRA_CURVE_COUNT = 12,
+    FOTUFILM_CONFIG_DONOR_EXTRA_RELEASE_COUNT = 2,
+    FOTUFILM_CONFIG_DONOR_EXTRA_GAMMA_COUNT = 2,
+    FOTUFILM_CONFIG_DONOR_RECEIVER_COUNT = 3,
+    FOTUFILM_CONFIG_DONOR_COUNT_COUNT = 1,
+    FOTUFILM_CONFIG_DONOR_EXTRA_LUT_ID_COUNT = 1,
+    FOTUFILM_CONFIG_COUPLER_CROSS_POINTWISE_SHARE_COUNT = 1,
     FOTUFILM_CONFIG_SCAN_FLARE_COUNT = 3,
     FOTUFILM_CONFIG_SCAN_BALANCE_COUNT = 195,
 };
 
-enum { FOTUFILM_FRAME_CONFIGURATION_COUNT = 18479 };
+enum { FOTUFILM_FRAME_CONFIGURATION_COUNT = 18532 };
 
 #endif

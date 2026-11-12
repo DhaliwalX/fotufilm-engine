@@ -226,6 +226,11 @@ static int render_frame(float *input, float *output, int32_t width, int32_t heig
                         int32_t origin_x, int32_t origin_y,
                         float *configuration, float *exposure_lut,
                         int32_t feature_mask, uint32_t seed, const DisplayOutput *display) {
+    if ((feature_mask & FOTUFILM_FRAME_DONOR_LAYER) != 0
+        && (feature_mask & (FOTUFILM_FRAME_NO_FILM | FOTUFILM_FRAME_DENSITY_IN | FOTUFILM_FRAME_LIGHT_OUT)) == 0) {
+        const float donor_count = configuration[FOTUFILM_CONFIG_DONOR_COUNT];
+        if (!(donor_count >= 0.0f && int32_t(donor_count) <= 1)) return -1;
+    }
     halide_buffer_t in_buf, out_buf, config_buf, exposure_buf;
     halide_dimension_t in_dims[3], out_dims[3];
     halide_dimension_t config_dim[1], exposure_dim[1];
