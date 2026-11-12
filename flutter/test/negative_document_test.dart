@@ -95,9 +95,15 @@ void main() {
     expect(newNegative(), {
       'border': null, 'lightFrame': null, 'roll': null, 'crosstalk': 0, 'scanLight': 'white',
     });
-    final fresh = newNegative('screen', 2);
+    final fresh = newNegative('screen', 2, true);
     expect(fresh['reading'], 2);
     expect(fresh['crosstalk'], 1);
+    // A camera nobody measured starts with the dyes unseparated; LED exposures separate.
+    expect(newNegative('white', 2)['crosstalk'], 0);
+    expect(newNegative('rgb', 2)['crosstalk'], 1);
+    expect(measuredCamera({'camera': {'id': 'sony-ilce-7cm2', 'name': 'SONY ILCE-7CM2'}}), isTrue);
+    expect(measuredCamera({'camera': {'id': 'generic'}}), isFalse);
+    expect(measuredCamera(null), isFalse);
     expect(fresh['scanLight'], 'screen');
     expect(readsModel(fresh), isTrue);
     expect(readsModel(newNegative()), isFalse);
@@ -108,14 +114,16 @@ void main() {
     // Update Reading: the dyes separated all the way unless the edit said how far, and a frame
     // on its roll stays on it.
     final roll = {'colour': [0.9, 1.2], 'frames': 4};
-    final updated = updatedReading({...newNegative('rgb'), 'roll': roll, 'border': [.8, .5, .2]}, 2);
+    final updated = updatedReading(
+        {...newNegative('rgb'), 'roll': roll, 'border': [.8, .5, .2]}, 2, separates: true);
     expect(updated['reading'], 2);
     expect(updated['crosstalk'], 1);
     expect(updated['balance'], 'roll');
     expect(updated['roll'], roll);
     expect(updated['border'], [.8, .5, .2]);
     expect(updated['scanLight'], 'rgb');
-    final kept = updatedReading({...newNegative(), 'crosstalk': 0.4}, 2);
+    final kept = updatedReading({...newNegative(), 'crosstalk': 0.4}, 2, separates: true);
+    expect(updatedReading(newNegative(), 2)['crosstalk'], 0);
     expect(kept['crosstalk'], 0.4);
     expect(kept.containsKey('balance'), isFalse);
   });

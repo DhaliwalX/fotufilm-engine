@@ -15,14 +15,26 @@ import 'catalogue.dart';
 /// light (`flare`, a share of the frame's light, absent to measure it), what the frame is
 /// balanced on (`balance`: "frame", "roll" or "none", absent for the frame) and a neutral picked
 /// on it (`neutral`, scan RGB like `border`).
-Json newNegative([String scanLight = 'white', int reading = 1]) => {
+///
+/// `separates` is whether the reading starts with the dyes separated all the way: where the scan
+/// was taken with a camera whose colour channels are measured, or under LEDs that light one
+/// channel each, the separation is worked out from what took the scan; for any other camera it
+/// is a guess at its channels, so it starts off, as an earlier reading's did.
+Json newNegative([String scanLight = 'white', int reading = 1, bool separates = false]) => {
       'border': null,
       'lightFrame': null,
       'roll': null,
-      'crosstalk': reading >= 2 ? 1 : 0,
+      'crosstalk': reading >= 2 && (separates || scanLight == 'rgb') ? 1 : 0,
       'scanLight': scanLight,
       if (reading >= 2) 'reading': reading,
     };
+
+/// Whether a scan's descriptor names a camera whose colour channels are measured
+/// (`negative.camera`), which a reading takes over the generic one.
+bool measuredCamera(Json? scan) {
+  final id = (scan?['camera'] as Map?)?['id'];
+  return id is String && id != 'generic' && id != 'scanner';
+}
 
 /// Whether a negative is read through its scan's light and camera and balanced as it says, or
 /// with the first reading, which an edit saved with it keeps (`readsModel`).
@@ -32,12 +44,13 @@ bool readsModel(Json? negative) => ((negative?['reading'] as num?) ?? 1) >= 2;
 /// edit says its roll's, or nothing.
 String balanceOf(Json? negative) => negative?['balance'] as String? ?? 'frame';
 
-/// An edit saved with an earlier reading moved to `reading`: the dyes separated all the way
-/// unless the edit had set how far, and a frame that was balanced on its roll still on it.
-Json updatedReading(Json negative, int reading) => {
+/// An edit saved with an earlier reading moved to `reading`: where the scan `separates`
+/// (`newNegative`) the dyes separated all the way unless the edit had set how far, and a frame
+/// that was balanced on its roll still on it.
+Json updatedReading(Json negative, int reading, {bool separates = false}) => {
       ...negative,
       'reading': reading,
-      if ((negative['crosstalk'] as num? ?? 0) == 0) 'crosstalk': 1,
+      if (separates && (negative['crosstalk'] as num? ?? 0) == 0) 'crosstalk': 1,
       if (negative['roll'] != null) 'balance': 'roll',
     };
 

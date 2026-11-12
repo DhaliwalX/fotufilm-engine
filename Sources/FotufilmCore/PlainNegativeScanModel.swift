@@ -78,7 +78,8 @@ extension PlainNegativeScan {
     public init(border: SIMD3<Float>, setup: NegativeScanSetup, separation: Float,
                 mode: ApproximateNegativeScan.BalanceMode, tones: ApproximateNegativeScan.Tones,
                 roll: ApproximateNegativeScan.RollBalance? = nil, flare: SIMD3<Float> = .zero) {
-        let weights = Self.weights(setup: setup, separation: separation)
+        let weights = setup.weights(Self.weights(setup: setup, separation: separation),
+                                    green: Self.weights(setup: setup, separation: 0)[1].y)
         let readable = { (density: SIMD3<Float>?) -> SIMD3<Float>? in
             density.flatMap { d in (0..<3).allSatisfy({ d[$0].isFinite }) ? d : nil }
         }

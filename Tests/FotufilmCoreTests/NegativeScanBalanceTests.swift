@@ -36,6 +36,45 @@ final class NegativeScanBalanceTests: XCTestCase {
                      slopes: [rise.x / rise.y, rise.z / rise.y])
     }
 
+    /// A camera nobody measured under a lamp of unknown spectrum is a guess at how strongly a
+    /// channel reads a dye. The reading then keeps the scan's own density of green as the
+    /// film's, as an earlier reading did, where a known setup takes the model's.
+    func testASetupWhoseScaleIsNotKnownKeepsTheScansOwnDensity() throws {
+        let stock = try stock("gold200")
+        typealias Setup = NegativeScanSetup
+        XCTAssertTrue(Setup(light: .white, camera: .profile("sony-ilce-7cm2")).knowsScale)
+        XCTAssertTrue(Setup(light: .white, camera: .scanner).knowsScale)
+        XCTAssertTrue(Setup(light: .rgb, camera: .generic).knowsScale)
+        for light in [NegativeScanCrosstalk.Light.white, .screen, .halogen] {
+            XCTAssertFalse(Setup(light: light, camera: .generic).knowsScale)
+        }
+        XCTAssertFalse(Setup(light: .white, camera: .profile("no-such-camera")).knowsScale)
+
+        let guessed = Setup(light: .white, camera: .generic)
+        let model = NegativeScanModel(stock: stock, setup: guessed)
+        let fitted = model.weights(separation: 0), full = model.weights(separation: 1)
+        XCTAssertGreaterThan(fitted[1].y, 1.15)
+        for separation: Float in [0, 1] {
+            let balance = ApproximateNegativeScan.balance(
+                stock: stock, setup: guessed, separation: separation, mode: .none, tones: .init())
+            let weights = try XCTUnwrap(balance.weights)
+            let expected = separation == 0 ? fitted : full
+            for record in 0..<3 { for channel in 0..<3 {
+                XCTAssertEqual(weights[record][channel], expected[record][channel] / fitted[1].y,
+                               accuracy: 1e-6)
+            } }
+        }
+        // With the dyes unseparated, green reads the density its channel does.
+        let own = try XCTUnwrap(ApproximateNegativeScan.balance(
+            stock: stock, setup: guessed, separation: 0, mode: .none, tones: .init()).weights)
+        XCTAssertEqual(own[1], SIMD3(0, 1, 0))
+        // A known setup takes the fit as it is.
+        let known = Setup(light: .white, camera: .profile("sony-ilce-7cm2"))
+        XCTAssertEqual(ApproximateNegativeScan.balance(
+            stock: stock, setup: known, separation: 1, mode: .none, tones: .init()).weights,
+            NegativeScanModel(stock: stock, setup: known).weights(separation: 1))
+    }
+
     /// Without a roll's contrast the neutral scales red and blue onto the film's grey scale:
     /// no exposure is added, and the clear film stays the film's base.
     func testWithoutARollsContrastTheNeutralScalesEachRecord() throws {

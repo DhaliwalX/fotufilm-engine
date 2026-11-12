@@ -44,7 +44,9 @@ extension ApproximateNegativeScan {
     public static func balance(stock: FilmStock, setup: NegativeScanSetup, separation: Float,
                                mode: BalanceMode, tones: Tones,
                                roll: RollBalance? = nil) -> Balance {
-        let weights = NegativeScanModel(stock: stock, setup: setup).weights(separation: separation)
+        let model = NegativeScanModel(stock: stock, setup: setup)
+        let weights = setup.weights(model.weights(separation: separation),
+                                    green: model.weights(separation: 0)[1].y)
         var balance = Balance(gains: .one, highlightStops: nil, weights: weights)
         let dense = readable(tones.denseEnd)
         if let dense {

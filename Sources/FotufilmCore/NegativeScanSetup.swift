@@ -55,6 +55,27 @@ public struct NegativeScanSetup: Equatable, Sendable {
         self.matrix = matrix
     }
 
+    /// Whether the model knows the setup well enough to say how much density a scan's channel
+    /// reads of a dye: a measured camera, a film scanner's bands, or LEDs that light one channel
+    /// each. A camera nobody measured under a lamp of unknown spectrum is modelled as reading
+    /// colour as the eye does, which says which dyes a channel sees but not how strongly: a
+    /// white lamp's red end alone moves that by a third. A reading then keeps the scan's own
+    /// density of green as the film's (`weights(_:knownScale:)`).
+    public var knowsScale: Bool {
+        if light == .rgb || camera == .scanner { return true }
+        if case .profile(let id) = camera { return CameraSpectralProfileStore.profile(id: id) != nil }
+        return false
+    }
+
+    /// A fit's weights as a reading through this setup takes them: as fitted where the setup's
+    /// scale is known, else scaled so a grey's green record reads the density the scan's green
+    /// channel does, `green` being what the fit's green record reads of its own channel alone
+    /// along the greys.
+    public func weights(_ fitted: [SIMD3<Float>], green: Float) -> [SIMD3<Float>] {
+        guard !knowsScale, green.isFinite, green > 0 else { return fitted }
+        return fitted.map { $0 / green }
+    }
+
     /// What each channel of the scan sees per `SpectralGrid` wavelength: three rows, red, green
     /// and blue, each summing to one. A camera's channels can be negative where its file's colour
     /// matrix subtracts one sensor channel from another.

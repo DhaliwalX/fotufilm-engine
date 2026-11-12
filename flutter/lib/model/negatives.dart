@@ -85,7 +85,8 @@ class NegativeScans {
       ...base,
       'stock': stock,
       'medium': mediumOnFilm(base, editor.stockById(stock)),
-      'negative': newNegative(scanLight ?? 'white', (scan?['reading'] as num?)?.toInt() ?? 1),
+      'negative': newNegative(scanLight ?? 'white', (scan?['reading'] as num?)?.toInt() ?? 1,
+          measuredCamera(scan)),
     };
   }
 
@@ -168,7 +169,9 @@ class NegativeScans {
   void updateReading() {
     final current = negative, reading = currentReading;
     if (current == null || reading == null || !canUpdateReading) return;
-    editor.change({'negative': updatedReading(current, reading)});
+    editor.change({
+      'negative': updatedReading(current, reading, separates: measuredCamera(_doc?.negativeScan)),
+    });
   }
 
   /// The camera the scan is read as taken with while the edit leaves that to its file: its
