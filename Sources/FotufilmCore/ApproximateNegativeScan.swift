@@ -193,6 +193,48 @@ public struct ApproximateNegativeScan: Encodable, Equatable, Sendable {
         return border
     }
 
+    /// The clear film a reading through the scan's light and camera is measured against until
+    /// one is sampled: as `estimatedBorder`, but where the scan shows its bare light past the
+    /// film, through sprocket holes or around a strip, the film's base under that light and not
+    /// the light itself (`NegativeFilmSuggestions.read`). That reading takes a density over the
+    /// clear film as the film's own, so a light taken for film reads the film's mask into every
+    /// tone; the first reading scaled each channel onto the frame's densest end, which hid it.
+    /// The light is told from film as the film suggestions tell it: it is neutral where the
+    /// film's base under it is orange and denser in every channel. It may fill a good part of
+    /// the scan, a plateau of its own, or only its sprocket holes, too few pixels for one: then
+    /// the brightest of the scan is the light, the thinnest plateau the base, and little of the
+    /// scan is brighter than that base, which a picture's own tones under a neutral clear film
+    /// never are.
+    public static func estimatedFilmBase(preview: ImageBuffer) -> SIMD3<Float>? {
+        guard let brightest = estimatedBorder(preview: preview) else { return nil }
+        guard let read = NegativeFilmSuggestions.read(preview: preview) else { return brightest }
+        if read.lamp != nil { return read.border }
+        let base = read.border
+        let density = { (v: SIMD3<Float>) in SIMD3((0..<3).map { -log10(v[$0]) }) }
+        let light = NegativeFilmSuggestions.colour(brightest)
+        let mask = NegativeFilmSuggestions.colour(base)
+        guard max(abs(light.x), abs(light.y), abs(light.z)) < NegativeFilmSuggestions.neutral,
+              mask.z - mask.x > NegativeFilmSuggestions.maskContrast,
+              (0..<3).allSatisfy({ base[$0] < brightest[$0] }),
+              (density(base) - density(brightest)).sum() / 3 >= NegativeFilmSuggestions.lampGap
+        else { return brightest }
+        // How much of the scan passes more light than the base: holes and gaps, not a picture.
+        let level = density(base).sum() / 3 - NegativeFilmSuggestions.plateauWidth
+        var brighter = 0, film = 0
+        for i in 0..<preview.pixelCount {
+            let pixel = SIMD3((0..<3).map { preview.planes[$0][i] })
+            guard (0..<3).allSatisfy({ pixel[$0].isFinite && pixel[$0] > 0 }) else { continue }
+            film += 1
+            if density(pixel).sum() / 3 < level { brighter += 1 }
+        }
+        return brighter * Self.bareLightShare <= film ? base : brightest
+    }
+
+    /// The most of a scan that may pass more light than its base where the light is no plateau
+    /// of its own, as one over this: a third. Holes, gaps and their blurred edges fill up to a
+    /// fifth of real scans; a picture under a neutral clear film fills more than half.
+    static let bareLightShare = 3
+
     /// What a frame's own tones say about reading it on a film: per-record gains and offsets, and
     /// where its highlights sit.
     public struct Balance: Equatable, Sendable {

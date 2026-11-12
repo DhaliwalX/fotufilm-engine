@@ -279,7 +279,8 @@ extension HostService {
             guard NegativeScanPrint.reads(stock) else { throw NegativeScanPrint.Failure.reversalFilm }
             return stock
         }
-        let border = try negative?.border ?? scan.estimatedBorder(light: light)
+        let border = try negative?.border
+            ?? scan.estimatedBorder(light: light, filmBase: negative?.readsModel ?? false)
         // The picture as framed, crop included even while the crop tool shows the whole frame:
         // the reading follows what will print.
         let image = prepared.image

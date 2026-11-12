@@ -64,12 +64,16 @@ final class HostNegativeScan {
     }
 
     /// A stand-in for the film border until one is sampled: the thinnest film of the whole scan
-    /// (`ApproximateNegativeScan.estimatedBorder`).
-    func estimatedBorder(light id: String?) throws -> [Float] {
-        let key = id ?? ""
+    /// (`ApproximateNegativeScan.estimatedBorder`), or with `filmBase`, as a reading through the
+    /// scan's light and camera takes it, the film's base where the scan shows its bare light
+    /// past the film (`ApproximateNegativeScan.estimatedFilmBase`).
+    func estimatedBorder(light id: String?, filmBase: Bool = false) throws -> [Float] {
+        let key = "\(id ?? "")|\(filmBase)"
         if let estimate = lock.withLock({ estimates[key] }) { return estimate }
-        guard let estimate = ApproximateNegativeScan.estimatedBorder(
-            preview: Self.preview(try image(light: id)))
+        let preview = Self.preview(try image(light: id))
+        guard let estimate = filmBase
+            ? ApproximateNegativeScan.estimatedFilmBase(preview: preview)
+            : ApproximateNegativeScan.estimatedBorder(preview: preview)
         else { throw Self.invalidBorder }
         let border = [estimate.x, estimate.y, estimate.z]
         lock.withLock { estimates[key] = border }

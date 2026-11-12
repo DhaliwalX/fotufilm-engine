@@ -18,11 +18,18 @@ import { importMedia } from "./browser-import.js";
 export async function importNegativeMedia(file, options) {
   const opened = await importMedia(file, options);
   if (options?.negative) {
-    const [suggestions, camera] = await Promise.all([
-      suggestNegativeFilms(opened.image).catch(() => []),
+    const [films, camera] = await Promise.all([
+      suggestNegativeFilms(opened.image).catch(() => ({ suggestions: [], base: null })),
       readCamera(opened.image).catch(() => ({ id: "generic" })),
     ]);
-    opened.image.negative = { suggestions, reading: NEGATIVE.currentReading, camera };
+    // `base`: the film's base where the scan shows its bare light past the film, which the
+    // current reading is measured against until clear film is picked (RenderSession).
+    opened.image.negative = {
+      suggestions: films.suggestions,
+      reading: NEGATIVE.currentReading,
+      camera,
+      base: films.base,
+    };
   }
   return opened;
 }
@@ -86,15 +93,20 @@ function loadNegativeFilms() {
   });
 }
 
-// Up to three readings of the scan's film base, each naming the installed films it could be.
+// Up to three readings of the scan's film base, each naming the installed films it could be, and
+// the base itself where the scan shows its bare light past the film.
 async function suggestNegativeFilms(image) {
   const films = await loadNegativeFilms();
-  const preview = films.length ? scanPreview(image) : null;
-  if (!preview) return [];
+  const preview = scanPreview(image);
+  if (!preview) return { suggestions: [], base: null };
   const bytes = await loadFilmProfile({ kind: "negative-film", ...preview, films });
   const names = new Map(films.map((film) => [film.id, film.name]));
-  return JSON.parse(new TextDecoder().decode(bytes)).suggestions.map((suggestion) => ({
-    films: suggestion.films.map((id) => ({ id, name: names.get(id) })),
-    likelihood: suggestion.likelihood,
-  }));
+  const read = JSON.parse(new TextDecoder().decode(bytes));
+  return {
+    suggestions: read.suggestions.map((suggestion) => ({
+      films: suggestion.films.map((id) => ({ id, name: names.get(id) })),
+      likelihood: suggestion.likelihood,
+    })),
+    base: read.base ?? null,
+  };
 }

@@ -25,6 +25,9 @@ final class WebNegativeFilmRequestTests: XCTestCase {
         let response = try WebRenderRequest.prepare(JSONSerialization.data(withJSONObject: request))
         let result = try XCTUnwrap(JSONSerialization.jsonObject(with: response) as? [String: Any])
         XCTAssertEqual(result["lamp"] as? Bool, true)
+        // The film's base under that light, which the current reading is measured against.
+        let found = try XCTUnwrap(result["base"] as? [Double])
+        for c in 0..<3 { XCTAssertEqual(Float(found[c]), 0.8 * pow(10, -base[c]), accuracy: 1e-3) }
         let suggestions = try XCTUnwrap(result["suggestions"] as? [[String: Any]])
         let expected = native.suggest(try XCTUnwrap(NegativeFilmSuggestions.read(
             preview: ImageBuffer(width: width, height: height, planes: planes))), limit: 3)

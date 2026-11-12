@@ -110,6 +110,55 @@ final class ApproximateNegativeScanTests: XCTestCase {
         }
     }
 
+    /// A scan that shows its bare light past the film, through sprocket holes or around a
+    /// strip: the film's base is the orange plateau under the light, not the light.
+    func testTheEstimatedFilmBaseIsUnderABareLightTheScanShows() throws {
+        let lamp = SIMD3<Float>(0.82, 0.8, 0.84), mask = SIMD3<Float>(0.35, 0.7, 0.95)
+        let base = SIMD3((0..<3).map { lamp[$0] * pow(10, -mask[$0]) })
+        let width = 120, height = 80
+        func scan(holes: Bool) -> ImageBuffer {
+            var image = ImageBuffer(width: width, height: height)
+            for y in 0..<height { for x in 0..<width {
+                let i = y * width + x
+                let rebate = y < 10 || y >= 70
+                let hole = holes && rebate && x % 20 < 6 && (y < 6 || y >= 74)
+                let density = 0.2 + 1.4 * Float(x) / Float(width)
+                for c in 0..<3 {
+                    image.planes[c][i] = hole ? lamp[c] : rebate ? base[c]
+                        : base[c] * pow(10, -density * (0.9 + 0.1 * Float(c)))
+                }
+            } }
+            return image
+        }
+        let shown = scan(holes: true)
+        // The brightest of the scan is the light through the holes.
+        let brightest = try XCTUnwrap(ApproximateNegativeScan.estimatedBorder(preview: shown))
+        let found = try XCTUnwrap(ApproximateNegativeScan.estimatedFilmBase(preview: shown))
+        for c in 0..<3 {
+            XCTAssertEqual(brightest[c], lamp[c], accuracy: 1e-4)
+            XCTAssertEqual(found[c], base[c], accuracy: 1e-4)
+        }
+        // A scan balanced on its clear film shows that film neutral. An orange plateau under it
+        // is then a picture's own tone, a dense sky, with most of the scan brighter than it:
+        // not a base under a light.
+        var balanced = ImageBuffer(width: width, height: height)
+        for y in 0..<height { for x in 0..<width {
+            let i = y * width + x
+            let sky = y >= 12 && y < 40
+            for c in 0..<3 {
+                balanced.planes[c][i] = y < 12 ? lamp[c]
+                    : sky ? base[c] : lamp[c] * pow(10, -(0.15 + 0.6 * Float(x) / Float(width)))
+            }
+        } }
+        XCTAssertEqual(ApproximateNegativeScan.estimatedFilmBase(preview: balanced),
+                       ApproximateNegativeScan.estimatedBorder(preview: balanced))
+        // With no light showing, both are the film's rebate.
+        let plain = scan(holes: false)
+        XCTAssertEqual(ApproximateNegativeScan.estimatedFilmBase(preview: plain),
+                       ApproximateNegativeScan.estimatedBorder(preview: plain))
+        XCTAssertNil(ApproximateNegativeScan.estimatedFilmBase(preview: ImageBuffer(width: 2, height: 2)))
+    }
+
     func testMonochromeUsesGreenForEveryFilmRecord() throws {
         let stock = try XCTUnwrap(FilmStock.presetDefinitions["hp5plus400"]).validated().stock
         let plan = try ApproximateNegativeScan(stock: stock, border: SIMD3(0.4, 0.6, 0.2))

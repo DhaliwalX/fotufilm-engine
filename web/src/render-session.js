@@ -406,7 +406,10 @@ export class RenderSession {
       kept.border = estimatedBorder(scan.pixels)
       if (!kept.border) throw new Error(INVALID_BORDER)
     }
-    const border = edit.negative.border ?? kept.border
+    // The current reading takes the film's base where the scan shows its bare light past the
+    // film (ApproximateNegativeScan.estimatedFilmBase), which the import read.
+    const estimate = (readsModel(edit.negative) && image.negative?.base) || kept.border
+    const border = edit.negative.border ?? estimate
     const framing = JSON.stringify([
       border,
       edit.rotation,
