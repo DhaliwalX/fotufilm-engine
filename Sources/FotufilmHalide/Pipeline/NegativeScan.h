@@ -1,6 +1,7 @@
 #ifndef FOTUFILM_NEGATIVE_SCAN_PIPELINE_H
 #define FOTUFILM_NEGATIVE_SCAN_PIPELINE_H
 #include "../Stages/NegativeScan.h"
+#include "../include/FotufilmNegativeScan.h"
 
 namespace fotufilm::pipelines {
 // Planar float RGB. Parameters: low[3], high[3], contrast, monochrome.
@@ -49,14 +50,16 @@ struct NegativeScanPipeline {
     }
 };
 // A scanned negative's scan made ready for the editor, interleaved linear Rec. 2020 RGBA in and
-// out, alpha passed through. Parameters: lit, plain, clear film[3], gains[3], reference, then
-// the crosstalk weights (3×3, each channel's row over the three channels' densities).
+// out, alpha passed through. Parameters: lit, plain, clear film[3], gains[3], reference, the
+// crosstalk weights (3×3, each channel's row over the three channels' densities), then the
+// scan's stray light[3], which the clear film is net of, the toe's light and each channel's
+// light scale[3] (plain_negative_light).
 // Lit divides out the light source's unevenness, `light` (interleaved RGB cells, bilinear
 // between cell centres, the edges holding their outermost cell, as NegativeLightFrame.gain), in
 // linear sRGB. Plain then reads the scan as a plain positive's scene light (PlainNegativeScan),
 // a pixel passing no light in any channel black.
 // How many parameters ScanPreparePipeline reads.
-constexpr int kScanPrepareParameterCount = 18;
+constexpr int kScanPrepareParameterCount = FOTUFILM_SCAN_PREPARE_PARAMETERS;
 struct ScanPreparePipeline {
     Halide::ImageParam input{Halide::Float(32), 3, "scan_prepare_input"};
     Halide::ImageParam light{Halide::Float(32), 3, "scan_prepare_light"};
@@ -92,14 +95,17 @@ struct ScanPreparePipeline {
                    c == 1, 0.069097289f * sr + 0.919540395f * sg + 0.011362316f * sb,
                    0.016391439f * sr + 0.088013308f * sg + 0.895595253f * sb),
             input(x, y, c));
-        Expr lr = lit(x, y, 0), lg = lit(x, y, 1), lb = lit(x, y, 2);
+        // A plain reading takes the scan's stray light off first.
+        Expr lr = lit(x, y, 0) - parameters(18), lg = lit(x, y, 1) - parameters(19),
+             lb = lit(x, y, 2) - parameters(20);
         Expr passes = is_finite(lr) && is_finite(lg) && is_finite(lb)
             && lr > 0.0f && lg > 0.0f && lb > 0.0f;
         Expr density = parameters(9 + 3 * c) * scan_density_over_clear(lr, parameters(2), approximate)
             + parameters(10 + 3 * c) * scan_density_over_clear(lg, parameters(3), approximate)
             + parameters(11 + 3 * c) * scan_density_over_clear(lb, parameters(4), approximate);
         Expr plain = select(passes,
-            plain_negative_light(density, parameters(5 + c), parameters(8), approximate), 0.0f);
+            plain_negative_light(density, parameters(5 + c), parameters(8), parameters(21),
+                                 parameters(22 + c), approximate), 0.0f);
         Func prepared("scan_prepared_rgb");
         prepared(x, y, c) = select(parameters(1) > 0.5f, plain, lit(x, y, c));
         output(x, y, c) = select(c == 3, input(x, y, 3), prepared(x, y, min(c, 2)));

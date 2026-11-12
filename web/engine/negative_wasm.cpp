@@ -3,26 +3,28 @@
 #include "trichromatic_layer_rgba_kernel.h"
 #include "trichromatic_merge_kernel.h"
 #include "FotufilmTrichromaticMeasure.h"
+#include "FotufilmNegativeScan.h"
 #include <emscripten/emscripten.h>
 #include <cmath>
 
 // A scanned negative's scan read without a film (ScanPreparePipeline's plain reading):
-// interleaved linear Rec. 2020 RGBA in and out, which may alias. Sixteen parameters: clear
-// film[3], gains[3], reference, and the crosstalk weights row by row (NegativeScanCrosstalk).
-// The browser keeps no light frames.
+// interleaved linear Rec. 2020 RGBA in and out, which may alias. The reading is the pipeline's
+// parameters after its first two: clear film[3], gains[3], reference, the crosstalk weights row
+// by row (NegativeScanCrosstalk), then the scan's stray light[3], the toe's light and each
+// channel's light scale[3]. The browser keeps no light frames.
 extern "C" EMSCRIPTEN_KEEPALIVE int scan_prepare_plain(float *input, float *output, int width,
     int height, const float *reading) {
     if (!input || !output || !reading || width < 1 || height < 1
         || width > 16384 || height > 16384) return -1;
-    float parameters[18] = {0, 1};
-    for (int i = 0; i < 16; ++i) {
+    float parameters[FOTUFILM_SCAN_PREPARE_PARAMETERS] = {0, 1};
+    for (int i = 0; i < FOTUFILM_SCAN_PREPARE_PARAMETERS - 2; ++i) {
         if (!std::isfinite(reading[i])) return -1;
         parameters[2 + i] = reading[i];
     }
     float none[3] = {1, 1, 1};
     halide_dimension_t pixels[] = {{0, width, 4, 0}, {0, height, width * 4, 0}, {0, 4, 1, 0}};
     halide_dimension_t cells[] = {{0, 1, 3, 0}, {0, 1, 3, 0}, {0, 3, 1, 0}};
-    halide_dimension_t slots[] = {{0, 18, 1, 0}};
+    halide_dimension_t slots[] = {{0, FOTUFILM_SCAN_PREPARE_PARAMETERS, 1, 0}};
     halide_buffer_t in{}, light{}, params{}, out{};
     for (auto *b : {&in, &light, &params, &out}) b->type = halide_type_t(halide_type_float, 32);
     in.host = reinterpret_cast<uint8_t *>(input); in.dim = pixels; in.dimensions = 3;

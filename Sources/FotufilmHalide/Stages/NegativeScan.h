@@ -120,15 +120,21 @@ inline Halide::Expr scan_film_density(Halide::ImageParam &configuration, Halide:
 
 // One channel's scene light from a plain reading of its `density` over the clear film, weighted
 // across the channels against their crosstalk: that density times `gain`, back to light along a
-// straight-line negative with the densest end, density `reference`, at diffuse white. Mirrors
-// PlainNegativeScan.light(of:); the caller blacks out a pixel where any channel passes no light.
+// negative's curve with the densest end, density `reference`, at diffuse white. `toe_light` is
+// what the clear film's light reads on the straight line, taken off for a curve with a toe, and
+// `scale` the channel's balance and what the toe took from the densest end; none and one read
+// along the straight line as before. Mirrors PlainNegativeScan.light(of:); the caller blacks
+// out a pixel where any channel passes no light.
 inline Halide::Expr plain_negative_light(Halide::Expr density, Halide::Expr gain,
-                                         Halide::Expr reference, bool approximate) {
+                                         Halide::Expr reference, Halide::Expr toe_light,
+                                         Halide::Expr scale, bool approximate) {
     using namespace Halide;
     // PlainNegativeScan.gamma and .highlight.
     constexpr float kGamma = 0.6f;
     constexpr float kHighlight = 0.18f * 5.656854f;
-    return kHighlight * fs_pow10((gain * density - reference) * (1.0f / kGamma), approximate);
+    return max(0.0f, kHighlight
+        * (fs_pow10((gain * density - reference) * (1.0f / kGamma), approximate) - toe_light)
+        * scale);
 }
 }
 #endif
