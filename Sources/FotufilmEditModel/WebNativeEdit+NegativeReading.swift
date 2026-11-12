@@ -67,9 +67,13 @@ extension WebNativeEdit.Negative {
                   (0..<3).allSatisfy({ neutral[$0].isFinite && neutral[$0] > flare[$0]
                       && border[$0] > flare[$0] })
             else { return nil }
-            return SIMD3((0..<3).map {
-                -log10((neutral[$0] - flare[$0]) / (border[$0] - flare[$0]))
-            })
+            var density = SIMD3<Float>.zero
+            for c in 0..<3 {
+                let sample: Float = neutral[c] - flare[c]
+                let clear: Float = border[c] - flare[c]
+                density[c] = -log10(sample / clear)
+            }
+            return density
         }
         return .init(denseEnd: denseEnd, picked: picked)
     }
