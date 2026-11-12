@@ -4,42 +4,52 @@
   "couplerDiffusionMM": 0.032,
   "couplerGeometry": {
     "interlayerTransmission": [
-      0.8106,
-      0.6897
+      0.8775,
+      0.88
     ],
     "layerDepthUM": [
       14.0,
       8.0,
       3.0
     ],
-    "release": [
-      0.5983,
-      0.8462,
-      0.4503
+    "receiverSusceptibility": [
+      0.8901,
+      1.0,
+      0.7347
     ],
-    "selfRetention": 0.9958
+    "release": [
+      0.4812,
+      0.4812,
+      0.4812
+    ],
+    "selfRetention": 0.996
   },
   "couplerInhibition": [
     [
-      0.595787,
-      0.68593,
-      0.25175
+      0.426603,
+      0.375847,
+      0.330746
     ],
     [
-      0.484982,
-      0.842646,
-      0.310572
+      0.422253,
+      0.479275,
+      0.423456
     ],
     [
-      0.334492,
-      0.583624,
-      0.448409
+      0.273002,
+      0.311113,
+      0.352123
     ]
   ],
   "couplerReleaseGamma": [
-    0.47,
-    0.49,
-    0.46
+    1.0,
+    1.0,
+    1.0
+  ],
+  "couplerReleaseKappa": [
+    0.2479,
+    0.2696,
+    0.1844
   ],
   "crystalGrainPopulation": {
     "coatingDensityScale": 1,
@@ -9683,7 +9693,7 @@
     "statedThroughSeconds": 1,
     "thresholdSeconds": 1
   },
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "sensitivity": [
     [
       0.902,
