@@ -423,9 +423,13 @@ extension EditState {
         edit.stockID = stockID
         edit.negative = WebNativeEdit.Negative(
             crosstalk: separates ? 1 : 0, reading: WebNativeEdit.Negative.currentReading)
-        // A scan opens on the print the scan editor and the desktop open on.
+        // A scan opens on the print the scan editor and the desktop open on: the display
+        // conversion, each frame timed on its own highlights as a lab times a negative, whatever
+        // conversion a photograph's edit starts with. A print at a fixed exposure shows a thin
+        // negative dark and a dense one light.
         edit.paper = .screen
         edit.paperFollowsStock = false
+        edit.digitalReference = .default
         return edit
     }
 
