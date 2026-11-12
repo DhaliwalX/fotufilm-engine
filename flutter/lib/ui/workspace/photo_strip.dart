@@ -152,7 +152,7 @@ class _PhotoStripState extends State<PhotoStrip> {
             controller: _scroll,
             scrollDirection: Axis.horizontal,
             // Frames are built as they come into view, which is when waiting ones are drawn.
-            cacheExtent: 0,
+            scrollCacheExtent: const ScrollCacheExtent.pixels(0),
             itemExtent: _stride,
             itemCount: items.length,
             itemBuilder: (context, index) {

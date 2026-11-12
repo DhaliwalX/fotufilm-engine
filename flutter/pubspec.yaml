@@ -4,7 +4,8 @@ publish_to: 'none'
 version: 0.1.0+1
 
 environment:
-  sdk: ^3.11.5
+  sdk: ^3.14.0
+  flutter: ">=3.50.0"
 
 dependencies:
   desktop_drop: ^0.8.4
@@ -13,6 +14,7 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_svg: ^2.3.0
+  material_ui: ^1.11.0
   shared_preferences: ^2.5.6
 
 dev_dependencies:
@@ -22,6 +24,9 @@ dev_dependencies:
   shared_preferences_platform_interface: ^2.4.2
 
 flutter:
+  config:
+    # The Mac app is Apple silicon alone (the engine is): no Intel half is compiled and then dropped.
+    enable-macos-arm64-only: true
   uses-material-design: false
   shaders:
     - shaders/display_p3_to_srgb.frag

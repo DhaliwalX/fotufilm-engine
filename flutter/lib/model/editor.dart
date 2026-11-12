@@ -77,9 +77,8 @@ enum Panel {
 }
 
 class EditorModel extends ChangeNotifier implements RenderHost {
-  EditorModel(this.catalogue, {AppSettings? settings, String? galleryFolder})
-      : settings = settings ?? AppSettings.memory(),
-        _galleryFolder = galleryFolder {
+  EditorModel(this.catalogue, {AppSettings? settings, this._galleryFolder})
+      : settings = settings ?? AppSettings.memory() {
     // The features attach now: they add to the render options before anything develops, and
     // listen to edits before the first one.
     [crop, selective, pipeline, negatives, printFrame, keptEdits, auto, library, video, gallery];

@@ -75,7 +75,7 @@ class _PhoneFilmsState extends State<PhoneFilms> {
                 controller: _strip,
                 scrollDirection: Axis.horizontal,
                 // Tiles are built as they come into view, which is when their pictures develop.
-                cacheExtent: 0,
+                scrollCacheExtent: const ScrollCacheExtent.pixels(0),
                 itemExtent: extent,
                 itemCount: films.length,
                 itemBuilder: (context, index) {

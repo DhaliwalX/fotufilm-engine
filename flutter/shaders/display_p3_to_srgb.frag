@@ -18,16 +18,10 @@ vec3 encode(vec3 c) {
 
 void main() {
   vec2 uv = FlutterFragCoord().xy / u_size;
-  // Under OpenGL ES (an Android phone without Vulkan) the filter's picture arrives bottom row first.
-#ifdef IMPELLER_TARGET_OPENGLES
-  uv.y = 1.0 - uv.y;
-#endif
   vec4 texel = texture(u_texture, uv);
-  if (texel.a <= 0.0) {
-    fragColor = vec4(0.0);
-    return;
-  }
-  vec3 p3 = decode(texel.rgb / texel.a);
+  // One way out: a sampler beside an early return fails to compile on some Windows drivers. A
+  // clear texel stays clear, since everything below is scaled by its alpha.
+  vec3 p3 = decode(texel.a > 0.0 ? texel.rgb / texel.a : vec3(0.0));
   // Display P3 → linear sRGB (both D65).
   vec3 srgb = vec3(
       1.2249401 * p3.r - 0.2249404 * p3.g,

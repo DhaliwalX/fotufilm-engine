@@ -1,5 +1,5 @@
 // Spectrum's fields at size S: a bare text field, the switch, the picker and the info row.
-import 'package:flutter/material.dart'
+import 'package:material_ui/material_ui.dart'
     show InputBorder, InputDecoration, Material, MaterialType, TextField, TextSelectionTheme,
         TextSelectionThemeData;
 import 'package:flutter/widgets.dart';
