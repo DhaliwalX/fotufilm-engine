@@ -122,4 +122,76 @@ final class NegativeScanBalanceTests: XCTestCase {
         XCTAssertEqual(balance.offset, .zero)
         XCTAssertNotNil(balance.highlightStops)
     }
+
+    func testFramesOnTheirRollShareOneBalance() throws {
+        let stock = try stock("gold200")
+        let model = NegativeScanModel(stock: stock, setup: setup)
+        func dense(_ exposure: Float, _ shift: SIMD3<Float>) throws -> SIMD3<Float> {
+            try XCTUnwrap(model.scannerDensity(
+                density: NegativeScanModel.density(stock: stock, logExposure: exposure, shift: shift)))
+        }
+        // The roll's neutral carries the cast; one frame's own densest end is a blue sky.
+        let neutral = try dense(0.6, cast)
+        let roll = ApproximateNegativeScan.RollBalance(
+            colour: [neutral.x / neutral.y, neutral.z / neutral.y], frames: 12, level: neutral.y)
+        let sky = try dense(0.4, SIMD3(-0.2, 0, 0.3))
+        func balance(_ mode: ApproximateNegativeScan.BalanceMode, _ end: SIMD3<Float>,
+                     roll: ApproximateNegativeScan.RollBalance?,
+                     picked: SIMD3<Float>? = nil) -> ApproximateNegativeScan.Balance {
+            ApproximateNegativeScan.balance(stock: stock, setup: setup, separation: 1, mode: mode,
+                                            tones: .init(denseEnd: end, picked: picked), roll: roll)
+        }
+        let rolled = balance(.roll, sky, roll: roll)
+        let own = balance(.frame, neutral, roll: nil).offset
+        for record in 0..<3 { XCTAssertEqual(rolled.offset[record], own[record], accuracy: 1e-5) }
+        XCTAssertEqual(rolled.offset, balance(.roll, neutral, roll: roll).offset)
+        // Each frame's print is still timed on its own highlights.
+        XCTAssertEqual(rolled.highlightStops, balance(.frame, sky, roll: nil).highlightStops)
+        XCTAssertNotEqual(rolled.highlightStops, balance(.roll, neutral, roll: roll).highlightStops)
+        // A neutral picked on the frame is the frame's, not the roll's.
+        XCTAssertEqual(balance(.roll, sky, roll: roll, picked: sky).offset, rolled.offset)
+        // The frame's own balance leaves the roll's neutral alone, and no balance leaves both.
+        XCTAssertEqual(balance(.frame, sky, roll: roll).offset, balance(.frame, sky, roll: nil).offset)
+        XCTAssertEqual(balance(.none, sky, roll: roll).offset, .zero)
+        // Without a roll the frame is balanced on its own.
+        XCTAssertEqual(balance(.roll, sky, roll: nil), balance(.frame, sky, roll: nil))
+        XCTAssertEqual(balance(.roll, sky, roll: nil, picked: neutral).offset, own)
+    }
+
+    func testARollKeptWithoutItsLevelBalancesAtTheFramesOwn() throws {
+        let stock = try stock("gold200")
+        let old = ApproximateNegativeScan.RollBalance(colour: [0.62, 1.2], frames: 5)
+        let end = SIMD3<Float>(0.5, 1.1, 1.6)
+        let rolled = ApproximateNegativeScan.balance(
+            stock: stock, setup: setup, separation: 1, mode: .roll, tones: .init(denseEnd: end),
+            roll: old)
+        let own = ApproximateNegativeScan.balance(
+            stock: stock, setup: setup, separation: 1, mode: .frame,
+            tones: .init(denseEnd: SIMD3(0.62 * 1.1, 1.1, 1.2 * 1.1)))
+        XCTAssertEqual(rolled.offset, own.offset)
+        XCTAssertEqual(rolled.gains, .one)
+        // A frame that cannot be read has no level to take the roll's colour at.
+        XCTAssertEqual(ApproximateNegativeScan.balance(
+            stock: stock, setup: setup, separation: 1, mode: .roll, tones: .init(), roll: old).offset,
+            .zero)
+    }
+
+    func testARollsContrastHoldsWhicheverNeutralBalancesTheFrame() throws {
+        let stock = try stock("gold200")
+        let weights = NegativeScanModel(stock: stock, setup: setup).weights(separation: 1)
+        let roll = ApproximateNegativeScan.RollBalance(colour: [0.62, 1.2], frames: 8, level: 1.2,
+                                                      slopes: [0.5, 1.3])
+        let gains = ApproximateNegativeScan.contrast(stock: stock, weights: weights,
+                                                     slopes: SIMD2(0.5, 1.3))
+        XCTAssertNotEqual(gains.x, 1, accuracy: 0.02)
+        let tones = ApproximateNegativeScan.Tones(denseEnd: SIMD3(0.7, 1.1, 1.4))
+        for mode in [ApproximateNegativeScan.BalanceMode.frame, .roll] {
+            XCTAssertEqual(ApproximateNegativeScan.balance(
+                stock: stock, setup: setup, separation: 1, mode: mode, tones: tones,
+                roll: roll).gains, gains)
+        }
+        XCTAssertEqual(ApproximateNegativeScan.balance(
+            stock: stock, setup: setup, separation: 1, mode: .none, tones: tones, roll: roll).gains,
+            .one)
+    }
 }

@@ -9,7 +9,7 @@ extension ApproximateNegativeScan {
     public enum BalanceMode: String, Codable, CaseIterable, Sendable {
         /// The frame's own neutral: one picked on it, else its densest end.
         case frame
-        /// The neutrals of the roll's frames together.
+        /// The neutral the roll's frames share, the same for each of them.
         case roll
         /// Nothing: the film as the scan model reads it.
         case none
@@ -31,13 +31,17 @@ extension ApproximateNegativeScan {
     }
 
     /// The balance of a frame read by the scan model for `setup`, its weights across the
-    /// channels at `separation` (`NegativeScanModel.weights`): the frame's neutral offset onto
-    /// the film's grey scale, and the highlights' exposure from the densest end.
+    /// channels at `separation` (`NegativeScanModel.weights`): a neutral offset onto the film's
+    /// grey scale, and the highlights' exposure from the densest end. A measured `roll` also
+    /// makes red and blue as steep against green as the film's own (`contrast`), whichever
+    /// neutral the frame is balanced on.
     public static func balance(stock: FilmStock, setup: NegativeScanSetup, separation: Float,
-                               mode: BalanceMode, tones: Tones) -> Balance {
+                               mode: BalanceMode, tones: Tones,
+                               roll: RollBalance? = nil) -> Balance {
         let weights = NegativeScanModel(stock: stock, setup: setup).weights(separation: separation)
         var balance = Balance(gains: .one, highlightStops: nil, weights: weights)
-        if let dense = readable(tones.denseEnd) {
+        let dense = readable(tones.denseEnd)
+        if let dense {
             let green = NegativeScanCrosstalk.apply(weights, dense).y
             if green > 0.05 {
                 balance.highlightStops = stock.curves[1]
@@ -45,13 +49,18 @@ extension ApproximateNegativeScan {
             }
         }
         guard mode != .none else { return balance }
-        if let picked = readable(tones.picked) {
+        if let slopes = roll?.slopes, slopes.count == 2 {
+            balance.gains = contrast(stock: stock, weights: weights,
+                                     slopes: SIMD2(slopes[0], slopes[1]))
+        }
+        // The roll's neutral when the frame is on its roll; else one picked on the frame; else
+        // its densest end. One too thin to tell a colour from is passed over.
+        let neutrals = [mode == .roll ? roll?.neutral(green: dense?.y) : nil,
+                        readable(tones.picked), dense]
+        if let neutral = neutrals.lazy.compactMap({ $0 }).first(
+            where: { NegativeScanCrosstalk.apply(weights, $0).y > 0.05 }) {
             balance.offset = offset(stock: stock, weights: weights, gains: balance.gains,
-                                    neutral: picked)
-        } else if let dense = readable(tones.denseEnd),
-                  NegativeScanCrosstalk.apply(weights, dense).y > 0.05 {
-            balance.offset = offset(stock: stock, weights: weights, gains: balance.gains,
-                                    neutral: dense)
+                                    neutral: neutral)
         }
         return balance
     }
