@@ -27,6 +27,40 @@ final class ApproximateNegativeScanTests: XCTestCase {
         XCTAssertThrowsError(try plan.convert(malformed))
     }
 
+    /// An offset adds to every density a record reads, the clear film's too, as filtration does,
+    /// and leaves what counts as film where it was.
+    func testAnOffsetMovesEveryDensityAndNotTheFilmsRange() throws {
+        let stock = TestStocks.negative
+        let border = SIMD3<Float>(0.4, 0.6, 0.2)
+        let plain = try ApproximateNegativeScan(stock: stock, border: border)
+        let offset = SIMD3<Float>(0.12, 0, -0.2)
+        let moved = try ApproximateNegativeScan(stock: stock, border: border, offset: offset)
+        XCTAssertEqual(moved.minimumSample, plain.minimumSample)
+        XCTAssertEqual(moved.maximumSample, plain.maximumSample)
+        for sample in [border, SIMD3<Float>(0.04, 0.06, 0.02), SIMD3(0.1, 0.3, 0.004)] {
+            let read = try XCTUnwrap(moved.density(of: sample))
+            let unmoved = try XCTUnwrap(plain.density(of: sample))
+            for record in 0..<3 {
+                XCTAssertEqual(read[record], unmoved[record] + offset[record], accuracy: 0.000001)
+            }
+        }
+        // The kernels take the offset in the base's slots.
+        let packed = ApproximateNegativeScan.packedReading(moved)
+        for record in 0..<3 {
+            XCTAssertEqual(packed[4 + record], stock.curves[record].dMin + offset[record],
+                           accuracy: 0.000001)
+        }
+        for invalid in [SIMD3<Float>(.nan, 0, 0), SIMD3(0, 1.5, 0), SIMD3(0, 0, -1.5)] {
+            XCTAssertThrowsError(try ApproximateNegativeScan(stock: stock, border: border,
+                                                             offset: invalid))
+        }
+        // A black-and-white film has one record and nothing to balance.
+        let monochrome = try XCTUnwrap(FilmStock.presetDefinitions["hp5plus400"]).validated().stock
+        XCTAssertEqual(
+            try ApproximateNegativeScan(stock: monochrome, border: border, offset: offset),
+            try ApproximateNegativeScan(stock: monochrome, border: border))
+    }
+
     func testMonochromeUsesGreenForEveryFilmRecord() throws {
         let stock = try XCTUnwrap(FilmStock.presetDefinitions["hp5plus400"]).validated().stock
         let plan = try ApproximateNegativeScan(stock: stock, border: SIMD3(0.4, 0.6, 0.2))

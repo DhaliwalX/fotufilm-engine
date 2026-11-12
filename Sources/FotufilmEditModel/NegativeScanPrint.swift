@@ -134,8 +134,9 @@ public enum NegativeScanPrint {
         /// correction it carries (`ApproximateNegativeScan.balance(stock:denseEnd:correction:)`).
         public init(stock: FilmStock, border: SIMD3<Float>,
                     balance: ApproximateNegativeScan.Balance) throws {
-            calibration = try ApproximateNegativeScan(stock: stock, border: border,
-                                                      gains: balance.gains, weights: balance.weights)
+            calibration = try ApproximateNegativeScan(
+                stock: stock, border: border, gains: balance.gains, offset: balance.offset,
+                weights: balance.weights)
             highlightStops = balance.highlightStops
         }
 
