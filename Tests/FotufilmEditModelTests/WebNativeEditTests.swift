@@ -113,4 +113,40 @@ final class WebNativeEditTests: XCTestCase {
                 WebNativeEdit.Negative.self, from: Data(#"{"crosstalk": \#(crosstalk)}"#.utf8)))
         }
     }
+
+    func testNegativeReadingRoundTripsWhatItWasMadeWith() throws {
+        let reading = WebNativeEdit.Negative(
+            border: [0.8, 0.45, 0.25],
+            roll: ApproximateNegativeScan.RollBalance(colour: [0.98, 1.03], frames: 4),
+            crosstalk: 0.6, scanLight: .screen, reading: WebNativeEdit.Negative.currentReading,
+            camera: "scanner", balance: .roll, neutral: [0.21, 0.12, 0.07])
+        let decoded = try JSONDecoder().decode(
+            WebNativeEdit.Negative.self, from: try JSONEncoder().encode(reading))
+        XCTAssertEqual(decoded, reading)
+        XCTAssertEqual(decoded.reading, 2)
+        XCTAssertEqual(decoded.balance, .roll)
+    }
+
+    func testAnEditSavedBeforeTheReadingHadAVersionKeepsTheFirst() throws {
+        // What an edit saved before now holds: nothing about the reading, camera or balance.
+        let json = #"{"border": [0.8, 0.45, 0.25], "crosstalk": 0.6, "scanLight": "rgb"}"#
+        let decoded = try JSONDecoder().decode(WebNativeEdit.Negative.self, from: Data(json.utf8))
+        XCTAssertNil(decoded.reading)
+        XCTAssertNil(decoded.camera)
+        XCTAssertNil(decoded.balance)
+        XCTAssertNil(decoded.neutral)
+        // And it is written back without them.
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(
+            with: try JSONEncoder().encode(decoded)) as? [String: Any])
+        XCTAssertEqual(Set(object.keys), ["border", "crosstalk", "scanLight"])
+    }
+
+    func testNegativeReadingRefusesAReadingOrNeutralThatIsNone() {
+        for json in [#"{"reading": 0}"#, #"{"reading": -1}"#, #"{"balance": "shadows"}"#,
+                     #"{"neutral": [0.2, 0.1]}"#, #"{"neutral": [0.2, 0, 0.1]}"#,
+                     #"{"neutral": [0.2, -0.1, 0.1]}"#] {
+            XCTAssertThrowsError(try JSONDecoder().decode(
+                WebNativeEdit.Negative.self, from: Data(json.utf8)), json)
+        }
+    }
 }

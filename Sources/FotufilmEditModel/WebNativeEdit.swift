@@ -52,19 +52,42 @@ public struct WebNativeEdit: Decodable {
         public var crosstalk: Float?
         /// The light the scan was made under (`NegativeScanCrosstalk.Light`); nil is white light.
         public var scanLight: NegativeScanCrosstalk.Light?
+        /// Which reading the edit was made with, so a saved edit keeps printing as it did: nil is
+        /// the first, which balances each channel's gain on the densest end; `currentReading`
+        /// reads the film through the scan's light and camera (`NegativeScanModel`) and balances
+        /// by a density offset (`ApproximateNegativeScan.balance(stock:setup:separation:mode:tones:roll:)`).
+        /// There `crosstalk` is how far the reading separates the dyes, nil all the way, and
+        /// `roll` is what the roll measured, whichever way the frame is balanced.
+        public var reading: Int?
+        /// What took the scan (`NegativeScanSetup.Camera.name`); nil is the camera its file names.
+        public var camera: String?
+        /// What the frame is balanced on; nil is its own tones.
+        public var balance: ApproximateNegativeScan.BalanceMode?
+        /// Something neutral picked on the scan, as linear Rec. 2020 scan RGB like `border`; nil
+        /// balances on the densest end.
+        public var neutral: [Float]?
         /// What an app keeps with the reading that the engine carries, saves and undoes without
         /// reading, by the app's own key, as `NegativeScanRecipe.attachments` does.
         public var attachments: [String: Data] = [:]
 
+        /// The reading new scans are made with.
+        public static let currentReading = 2
+
         public init(border: [Float]? = nil, lightFrame: String? = nil,
                     roll: ApproximateNegativeScan.RollBalance? = nil, crosstalk: Float? = nil,
                     scanLight: NegativeScanCrosstalk.Light? = nil,
+                    reading: Int? = nil, camera: String? = nil,
+                    balance: ApproximateNegativeScan.BalanceMode? = nil, neutral: [Float]? = nil,
                     attachments: [String: Data] = [:]) {
             self.border = border
             self.lightFrame = lightFrame
             self.roll = roll
             self.crosstalk = crosstalk
             self.scanLight = scanLight
+            self.reading = reading
+            self.camera = camera
+            self.balance = balance
+            self.neutral = neutral
             self.attachments = attachments
         }
 
@@ -74,7 +97,8 @@ public struct WebNativeEdit: Decodable {
         }
 
         private enum CodingKeys: String, CodingKey {
-            case border, lightFrame, roll, crosstalk, scanLight, attachments
+            case border, lightFrame, roll, crosstalk, scanLight, reading, camera, balance, neutral
+            case attachments
         }
 
         public init(from decoder: Decoder) throws {
@@ -88,6 +112,19 @@ public struct WebNativeEdit: Decodable {
                     forKey: .crosstalk, in: c, debugDescription: "Invalid crosstalk correction.")
             }
             scanLight = try c.decodeIfPresent(NegativeScanCrosstalk.Light.self, forKey: .scanLight)
+            reading = try c.decodeIfPresent(Int.self, forKey: .reading)
+            if let reading, reading < 1 {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .reading, in: c, debugDescription: "Invalid negative reading.")
+            }
+            camera = try c.decodeIfPresent(String.self, forKey: .camera)
+            balance = try c.decodeIfPresent(ApproximateNegativeScan.BalanceMode.self,
+                                            forKey: .balance)
+            neutral = try c.decodeIfPresent([Float].self, forKey: .neutral)
+            if let neutral, neutral.count != 3 || !neutral.allSatisfy({ $0.isFinite && $0 > 0 }) {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .neutral, in: c, debugDescription: "Invalid picked neutral.")
+            }
             attachments = try c.decodeIfPresent([String: Data].self, forKey: .attachments) ?? [:]
         }
 
@@ -98,6 +135,10 @@ public struct WebNativeEdit: Decodable {
             try c.encodeIfPresent(roll, forKey: .roll)
             try c.encodeIfPresent(crosstalk, forKey: .crosstalk)
             try c.encodeIfPresent(scanLight, forKey: .scanLight)
+            try c.encodeIfPresent(reading, forKey: .reading)
+            try c.encodeIfPresent(camera, forKey: .camera)
+            try c.encodeIfPresent(balance, forKey: .balance)
+            try c.encodeIfPresent(neutral, forKey: .neutral)
             if !attachments.isEmpty { try c.encode(attachments, forKey: .attachments) }
         }
     }
