@@ -277,6 +277,11 @@ void release_device() {
 }
 
 bool valid_flare_mean(const float *configuration, int32_t feature_mask) {
+    if ((feature_mask & FOTUFILM_FRAME_DONOR_LAYER) != 0
+        && (feature_mask & (FOTUFILM_FRAME_NO_FILM | FOTUFILM_FRAME_DENSITY_IN | FOTUFILM_FRAME_LIGHT_OUT)) == 0) {
+        const float count = configuration[FOTUFILM_CONFIG_DONOR_COUNT];
+        if (!std::isfinite(count) || count < 0.0f || int32_t(count) > 1) return false;
+    }
     if ((feature_mask & FOTUFILM_FRAME_FLARE) == 0) return true;
     if ((feature_mask & FOTUFILM_FRAME_FLARE_MEASURE) != 0) return true;
     for (int channel = 0; channel < 3; ++channel) {
@@ -560,6 +565,11 @@ extern "C" int32_t fotufilm_film_tile_build(int32_t, int32_t, int32_t, const flo
 extern "C" int32_t fotufilm_halide_set_film_tiles(int32_t id, const float *tiles,
                                                   int64_t count) {
     return film_tile_store().set(id, tiles, count) ? 0 : -1;
+}
+extern "C" int32_t fotufilm_halide_set_extra_donor_lut(int32_t, const float *lut,
+                                                       int64_t count) {
+    if (!lut || count == 0) return 0;
+    return count == int64_t(kLutValueCount) ? -2 : -1;
 }
 extern "C" int32_t fotufilm_halide_develop(
     const float *, const float *, const float *, float *, float *, float *,

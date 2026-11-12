@@ -108,8 +108,9 @@ struct Backend {
         return sample_film_curve(configuration, table, log_exposure, channel);
     }
 
-    virtual Expr donor_curve(Halide::ImageParam &configuration, Func table, Expr log_exposure) {
-        return sample_curve(table, log_exposure, 0);
+    virtual Expr donor_curve(Halide::ImageParam &configuration, Func table,
+                             Expr donor_index, Expr log_exposure) {
+        return sample_curve(table, log_exposure, donor_index);
     }
 
     virtual GrainFields grain_fields(Halide::ImageParam &configuration, FrameParams &p,
@@ -144,6 +145,10 @@ struct Inputs {
     /// computed and discarded.
     Halide::ImageParam *film_tiles = nullptr;
     Expr film_on = Expr();
+    /// Optional 33^3 RGBA spectral exposure cube for extra donor capture layers (`donors[1..2]`),
+    /// bound on JIT CPU/GPU pipelines and omitted on AOT generators.
+    Halide::ImageParam *extra_donor_lut = nullptr;
+    Expr extra_donor_on = Halide::Internal::const_false();
     /// Optional photographic record exposure arriving behind the camera gate (RGB records + donor).
     /// Coordinates are local to this tile. This light is excluded from lens-glare measurement.
     std::function<Expr(Expr, Expr, Expr)> additional_record_exposure;
@@ -220,7 +225,8 @@ inline Developed build_develop(Backend &b, const Inputs &in, Var x, Var y, Var c
     Expr on_halation = gate(in, FOTUFILM_FRAME_HALATION);
     Expr on_couplers = gate(in, FOTUFILM_FRAME_COUPLERS);
     Expr on_donor = gate(in, FOTUFILM_FRAME_DONOR_LAYER);
-    Expr on_coupler_diffusion = on_couplers && gate(in, FOTUFILM_FRAME_COUPLER_DIFFUSION);
+    Expr on_coupler_diffusion =
+        (on_couplers || on_donor) && gate(in, FOTUFILM_FRAME_COUPLER_DIFFUSION);
     Expr on_adjacency = gate(in, FOTUFILM_FRAME_ADJACENCY);
     Expr on_grain = gate(in, FOTUFILM_FRAME_GRAIN);
     Expr on_mottle = on_grain && gate(in, FOTUFILM_FRAME_GRAIN_MOTTLE);
@@ -310,6 +316,7 @@ inline Developed build_develop(Backend &b, const Inputs &in, Var x, Var y, Var c
     // Glare is metered on the lens's image as formed, before the gate.
     Func lens_light = light;
     light = through_gate(lens_light, "through_gate");
+    Func gated_rgb = light;
     if (use_donor) donor_exposure = through_gate(donor_exposure, "donor_through_gate", true);
 
     const bool merged_luma = use_mtf_luma && b.merged_luma();
@@ -427,36 +434,188 @@ inline Developed build_develop(Backend &b, const Inputs &in, Var x, Var y, Var c
 
     Func effective_log = log_exposure;
     Expr adjacency_residual = 0.0f;
+    const int max_donors = use_donor ? (in.extra_donor_lut && !in.record_in ? 3 : 1) : 0;
+    Expr forward_model = configuration(FOTUFILM_CONFIG_COUPLER_MODEL) > 0.5f;
+    Func log_view;
+    Func donor_curve_tbl;
+    Func donor_log_view;
     Func donor_released(name("donor_released"));
     Func donor_pointwise = donor_released;
+    auto donor_curve_at = [&](Expr donor_index, Expr log_exp) {
+        return b.donor_curve(configuration, donor_curve_tbl, donor_index, log_exp);
+    };
     if (use_couplers || use_adjacency || use_donor) {
-        Func log_view = store_light(log_exposure, Store::LogExposure, 3);
+        log_view = store_light(log_exposure, Store::LogExposure, 3);
         Func activation(name("activation"));
         activation(x, y, c) = film_activation(
             configuration, c, film_curve(c, log_view(x, y, c)));
         Func activation_view = b.store(activation, Store::Activation, 3);
+
+        Func donor_diffused;
+        if (use_donor) {
+            if (b.tabulated_curves()) {
+                donor_curve_tbl = donor_curve_table(
+                    configuration, max_donors, name("donor_curve"), b.device(), approximate);
+            }
+            Expr donor_count = Halide::clamp(
+                Halide::cast<int32_t>(configuration(FOTUFILM_CONFIG_DONOR_COUNT)), 0, max_donors);
+            auto gate_ratio = [&](int m) -> Expr {
+                Expr rm = donor_receiver_channel(configuration, m);
+                if (m == 0) {
+                    Expr e_rgb = Halide::mux(
+                        rm, {gated_rgb(x, y, 0), gated_rgb(x, y, 1), gated_rgb(x, y, 2)});
+                    Expr e_d0 = donor_exposure(x, y, 0);
+                    return fs_log10(Halide::max(e_d0, 1.0e-6f), approximate)
+                        - fs_log10(Halide::max(e_rgb, 1.0e-6f), approximate);
+                }
+                if (in.record_in) return Expr(0.0f);
+                Expr e_base = Halide::mux(
+                    rm, {exposure(x, y, 0), exposure(x, y, 1), exposure(x, y, 2)}) * gate_pass;
+                Expr e_extra = extra_donor_scene_exposure(
+                    configuration, *in.extra_donor_lut,
+                    in.decoded(0), in.decoded(1), in.decoded(2),
+                    m - 1, rm, x + p.origin_x_, y + p.origin_y_,
+                    in.extra_donor_on, approximate, b.half_lut_math()) * gate_pass;
+                if (in.additional_record_exposure) {
+                    auto &extra = in.additional_record_exposure;
+                    Expr added = Halide::mux(rm, {extra(x, y, 0), extra(x, y, 1), extra(x, y, 2)});
+                    e_base += added;
+                    e_extra += added;
+                }
+                return Halide::select(
+                    in.extra_donor_on && m < donor_count,
+                    fs_log10(Halide::max(e_extra, 1.0e-6f), approximate)
+                        - fs_log10(Halide::max(e_base, 1.0e-6f), approximate),
+                    0.0f);
+            };
+            auto forward_donor_log = [&](int m) -> Expr {
+                Expr rm = donor_receiver_channel(configuration, m);
+                Expr l_base = Halide::mux(
+                    rm, {log_view(x, y, 0), log_view(x, y, 1), log_view(x, y, 2)});
+                return l_base + gate_ratio(m);
+            };
+            Func donor_log(name("donor_log"));
+            Expr legacy_log0 = fs_log10(
+                Halide::max(donor_exposure(x, y, 0), 1.0e-6f), approximate);
+            Expr log0 = Halide::select(forward_model, forward_donor_log(0), legacy_log0);
+            if (max_donors == 1) {
+                donor_log(x, y, c) = log0;
+            } else {
+                Expr log1 = Halide::select(
+                    forward_model && 1 < donor_count, forward_donor_log(1), 0.0f);
+                Expr log2 = Halide::select(
+                    forward_model && 2 < donor_count, forward_donor_log(2), 0.0f);
+                donor_log(x, y, c) = Halide::mux(c, {log0, log1, log2});
+            }
+            donor_log_view = b.store(donor_log, Store::DonorLog, max_donors);
+            Func donor_act(name("donor_activation"));
+            Expr d_idx = max_donors == 1 ? Expr(0) : Halide::clamp(c, 0, max_donors - 1);
+            donor_act(x, y, c) = donor_activation(
+                configuration, d_idx, donor_curve_at(d_idx, donor_log_view(x, y, d_idx)));
+            Func donor_view = b.store(donor_act, Store::DonorActivation, max_donors);
+            donor_released(x, y, c) = donor_release(
+                configuration, d_idx, donor_view(x, y, d_idx));
+            Func donor_released_view = b.store(donor_released, Store::DonorReleased, max_donors);
+            donor_pointwise = donor_released_view;
+            donor_diffused = donor_released_view;
+            if (use_coupler_diffusion) {
+                Func diffused = b.gaussian_decimated(
+                    donor_released_view, p.coupler_sigma_, p.coupler_radius_, p.origin_x_,
+                    p.origin_y_, p.width_, p.height_, name("donor_diffused"), 1);
+                Func selected(name("donor_diffused_selected"));
+                selected(x, y, c) = gated(
+                    on_donor && on_coupler_diffusion && !forward_model,
+                    diffused(x, y, c),
+                    gated(on_donor, donor_released_view(x, y, c), 0.0f));
+                donor_diffused = selected;
+            }
+        }
+
+        const bool can_diffuse_couplers = use_coupler_diffusion && (use_couplers || use_donor);
+        const bool fringe_compiled = use_coupler_diffusion && use_couplers && !b.windowed();
+        Expr effective_fringe = fringe_compiled
+            ? gated(on_coupler_diffusion,
+                    Halide::select(p.fringe_radius_ > 0,
+                                   configuration(FOTUFILM_CONFIG_CHROMATIC_FRINGE_AMOUNT),
+                                   0.0f),
+                    0.0f)
+            : Expr(0.0f);
+        Func raw_release(name("raw_release"));
+        raw_release(x, y, c) = coupler_release(configuration, c, activation_view(x, y, c));
+
+        Expr u_coupler = 0.0f;
+        if (use_couplers) {
+            Expr k0 = configuration(FOTUFILM_CONFIG_COUPLER + c * 3);
+            Expr k1 = configuration(FOTUFILM_CONFIG_COUPLER + c * 3 + 1);
+            Expr k2 = configuration(FOTUFILM_CONFIG_COUPLER + c * 3 + 2);
+            Expr cross_blur = Halide::select(
+                forward_model,
+                (1.0f - configuration(FOTUFILM_CONFIG_COUPLER_CROSS_POINTWISE_SHARE))
+                    * (1.0f - effective_fringe),
+                1.0f - effective_fringe);
+            Expr w0 = Halide::select(c == 0, k0, cross_blur * k0);
+            Expr w1 = Halide::select(c == 1, k1, cross_blur * k1);
+            Expr w2 = Halide::select(c == 2, k2, cross_blur * k2);
+            u_coupler = gated(
+                on_couplers,
+                w0 * raw_release(x, y, 0) + w1 * raw_release(x, y, 1) + w2 * raw_release(x, y, 2),
+                0.0f);
+        }
+        Expr u_donor = 0.0f;
+        if (use_donor) {
+            Expr donor_count = Halide::clamp(
+                Halide::cast<int32_t>(configuration(FOTUFILM_CONFIG_DONOR_COUNT)), 0, max_donors);
+            Expr d_sum = 0.0f;
+            for (int m = 0; m < max_donors; ++m) {
+                d_sum = d_sum + Halide::select(
+                    m < donor_count,
+                    donor_release_amplitude(configuration, c, m)
+                        * gated(on_donor, donor_pointwise(x, y, m), 0.0f),
+                    0.0f);
+            }
+            u_donor = gated(on_donor, d_sum, 0.0f);
+        }
+        Expr u_norm = Halide::max(configuration(FOTUFILM_CONFIG_COUPLER_ROW_NORM + c), 1.0e-6f);
         Func released(name("released"));
-        released(x, y, c) = coupler_release(configuration, c, activation_view(x, y, c));
-        Func released_view = use_couplers ? b.store(released, Store::Released, 3) : released;
+        released(x, y, c) = Halide::select(
+            forward_model, (u_coupler + u_donor) / u_norm, raw_release(x, y, c));
+        Func released_view = (use_couplers || use_donor)
+            ? b.store(released, Store::Released, 3) : released;
+
         Func coupler_diffused = released_view;
         Func fringe_diffused = released_view;
         Func adjacency_diffused = activation_view;
-        const bool fringe_compiled = use_coupler_diffusion && use_couplers && !b.windowed();
-        if (use_coupler_diffusion && use_couplers) {
+        if (can_diffuse_couplers) {
             Func diffused = b.gaussian_decimated(
                 released_view, p.coupler_sigma_, p.coupler_radius_, p.origin_x_, p.origin_y_,
                 p.width_, p.height_, name("coupler_diffused"), 3);
             Func selected(name("coupler_diffused_selected"));
-            selected(x, y, c) = gated(on_coupler_diffusion, diffused(x, y, c),
-                                      gated(on_couplers, released_view(x, y, c), 0.0f));
+            Expr active_release = Halide::select(forward_model, on_couplers || on_donor, on_couplers);
+            selected(x, y, c) = gated(active_release && on_coupler_diffusion, diffused(x, y, c),
+                                      gated(active_release, released_view(x, y, c), 0.0f));
             coupler_diffused = selected;
             if (fringe_compiled) {
+                Func fringe_source(name("fringe_source"));
+                Expr k0 = configuration(FOTUFILM_CONFIG_COUPLER + c * 3);
+                Expr k1 = configuration(FOTUFILM_CONFIG_COUPLER + c * 3 + 1);
+                Expr k2 = configuration(FOTUFILM_CONFIG_COUPLER + c * 3 + 2);
+                Expr v_raw = gated(
+                    on_couplers,
+                    effective_fringe * (Halide::select(c != 0, k0 * raw_release(x, y, 0), 0.0f)
+                                      + Halide::select(c != 1, k1 * raw_release(x, y, 1), 0.0f)
+                                      + Halide::select(c != 2, k2 * raw_release(x, y, 2), 0.0f)),
+                    0.0f);
+                Expr v_norm = Halide::max(
+                    configuration(FOTUFILM_CONFIG_COUPLER_ROW_NORM + 3 + c), 1.0e-6f);
+                fringe_source(x, y, c) = Halide::select(
+                    forward_model, v_raw / v_norm, released_view(x, y, c));
                 Func fringe = b.gaussian_decimated(
-                    released_view, p.fringe_sigma_, p.fringe_radius_, p.origin_x_,
+                    fringe_source, p.fringe_sigma_, p.fringe_radius_, p.origin_x_,
                     p.origin_y_, p.width_, p.height_, name("fringe_diffused"), 3);
                 Func fringe_selected(name("fringe_diffused_selected"));
-                fringe_selected(x, y, c) = gated(on_coupler_diffusion, fringe(x, y, c),
-                                                 gated(on_couplers, released_view(x, y, c), 0.0f));
+                fringe_selected(x, y, c) = gated(
+                    on_couplers && on_coupler_diffusion, fringe(x, y, c),
+                    gated(on_couplers, fringe_source(x, y, c), 0.0f));
                 fringe_diffused = fringe_selected;
             }
         }
@@ -478,42 +637,10 @@ inline Developed build_develop(Backend &b, const Inputs &in, Var x, Var y, Var c
                     gated(on_adjacency, secondary(x, y, c), 0.0f)),
                 0.0f);
         }
-        Func donor_diffused;
-        if (use_donor) {
-            Func donor_curve;
-            if (b.tabulated_curves()) {
-                donor_curve = curve_table(configuration, FOTUFILM_CONFIG_DONOR_CURVE, 6, 1,
-                                          name("donor_curve"), b.device(), approximate);
-            }
-            Func donor_log(name("donor_log"));
-            donor_log(x, y, c) = fs_log10(
-                Halide::max(donor_exposure(x, y, c), 1.0e-6f), approximate);
-            Func donor_log_view = b.store(donor_log, Store::DonorLog, 1);
-            Func donor_activation(name("donor_activation"));
-            donor_activation(x, y, c) =
-                (b.donor_curve(configuration, donor_curve, donor_log_view(x, y, c))
-                 - configuration(FOTUFILM_CONFIG_DONOR_CURVE))
-                / Halide::max(curve_range(configuration, FOTUFILM_CONFIG_DONOR_CURVE),
-                              1.0e-6f);
-            Func donor_view = b.store(donor_activation, Store::DonorActivation, 1);
-            donor_released(x, y, c) = donor_release(configuration, donor_view(x, y, c));
-            Func donor_released_view = b.store(donor_released, Store::DonorReleased, 1);
-            donor_pointwise = donor_released_view;
-            donor_diffused = donor_released_view;
-            if (use_coupler_diffusion) {
-                Func diffused = b.gaussian_decimated(
-                    donor_released_view, p.coupler_sigma_, p.coupler_radius_, p.origin_x_,
-                    p.origin_y_, p.width_, p.height_, name("donor_diffused"), 1);
-                Func selected(name("donor_diffused_selected"));
-                selected(x, y, c) = gated(on_donor && on_coupler_diffusion, diffused(x, y, c),
-                                          gated(on_donor, donor_released_view(x, y, c), 0.0f));
-                donor_diffused = selected;
-            }
-        }
         Func shifted(name("inhibited"));
         Expr inhibited = log_view(x, y, c);
         if (use_couplers || use_donor) {
-            Expr inhibition = 0.0f;
+            Expr legacy_inhibition = 0.0f;
             if (use_couplers) {
                 Expr coupler_term = coupler_inhibition(
                     configuration, c, coupler_diffused(x, y, 0), coupler_diffused(x, y, 1),
@@ -526,18 +653,50 @@ inline Developed build_develop(Backend &b, const Inputs &in, Var x, Var y, Var c
                         fringe_diffused(x, y, 2) - coupler_diffused(x, y, 2));
                     coupler_term = gated(on_coupler_diffusion, fringed, coupler_term);
                 }
-                inhibition = gated(on_couplers, coupler_term, 0.0f);
+                legacy_inhibition = gated(on_couplers, coupler_term, 0.0f);
             }
             if (use_donor) {
-                inhibition = inhibition + gated(
-                    on_donor, donor_inhibition(configuration, c, donor_diffused(x, y, 0)),
+                legacy_inhibition = legacy_inhibition + gated(
+                    on_donor && !forward_model,
+                    donor_inhibition(configuration, c, donor_diffused(x, y, 0)),
                     0.0f);
             }
+
+            Expr v_norm = Halide::max(
+                configuration(FOTUFILM_CONFIG_COUPLER_ROW_NORM + 3 + c), 1.0e-6f);
+            Expr v_blurred = fringe_compiled
+                ? Halide::select(p.fringe_radius_ > 0,
+                                 gated(on_couplers, fringe_diffused(x, y, c), 0.0f),
+                                 0.0f)
+                : Expr(0.0f);
+            Expr u_cross_pointwise = 0.0f;
+            if (use_couplers) {
+                Expr k0 = configuration(FOTUFILM_CONFIG_COUPLER + c * 3);
+                Expr k1 = configuration(FOTUFILM_CONFIG_COUPLER + c * 3 + 1);
+                Expr k2 = configuration(FOTUFILM_CONFIG_COUPLER + c * 3 + 2);
+                Expr cross_pt = configuration(FOTUFILM_CONFIG_COUPLER_CROSS_POINTWISE_SHARE)
+                    * (1.0f - effective_fringe);
+                u_cross_pointwise = gated(
+                    on_couplers,
+                    cross_pt * (Halide::select(c != 0, k0 * raw_release(x, y, 0), 0.0f)
+                              + Halide::select(c != 1, k1 * raw_release(x, y, 1), 0.0f)
+                              + Halide::select(c != 2, k2 * raw_release(x, y, 2), 0.0f)),
+                    0.0f);
+            }
+            Expr forward_spatial = configuration(FOTUFILM_CONFIG_COUPLER_EFFECTIVE_SCALE + c)
+                * (u_norm * coupler_diffused(x, y, c) + u_cross_pointwise + v_norm * v_blurred);
+            Expr neutral_comp = forward_neutral_compensation(
+                configuration, c, log_view(x, y, c), film_curve, donor_curve_at,
+                on_couplers, on_donor, max_donors);
+
             Func inhibition_field(name("inhibition"));
-            inhibition_field(x, y, c) = inhibition;
+            inhibition_field(x, y, c) = Halide::select(
+                forward_model, forward_spatial - neutral_comp, legacy_inhibition);
             Func inhibition_view = b.store(inhibition_field, Store::Inhibition, 3);
-            inhibited = inhibited_log_exposure(configuration, c, log_view(x, y, c),
-                                               inhibition_view(x, y, c));
+            Expr legacy_inhibited = inhibited_log_exposure(
+                configuration, c, log_view(x, y, c), inhibition_view(x, y, c));
+            inhibited = Halide::select(
+                forward_model, log_view(x, y, c) - inhibition_view(x, y, c), legacy_inhibited);
         }
         Expr shift = 0.0f;
         if (use_adjacency) shift = adjacency_shift(configuration, adjacency_residual);
@@ -570,7 +729,8 @@ inline Developed build_develop(Backend &b, const Inputs &in, Var x, Var y, Var c
         if (use_couplers || use_donor) {
             Func flat_log_view = b.store(flat_log, Store::FlatLog, 3);
             Func flat_shifted(name("flat_inhibited"));
-            Expr inhibition = 0.0f;
+            Expr legacy_inhibition = 0.0f;
+            Expr forward_sum = 0.0f;
             if (use_couplers) {
                 Func flat_activation(name("flat_activation"));
                 flat_activation(x, y, c) = film_activation(
@@ -580,22 +740,56 @@ inline Developed build_develop(Backend &b, const Inputs &in, Var x, Var y, Var c
                 flat_released(x, y, c) = coupler_release(
                     configuration, c, flat_activation_view(x, y, c));
                 Func flat_released_view = b.store(flat_released, Store::FlatReleased, 3);
-                inhibition = gated(
+                legacy_inhibition = gated(
                     on_couplers,
                     coupler_inhibition(configuration, c, flat_released_view(x, y, 0),
                                        flat_released_view(x, y, 1),
                                        flat_released_view(x, y, 2)),
                     0.0f);
+                Expr base = FOTUFILM_CONFIG_COUPLER + c * 3;
+                forward_sum = gated(
+                    on_couplers,
+                    configuration(base) * flat_released_view(x, y, 0)
+                        + configuration(base + 1) * flat_released_view(x, y, 1)
+                        + configuration(base + 2) * flat_released_view(x, y, 2),
+                    0.0f);
             }
             if (use_donor) {
-                inhibition = inhibition + gated(
+                legacy_inhibition = legacy_inhibition + gated(
                     on_donor,
                     donor_inhibition(configuration, c,
                                      gated(on_donor, donor_pointwise(x, y, 0), 0.0f)),
                     0.0f);
+                Expr donor_count = Halide::clamp(
+                    Halide::cast<int32_t>(configuration(FOTUFILM_CONFIG_DONOR_COUNT)),
+                    0, max_donors);
+                Expr flat_donor_sum = 0.0f;
+                for (int m = 0; m < max_donors; ++m) {
+                    Expr rm = donor_receiver_channel(configuration, m);
+                    Expr l_flat_base = Halide::mux(
+                        rm, {flat_log_view(x, y, 0), flat_log_view(x, y, 1), flat_log_view(x, y, 2)});
+                    Expr l_opt_base = Halide::mux(
+                        rm, {log_view(x, y, 0), log_view(x, y, 1), log_view(x, y, 2)});
+                    Expr lambda_m = gated(on_donor, donor_log_view(x, y, m), l_opt_base)
+                        - l_opt_base;
+                    Expr flat_d_act = donor_activation(
+                        configuration, m, donor_curve_at(m, l_flat_base + lambda_m));
+                    Expr flat_d_rel = donor_release(configuration, m, flat_d_act);
+                    flat_donor_sum = flat_donor_sum + Halide::select(
+                        m < donor_count,
+                        donor_release_amplitude(configuration, c, m) * flat_d_rel,
+                        0.0f);
+                }
+                forward_sum = forward_sum + gated(on_donor, flat_donor_sum, 0.0f);
             }
-            flat_shifted(x, y, c) = inhibited_log_exposure(
-                configuration, c, flat_log_view(x, y, c), inhibition);
+            Expr flat_w = forward_neutral_compensation(
+                configuration, c, flat_log_view(x, y, c), film_curve, donor_curve_at,
+                on_couplers, on_donor, max_donors);
+            Expr forward_flat = flat_log_view(x, y, c) + flat_w
+                - configuration(FOTUFILM_CONFIG_COUPLER_EFFECTIVE_SCALE + c) * forward_sum;
+            Expr legacy_flat = inhibited_log_exposure(
+                configuration, c, flat_log_view(x, y, c), legacy_inhibition);
+            flat_shifted(x, y, c) = Halide::select(forward_model, forward_flat, legacy_flat);
             flat_effective = select_stage(on_couplers || on_donor, flat_shifted, flat_log_view,
                                           x, y, c, name("flat_inhibited_selected"));
         }

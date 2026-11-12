@@ -248,6 +248,12 @@ int32_t fotufilm_halide_develop(
 /// `tiles` forgets them. Returns 0, or -1 when the count is not the tiles' size.
 int32_t fotufilm_halide_set_film_tiles(int32_t id, const float *tiles, int64_t count);
 
+/// Registers the extra donor capture layers' 33^3 RGBA spectral exposure cube (`count == 33^3 * 4`)
+/// under `id`, or forgets `id` when `lut` is null or `count == 0`. Returns 0 on JIT backends that
+/// retain the cube, -2 on ahead-of-time/fallback targets that refuse multi-donor frames, or -1 when
+/// `count` is invalid.
+int32_t fotufilm_halide_set_extra_donor_lut(int32_t id, const float *lut, int64_t count);
+
 /// Stage 8: developed densities to display-linear RGB.
 int32_t fotufilm_halide_print(
     const float *input_r, const float *input_g, const float *input_b,

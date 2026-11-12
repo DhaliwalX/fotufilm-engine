@@ -12,34 +12,44 @@
       8.0,
       3.0
     ],
-    "release": [
-      0.5289,
-      0.5595,
-      0.5375
+    "receiverSusceptibility": [
+      1.0433,
+      1.0,
+      1.0416
     ],
-    "selfRetention": 0.8833
+    "release": [
+      0.3668,
+      0.3668,
+      0.3668
+    ],
+    "selfRetention": 0.8838
   },
   "couplerInhibition": [
     [
-      0.467177,
-      0.49236,
-      0.41624
+      0.338215,
+      0.336761,
+      0.296349
     ],
     [
-      0.465432,
-      0.494206,
-      0.473
+      0.322784,
+      0.324178,
+      0.322784
     ],
     [
-      0.40958,
-      0.49236,
-      0.474774
+      0.295866,
+      0.336212,
+      0.337664
     ]
   ],
   "couplerReleaseGamma": [
-    0.47,
-    0.47,
-    0.46
+    1.0,
+    1.0,
+    1.0
+  ],
+  "couplerReleaseKappa": [
+    0.1721,
+    0.189,
+    0.1869
   ],
   "crystalGrainPopulation": {
     "coatingDensityScale": 1,
@@ -9084,7 +9094,7 @@
         0.0
       ],
       "name": "CL",
-      "releaseGamma": 0.35,
+      "releaseGamma": 1.0,
       "sensitivity": [
         0.0,
         0.0,
@@ -9824,7 +9834,7 @@
     "statedThroughSeconds": 64,
     "thresholdSeconds": 1
   },
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "sensitivity": [
     [
       0.8811,

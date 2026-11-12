@@ -2050,7 +2050,7 @@
       "commandLineHelp" : "Within-layer inhibition as a multiple of the stock's own, 0-3 (default: 1)",
       "commandLinePlaceholder" : "<scale>",
       "detail" : "Adjust the local contrast around edges created during development.",
-      "documentation" : "Scales inhibition acting within a layer rather than across two.",
+      "documentation" : "Scales inhibition acting within a layer across tonal and colour edges, leaving uniform areas unchanged.",
       "drives" : [
 
       ],

@@ -849,7 +849,8 @@ public enum EditorControlCatalogue {
             commandLine: CommandLineFlag("--coupler-self", placeholder: "<scale>",
                                          help: "Within-layer inhibition as a multiple of the stock's "
                                              + "own, 0-3 (default: 1)"),
-            documentation: "Scales inhibition acting within a layer rather than across two."),
+            documentation: "Scales inhibition acting within a layer across tonal and colour edges, "
+                + "leaving uniform areas unchanged."),
         EditorControl(
             .couplerRedGreen, title: "Red–Green Reach",
             detail: "Adjust the separation between the red and green layers.",

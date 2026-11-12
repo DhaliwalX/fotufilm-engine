@@ -312,7 +312,8 @@ int run_aot(ExecutionState &state, halide_buffer_t *in, halide_buffer_t *out,
         // couplers or a donor applies no coupler warp, where a graph that gates them off still
         // applies the warp the frame carries; the host sends one only with either running, so
         // such a twin serves only a frame without one.
-        bool carries_warp = false;
+        bool carries_warp = configuration[FOTUFILM_CONFIG_COUPLER_MODEL] != 0.0f
+            && (wanted_stages & (FOTUFILM_FRAME_COUPLERS | FOTUFILM_FRAME_DONOR_LAYER)) != 0;
         for (int i = 0; i < 3 * FOTUFILM_COUPLER_WARP_SAMPLES && !carries_warp; ++i) {
             carries_warp = configuration[FOTUFILM_CONFIG_COUPLER_WARP + i] != 0.0f;
         }
@@ -361,6 +362,11 @@ int32_t translate_exceptions(Function &&function) {
 }
 
 bool valid_flare_mean(const float *configuration, int32_t feature_mask) {
+    if ((feature_mask & FOTUFILM_FRAME_DONOR_LAYER) != 0
+        && (feature_mask & (FOTUFILM_FRAME_NO_FILM | FOTUFILM_FRAME_DENSITY_IN | FOTUFILM_FRAME_LIGHT_OUT)) == 0) {
+        const float count = configuration[FOTUFILM_CONFIG_DONOR_COUNT];
+        if (!std::isfinite(count) || count < 0.0f || int32_t(count) > 1) return false;
+    }
     if ((feature_mask & FOTUFILM_FRAME_FLARE) == 0) return true;
     // A measuring variant reaches its own mean, so the unset sentinel is what this slot is
     // supposed to hold — not the sign of a caller who forgot to measure.
@@ -1503,6 +1509,11 @@ extern "C" int32_t fotufilm_halide_set_film_tiles(int32_t id, const float *tiles
     return translate_exceptions([&] {
         return film_tile_store().set(id, tiles, count) ? 0 : -1;
     });
+}
+extern "C" int32_t fotufilm_halide_set_extra_donor_lut(int32_t, const float *lut,
+                                                       int64_t count) {
+    if (!lut || count == 0) return 0;
+    return count == int64_t(kLutValueCount) ? -2 : -1;
 }
 extern "C" int32_t fotufilm_halide_develop(
     const float *, const float *, const float *, float *, float *, float *,

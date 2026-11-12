@@ -433,6 +433,10 @@ public:
           paper_lut_(Float(32), 1, "frame_paper_lut" + suffix),
           film_tiles_(Float(32), 3, "frame_film_tiles" + suffix),
           film_grain_("frame_film_on" + suffix),
+#if !defined(FOTUFILM_HALIDE_AOT_GENERATOR)
+          extra_donor_lut_(Float(32), 1, "frame_extra_donor_lut" + suffix),
+          extra_donor_on_("frame_extra_donor_on" + suffix),
+#endif
           halation_radius_0_("frame_halation_radius_0" + suffix),
           halation_radius_1_("frame_halation_radius_1" + suffix),
           halation_radius_2_("frame_halation_radius_2" + suffix),
@@ -580,6 +584,10 @@ public:
         // them, beside the configuration and the stored density, so WebGPU has the room too.
         inputs.film_tiles = &film_tiles_;
         inputs.film_on = film_grain_ != 0;
+#if !defined(FOTUFILM_HALIDE_AOT_GENERATOR)
+        inputs.extra_donor_lut = &extra_donor_lut_;
+        inputs.extra_donor_on = extra_donor_on_ != 0;
+#endif
         graph::Developed developed_frame = graph::build_develop(backend, inputs, x, y, channel);
         Func light = developed_frame.light;
         Func developed = developed_frame.developed;
@@ -831,7 +839,8 @@ public:
             // single FrameFunction shape.
             diffusion_stride_0_, diffusion_stride_1_, diffusion_stride_2_,
             diffusion_strided_radius_0_, diffusion_strided_radius_1_,
-            diffusion_strided_radius_2_, runtime_features_, film_tiles_, film_grain_,},
+            diffusion_strided_radius_2_, runtime_features_, film_tiles_, film_grain_,
+            extra_donor_lut_, extra_donor_on_,},
             gpu_target())) {
             pipeline_.compile_jit(gpu_target());
         }
@@ -1206,6 +1215,24 @@ private:
         }
         film_tiles_.set(film_tiles_buffer_);
         film_grain_.set(film_on ? 1 : 0);
+#if !defined(FOTUFILM_HALIDE_AOT_GENERATOR)
+        bool extra_on = false;
+        Buffer<float> extra_lut = ExtraDonorLutStore::shared().lut_for(configuration, extra_on);
+        if ((requested & FOTUFILM_FRAME_DONOR_LAYER) != 0
+            && !no_film_ && !density_in_ && !light_out_
+            && configuration[FOTUFILM_CONFIG_RECORD_INPUT] == 0.0f
+            && int32_t(configuration[FOTUFILM_CONFIG_DONOR_COUNT]) > 1
+            && !extra_on) {
+            throw Halide::RuntimeError("Fotufilm extra donor LUT is not registered");
+        }
+        if (!extra_donor_buffer_.defined() || extra_lut.data() != extra_donor_host_.data()) {
+            extra_donor_host_ = extra_lut;
+            extra_donor_buffer_ = Buffer<float>(extra_lut.data(), extra_lut.dim(0).extent());
+            extra_donor_buffer_.set_host_dirty();
+        }
+        extra_donor_lut_.set(extra_donor_buffer_);
+        extra_donor_on_.set(extra_on ? 1 : 0);
+#endif
         const ResolvedFrameParams frame(configuration, width, height, seed, reversal,
                                         origin_x, origin_y);
         set_frame(frame);
@@ -1255,6 +1282,10 @@ private:
     /// The film grain model's tiles (FilmTileStore), and whether this frame samples them.
     ImageParam film_tiles_;
     Param<int32_t> film_grain_;
+#if !defined(FOTUFILM_HALIDE_AOT_GENERATOR)
+    ImageParam extra_donor_lut_;
+    Param<int32_t> extra_donor_on_;
+#endif
     Param<int32_t> halation_radius_0_, halation_radius_1_, halation_radius_2_;
     Param<int32_t> runtime_features_;
     /// The byte frames' primaries as FOTUFILM_CONFIG_BYTE_BASIS packs them: bit 0 the input is
@@ -1269,6 +1300,9 @@ private:
     /// The film grain tiles this pipeline last read: the store's buffer, kept alive, and this
     /// pipeline's own view of its floats, which carries the device copy.
     Buffer<float> film_tiles_host_, film_tiles_buffer_;
+#if !defined(FOTUFILM_HALIDE_AOT_GENERATOR)
+    Buffer<float> extra_donor_host_, extra_donor_buffer_;
+#endif
     uint64_t lut_cache_id_ = 0;
     Buffer<float> extended_configuration_;
     int32_t extended_configuration_floats_ = 0;

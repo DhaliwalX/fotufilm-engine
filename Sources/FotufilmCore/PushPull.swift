@@ -32,14 +32,17 @@ public struct FilmDevelopmentCondition: Sendable {
     public var basis: FilmDevelopmentBasis
     /// Complete dye-forming layer curves at this condition.
     public var curves: [CharacteristicCurve]
-    /// Complete donor-layer curves, where the stock coats donor records.
-    public var donorCurves: [CharacteristicCurve]
+    /// Donor-layer curves at this condition, or `nil` to inherit the stock's reference `donorLayers`
+    /// curves unchanged.
+    public var donorCurves: [CharacteristicCurve]?
 
     public var grainStrength: Float?
     public var grainSizeMM: Float?
     public var grainLayerWeights: [Float]?
     public var grainFogDensity: Float?
     public var adjacencyStrength: Float?
+    public var couplerScale: Float?
+    public var couplerGeometry: CouplerGeometry?
 
     public init(
         stops: Float,
@@ -48,12 +51,14 @@ public struct FilmDevelopmentCondition: Sendable {
         exposureIndex: Float? = nil,
         basis: FilmDevelopmentBasis,
         curves: [CharacteristicCurve],
-        donorCurves: [CharacteristicCurve] = [],
+        donorCurves: [CharacteristicCurve]? = nil,
         grainStrength: Float? = nil,
         grainSizeMM: Float? = nil,
         grainLayerWeights: [Float]? = nil,
         grainFogDensity: Float? = nil,
-        adjacencyStrength: Float? = nil
+        adjacencyStrength: Float? = nil,
+        couplerScale: Float? = nil,
+        couplerGeometry: CouplerGeometry? = nil
     ) {
         self.stops = stops
         self.label = label
@@ -67,6 +72,8 @@ public struct FilmDevelopmentCondition: Sendable {
         self.grainLayerWeights = grainLayerWeights
         self.grainFogDensity = grainFogDensity
         self.adjacencyStrength = adjacencyStrength
+        self.couplerScale = couplerScale
+        self.couplerGeometry = couplerGeometry
     }
 }
 
@@ -158,22 +165,28 @@ public extension FilmStock {
                 stock: name, condition: condition.label,
                 reason: "\(condition.curves.count) layer curves; expected \(curves.count)")
         }
-        guard condition.donorCurves.count == donorLayers.count else {
-            throw FilmDevelopmentError.invalidProfile(
-                stock: name, condition: condition.label,
-                reason: "\(condition.donorCurves.count) donor curves; expected \(donorLayers.count)")
+        if let donorCurves = condition.donorCurves {
+            guard donorCurves.count == donorLayers.count else {
+                throw FilmDevelopmentError.invalidProfile(
+                    stock: name, condition: condition.label,
+                    reason: "\(donorCurves.count) donor curves; expected \(donorLayers.count)")
+            }
         }
 
         var developed = self
         developed.curves = condition.curves
-        for index in developed.donorLayers.indices {
-            developed.donorLayers[index].curve = condition.donorCurves[index]
+        if let donorCurves = condition.donorCurves {
+            for index in developed.donorLayers.indices {
+                developed.donorLayers[index].curve = donorCurves[index]
+            }
         }
         if let value = condition.grainStrength { developed.grainStrength = value }
         if let value = condition.grainSizeMM { developed.grainSizeMM = value }
         if let value = condition.grainLayerWeights { developed.grainLayerWeights = value }
         if let value = condition.grainFogDensity { developed.grainFogDensity = value }
         if let value = condition.adjacencyStrength { developed.adjacencyStrength = value }
+        if let value = condition.couplerGeometry { developed.couplerGeometry = value }
+        if let value = condition.couplerScale { developed.developmentCouplerScale = value }
         return developed
     }
 

@@ -37,15 +37,21 @@ public extension FilmStockDefinition {
             for row in rows { try check(field, row, count: shape.1, range) }
         }
 
-        guard (1...FilmStockDefinition.layeredTransportSchemaVersion).contains(schemaVersion) else {
+        guard (1...FilmStockDefinition.dirChemistrySchemaVersion).contains(schemaVersion) else {
             throw fail("schemaVersion",
                        "is \(schemaVersion); this build requires "
-                           + "1, 2 or 3")
+                           + "1, 2, 3 or 4")
         }
-        guard (schemaVersion == 3) == (layeredTransport != nil) else {
-            throw fail("layeredTransport", "layered transport requires schema 3 and schema 3 requires a transport definition")
+        if schemaVersion <= FilmStockDefinition.currentSchemaVersion && layeredTransport != nil {
+            throw fail("layeredTransport", "layered transport requires schema 3 or 4")
+        }
+        if schemaVersion == FilmStockDefinition.layeredTransportSchemaVersion && layeredTransport == nil {
+            throw fail("layeredTransport", "schema 3 requires a transport definition")
         }
         if let layeredTransport {
+            if (donorLayers?.count ?? 0) > 1 {
+                throw fail("donorLayers", "layered transport supports at most one donor layer")
+            }
             do { try layeredTransport.validate() }
             catch { throw fail("layeredTransport", error.localizedDescription) }
             // Model selection chooses the optical operator. Retain the independently
@@ -134,7 +140,7 @@ public extension FilmStockDefinition {
             throw fail("sensitivity", "row \(index) sums to zero and cannot be normalised")
         }
 
-        try spectral.validate(fail: fail)
+        try spectral.validate(schemaVersion: schemaVersion, fail: fail)
 
         // `curves` declares how many capture layers the emulsion has; every other per-layer
         // field is then checked against that count rather than against a literal, so a stock
@@ -168,6 +174,11 @@ public extension FilmStockDefinition {
                        + "\(FilmStock.supportedDonorLayerCounts.upperBound); see "
                        + "FilmStock.supportedDonorLayerCounts")
         }
+        if donors.count > 1 && schemaVersion < FilmStockDefinition.dirChemistrySchemaVersion {
+            throw fail("donorLayers", "multiple donor layers require schema version 4")
+        }
+        let releaseGammaRange: ClosedRange<Float> =
+            schemaVersion >= FilmStockDefinition.dirChemistrySchemaVersion ? 1...4 : 0.25...4
         for (index, donor) in donors.enumerated() {
             let field = "donorLayers[\(index)]"
             try Self.checkText(donor.name, field: "\(field).name", limit: 16,
@@ -193,7 +204,24 @@ public extension FilmStockDefinition {
             // The same bound as `couplerInhibition`: a release row is the same physical
             // quantity, stated for a donor record instead of a dye-forming one.
             try check("\(field).inhibition", donor.inhibition, count: layers, 0...4)
-            try check("\(field).releaseGamma", donor.releaseGamma ?? 1, 0.25...4)
+            if schemaVersion >= FilmStockDefinition.dirChemistrySchemaVersion {
+                // Schema 4 routes each non-dye donor through a single driving optical record `r_m`
+                // (`<= 1` positive receiver entry). Zero active entries (`[0, 0, 0]`) remain legal
+                // so Film Designer and calibration packs can dial a coated donor's amplitude down
+                // to zero without tearing down its spectral sensitivity or curve slot.
+                let activeReceivers = donor.inhibition.filter { $0 > 0 }.count
+                guard activeReceivers <= 1 else {
+                    throw fail("\(field).inhibition",
+                               "schema 4 donor layers may target at most one receiver layer")
+                }
+            }
+            try check("\(field).releaseGamma", donor.releaseGamma ?? 1, releaseGammaRange)
+            if let releaseKappa = donor.releaseKappa, releaseKappa != 1,
+               schemaVersion < FilmStockDefinition.dirChemistrySchemaVersion {
+                throw fail("\(field).releaseKappa",
+                           "non-unit donor releaseKappa requires schema version 4")
+            }
+            try check("\(field).releaseKappa", donor.releaseKappa ?? 1, 0.05...20)
             if let depth = donor.depthUM {
                 try check("\(field).depthUM", depth, -1000...1000)
             }
@@ -236,27 +264,45 @@ public extension FilmStockDefinition {
 
         try check("couplerInhibition", couplerInhibition, shape: (layers, layers), 0...4)
         try check("couplerReleaseGamma", couplerReleaseGamma ?? [1, 1, 1],
-                  count: layers, 0.25...4)
-        if let couplerGeometry {
-            try check("couplerGeometry.layerDepthUM", couplerGeometry.layerDepthUM,
+                  count: layers, releaseGammaRange)
+        if let couplerReleaseKappa, couplerReleaseKappa != [1, 1, 1],
+           schemaVersion < FilmStockDefinition.dirChemistrySchemaVersion {
+            throw fail("couplerReleaseKappa", "couplerReleaseKappa requires schema version 4")
+        }
+        try check("couplerReleaseKappa", couplerReleaseKappa ?? [1, 1, 1],
+                  count: layers, 0.05...20)
+        func checkCouplerGeometry(_ geometry: CouplerGeometry, field: String) throws {
+            try check("\(field).layerDepthUM", geometry.layerDepthUM,
                       count: layers, -1000...1000)
             // Gaps are read off neighbouring array entries, so a stack listed out of order would
             // silently pair the wrong layers across the wrong interlayer.
-            let depths = couplerGeometry.layerDepthUM
+            let depths = geometry.layerDepthUM
             let rising = zip(depths, depths.dropFirst()).allSatisfy { $0 < $1 }
             let falling = zip(depths, depths.dropFirst()).allSatisfy { $0 > $1 }
             guard rising || falling else {
-                throw fail("couplerGeometry.layerDepthUM",
+                throw fail("\(field).layerDepthUM",
                            "must be strictly monotonic so neighbouring entries are "
                            + "neighbouring layers; got \(depths)")
             }
-            try check("couplerGeometry.interlayerTransmission",
-                      couplerGeometry.interlayerTransmission,
-                      count: depths.count - 1, 0...1)
+            let transmissionUpper: Float = schemaVersion >= FilmStockDefinition.dirChemistrySchemaVersion
+                ? 0.88 : 1
+            try check("\(field).interlayerTransmission",
+                      geometry.interlayerTransmission,
+                      count: depths.count - 1, 0...transmissionUpper)
             // Non-negative: a negative release would have a layer *develop* its neighbours, which
             // `releaseSolvedFromInterImage` refuses to return in the first place.
-            try check("couplerGeometry.release", couplerGeometry.release, count: layers, 0...4)
-            try check("couplerGeometry.selfRetention", couplerGeometry.selfRetention, 0...1)
+            try check("\(field).release", geometry.release, count: layers, 0...4)
+            try check("\(field).selfRetention", geometry.selfRetention, 0...1)
+            if geometry.receiverSusceptibility != [1, 1, 1],
+               schemaVersion < FilmStockDefinition.dirChemistrySchemaVersion {
+                throw fail("\(field).receiverSusceptibility",
+                           "receiverSusceptibility requires schema version 4")
+            }
+            try check("\(field).receiverSusceptibility",
+                      geometry.receiverSusceptibility, count: layers, 0...4)
+        }
+        if let couplerGeometry {
+            try checkCouplerGeometry(couplerGeometry, field: "couplerGeometry")
         }
         try check("couplerDiffusionMM", couplerDiffusionMM, 0...2)
         try check("chromaticFringeAmount", chromaticFringeAmount ?? 0, 0...1)
@@ -392,16 +438,17 @@ public extension FilmStockDefinition {
                     }
                     try curve.validate(field: "\(field).curves[\(curveIndex)]", fail: fail)
                 }
-                let donorCurves = condition.donorCurves ?? []
-                guard donorCurves.count == donors.count else {
-                    throw fail("\(field).donorCurves",
-                               "has \(donorCurves.count) entries; expected \(donors.count)")
-                }
-                for (curveIndex, curve) in donorCurves.enumerated() {
-                    guard curve.sampled == nil else {
-                        throw fail("\(field).donorCurves[\(curveIndex)].sampled", "sampled records are supported only for dye-forming film curves")
+                if let donorCurves = condition.donorCurves {
+                    guard donorCurves.count == donors.count else {
+                        throw fail("\(field).donorCurves",
+                                   "has \(donorCurves.count) entries; expected \(donors.count)")
                     }
-                    try curve.validate(field: "\(field).donorCurves[\(curveIndex)]", fail: fail)
+                    for (curveIndex, curve) in donorCurves.enumerated() {
+                        guard curve.sampled == nil else {
+                            throw fail("\(field).donorCurves[\(curveIndex)].sampled", "sampled records are supported only for dye-forming film curves")
+                        }
+                        try curve.validate(field: "\(field).donorCurves[\(curveIndex)]", fail: fail)
+                    }
                 }
                 if let value = condition.grainStrength {
                     try check("\(field).grainStrength", value, 0...1)
@@ -417,6 +464,118 @@ public extension FilmStockDefinition {
                 }
                 if let value = condition.adjacencyStrength {
                     try check("\(field).adjacencyStrength", value, 0...4)
+                }
+                if let value = condition.couplerScale {
+                    if schemaVersion < FilmStockDefinition.dirChemistrySchemaVersion {
+                        throw fail("\(field).couplerScale",
+                                   "condition couplerScale requires schema version 4")
+                    }
+                    try check("\(field).couplerScale", value, 0...2)
+                }
+                if let geometry = condition.couplerGeometry {
+                    if schemaVersion < FilmStockDefinition.dirChemistrySchemaVersion {
+                        throw fail("\(field).couplerGeometry",
+                                   "condition couplerGeometry requires schema version 4")
+                    }
+                    try checkCouplerGeometry(geometry, field: "\(field).couplerGeometry")
+                }
+            }
+        }
+
+        if schemaVersion >= FilmStockDefinition.dirChemistrySchemaVersion {
+            let resolvedCurves = curves.map(\.curve)
+            let resolvedDonors = donors.map(\.layer)
+            let resolvedKappa = couplerReleaseKappa ?? [1, 1, 1]
+            let resolvedGamma = couplerReleaseGamma ?? [1, 1, 1]
+            let referenceInhibition = couplerGeometry?.matrix() ?? couplerInhibition
+            let referenceLoopGain = FilmEngineInvocation.loopGainGamma1(
+                curves: resolvedCurves,
+                couplerReleaseKappa: resolvedKappa,
+                couplerReleaseGamma: resolvedGamma,
+                inhibition: referenceInhibition,
+                donors: resolvedDonors)
+            guard referenceLoopGain <= FilmEngineInvocation.maximumLoopGain else {
+                throw fail("couplerInhibition",
+                           "loop gain \(referenceLoopGain) exceeds \(FilmEngineInvocation.maximumLoopGain)")
+            }
+            for (index, condition) in (development?.conditions ?? []).enumerated() {
+                let field = "development.conditions[\(index)]"
+                let condCurves = condition.curves.map(\.curve)
+                let condDonors: [DonorCaptureLayer]
+                if let explicitDonorCurves = condition.donorCurves?.map(\.curve) {
+                    condDonors = zip(resolvedDonors, explicitDonorCurves).map { donor, curve in
+                        var updated = donor
+                        updated.curve = curve
+                        return updated
+                    }
+                } else {
+                    condDonors = resolvedDonors
+                }
+                let condInhibition = (condition.couplerGeometry ?? couplerGeometry)?.matrix()
+                    ?? couplerInhibition
+                let rawCondLoopGain = FilmEngineInvocation.loopGainGamma1(
+                    curves: condCurves,
+                    couplerReleaseKappa: resolvedKappa,
+                    couplerReleaseGamma: resolvedGamma,
+                    inhibition: condInhibition,
+                    donors: condDonors)
+                if let explicitScale = condition.couplerScale {
+                    let condLoopGain = explicitScale * rawCondLoopGain
+                    guard condLoopGain <= FilmEngineInvocation.maximumLoopGain else {
+                        throw fail("\(field).couplerInhibition",
+                                   "loop gain \(condLoopGain) exceeds \(FilmEngineInvocation.maximumLoopGain)")
+                    }
+                } else {
+                    // Unscaled push conditions rely on runtime per-receiver-row clamping
+                    // (`effectiveCouplerRowScales`) so steeper push curves do not require baking a
+                    // collateral global `couplerScale < 1`; bound raw unscaled gain against runaway curves.
+                    guard rawCondLoopGain <= FilmEngineInvocation.maximumUnscaledConditionLoopGain else {
+                        throw fail("\(field).couplerInhibition",
+                                   "unscaled condition loop gain \(rawCondLoopGain) exceeds \(FilmEngineInvocation.maximumUnscaledConditionLoopGain)")
+                    }
+                }
+            }
+        }
+
+        if case let .separatedBase(_, imageDyeDensity, minimumDensity) = spectral,
+           imageDyeDensity.contains(where: { $0.contains { $0 < 0 } }) {
+            var maxRanges = (0..<layers).map { k -> Float in
+                let c = curves[k].curve
+                return max(c.dMax - c.dMin, 0)
+            }
+            if let development {
+                for condition in development.conditions {
+                    for k in 0..<layers {
+                        let c = condition.curves[k].curve
+                        maxRanges[k] = max(maxRanges[k], c.dMax - c.dMin)
+                    }
+                }
+            }
+            let dFloor = minimumDensity.min() ?? 0
+            let fogHeadroom = FilmStock.maskFogHeadroom
+            for i in 0..<SpectralGrid.count {
+                var maxDepletion: Float = 0
+                for k in 0..<layers {
+                    maxDepletion += (maxRanges[k] + fogHeadroom[k]) * max(-imageDyeDensity[k][i], 0)
+                }
+                if minimumDensity[i] - maxDepletion < dFloor - 0.005 {
+                    throw fail("spectral.imageDyeDensity",
+                               "mask depletion at \(SpectralGrid.wavelengths[i]) nm drops density below support floor (\(dFloor))")
+                }
+            }
+            if !(isMonochrome ?? false) {
+                for light in NegativeScanCrosstalk.Light.allCases {
+                    let diag = NegativeScanCrosstalk.unmixDiagnostics(
+                        dyes: imageDyeDensity, light: light)
+                    guard diag.determinant.isFinite, diag.determinant >= 1e-3,
+                          let rowSums = diag.equalDensityRowSums,
+                          rowSums.allSatisfy({
+                              $0.isFinite && (0.5...2).contains($0)
+                                  && (0.5...2).contains(1 / $0)
+                          }) else {
+                        throw fail("spectral.imageDyeDensity",
+                                   "signed dye spectra fail scan crosstalk conditioning under \(light.rawValue) light")
+                    }
                 }
             }
         }
@@ -518,7 +677,8 @@ extension FilmStockDefinition.CurveSpec.ComponentSpec {
 }
 
 extension FilmStockDefinition.SpectralSpec {
-    func validate(fail: (String, String) -> FilmStockDefinition.ValidationFailure) throws {
+    func validate(schemaVersion: Int = FilmStockDefinition.currentSchemaVersion,
+                  fail: (String, String) -> FilmStockDefinition.ValidationFailure) throws {
         func checkSamples(_ rows: [[Float]], field: String,
                           range: ClosedRange<Float>, needsSignal: Bool) throws {
             guard rows.count == 3 else {
@@ -550,8 +710,10 @@ extension FilmStockDefinition.SpectralSpec {
         case let .separatedBase(layerSensitivity, imageDyeDensity, minimumDensity):
             try checkSamples(layerSensitivity, field: "spectral.layerSensitivity",
                              range: 0...1e4, needsSignal: true)
+            let dyeRange: ClosedRange<Float> =
+                schemaVersion >= FilmStockDefinition.dirChemistrySchemaVersion ? -1...100 : 0...100
             try checkSamples(imageDyeDensity, field: "spectral.imageDyeDensity",
-                             range: 0...100, needsSignal: false)
+                             range: dyeRange, needsSignal: false)
             guard minimumDensity.count == SpectralGrid.count,
                   minimumDensity.allSatisfy({ $0.isFinite && (0...100).contains($0) }) else {
                 throw fail("spectral.minimumDensity",

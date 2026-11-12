@@ -5,6 +5,7 @@
 #include "../Schedule/Gpu.h"
 #include "../Graph/Frame.h"
 #include "../FotufilmCompiledCache.h"
+#include "ExtraDonorLutStore.h"
 #include "FilmTileStore.h"
 
 #include <algorithm>
@@ -37,8 +38,9 @@ using Halide::Target;
 using Halide::UInt;
 using Halide::Var;
 
-/// The JIT roads keep the film grain tiles as compiler buffers.
+/// The JIT roads keep the film grain tiles and extra donor cubes as compiler buffers.
 using FilmTileStore = BasicFilmTileStore<Buffer<float>>;
+using ExtraDonorLutStore = BasicExtraDonorLutStore<Buffer<float>>;
 
 using namespace fotufilm;
 using namespace fotufilm::gpu;
@@ -387,11 +389,11 @@ public:
             : film_density(configuration, channel, log_exposure, policy_.approximate);
     }
 
-    Expr donor_curve(ImageParam &configuration, Func table, Expr log_exposure) override {
+    Expr donor_curve(ImageParam &configuration, Func table, Expr donor_index,
+                     Expr log_exposure) override {
         return policy_.tabulated_curves
-            ? sample_curve(table, log_exposure, 0)
-            : curve_density(configuration, FOTUFILM_CONFIG_DONOR_CURVE, log_exposure,
-                            policy_.approximate);
+            ? sample_curve(table, log_exposure, donor_index)
+            : donor_density(configuration, donor_index, log_exposure, policy_.approximate);
     }
 
     graph::GrainFields grain_fields(ImageParam &configuration, FrameParams &p, Expr,
