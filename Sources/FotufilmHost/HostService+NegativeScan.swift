@@ -258,8 +258,8 @@ extension HostService {
 
     /// What a scan is read as taken with where its edit leaves that to the file: `id` as an edit
     /// names a camera (`NegativeScanSetup.Camera.name`), and for a measured camera its `name`.
-    static func readCamera(_ source: NegativeScanSource?) -> [String: Any] {
-        let camera = (source ?? NegativeScanSource()).readCamera
+    static func readCamera(_ source: NegativeScanCapture?) -> [String: Any] {
+        let camera = (source ?? NegativeScanCapture()).readCamera
         var read: [String: Any] = ["id": camera.id]
         if let name = camera.name { read["name"] = name }
         return read

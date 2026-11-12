@@ -60,10 +60,10 @@ public enum NegativeScanImport {
     /// What `data` says of how its scan was made and how `decode` decodes it: the camera the
     /// file names and, of a camera RAW, the white it is decoded on and the matrix its channels
     /// are mixed with. The matrix is looked for only where a reading would take it, of a camera
-    /// whose channels are measured (`NegativeScanSource.setup`), and where a decode can show it,
+    /// whose channels are measured (`NegativeScanCapture.setup`), and where a decode can show it,
     /// which a DNG's cannot.
-    public static func source(data: Data, identifierHint: String? = nil) -> NegativeScanSource {
-        var source = NegativeScanSource(
+    public static func source(data: Data, identifierHint: String? = nil) -> NegativeScanCapture {
+        var source = NegativeScanCapture(
             camera: RawDecode.cameraIdentity(data: data, identifierHint: identifierHint))
         guard RawDecode.isRaw(data: data, identifierHint: identifierHint),
               let filter = scanFilter(data: data, identifierHint: identifierHint)

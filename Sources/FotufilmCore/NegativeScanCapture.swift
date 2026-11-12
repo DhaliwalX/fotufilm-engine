@@ -3,7 +3,7 @@ import Foundation
 /// What a scan's file says of how it was made and decoded, which a reading's setup is made of
 /// (`NegativeScanSetup`): the camera, and the white and matrix its decoder used. It belongs to
 /// the decoded scan, not to its edit: another decoder of the same file answers otherwise.
-public struct NegativeScanSource: Equatable, Codable, Sendable {
+public struct NegativeScanCapture: Equatable, Codable, Sendable {
     /// The camera the file names.
     public var camera: CameraIdentity?
     /// The white the file was decoded on: its colour temperature in kelvin, and its chromaticity

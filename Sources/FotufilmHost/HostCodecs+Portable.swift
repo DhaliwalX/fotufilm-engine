@@ -222,7 +222,7 @@ struct PortableScanDecoder: HostScanDecoder {
         }
         let image = HostImage(rgba: scan.rgba, width: scan.width, height: scan.height,
                               contentHeadroom: 1)
-        image.scanSource = NegativeScanSource(camera: scan.camera, kelvin: scan.sceneKelvin,
+        image.scanSource = NegativeScanCapture(camera: scan.camera, kelvin: scan.sceneKelvin,
                                               white: scan.white, matrix: scan.cameraMatrix)
         return image
     }

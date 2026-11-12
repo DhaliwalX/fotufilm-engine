@@ -19,7 +19,7 @@ final class HostNegativeScan {
     let lightFrame: (String) -> NegativeLightFrame?
     /// What the scan's file says of its camera and of how it was decoded, nil where its decoder
     /// does not say: the readings then take a generic camera's channels.
-    let source: NegativeScanSource?
+    let source: NegativeScanCapture?
 
     private let lock = NSLock()
     /// The scan evened under the newest light frame it was asked for.
@@ -36,7 +36,7 @@ final class HostNegativeScan {
     /// The newest plain positive asked for (`positive`), by its framing's key.
     private var plain: (key: String, image: HostImage)?
 
-    init(scan: HostImage, source: NegativeScanSource? = nil,
+    init(scan: HostImage, source: NegativeScanCapture? = nil,
          lightFrame: @escaping (String) -> NegativeLightFrame?) {
         self.scan = scan
         self.source = source

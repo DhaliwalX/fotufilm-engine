@@ -126,7 +126,7 @@ in one place (`WebNativeEdit.Negative.balance`, `.plain` and `.strayLight`):
   a white LED panel, a phone or tablet screen, a halogen lamp or red, green and blue LEDs, seen
   by a generic camera, a film scanner, or a camera with measured channels. A measured camera is
   taken only where the file's decoder says the matrix it mixed the camera's channels with
-  (`NegativeScanSource`), since decoders differ and a dense negative's blue follows the matrix
+  (`NegativeScanCapture`), since decoders differ and a dense negative's blue follows the matrix
   closely. `NegativeScanModel` carries the film's record densities to its spectral density, as
   the print stage does, and through each channel of that setup.
 - **The fit.** The weights each record reads from the scan's three channel densities are the

@@ -588,7 +588,7 @@ final class HostNegativeScanTests: XCTestCase {
         XCTAssertEqual((negative["camera"] as? [String: Any])?["id"] as? String, "generic")
         XCTAssertNil((negative["camera"] as? [String: Any])?["name"])
         let scan = try XCTUnwrap(service.negativeScans.scan(handle))
-        XCTAssertEqual(scan.source, NegativeScanSource())
+        XCTAssertEqual(scan.source, NegativeScanCapture())
 
         // The clear film reads back as it was written, through the file's linear profile.
         let sampled = try JSONSerialization.jsonObject(with: service.call(
@@ -699,14 +699,14 @@ final class HostNegativeScanTests: XCTestCase {
     /// decoder says the matrix it used, the generic one otherwise.
     func testADocumentSaysWhatItsScanIsReadAsTakenWith() {
         let matrix: [Float] = [1.18, -0.09, -0.09, -0.04, 1.52, -0.48, 0.01, -0.25, 1.24]
-        let measured = HostService.readCamera(NegativeScanSource(
+        let measured = HostService.readCamera(NegativeScanCapture(
             camera: CameraIdentity(make: "SONY", model: "ILCE-7CM2"), kelvin: 5100, matrix: matrix))
         XCTAssertEqual(measured["id"] as? String, "sony-ilce-7cm2")
         XCTAssertEqual(measured["name"] as? String, "SONY ILCE-7CM2")
         // A measured camera whose decoder's matrix is not known, one nobody measured, and a
         // decoder that says nothing are all read as the generic camera.
-        for source in [NegativeScanSource(camera: CameraIdentity(make: "SONY", model: "ILCE-7CM2")),
-                       NegativeScanSource(camera: CameraIdentity(make: "Unmeasured", model: "Camera"),
+        for source in [NegativeScanCapture(camera: CameraIdentity(make: "SONY", model: "ILCE-7CM2")),
+                       NegativeScanCapture(camera: CameraIdentity(make: "Unmeasured", model: "Camera"),
                                           matrix: matrix), nil] {
             let read = HostService.readCamera(source)
             XCTAssertEqual(read["id"] as? String, "generic")
@@ -744,7 +744,7 @@ final class HostNegativeScanTests: XCTestCase {
 
         let scan = try CoreImageScanDecoder().decodeScan(url)
         // A file that names no camera says nothing of one.
-        XCTAssertEqual(scan.scanSource, NegativeScanSource())
+        XCTAssertEqual(scan.scanSource, NegativeScanCapture())
         let rgba = scan.scene(width: width, height: height)
         let expected = ColorScience.linearSRGBToRec2020(SIMD3(sample[0], sample[1], sample[2]))
         for c in 0..<3 { XCTAssertEqual(rgba[c], expected[c], accuracy: 0.002) }

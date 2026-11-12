@@ -112,7 +112,7 @@ const product3 = (a, b) =>
   )
 
 // What a scanned negative's reading takes from its RAW file and this decode of it
-// (Sources/FotufilmCore/NegativeScanSource.swift): the camera the file names, the white it was
+// (Sources/FotufilmCore/NegativeScanCapture.swift): the camera the file names, the white it was
 // decoded on (CIE x and y, and its temperature by McCamy's formula, as the desktop's decoder
 // says them) and the matrix its balanced channels were mixed into Rec. 2020 with, nine values by
 // rows. `cameraToXYZ` holds the decoder's own matrix into sRGB with each column at the camera's

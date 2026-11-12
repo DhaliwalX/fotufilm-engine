@@ -11,14 +11,29 @@ extension WebNativeEdit.Negative {
     /// and balances as `balance` says, or with the first reading.
     public var readsModel: Bool { (reading ?? 1) >= 2 }
 
+    /// Whether the edit was made with the reading new scans are made with; one that was not
+    /// keeps its own until it is updated.
+    public var isCurrentReading: Bool { (reading ?? 1) >= Self.currentReading }
+
+    /// The edit moved to the current reading, as Update Reading moves it: where the scan
+    /// `separates`, its camera's channels measured, the dyes separated all the way unless the
+    /// edit had set how far, and a frame that was balanced on its roll still on it.
+    public func updatedReading(separates: Bool) -> WebNativeEdit.Negative {
+        var updated = self
+        updated.reading = Self.currentReading
+        if separates, (crosstalk ?? 0) == 0 { updated.crosstalk = 1 }
+        if roll != nil { updated.balance = .roll }
+        return updated
+    }
+
     /// How far the reading separates the dyes: all the way where a reading through the scan's
     /// light and camera does not say, not at all where the first reading does not.
     public var separation: Float { crosstalk ?? (readsModel ? 1 : 0) }
 
     /// What the reading sees the film through: the edit's light and camera, the camera left to
-    /// what the scan's file says of it (`NegativeScanSource`).
-    public func setup(source: NegativeScanSource? = nil) -> NegativeScanSetup {
-        (source ?? NegativeScanSource()).setup(
+    /// what the scan's file says of it (`NegativeScanCapture`).
+    public func setup(source: NegativeScanCapture? = nil) -> NegativeScanSetup {
+        (source ?? NegativeScanCapture()).setup(
             light: scanLight ?? .white, camera: camera.map(NegativeScanSetup.Camera.init(name:)))
     }
 
@@ -64,7 +79,7 @@ extension WebNativeEdit.Negative {
     /// of the scan's stray light, `flare`, which `border` here still carries; `source` is what
     /// the scan's file says of its camera.
     public func balance(stock: FilmStock, border: SIMD3<Float>, denseEnd: SIMD3<Float>?,
-                        source: NegativeScanSource? = nil,
+                        source: NegativeScanCapture? = nil,
                         flare: SIMD3<Float> = .zero) -> ApproximateNegativeScan.Balance {
         guard readsModel else {
             return ApproximateNegativeScan.balance(
@@ -80,7 +95,7 @@ extension WebNativeEdit.Negative {
     /// The frame read without a film, as Normal reads a negative. Arguments as
     /// `balance(stock:border:denseEnd:source:flare:)`.
     public func plain(border: SIMD3<Float>, denseEnd: SIMD3<Float>?,
-                      source: NegativeScanSource? = nil,
+                      source: NegativeScanCapture? = nil,
                       flare: SIMD3<Float> = .zero) -> PlainNegativeScan {
         guard readsModel else {
             return PlainNegativeScan(

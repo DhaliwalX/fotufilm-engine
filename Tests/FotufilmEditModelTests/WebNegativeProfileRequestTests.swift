@@ -157,13 +157,13 @@ final class WebNegativeProfileRequestTests: XCTestCase {
         let border = SIMD3<Float>(0.4, 0.6, 0.2), dense = SIMD3<Float>(1.1, 1.0, 0.9)
         let roll = ApproximateNegativeScan.RollBalance(colour: [0.94, 1.08], frames: 12, level: 1.2,
                                                        slopes: [0.9, 1.1])
-        let source = NegativeScanSource(
+        let source = NegativeScanCapture(
             camera: CameraIdentity(spectralProfileID: "sony-ilce-7cm2"), kelvin: 5400, white: [0.34, 0.36],
             matrix: [1.18, -0.09, -0.09, -0.04, 1.52, -0.48, 0.01, -0.25, 1.24])
         func object(_ value: some Encodable) throws -> Any {
             try JSONSerialization.jsonObject(with: JSONEncoder().encode(value))
         }
-        let edits: [(WebNativeEdit.Negative, NegativeScanSource?)] = [
+        let edits: [(WebNativeEdit.Negative, NegativeScanCapture?)] = [
             (.init(reading: 2), nil),
             (.init(roll: roll, crosstalk: 0.5, scanLight: .screen, reading: 2, camera: "scanner",
                    balance: .roll, neutral: [0.05, 0.06, 0.03]), nil),
@@ -199,7 +199,7 @@ final class WebNegativeProfileRequestTests: XCTestCase {
     /// camera its scan names, and the reading then takes that camera as the desktop host does.
     func testARequestBringsItsCamerasMeasuredChannels() throws {
         let camera = CameraIdentity(make: "Fotufilm Test", model: "Scan One")
-        let source = NegativeScanSource(
+        let source = NegativeScanCapture(
             camera: camera, kelvin: 5400, white: [0.34, 0.36],
             matrix: [1.18, -0.09, -0.09, -0.04, 1.52, -0.48, 0.01, -0.25, 1.24])
         func band(_ wavelength: Double, _ peak: Double) -> Double {

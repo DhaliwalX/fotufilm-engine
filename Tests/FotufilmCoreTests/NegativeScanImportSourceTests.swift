@@ -219,7 +219,7 @@ final class NegativeScanImportSourceTests: XCTestCase {
     func testAFileThatIsNotRawSaysOnlyItsCamera() throws {
         let png = try XCTUnwrap(Data(base64Encoded:
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="))
-        XCTAssertEqual(NegativeScanImport.source(data: png), NegativeScanSource())
+        XCTAssertEqual(NegativeScanImport.source(data: png), NegativeScanCapture())
         XCTAssertNil(NegativeScanImport.decoderMatrix(data: png))
     }
 }

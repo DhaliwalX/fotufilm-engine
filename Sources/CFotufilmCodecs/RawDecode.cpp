@@ -313,7 +313,7 @@ static void developRaw(const std::string &path, uint32_t options, uint32_t longE
     if (!(greenScale > 0) || !std::isfinite(greenScale))
         throw Failure("The RAW file has an invalid white balance.");
     const float scale = exposure / greenScale / 65535.0f;
-    // What a scan's reading takes the camera's channels through (`NegativeScanSource`). An
+    // What a scan's reading takes the camera's channels through (`NegativeScanCapture`). An
     // exposure under one coloured light is balanced on daylight, not on the white the file says.
     if (!(options & FFC_DECODE_EXPOSURE)) std::copy(matrix, matrix + 9, out.camera_matrix);
     for (int k = 0; k < 9; ++k) matrix[k] *= scale;

@@ -144,7 +144,7 @@ final class PortableCodecsTests: XCTestCase {
         let scan = try PortableScanDecoder().decodeScan(url)
         XCTAssertLessThan(worst(scan, deep: true), 2e-4)
         // Only a camera's RAW says what took it and how it was decoded.
-        XCTAssertEqual(scan.scanSource, NegativeScanSource())
+        XCTAssertEqual(scan.scanSource, NegativeScanCapture())
     }
 
     /// A linear DNG of one colour from a camera named `make` and `model`, whose channels are

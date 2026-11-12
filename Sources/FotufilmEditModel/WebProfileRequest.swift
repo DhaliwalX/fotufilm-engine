@@ -52,7 +52,7 @@ public struct WebProfileRequest: Decodable {
         public let roll: ApproximateNegativeScan.RollBalance?
         /// What the scan's file says of its camera and decoder, which the current reading's
         /// setup is made of.
-        public let source: NegativeScanSource?
+        public let source: NegativeScanCapture?
         /// The measured channels of the camera `source` names, as one record of the cameras the
         /// desktop app carries (`CameraSpectralProfileStore.register(rawtoaces:)`): the browser
         /// carries none inside the builder, and sends the record of a camera it has.

@@ -41,7 +41,7 @@ final class WebNativeEditNegativeReadingTests: XCTestCase {
         let stock = try stock()
         let neutral: [Float] = [0.05, 0.06, 0.03]
         let picked = SIMD3<Float>((0..<3).map { -log10(neutral[$0] / border[$0]) })
-        let source = NegativeScanSource(kelvin: 5200)
+        let source = NegativeScanCapture(kelvin: 5200)
         typealias Mode = ApproximateNegativeScan.BalanceMode
         let cases: [(Negative, NegativeScanSetup, Float, Mode, SIMD3<Float>?)] = [
             (Negative(reading: 2), NegativeScanSetup(light: .white, camera: .generic), 1, .frame, nil),
@@ -86,7 +86,7 @@ final class WebNativeEditNegativeReadingTests: XCTestCase {
         // A file that names a measured camera and its decoder's matrix is read as that camera,
         // unless the edit says what took the scan.
         let profile = try XCTUnwrap(CameraSpectralProfileStore.profile(id: "sony-ilce-7cm2"))
-        let source = NegativeScanSource(
+        let source = NegativeScanCapture(
             camera: CameraIdentity(spectralProfileID: profile.id), kelvin: 5400, white: [0.34, 0.36],
             matrix: [1.18, -0.09, -0.09, -0.04, 1.52, -0.48, 0.01, -0.25, 1.24])
         XCTAssertEqual(Negative(reading: 2).setup(source: source).camera, .profile(profile.id))
@@ -145,6 +145,25 @@ final class WebNativeEditNegativeReadingTests: XCTestCase {
                            accuracy: 1e-6)
         }
         XCTAssertNil(picked.tones(border: border, denseEnd: nil, flare: SIMD3(0.3, 0, 0)).picked)
+    }
+
+    func testUpdateReadingMovesAnEditToTheCurrentReading() {
+        typealias Negative = WebNativeEdit.Negative
+        let roll = ApproximateNegativeScan.RollBalance(colour: [0.9, 1.2], frames: 4)
+        let first = Negative(border: [0.8, 0.5, 0.2], roll: roll, scanLight: .rgb)
+        XCTAssertFalse(first.isCurrentReading)
+        let updated = first.updatedReading(separates: true)
+        XCTAssertTrue(updated.isCurrentReading)
+        XCTAssertEqual(updated.reading, Negative.currentReading)
+        XCTAssertEqual(updated.crosstalk, 1)
+        XCTAssertEqual(updated.balance, .roll)
+        XCTAssertEqual(updated.border, first.border)
+        XCTAssertEqual(updated.roll, roll)
+        XCTAssertEqual(updated.scanLight, .rgb)
+        // A camera nobody measured starts unseparated, and what the edit had set is kept.
+        XCTAssertNil(Negative().updatedReading(separates: false).crosstalk)
+        XCTAssertNil(Negative().updatedReading(separates: false).balance)
+        XCTAssertEqual(Negative(crosstalk: 0.4).updatedReading(separates: true).crosstalk, 0.4)
     }
 
     func testEditsThatReadAlikeShareAKeyAndOthersDoNot() {
