@@ -31,7 +31,8 @@ import {
   denseEnd,
   tonalSlopes,
   frameLight,
-  strayLight,
+  holder,
+  withoutHolder,
   readingFlare,
   netOfFlare,
   estimatedBorder,
@@ -410,7 +411,7 @@ export class RenderSession {
     // film (ApproximateNegativeScan.estimatedFilmBase), which the import read.
     const estimate = (readsModel(edit.negative) && image.negative?.base) || kept.border
     const border = edit.negative.border ?? estimate
-    const framing = JSON.stringify([
+    const framingOf = JSON.stringify([
       border,
       edit.rotation,
       edit.flip,
@@ -420,10 +421,25 @@ export class RenderSession {
       edit.perspectiveV || 0,
       edit.perspectiveH || 0,
     ])
+    // A reading through the scan's light and camera leaves the scan's holder out of what it
+    // measures of the frame; the first reading measures as it did.
+    let shown = null
+    if (readsModel(edit.negative)) {
+      const key = JSON.stringify(border)
+      if (!kept.holders.has(key)) {
+        const scan = await whole()
+        if (!scan) return null
+        if (kept.holders.size >= 8) kept.holders.clear()
+        kept.holders.set(key, holder(border, scan.pixels, scan.width, scan.height))
+      }
+      shown = kept.holders.get(key)
+    }
+    const framing = JSON.stringify([framingOf, shown?.light ?? null])
     let framed = kept.framings.find((item) => item.key === framing)
     if (!framed) {
       const preview = await read(edit)
       if (!preview) return null
+      if (shown) preview.pixels = withoutHolder(preview.pixels, shown.light)
       framed = {
         key: framing,
         border,
@@ -434,19 +450,13 @@ export class RenderSession {
       kept.framings.push(framed)
       if (kept.framings.length > 8) kept.framings.shift()
     }
-    // The holder is looked for only where the edit leaves the stray light to be measured.
-    let holder = null
-    if (readsModel(edit.negative) && edit.negative.flare == null) {
-      const key = JSON.stringify(border)
-      if (!kept.holders.has(key)) {
-        const scan = await whole()
-        if (!scan) return null
-        if (kept.holders.size >= 8) kept.holders.clear()
-        kept.holders.set(key, strayLight(border, scan.pixels, scan.width, scan.height))
-      }
-      holder = kept.holders.get(key)
-    }
-    const flare = readingFlare(edit.negative, border, framed.light, holder)
+    // The holder's stray light is taken only where the edit leaves it to be measured.
+    const flare = readingFlare(
+      edit.negative,
+      border,
+      framed.light,
+      edit.negative.flare == null ? (shown?.stray ?? null) : null,
+    )
     const measured = JSON.stringify(flare)
     if (!framed.measures.has(measured)) {
       const { preview } = framed

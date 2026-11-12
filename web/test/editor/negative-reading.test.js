@@ -9,6 +9,8 @@ import {
   estimatedBorder,
   filmBase,
   frameLight,
+  holder,
+  withoutHolder,
   netOfFlare,
   pickedNeutral,
   readingFlare,
@@ -247,6 +249,17 @@ test("a scan's stray light is read from its holder only where it plainly shows o
   found.forEach((v, c) => assert.ok(Math.abs(v - stray[c]) < 0.06 * stray[c], String(v)));
   const light = frameLight(held, width, height);
   light.forEach((v, c) => assert.ok(v > 20 * found[c]));
+
+  // The holder is left out of what a frame measures: its densest end is then the picture's.
+  const wide = draw(0.2, stray);
+  const shown = holder(border, wide, width, height);
+  shown.light.forEach((v, c) => assert.ok(Math.abs(v - stray[c]) < 0.06 * stray[c]));
+  assert.deepEqual(shown.stray, strayLight(border, wide, width, height));
+  assert.ok(denseEnd(border, wide, width, height)[1] > 3);
+  const film = withoutHolder(wide, shown.light);
+  const dense = denseEnd(border, film, width, height);
+  assert.ok(dense[1] > 1.1 && dense[1] < 1.6, String(dense[1]));
+  assert.equal(holder(border, draw(0, null), width, height), null);
 
   // The film filling the scan, a dense sky reaching into its middle, a lamp at its corner, a
   // grey mask no darker than the film, and a holder that shows no light have none to measure.

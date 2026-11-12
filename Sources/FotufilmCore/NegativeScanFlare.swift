@@ -27,14 +27,40 @@ extension ApproximateNegativeScan {
         return SIMD3<Float>(sum / Double(count))
     }
 
-    /// The stray light of a whole scan that shows its holder, linear scan RGB, read from the
-    /// holder. The holder is taken to be in view only where the darkest twentieth of the scan
-    /// lies around its edge, is even to within a stop, and is darker than the densest film in
-    /// the scan's middle by a stop or more in every channel: a dense sky or a lamp at the
-    /// picture's edge is none of these. The stray light is then that twentieth's lower quartile,
-    /// no more than the largest share of the middle's average light a scan's is set to. Nil
-    /// where no holder shows, or the holder shows no light.
+    /// The stray light of a whole scan that shows its holder, linear scan RGB: what its
+    /// holder shows (`holderLight`), no more than the largest share of the scan's middle's
+    /// average light a scan's is set to. Nil where no holder shows, or it shows no light.
     public static func strayLight(border: SIMD3<Float>, preview: ImageBuffer) -> SIMD3<Float>? {
+        holder(border: border, preview: preview)?.stray
+    }
+
+    /// The light a whole scan's holder shows, linear scan RGB, which passes none of its own.
+    /// The holder is taken to be in view only where the darkest twentieth of the scan lies
+    /// around its edge, is even to within a stop, and is darker than the densest film in the
+    /// scan's middle by a stop or more in every channel: a dense sky or a lamp at the picture's
+    /// edge is none of these. Its light is that twentieth's lower quartile. Nil where no holder
+    /// shows, or the holder shows no light.
+    public static func holderLight(border: SIMD3<Float>, preview: ImageBuffer) -> SIMD3<Float>? {
+        holder(border: border, preview: preview)?.light
+    }
+
+    /// A framed picture with the scan's holder left out, for what a reading measures of the
+    /// frame: its densest end, which times the print, would otherwise be the holder's, where a
+    /// scan shows much of one. A pixel is the holder's where every channel is within a stop of
+    /// `holder`, the light it shows (`holderLight`); it is made no number, which the measures
+    /// pass over.
+    public static func withoutHolder(_ preview: ImageBuffer, holder: SIMD3<Float>) -> ImageBuffer {
+        var film = preview
+        for i in 0..<preview.pixelCount
+        where (0..<3).allSatisfy({ !(preview.planes[$0][i] > 2 * holder[$0]) }) {
+            for c in 0..<3 { film.planes[c][i] = .nan }
+        }
+        return film
+    }
+
+    /// Both of the above from one look at the scan.
+    public static func holder(border: SIMD3<Float>, preview: ImageBuffer)
+        -> (light: SIMD3<Float>, stray: SIMD3<Float>)? {
         let width = preview.width, height = preview.height
         guard width >= 16, height >= 16,
               (0..<3).allSatisfy({ border[$0].isFinite && border[$0] > 0 }) else { return nil }
@@ -72,15 +98,16 @@ extension ApproximateNegativeScan {
             for c in 0..<3 { middle[c].append(pixel[c]) }
         }
         guard middle[0].count >= 16 else { return nil }
-        var stray = SIMD3<Float>.zero
+        var light = SIMD3<Float>.zero, stray = SIMD3<Float>.zero
         for c in 0..<3 {
             let values = dark.map { preview.planes[c][$0.index] }.map { max($0, 0) }.sorted()
             let holder = values[(count - 1) / 4]
             let film = middle[c].sorted()
             guard holder * 2 <= film[(film.count - 1) / 1000] else { return nil }
             let mean = film.reduce(Float(0), +) / Float(film.count)
+            light[c] = holder
             stray[c] = min(holder, flareShares.upperBound * mean)
         }
-        return stray.max() > 0 ? stray : nil
+        return light.max() > 0 ? (light, stray) : nil
     }
 }

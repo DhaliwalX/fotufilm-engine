@@ -132,6 +132,12 @@ export function frameLight(pixels, width, height) {
 // the middle's average light an edit's flare can be. Null where no holder shows, or it shows no
 // light.
 export function strayLight(border, pixels, width, height) {
+  return holder(border, pixels, width, height)?.stray ?? null;
+}
+
+// The light a whole scan's holder shows (`light`) and the stray light read from it (`stray`,
+// above): both from one look at the scan. Null where no holder shows.
+export function holder(border, pixels, width, height) {
   if (width < 16 || height < 16 || !border.every((v) => Number.isFinite(v) && v > 0)) return null;
   const lit = [];
   for (let index = 0; index < width * height; index++) {
@@ -163,16 +169,31 @@ export function strayLight(border, pixels, width, height) {
     for (let c = 0; c < 3; c++) middle[c].push(Math.max(pixels[index * 4 + c], 0));
   }
   if (middle[0].length < 16) return null;
-  const stray = [0, 0, 0];
+  const light = [0, 0, 0],
+    stray = [0, 0, 0];
   for (let c = 0; c < 3; c++) {
     const values = dark.map(({ index }) => Math.max(pixels[index * 4 + c], 0)).sort((a, b) => a - b);
-    const holder = values[Math.floor((count - 1) / 4)];
+    const shown = values[Math.floor((count - 1) / 4)];
     const film = middle[c].sort((a, b) => a - b);
-    if (holder * 2 > film[Math.floor((film.length - 1) / 1000)]) return null;
+    if (shown * 2 > film[Math.floor((film.length - 1) / 1000)]) return null;
     const mean = film.reduce((a, b) => a + b, 0) / film.length;
-    stray[c] = Math.min(holder, FLARE_SHARES[1] * mean);
+    light[c] = shown;
+    stray[c] = Math.min(shown, FLARE_SHARES[1] * mean);
   }
-  return Math.max(...stray) > 0 ? stray : null;
+  return Math.max(...light) > 0 ? { light, stray } : null;
+}
+
+// A framed picture with the scan's holder left out, for what a reading measures of the frame:
+// its densest end, which times the print, would otherwise be the holder's where a scan shows
+// much of one. A pixel is the holder's where every channel is within a stop of the light the
+// holder shows; it is made no number, which the measures pass over. Mirrors
+// ApproximateNegativeScan.withoutHolder.
+export function withoutHolder(pixels, light) {
+  const film = new Float32Array(pixels);
+  for (let i = 0; i < film.length; i += 4)
+    if ([0, 1, 2].every((c) => !(pixels[i + c] > 2 * light[c])))
+      for (let c = 0; c < 3; c++) film[i + c] = NaN;
+  return film;
 }
 
 // The stray light a reading takes off the scan: the edit's share of the frame's `light`

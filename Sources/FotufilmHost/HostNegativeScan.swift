@@ -30,9 +30,9 @@ final class HostNegativeScan {
     /// What framings measure (`Measure`) net of the stray light a reading takes off, which
     /// every film reads.
     private var measures: [(key: String, measure: ApproximateNegativeScan.RollBalance.Measure)] = []
-    /// The stray light the whole scan's holder shows, by clear film and light frame; none where
-    /// it shows no holder.
-    private var holders: [String: SIMD3<Float>?] = [:]
+    /// The light the whole scan's holder shows and the stray light read from it, by clear film
+    /// and light frame; none where it shows no holder.
+    private var holders: [String: (light: SIMD3<Float>, stray: SIMD3<Float>)?] = [:]
     /// The newest plain positive asked for (`positive`), by its framing's key.
     private var plain: (key: String, image: HostImage)?
 
@@ -80,18 +80,20 @@ final class HostNegativeScan {
         return border
     }
 
-    /// The stray light the whole scan's holder shows against `border`, under the light frame
-    /// `id` (`ApproximateNegativeScan.strayLight`); nil where the scan shows no holder.
-    func holderLight(border: SIMD3<Float>, light id: String?) throws -> SIMD3<Float>? {
+    /// The light the whole scan's holder shows against `border`, under the light frame `id`,
+    /// and the stray light read from it (`ApproximateNegativeScan.holderLight`, `.strayLight`);
+    /// nil where the scan shows no holder.
+    func holder(border: SIMD3<Float>, light id: String?) throws
+        -> (light: SIMD3<Float>, stray: SIMD3<Float>)? {
         let key = "\(id ?? "")|\(border)"
         if let kept = lock.withLock({ holders[key] }) { return kept }
-        let stray = ApproximateNegativeScan.strayLight(
+        let found = ApproximateNegativeScan.holder(
             border: border, preview: Self.preview(try image(light: id)))
         lock.withLock {
             if holders.count >= 8 { holders.removeAll() }
-            holders[key] = .some(stray)
+            holders[key] = .some(found)
         }
-        return stray
+        return found
     }
 
     /// The reading of a framing on `stock` as the edit's `negative` says to read it
@@ -126,24 +128,30 @@ final class HostNegativeScan {
             throw Self.invalidBorder
         }
         let border = SIMD3(border[0], border[1], border[2])
+        // A reading through the scan's light and camera leaves the scan's holder out of what
+        // it measures of the frame; the first reading measures as it did.
+        let holder = negative.readsModel ? try self.holder(border: border, light: id) : nil
+        let frameKey = "\(key)|\(holder.map { "\($0.light)" } ?? "")"
         let frame: (planes: ImageBuffer, light: SIMD3<Float>?)
-        if let kept = lock.withLock({ frames.first { $0.key == key } }) {
+        if let kept = lock.withLock({ frames.first { $0.key == frameKey } }) {
             frame = (kept.planes, kept.light)
         } else {
             let framed = try preview()
-            let planes = Self.planes(framed.rgba, width: framed.width, height: framed.height)
+            var planes = Self.planes(framed.rgba, width: framed.width, height: framed.height)
+            if let holder {
+                planes = ApproximateNegativeScan.withoutHolder(planes, holder: holder.light)
+            }
             frame = (planes, ApproximateNegativeScan.frameLight(preview: planes))
             lock.withLock {
-                frames.removeAll { $0.key == key }
-                frames.append((key, frame.planes, frame.light))
+                frames.removeAll { $0.key == frameKey }
+                frames.append((frameKey, frame.planes, frame.light))
                 if frames.count > 8 { frames.removeFirst() }
             }
         }
-        // The holder is looked for only where the edit leaves the stray light to be measured.
-        let holder = negative.readsModel && negative.flare == nil
-            ? try holderLight(border: border, light: id) : nil
-        let flare = negative.strayLight(border: border, frameLight: frame.light, holder: holder)
-        let measured = "\(key)|\(flare)"
+        // The holder's stray light is taken only where the edit leaves it to be measured.
+        let flare = negative.strayLight(border: border, frameLight: frame.light,
+                                        holder: negative.flare == nil ? holder?.stray : nil)
+        let measured = "\(frameKey)|\(flare)"
         if let kept = lock.withLock({ measures.first { $0.key == measured } }) {
             return (border, flare, kept.measure)
         }

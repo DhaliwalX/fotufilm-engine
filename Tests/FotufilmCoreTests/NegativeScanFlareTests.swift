@@ -48,6 +48,30 @@ final class NegativeScanFlareTests: XCTestCase {
         }
     }
 
+    /// A scan that shows much of its holder would be timed on it: the holder is the densest
+    /// thing in view. Left out, the frame's densest end is the picture's own.
+    func testTheHolderIsLeftOutOfWhatAFrameMeasures() throws {
+        let stray = border * 0.0006
+        let image = scan(margin: 0.2, holder: stray, density: picture)
+        let holder = try XCTUnwrap(ApproximateNegativeScan.holderLight(border: border, preview: image))
+        for c in 0..<3 { XCTAssertEqual(holder[c], stray[c], accuracy: 0.06 * stray[c]) }
+        // With the holder in the frame's central part, its densest end is the holder's.
+        let timed = try XCTUnwrap(ApproximateNegativeScan.denseEnd(border: border, preview: image))
+        XCTAssertGreaterThan(timed.y, 3)
+        let film = ApproximateNegativeScan.withoutHolder(image, holder: holder)
+        let dense = try XCTUnwrap(ApproximateNegativeScan.denseEnd(border: border, preview: film))
+        let own = try XCTUnwrap(ApproximateNegativeScan.denseEnd(
+            border: border, preview: scan(margin: 0, holder: nil, density: picture)))
+        // The film here shows the picture's middle three fifths, a little short of its densest.
+        for c in 0..<3 {
+            XCTAssertLessThan(dense[c], own[c] + 0.01)
+            XCTAssertGreaterThan(dense[c], own[c] - 0.2)
+        }
+        // The picture's own pixels are all kept.
+        let kept = (0..<film.pixelCount).filter { !film.planes[1][$0].isNaN }.count
+        XCTAssertEqual(Float(kept) / Float(film.pixelCount), 0.36, accuracy: 0.02)
+    }
+
     func testAScanThatShowsNoHolderHasNoneToMeasure() {
         // The film fills the scan.
         XCTAssertNil(ApproximateNegativeScan.strayLight(
