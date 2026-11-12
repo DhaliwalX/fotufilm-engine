@@ -35,7 +35,7 @@ import {
   positiveSource,
 } from './negative-reading.js'
 import { rolledDenseEnd } from './negative-document.js'
-import { rampCurve, toneHistogram, toneRamp } from './tone-curve.js'
+import { rampCurve, toneRamp } from './tone-curve.js'
 import {
   assetUrl,
   sceneScreenMeter,
@@ -709,7 +709,7 @@ export class RenderSession {
             ? await developer.develop(ramp, rampControls, rendering, stale, rampOutput)
             : await developNormal(ramp, rampControls, rendering, stale, rampOutput)
           if (!developed || stale()) return null
-          return { toneCurve: { ...rampCurve(developed.pixels), histogram: toneHistogram(source) } }
+          return { toneCurve: rampCurve(developed.pixels) }
         }
         const developed = developer
           ? await developer.develop(film, controls, rendering, stale, output)

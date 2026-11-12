@@ -33,7 +33,10 @@ abstract interface class RenderHost {
   ViewState get view;
   Json? stockById(String? id);
   List<Json> get stocks;
-  bool get histogramOpen;
+
+  /// Whether the developed picture's tones are drawn: by the Histogram panel, or behind the
+  /// tone curve.
+  bool get histogramShown;
   bool get formatDetail;
 
   /// The film rows on screen ('' for Normal): only their pictures develop.
@@ -307,14 +310,22 @@ class Renderer {
 
   Future<void> _runBackground() async {
     final doc = host.active;
-    if (doc == null || _running || playing || doc.history.group != null) return;
+    if (doc == null || _running || playing) return;
     _running = true;
     _moreShown = false;
     try {
-      if (host.histogramOpen) await _histogram(doc);
-      await _presetThumbnails(doc);
-      await _filmThumbnails(doc);
-      await _formatThumbnails(doc);
+      if (host.histogramShown) {
+        await _histogram(doc);
+      } else {
+        // Nothing draws it: what shows it next waits for the tones of the picture then shown.
+        host.measured(null);
+      }
+      // A slider held still has its picture measured; the small pictures wait until it is let go.
+      if (doc.history.group == null) {
+        await _presetThumbnails(doc);
+        await _filmThumbnails(doc);
+        await _formatThumbnails(doc);
+      }
     } catch (_) {
       // Small pictures are a convenience; the next settle tries again.
     } finally {

@@ -1,6 +1,8 @@
 // The inspector's tone curve, above its heading: how the edit's film, output medium and grade
-// carry each input tone, per channel, over the photograph's own tones on the same input axis.
+// carry each input tone, per channel, over the developed picture's tones, which follow the edit
+// as the curve does.
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
 
@@ -10,7 +12,7 @@ import '../../model/tone_curve.dart';
 import '../theme/theme.dart';
 import '../workspace/histogram_panel.dart' show histogramColors;
 
-class ToneCurveChart extends StatelessWidget {
+class ToneCurveChart extends StatefulWidget {
   const ToneCurveChart({super.key, required this.editor, this.padding = EdgeInsets.zero});
   final EditorModel editor;
 
@@ -18,22 +20,59 @@ class ToneCurveChart extends StatelessWidget {
   final EdgeInsets padding;
 
   @override
+  State<ToneCurveChart> createState() => _ToneCurveChartState();
+}
+
+class _ToneCurveChartState extends State<ToneCurveChart> {
+  // The curve, and the editor for the picture's tones as the renderer measures them.
+  late Listenable _changes;
+
+  @override
+  void initState() {
+    super.initState();
+    _watch();
+  }
+
+  @override
+  void didUpdateWidget(ToneCurveChart old) {
+    super.didUpdateWidget(old);
+    if (identical(old.editor, widget.editor)) return;
+    old.editor.toneCurve.chart(false);
+    _watch();
+  }
+
+  void _watch() {
+    final editor = widget.editor;
+    _changes = Listenable.merge([editor.toneCurve, editor]);
+    // While the chart is shown the renderer measures the developed picture for it.
+    editor.toneCurve.chart(true);
+  }
+
+  @override
+  void dispose() {
+    widget.editor.toneCurve.chart(false);
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) => ListenableBuilder(
-        listenable: editor.toneCurve,
+        listenable: _changes,
         builder: (context, _) {
+          final editor = widget.editor;
           final curve = (editor.toneCurve..follow()).curve;
           if (curve == null) return const SizedBox.shrink();
           final palette = Palette.of(context);
           return Padding(
-            padding: padding,
+            padding: widget.padding,
             child: Semantics(
               label: 'Tone curve',
               value: _description(curve),
               child: AspectRatio(
                 aspectRatio: 280 / 168,
                 child: CustomPaint(
-                  painter: _ToneCurvePainter(
+                  painter: ToneCurvePainter(
                     curve: curve,
+                    tones: editor.histogram?.luma,
                     palette: palette,
                     colors: histogramColors(palette.dark),
                     labelStyle: editorText(context, size: 8, color: palette.muted),
@@ -52,15 +91,19 @@ class ToneCurveChart extends StatelessWidget {
   }
 }
 
-class _ToneCurvePainter extends CustomPainter {
-  _ToneCurvePainter({
+class ToneCurvePainter extends CustomPainter {
+  ToneCurvePainter({
     required this.curve,
+    required this.tones,
     required this.palette,
     required this.colors,
     required this.labelStyle,
   });
 
   final ToneCurveData curve;
+
+  /// The developed picture's pixels at each code, by luma; null until they are measured.
+  final Uint32List? tones;
   final Palette palette;
   final Map<String, Color> colors;
   final TextStyle labelStyle;
@@ -78,9 +121,9 @@ class _ToneCurvePainter extends CustomPainter {
     canvas.scale(k);
     final hairline = 1 / k;
 
-    // The photograph's tones, behind everything: a square-root scale keeps a sky's spike from
+    // The picture's tones, behind everything: a square-root scale keeps a sky's spike from
     // flattening the rest.
-    final counts = smoothHistogram(curve.histogram);
+    final counts = smoothHistogram(tones ?? const <int>[]);
     final peak = counts.fold<double>(0, (m, v) => math.max(m, v.toDouble()));
     if (peak > 0) {
       final fill = Path()..moveTo(_x(0), _bottom);
@@ -140,6 +183,9 @@ class _ToneCurvePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_ToneCurvePainter old) =>
-      !identical(old.curve, curve) || old.palette != palette || old.colors != colors;
+  bool shouldRepaint(ToneCurvePainter old) =>
+      !identical(old.curve, curve) ||
+      !identical(old.tones, tones) ||
+      old.palette != palette ||
+      old.colors != colors;
 }

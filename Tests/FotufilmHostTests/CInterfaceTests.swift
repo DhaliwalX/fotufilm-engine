@@ -497,7 +497,7 @@ extension CInterfaceTests {
     }
 
     /// The Output panel's chart: the edit's grey ramp through its film and medium, rising from
-    /// black to white, landing on the output levels, over the photograph's own tones.
+    /// black to white, landing on the output levels.
     func testToneCurveFollowsTheEditsOutput() throws {
         let engine = try makeEngine()
         defer { fotufilm_engine_destroy(engine) }
@@ -533,9 +533,6 @@ extension CInterfaceTests {
             XCTAssertGreaterThan(values[255], 0.8, channel)
             for i in 1..<values.count { XCTAssertGreaterThan(values[i] + 0.01, values[i - 1]) }
         }
-        let histogram = try XCTUnwrap(plain["histogram"] as? [Int])
-        XCTAssertEqual(histogram.count, 256)
-        XCTAssertGreaterThan(histogram.reduce(0, +), 1000)
 
         let levelled = try XCTUnwrap(try curve(stock: "portra400",
                                                params: ["blackPoint": 0.2, "whitePoint": 0.8]))
