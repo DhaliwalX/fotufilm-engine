@@ -104,6 +104,49 @@ final class WebNativeEditNegativeReadingTests: XCTestCase {
         XCTAssertNil(Negative(reading: 2).tones(border: border, denseEnd: nil).denseEnd)
     }
 
+    /// The stray light a reading takes off: the edit's share of the frame's light, or what
+    /// the scan's holder shows where the edit leaves it to be measured.
+    func testAnEditsFlareIsItsShareOfTheFramesLightElseTheHolders() throws {
+        let border = SIMD3<Float>(0.8, 0.45, 0.2), light = SIMD3<Float>(0.2, 0.1, 0.04)
+        let holder = SIMD3<Float>(0.001, 0.0006, 0.0002)
+        typealias Negative = WebNativeEdit.Negative
+        func stray(_ edit: Negative, holder: SIMD3<Float>? = holder) -> SIMD3<Float> {
+            edit.strayLight(border: border, frameLight: light, holder: holder)
+        }
+        XCTAssertEqual(stray(Negative(reading: 2)), holder)
+        XCTAssertEqual(stray(Negative(reading: 2), holder: nil), .zero)
+        XCTAssertEqual(stray(Negative(reading: 2, flare: 0.01)), light * 0.01)
+        XCTAssertEqual(stray(Negative(reading: 2, flare: 0)), .zero)
+        XCTAssertEqual(Negative(reading: 2, flare: 0.01)
+            .strayLight(border: border, frameLight: nil, holder: holder), .zero)
+        // The first reading takes none off, whatever it is handed.
+        XCTAssertEqual(stray(Negative(flare: 0.01)), .zero)
+        XCTAssertEqual(stray(Negative()), .zero)
+        // No more than a reading takes, and nothing that is not a number.
+        XCTAssertEqual(stray(Negative(reading: 2), holder: SIMD3(0.7, .nan, -1)),
+                       SIMD3(ApproximateNegativeScan.flareLimit * 0.8, 0, 0))
+
+        // An edit keeps its flare, and one it could not have is refused.
+        let kept = try JSONDecoder().decode(
+            Negative.self, from: JSONEncoder().encode(Negative(reading: 2, flare: 0.0125)))
+        XCTAssertEqual(kept.flare, 0.0125)
+        XCTAssertNil(try JSONDecoder().decode(Negative.self, from: Data(#"{"flare":null}"#.utf8)).flare)
+        for invalid in [#"{"flare":0.03}"#, #"{"flare":-0.01}"#] {
+            XCTAssertThrowsError(try JSONDecoder().decode(Negative.self, from: Data(invalid.utf8)))
+        }
+        XCTAssertNotEqual(Negative(reading: 2, flare: 0.01).readingKey, Negative(reading: 2).readingKey)
+
+        // A picked neutral is read net of the stray light, as the scan's samples are.
+        let picked = Negative(reading: 2, neutral: [0.2, 0.1, 0.05])
+        let tones = picked.tones(border: border, denseEnd: nil, flare: holder)
+        let read = try XCTUnwrap(tones.picked)
+        for c in 0..<3 {
+            XCTAssertEqual(read[c], -log10(([0.2, 0.1, 0.05][c] - holder[c]) / (border[c] - holder[c])),
+                           accuracy: 1e-6)
+        }
+        XCTAssertNil(picked.tones(border: border, denseEnd: nil, flare: SIMD3(0.3, 0, 0)).picked)
+    }
+
     func testEditsThatReadAlikeShareAKeyAndOthersDoNot() {
         let base = Negative(roll: roll, crosstalk: 0.5, scanLight: .screen, reading: 2, camera: "scanner",
                             balance: .roll, neutral: [0.05, 0.06, 0.03])

@@ -292,16 +292,19 @@ extension HostService {
         }
         let reading = negative ?? .init()
         if let stock {
-            prepared.edit.negativeReading = try scan.reading(key, stock: stock, border: border,
-                                                             negative: reading, preview: preview)
+            prepared.edit.negativeReading = try scan.reading(
+                key, stock: stock, border: border, light: light, negative: reading,
+                preview: preview)
         } else {
             prepared.image = try scan.positive(key, border: border, light: light,
                                                negative: reading, preview: preview)
         }
         // What this frame measures for its roll, kept from the reading above.
-        let (read, measure) = try scan.measure(key, border: border, preview: preview)
+        let (read, flare, measure) = try scan.measure(key, border: border, light: light,
+                                                      negative: reading, preview: preview)
         prepared.negativeMeasure = [
             "border": (0..<3).map { Double(read[$0]) },
+            "flare": (0..<3).map { Double(flare[$0]) },
             "denseEnd": measure.denseEnd.map { dense in (0..<3).map { Double(dense[$0]) } as Any }
                 ?? NSNull(),
             "slopes": measure.slopes.map { slopes in (0..<2).map { Double(slopes[$0]) } as Any }

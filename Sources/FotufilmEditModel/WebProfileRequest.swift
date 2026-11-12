@@ -57,6 +57,11 @@ public struct WebProfileRequest: Decodable {
         /// desktop app carries (`CameraSpectralProfileStore.register(rawtoaces:)`): the browser
         /// carries none inside the builder, and sends the record of a camera it has.
         public let cameraProfile: String?
+        /// The stray light the reading takes off the scan, linear scan RGB like `border`, as
+        /// the browser resolved it from the edit's flare and what the frame and the scan show
+        /// (`WebNativeEdit.Negative.strayLight`). `border` still carries it; `denseEnd` is net
+        /// of it. Nil takes none off, and the first reading never does.
+        public let strayLight: [Float]?
 
         /// The keys `light` may hold.
         static let lightKeys: Set<String> = ["ev", "temperature", "tint"]
@@ -66,6 +71,8 @@ public struct WebProfileRequest: Decodable {
             var edit: WebNativeEdit.Negative
             var border: SIMD3<Float>
             var denseEnd: SIMD3<Float>?
+            /// The scan's stray light, none on the first reading.
+            var flare: SIMD3<Float> = .zero
         }
 
         /// Makes `record`'s camera one a reading can resolve.
@@ -93,11 +100,19 @@ public struct WebProfileRequest: Decodable {
                 guard dense.count == 3 else { throw Failure(description: "Invalid scene measurement.") }
                 return SIMD3(dense[0], dense[1], dense[2])
             }
-            return Measured(
-                edit: WebNativeEdit.Negative(
-                    roll: roll, crosstalk: crosstalk, scanLight: scanLight, reading: reading,
-                    camera: camera, balance: balance, neutral: neutral),
-                border: SIMD3(border[0], border[1], border[2]), denseEnd: dense)
+            let edit = WebNativeEdit.Negative(
+                roll: roll, crosstalk: crosstalk, scanLight: scanLight, reading: reading,
+                camera: camera, balance: balance, neutral: neutral)
+            var flare = SIMD3<Float>.zero
+            if let strayLight {
+                guard strayLight.count == 3, (0..<3).allSatisfy({
+                    strayLight[$0].isFinite && strayLight[$0] >= 0
+                        && strayLight[$0] <= ApproximateNegativeScan.flareLimit * border[$0]
+                }) else { throw Failure(description: "Invalid stray light.") }
+                if edit.readsModel { flare = SIMD3(strayLight[0], strayLight[1], strayLight[2]) }
+            }
+            return Measured(edit: edit, border: SIMD3(border[0], border[1], border[2]),
+                            denseEnd: dense, flare: flare)
         }
     }
 
@@ -185,11 +200,11 @@ public struct WebProfileRequest: Decodable {
             let measured = try negative.measured()
             let balance = measured.edit.balance(
                 stock: stock, border: measured.border, denseEnd: measured.denseEnd,
-                source: negative.source)
+                source: negative.source, flare: measured.flare)
             // Exposure and development, which transport belongs to, already happened to the film.
             stock.layeredTransport = nil
             options = try NegativeScanPrint.Reading(
-                stock: stock, border: measured.border, balance: balance)
+                stock: stock, border: measured.border, balance: balance, flare: measured.flare)
                 .printing(options, stock: stock)
         }
         return (stock, options)

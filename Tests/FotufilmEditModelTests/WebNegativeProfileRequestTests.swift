@@ -188,10 +188,7 @@ final class WebNegativeProfileRequestTests: XCTestCase {
                 WebNegativePlainRequest.Result.self,
                 from: WebRenderRequest.prepare(JSONSerialization.data(withJSONObject: plain)))
             let expected = edit.plain(border: border, denseEnd: dense, source: source)
-            let values = { (v: SIMD3<Float>) in [v.x, v.y, v.z] }
-            XCTAssertEqual(found, WebNegativePlainRequest.Result(
-                border: values(expected.border), gains: values(expected.gains),
-                reference: expected.reference, weights: expected.weights.map(values)))
+            XCTAssertEqual(found, WebNegativePlainRequest.Result(expected))
         }
         // The camera the file names changes the reading only with its decoder's matrix.
         XCTAssertNotEqual(edits[2].0.balance(stock: stock, border: border, denseEnd: dense, source: source),
@@ -246,6 +243,44 @@ final class WebNegativeProfileRequestTests: XCTestCase {
             stock: stock, border: border, balance: balance).calibration)
         XCTAssertEqual(source.setup(light: .white).camera, .profile("fotufilm-test-scan-one"))
         XCTAssertNotEqual(balance, edit.balance(stock: stock, border: border, denseEnd: dense))
+    }
+
+    /// The stray light the browser resolved reaches the print's reading and the plain one.
+    func testARequestsStrayLightIsTakenOffTheReading() throws {
+        let stock = try printed("gold200")
+        let border = SIMD3<Float>(0.4, 0.6, 0.2), dense = SIMD3<Float>(1.1, 1.0, 0.9)
+        let flare = SIMD3<Float>(0.002, 0.003, 0.001)
+        let edit = WebNativeEdit.Negative(reading: 2)
+        let reading: [String: Any] = ["reading": 2, "strayLight": [0.002, 0.003, 0.001]]
+        let request = try profile(reading: reading)
+        let (_, options) = try JSONDecoder().decode(WebProfileRequest.self, from: request).configured()
+        let expected = try NegativeScanPrint.Reading(
+            stock: stock, border: border,
+            balance: edit.balance(stock: stock, border: border, denseEnd: dense, flare: flare),
+            flare: flare).calibration
+        XCTAssertEqual(options.scanReading, expected)
+        XCTAssertEqual(expected.flare, [0.002, 0.003, 0.001])
+
+        var plain = try XCTUnwrap(JSONSerialization.jsonObject(with: request) as? [String: Any])
+        plain["kind"] = "negative-plain"
+        let found = try JSONDecoder().decode(
+            WebNegativePlainRequest.Result.self,
+            from: WebRenderRequest.prepare(JSONSerialization.data(withJSONObject: plain)))
+        XCTAssertEqual(found, WebNegativePlainRequest.Result(
+            edit.plain(border: border, denseEnd: dense, flare: flare)))
+        XCTAssertEqual(found.flare, [0.002, 0.003, 0.001])
+        XCTAssertEqual(found.border[0], border.x - flare.x)
+        XCTAssertGreaterThan(found.toe, 0)
+
+        // The first reading takes none off, and stray light a scan could not carry is refused.
+        let (_, first) = try JSONDecoder().decode(
+            WebProfileRequest.self, from: profile(reading: ["strayLight": [0.002, 0.003, 0.001]]))
+            .configured()
+        XCTAssertEqual(first.scanReading?.flare, [0, 0, 0])
+        for invalid: [Double] in [[0.002, 0.003], [-0.001, 0, 0], [0.3, 0, 0]] {
+            XCTAssertThrowsError(try WebRenderRequest.prepare(
+                profile(reading: ["reading": 2, "strayLight": invalid])), "\(invalid)")
+        }
     }
 
     func testRejectsAReadingTheEditCouldNotKeep() throws {

@@ -25,8 +25,14 @@ final class HostNegativeScan {
     /// The scan evened under the newest light frame it was asked for.
     private var lit: (id: String, image: HostImage)?
     private var estimates: [String: [Float]] = [:]
-    /// What framings measure (`Measure`), which every film reads.
+    /// Framings drawn down for their readings, with their average light, by their keys.
+    private var frames: [(key: String, planes: ImageBuffer, light: SIMD3<Float>?)] = []
+    /// What framings measure (`Measure`) net of the stray light a reading takes off, which
+    /// every film reads.
     private var measures: [(key: String, measure: ApproximateNegativeScan.RollBalance.Measure)] = []
+    /// The stray light the whole scan's holder shows, by clear film and light frame; none where
+    /// it shows no holder.
+    private var holders: [String: SIMD3<Float>?] = [:]
     /// The newest plain positive asked for (`positive`), by its framing's key.
     private var plain: (key: String, image: HostImage)?
 
@@ -70,45 +76,87 @@ final class HostNegativeScan {
         return border
     }
 
+    /// The stray light the whole scan's holder shows against `border`, under the light frame
+    /// `id` (`ApproximateNegativeScan.strayLight`); nil where the scan shows no holder.
+    func holderLight(border: SIMD3<Float>, light id: String?) throws -> SIMD3<Float>? {
+        let key = "\(id ?? "")|\(border)"
+        if let kept = lock.withLock({ holders[key] }) { return kept }
+        let stray = ApproximateNegativeScan.strayLight(
+            border: border, preview: Self.preview(try image(light: id)))
+        lock.withLock {
+            if holders.count >= 8 { holders.removeAll() }
+            holders[key] = .some(stray)
+        }
+        return stray
+    }
+
     /// The reading of a framing on `stock` as the edit's `negative` says to read it
     /// (`WebNativeEdit.Negative.balance`). What the framing measures is kept by `key` (the
     /// framing, border and light), so each film and each way of reading it takes it without
-    /// drawing the scan again; `preview` is the framed scan, made only when none is kept.
-    func reading(_ key: String, stock: FilmStock, border: [Float],
+    /// drawing the scan again; `preview` is the framed scan, made only when none is kept, and
+    /// `id` the light frame the scan is evened under.
+    func reading(_ key: String, stock: FilmStock, border: [Float], light id: String? = nil,
                  negative: WebNativeEdit.Negative = .init(),
                  preview: () throws -> (rgba: [Float], width: Int, height: Int)) throws
         -> NegativeScanPrint.Reading {
-        let (border, measure) = try measure(key, border: border, preview: preview)
+        let read = try measure(key, border: border, light: id, negative: negative,
+                               preview: preview)
         return try NegativeScanPrint.Reading(
-            stock: stock, border: border,
-            balance: negative.balance(stock: stock, border: border, denseEnd: measure.denseEnd,
-                                      source: source))
+            stock: stock, border: read.border,
+            balance: negative.balance(stock: stock, border: read.border,
+                                      denseEnd: read.measure.denseEnd, source: source,
+                                      flare: read.flare),
+            flare: read.flare)
     }
 
-    /// What a framing measures for its roll: the clear film it is read against, its own densest
-    /// end, before any roll's colour, and the rises across its tonal steps. Arguments as
-    /// `reading`.
-    func measure(_ key: String, border: [Float],
+    /// What a framing measures for its reading and its roll: the clear film it is read against,
+    /// the stray light the reading takes off (`WebNativeEdit.Negative.strayLight`), and, net of
+    /// that, its own densest end, before any roll's colour, and the rises across its tonal
+    /// steps. Arguments as `reading`.
+    func measure(_ key: String, border: [Float], light id: String? = nil,
+                 negative: WebNativeEdit.Negative = .init(),
                  preview: () throws -> (rgba: [Float], width: Int, height: Int)) throws
-        -> (border: SIMD3<Float>, measure: ApproximateNegativeScan.RollBalance.Measure) {
+        -> (border: SIMD3<Float>, flare: SIMD3<Float>,
+            measure: ApproximateNegativeScan.RollBalance.Measure) {
         guard border.count == 3, border.allSatisfy({ $0.isFinite && $0 > 0 }) else {
             throw Self.invalidBorder
         }
         let border = SIMD3(border[0], border[1], border[2])
-        if let kept = lock.withLock({ measures.first { $0.key == key } }) {
-            return (border, kept.measure)
+        let frame: (planes: ImageBuffer, light: SIMD3<Float>?)
+        if let kept = lock.withLock({ frames.first { $0.key == key } }) {
+            frame = (kept.planes, kept.light)
+        } else {
+            let framed = try preview()
+            let planes = Self.planes(framed.rgba, width: framed.width, height: framed.height)
+            frame = (planes, ApproximateNegativeScan.frameLight(preview: planes))
+            lock.withLock {
+                frames.removeAll { $0.key == key }
+                frames.append((key, frame.planes, frame.light))
+                if frames.count > 8 { frames.removeFirst() }
+            }
         }
-        let framed = try preview()
-        let planes = Self.planes(framed.rgba, width: framed.width, height: framed.height)
+        // The holder is looked for only where the edit leaves the stray light to be measured.
+        let holder = negative.readsModel && negative.flare == nil
+            ? try holderLight(border: border, light: id) : nil
+        let flare = negative.strayLight(border: border, frameLight: frame.light, holder: holder)
+        let measured = "\(key)|\(flare)"
+        if let kept = lock.withLock({ measures.first { $0.key == measured } }) {
+            return (border, flare, kept.measure)
+        }
+        var planes = frame.planes
+        if flare != .zero {
+            for c in 0..<3 { for i in planes.planes[c].indices { planes.planes[c][i] -= flare[c] } }
+        }
+        let clear = border - flare
         let measure = ApproximateNegativeScan.RollBalance.Measure(
-            denseEnd: ApproximateNegativeScan.denseEnd(border: border, preview: planes),
-            slopes: ApproximateNegativeScan.tonalSlopes(border: border, preview: planes))
+            denseEnd: ApproximateNegativeScan.denseEnd(border: clear, preview: planes),
+            slopes: ApproximateNegativeScan.tonalSlopes(border: clear, preview: planes))
         lock.withLock {
-            measures.removeAll { $0.key == key }
-            measures.append((key, measure))
+            measures.removeAll { $0.key == measured }
+            measures.append((measured, measure))
             if measures.count > 8 { measures.removeFirst() }
         }
-        return (border, measure)
+        return (border, flare, measure)
     }
 
     /// The scan read without a film (`PlainNegativeScan`), evened under the light frame `light`:
@@ -120,10 +168,12 @@ final class HostNegativeScan {
                   preview: () throws -> (rgba: [Float], width: Int, height: Int)) throws -> HostImage {
         let plainKey = "\(key)|\(negative.readingKey)"
         if let kept = lock.withLock({ plain }), kept.key == plainKey { return kept.image }
-        let (border, measure) = try measure(key, border: border, preview: preview)
+        let read = try measure(key, border: border, light: id, negative: negative,
+                               preview: preview)
         let positive = try prepared(
             light: id.flatMap(lightFrame),
-            plain: negative.plain(border: border, denseEnd: measure.denseEnd, source: source))
+            plain: negative.plain(border: read.border, denseEnd: read.measure.denseEnd,
+                                  source: source, flare: read.flare))
         lock.withLock { plain = (plainKey, positive) }
         return positive
     }

@@ -55,7 +55,7 @@ public struct WebNativeEdit: Decodable {
         /// Which reading the edit was made with, so a saved edit keeps printing as it did: nil is
         /// the first, which balances each channel's gain on the densest end; `currentReading`
         /// reads the film through the scan's light and camera (`NegativeScanModel`) and balances
-        /// by a density offset (`ApproximateNegativeScan.balance(stock:setup:separation:mode:tones:roll:)`).
+        /// by an exposure (`ApproximateNegativeScan.balance(stock:setup:separation:mode:tones:roll:)`).
         /// There `crosstalk` is how far the reading separates the dyes, nil all the way, and
         /// `roll` is what the roll measured, whichever way the frame is balanced.
         public var reading: Int?
@@ -66,6 +66,10 @@ public struct WebNativeEdit: Decodable {
         /// Something neutral picked on the scan, as linear Rec. 2020 scan RGB like `border`; nil
         /// balances on the densest end.
         public var neutral: [Float]?
+        /// The scan's stray light as a share of the frame's average light
+        /// (`ApproximateNegativeScan.flareShares`); nil measures it from the holder where the scan
+        /// shows one, and takes none off otherwise. The first reading takes none off.
+        public var flare: Float?
         /// What an app keeps with the reading that the engine carries, saves and undoes without
         /// reading, by the app's own key, as `NegativeScanRecipe.attachments` does.
         public var attachments: [String: Data] = [:]
@@ -78,7 +82,7 @@ public struct WebNativeEdit: Decodable {
                     scanLight: NegativeScanCrosstalk.Light? = nil,
                     reading: Int? = nil, camera: String? = nil,
                     balance: ApproximateNegativeScan.BalanceMode? = nil, neutral: [Float]? = nil,
-                    attachments: [String: Data] = [:]) {
+                    flare: Float? = nil, attachments: [String: Data] = [:]) {
             self.border = border
             self.lightFrame = lightFrame
             self.roll = roll
@@ -88,6 +92,7 @@ public struct WebNativeEdit: Decodable {
             self.camera = camera
             self.balance = balance
             self.neutral = neutral
+            self.flare = flare
             self.attachments = attachments
         }
 
@@ -98,7 +103,7 @@ public struct WebNativeEdit: Decodable {
 
         private enum CodingKeys: String, CodingKey {
             case border, lightFrame, roll, crosstalk, scanLight, reading, camera, balance, neutral
-            case attachments
+            case flare, attachments
         }
 
         public init(from decoder: Decoder) throws {
@@ -125,6 +130,11 @@ public struct WebNativeEdit: Decodable {
                 throw DecodingError.dataCorruptedError(
                     forKey: .neutral, in: c, debugDescription: "Invalid picked neutral.")
             }
+            flare = try c.decodeIfPresent(Float.self, forKey: .flare)
+            if let flare, !ApproximateNegativeScan.flareShares.contains(flare) {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .flare, in: c, debugDescription: "Invalid flare.")
+            }
             attachments = try c.decodeIfPresent([String: Data].self, forKey: .attachments) ?? [:]
         }
 
@@ -139,6 +149,7 @@ public struct WebNativeEdit: Decodable {
             try c.encodeIfPresent(camera, forKey: .camera)
             try c.encodeIfPresent(balance, forKey: .balance)
             try c.encodeIfPresent(neutral, forKey: .neutral)
+            try c.encodeIfPresent(flare, forKey: .flare)
             if !attachments.isEmpty { try c.encode(attachments, forKey: .attachments) }
         }
     }
