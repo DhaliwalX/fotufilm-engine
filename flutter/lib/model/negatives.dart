@@ -78,14 +78,14 @@ class NegativeScans {
       editor.openFiles(scans, negative: true, scanLight: scanLight);
 
   /// A new negative's edit: a new photograph's (`base`), on the film its base looks like, read
-  /// against an estimated base.
+  /// against an estimated base with the reading its scan opens with.
   Json startingEdit(Json base, Json? scan, String? scanLight) {
     final stock = negativeStartingStock(scan, editor.stocks, base['stock'] as String?);
     return {
       ...base,
       'stock': stock,
       'medium': mediumOnFilm(base, editor.stockById(stock)),
-      'negative': newNegative(scanLight ?? 'white'),
+      'negative': newNegative(scanLight ?? 'white', (scan?['reading'] as num?)?.toInt() ?? 1),
     };
   }
 
@@ -137,12 +137,43 @@ class NegativeScans {
     editor.change({'negative': {...current, ...change}});
   }
 
-  /// Crosstalk Correction while its slider moves.
+  /// Colour Separation (an earlier reading's Crosstalk Correction) while its slider moves.
   void setCrosstalk(double value) {
     final current = negative;
     if (current == null) return;
     editor.patch({'negative': {...current, 'crosstalk': value}}, group: 'negative-crosstalk');
   }
+
+  /// Flare while its slider moves: the scan's stray light as a share of the frame's light.
+  void setFlare(double value) {
+    final current = negative;
+    if (current == null) return;
+    editor.patch({'negative': {...current, 'flare': value}}, group: 'negative-flare');
+  }
+
+  /// Whether the shown negative is read through its scan's light and camera (`readsModel`).
+  bool get readsCurrent => readsModel(negative);
+
+  /// The reading a negative opened now is made with, as the shown scan's descriptor says it.
+  int? get currentReading => (_doc?.negativeScan?['reading'] as num?)?.toInt();
+
+  /// Whether Update Reading has anything to do: the edit was saved with an earlier reading than
+  /// the engine's.
+  bool get canUpdateReading {
+    final current = currentReading;
+    return negative != null && current != null && ((negative!['reading'] as num?) ?? 1) < current;
+  }
+
+  /// Update Reading: the edit moved to the engine's current reading, as one step.
+  void updateReading() {
+    final current = negative, reading = currentReading;
+    if (current == null || reading == null || !canUpdateReading) return;
+    editor.change({'negative': updatedReading(current, reading)});
+  }
+
+  /// The camera the scan is read as taken with while the edit leaves that to its file: its
+  /// name, null for the generic camera.
+  String? get scannedWithName => (_doc?.negativeScan?['camera'] as Map?)?['name'] as String?;
 
   /// The films the scan's base looks like that are installed, up to three.
   List<Map> get suggestions {
@@ -158,20 +189,27 @@ class NegativeScans {
 
   // ── Clear film ──────────────────────────────────────────────────────────────────────────
 
-  /// Whether a click on the photograph picks the clear film.
-  bool sampling = false;
+  /// What a click on the photograph picks for the reading: the clear film it is measured
+  /// against ('border'), something neutral its frame is balanced on ('neutral'), or nothing.
+  String? picking;
 
-  void setSampling(bool on) {
-    if (sampling == on) return;
-    sampling = on;
+  /// Whether a click on the photograph picks something for the reading.
+  bool get sampling => picking != null;
+
+  void setPicking(String? what) {
+    if (picking == what) return;
+    picking = what;
     editor.notify();
   }
 
-  /// Samples clear film where `point` (0–1 across the shown picture) falls, and reads the scan
-  /// against it.
-  Future<void> sampleFilmBase(Offset point) async {
-    final doc = _doc, engine = _engine;
-    if (doc == null || engine == null || !sampling) return;
+  /// Pick Clear Film.
+  void setSampling(bool on) => setPicking(on ? 'border' : null);
+
+  /// Samples the scan where `point` (0–1 across the shown picture) falls, and keeps it with the
+  /// reading as what is being picked: the clear film, or the frame's neutral.
+  Future<void> sample(Offset point) async {
+    final doc = _doc, engine = _engine, what = picking;
+    if (doc == null || engine == null || what == null) return;
     if (point.dx < 0 || point.dx > 1 || point.dy < 0 || point.dy > 1) return;
     final edit = doc.edit;
     final preview = doc.preview;
@@ -192,12 +230,13 @@ class NegativeScans {
     };
     try {
       final answer = await engine.call(
-          'negativeSampleFilmBase', {'render': request, 'point': [point.dx, point.dy]});
-      final border = [for (final v in answer.value as List) (v as num).toDouble()];
+          what == 'neutral' ? 'negativeSampleNeutral' : 'negativeSampleFilmBase',
+          {'render': request, 'point': [point.dx, point.dy]});
+      final sampled = [for (final v in answer.value as List) (v as num).toDouble()];
       // The photograph or its edit moved on while the engine looked.
-      if (!sampling || editor.active != doc || !identical(doc.edit, edit)) return;
-      sampling = false;
-      read({'border': border});
+      if (picking != what || editor.active != doc || !identical(doc.edit, edit)) return;
+      picking = null;
+      read({what: sampled});
     } catch (e) {
       if (editor.active == doc) {
         editor
@@ -292,8 +331,9 @@ class NegativeScans {
   /// The edge each frame develops at to be measured.
   static const _measureEdge = 480;
 
-  /// Develops each frame small for its densest end, and keeps the roll's colour with every
-  /// frame's edit: the shown one as an undoable change, the others in their histories.
+  /// Develops each frame small for what it measures, and keeps what the roll's frames share
+  /// with every frame's edit: the shown one as an undoable change, the others in their
+  /// histories.
   Future<void> measureRoll() async {
     final docs = rollFrames;
     if (docs.length < 2 || measuring != null) return;
@@ -301,23 +341,23 @@ class NegativeScans {
     measuring = RollProgress(0, docs.length);
     editor.notify();
     try {
-      final ends = <List?>[];
+      final measures = <Map?>[];
       String? failure;
       for (final (index, doc) in docs.indexed) {
         if (_cancelMeasure) return;
         if (doc.edit['negative'] != null) {
           try {
-            ends.add(await _denseEnd(doc));
+            measures.add(await _measure(doc));
           } catch (e) {
             failure ??= '${doc.name}: $e';
-            ends.add(null);
+            measures.add(null);
           }
         }
         measuring = RollProgress(index + 1, docs.length);
         editor.notify();
       }
       if (_cancelMeasure) return;
-      final roll = rollBalance(ends);
+      final roll = rollBalance(measures);
       if (roll == null) {
         // A frame that could not be developed says why; otherwise the frames were too thin.
         editor.error = failure != null
@@ -335,8 +375,9 @@ class NegativeScans {
 
   void cancelMeasure() => _cancelMeasure = true;
 
-  /// A frame's densest end, from a small develop of it (`negativeMeasure`).
-  Future<List?> _denseEnd(PhotoDocument doc) async {
+  /// What a frame measures for its roll, from a small develop of it (`negativeMeasure`): its
+  /// densest end and the rises across its tonal steps.
+  Future<Map?> _measure(PhotoDocument doc) async {
     final edit = doc.edit;
     final request = {
       ...renderRequest(
@@ -352,14 +393,14 @@ class NegativeScans {
     for (var attempt = 0;; attempt++) {
       try {
         final answer = await _engine!.call('render', request);
-        return (answer.json['negativeMeasure'] as Map?)?['denseEnd'] as List?;
+        return answer.json['negativeMeasure'] as Map?;
       } on FotufilmCancelled {
         if (attempt >= 4 || _cancelMeasure) rethrow;
       }
     }
   }
 
-  /// Sets the roll's colour, or none, on every frame of `docs`.
+  /// Sets what the roll measured, or nothing, on every frame of `docs`.
   void _applyRoll(List<PhotoDocument> docs, Json? roll) {
     for (final doc in docs) {
       final before = doc.edit['negative'] as Json?;
