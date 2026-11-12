@@ -198,6 +198,56 @@ final class WebNegativeProfileRequestTests: XCTestCase {
                           edits[2].0.balance(stock: stock, border: border, denseEnd: dense))
     }
 
+    /// The browser's builder carries no measured cameras: a request brings the record of the
+    /// camera its scan names, and the reading then takes that camera as the desktop host does.
+    func testARequestBringsItsCamerasMeasuredChannels() throws {
+        let camera = CameraIdentity(make: "Fotufilm Test", model: "Scan One")
+        let source = NegativeScanSource(
+            camera: camera, kelvin: 5400, white: [0.34, 0.36],
+            matrix: [1.18, -0.09, -0.09, -0.04, 1.52, -0.48, 0.01, -0.25, 1.24])
+        func band(_ wavelength: Double, _ peak: Double) -> Double {
+            exp(-0.5 * pow((wavelength - peak) / 35, 2))
+        }
+        var samples: [String: [Double]] = [:]
+        for wavelength in stride(from: 380.0, through: 780, by: 5) {
+            samples["\(Int(wavelength))"] = [band(wavelength, 600), band(wavelength, 540),
+                                             band(wavelength, 460)]
+        }
+        let record = String(decoding: try JSONSerialization.data(withJSONObject: [
+            "header": ["manufacturer": "Fotufilm Test", "model": "Scan One"],
+            "spectral_data": ["index": ["main": ["R", "G", "B"]], "data": ["main": samples]],
+        ] as [String: Any]), as: UTF8.self)
+        func named(_ request: [String: Any]) throws -> WebNegativeCameraRequest.Result {
+            try JSONDecoder().decode(
+                WebNegativeCameraRequest.Result.self,
+                from: WebRenderRequest.prepare(JSONSerialization.data(withJSONObject: request)))
+        }
+        let described = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(source)) as? [String: Any])
+
+        // Nobody has measured the camera until a request brings its record.
+        XCTAssertEqual(try named(["kind": "negative-camera", "source": described]),
+                       .init(id: "generic", name: nil))
+        XCTAssertEqual(try named(["kind": "negative-camera"]), .init(id: "generic", name: nil))
+        XCTAssertEqual(try named(["kind": "negative-camera", "source": described,
+                                  "cameraProfile": "not a record"]), .init(id: "generic", name: nil))
+        XCTAssertEqual(try named(["kind": "negative-camera", "source": described,
+                                  "cameraProfile": record]),
+                       .init(id: "fotufilm-test-scan-one", name: "Fotufilm Test Scan One"))
+
+        // The print profile and the plain reading take the record the same way.
+        let stock = try printed("gold200")
+        let border = SIMD3<Float>(0.4, 0.6, 0.2), dense = SIMD3<Float>(1.1, 1.0, 0.9)
+        let edit = WebNativeEdit.Negative(reading: 2)
+        let request = try profile(reading: ["reading": 2, "source": described, "cameraProfile": record])
+        let (_, options) = try JSONDecoder().decode(WebProfileRequest.self, from: request).configured()
+        let balance = edit.balance(stock: stock, border: border, denseEnd: dense, source: source)
+        XCTAssertEqual(options.scanReading, try NegativeScanPrint.Reading(
+            stock: stock, border: border, balance: balance).calibration)
+        XCTAssertEqual(source.setup(light: .white).camera, .profile("fotufilm-test-scan-one"))
+        XCTAssertNotEqual(balance, edit.balance(stock: stock, border: border, denseEnd: dense))
+    }
+
     func testRejectsAReadingTheEditCouldNotKeep() throws {
         let invalid: [[String: Any]] = [
             ["reading": 0], ["reading": 2, "neutral": [0.05, 0.06]],

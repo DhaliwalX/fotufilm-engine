@@ -53,6 +53,10 @@ public struct WebProfileRequest: Decodable {
         /// What the scan's file says of its camera and decoder, which the current reading's
         /// setup is made of.
         public let source: NegativeScanSource?
+        /// The measured channels of the camera `source` names, as one record of the cameras the
+        /// desktop app carries (`CameraSpectralProfileStore.register(rawtoaces:)`): the browser
+        /// carries none inside the builder, and sends the record of a camera it has.
+        public let cameraProfile: String?
 
         /// The keys `light` may hold.
         static let lightKeys: Set<String> = ["ev", "temperature", "tint"]
@@ -64,7 +68,13 @@ public struct WebProfileRequest: Decodable {
             var denseEnd: SIMD3<Float>?
         }
 
+        /// Makes `record`'s camera one a reading can resolve.
+        static func register(cameraProfile record: String?) {
+            if let record { CameraSpectralProfileStore.register(rawtoaces: Data(record.utf8)) }
+        }
+
         func measured() throws -> Measured {
+            Self.register(cameraProfile: cameraProfile)
             guard border.count == 3, border.allSatisfy({ $0.isFinite && $0 > 0 }) else {
                 throw Failure(description: "Pick clear, unexposed film.")
             }
