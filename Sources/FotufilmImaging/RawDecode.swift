@@ -125,8 +125,16 @@ public enum RawDecode {
 
     /// The camera the file's TIFF record names, for profile resolution. Nil when the record
     /// is absent or empty — the caller falls back to the colorimetric path, it does not guess.
-    public static func cameraIdentity(data: Data) -> CameraIdentity? {
-        cameraIdentity(source: CGImageSourceCreateWithData(data as CFData, nil))
+    ///
+    /// A TIFF-based raw's bytes alone can open as a plain TIFF that names no camera, so a type
+    /// the importer knows the file by is tried first, as `filter` tries it.
+    public static func cameraIdentity(data: Data, identifierHint: String? = nil) -> CameraIdentity? {
+        if let identifierHint,
+           let named = cameraIdentity(source: CGImageSourceCreateWithData(
+               data as CFData, [kCGImageSourceTypeIdentifierHint: identifierHint] as CFDictionary)) {
+            return named
+        }
+        return cameraIdentity(source: CGImageSourceCreateWithData(data as CFData, nil))
     }
 
     /// The same record read off a file on disk, for the CLI path.

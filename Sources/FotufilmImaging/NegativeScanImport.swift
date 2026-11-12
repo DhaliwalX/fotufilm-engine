@@ -28,16 +28,8 @@ public enum NegativeScanImport {
 
     public static func decode(data: Data, identifierHint: String? = nil, linearSamples: Bool = false) throws -> CIImage {
         if RawDecode.isRaw(data: data, identifierHint: identifierHint) {
-            guard let filter = RawDecode.filter(data: data, identifierHint: identifierHint) else { throw Failure.unreadable }
-            RawDecode.configure(filter, recipe: .init(correctsLens: false,
-                extendedDynamicRangeAmount: 0, recoversHighlights: false))
-            filter.exposure = 0
-            filter.baselineExposure = 0
-            filter.shadowBias = 0
-            filter.boostShadowAmount = 0
-            if filter.isLuminanceNoiseReductionSupported { filter.luminanceNoiseReductionAmount = 0 }
-            if filter.isColorNoiseReductionSupported { filter.colorNoiseReductionAmount = 0 }
-            guard let image = filter.outputImage else { throw Failure.unreadable }
+            guard let filter = scanFilter(data: data, identifierHint: identifierHint),
+                  let image = filter.outputImage else { throw Failure.unreadable }
             return atOrigin(image)
         }
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),
@@ -47,6 +39,124 @@ public enum NegativeScanImport {
         let orientation = (properties?[kCGImagePropertyOrientation] as? NSNumber)?.int32Value ?? 1
         let image = CIImage(cgImage: cg, options: linearSamples ? [.colorSpace: linearSpace] : [:])
         return atOrigin(image.oriented(forExifOrientation: orientation))
+    }
+
+    /// A camera RAW's filter as a scan is decoded: on the white the camera recorded, every
+    /// rendering choice off.
+    static func scanFilter(data: Data, identifierHint: String?) -> CIRAWFilter? {
+        guard let filter = RawDecode.filter(data: data, identifierHint: identifierHint)
+        else { return nil }
+        RawDecode.configure(filter, recipe: .init(correctsLens: false,
+            extendedDynamicRangeAmount: 0, recoversHighlights: false))
+        filter.exposure = 0
+        filter.baselineExposure = 0
+        filter.shadowBias = 0
+        filter.boostShadowAmount = 0
+        if filter.isLuminanceNoiseReductionSupported { filter.luminanceNoiseReductionAmount = 0 }
+        if filter.isColorNoiseReductionSupported { filter.colorNoiseReductionAmount = 0 }
+        return filter
+    }
+
+    /// What `data` says of how its scan was made and how `decode` decodes it: the camera the
+    /// file names and, of a camera RAW, the white it is decoded on and the matrix its channels
+    /// are mixed with. The matrix is looked for only where a reading would take it, of a camera
+    /// whose channels are measured (`NegativeScanSource.setup`), and where a decode can show it,
+    /// which a DNG's cannot.
+    public static func source(data: Data, identifierHint: String? = nil) -> NegativeScanSource {
+        var source = NegativeScanSource(
+            camera: RawDecode.cameraIdentity(data: data, identifierHint: identifierHint))
+        guard RawDecode.isRaw(data: data, identifierHint: identifierHint),
+              let filter = scanFilter(data: data, identifierHint: identifierHint)
+        else { return source }
+        let kelvin = filter.neutralTemperature
+        if kelvin.isFinite, kelvin > 0 { source.kelvin = kelvin }
+        let white = filter.neutralChromaticity
+        if white.x > 0, white.y > 0, white.x + white.y < 1 {
+            source.white = [Float(white.x), Float(white.y)]
+        }
+        if let camera = source.camera, CameraSpectralProfileStore.resolve(camera) != nil,
+           !isDNG(data: data, identifierHint: identifierHint) {
+            // A decoder mixes one camera's channels one way on one white, and a roll's frames
+            // are mostly scanned on the same: the matrix found for one serves the rest.
+            let key = "\(camera.make ?? "")|\(camera.model ?? "")|\(kelvin)|\(white.x)|\(white.y)"
+            source.matrix = DecoderMatrices.shared.matrix(key) {
+                decoderMatrix(data: data, identifierHint: identifierHint)?
+                    .flatMap { [$0.x, $0.y, $0.z] }
+            }
+        }
+        return source
+    }
+
+    /// Decoder matrices found in this process, by camera and white. One that was not found is
+    /// looked for again: another frame of the roll may show it.
+    final class DecoderMatrices: @unchecked Sendable {
+        static let shared = DecoderMatrices()
+        private let lock = NSLock()
+        private var found: [String: [Float]] = [:]
+
+        func matrix(_ key: String, find: () -> [Float]?) -> [Float]? {
+            lock.lock()
+            let known = found[key]
+            lock.unlock()
+            if let known { return known }
+            guard let matrix = find() else { return nil }
+            lock.lock()
+            if found.count >= 64 { found.removeAll() }
+            found[key] = matrix
+            lock.unlock()
+            return matrix
+        }
+    }
+
+    /// Whether a raw file is a DNG, whose white the decoder adapts after the file's own matrix:
+    /// no decode of it shows how the camera's channels were mixed.
+    private static func isDNG(data: Data, identifierHint: String?) -> Bool {
+        let dng = "com.adobe.raw-image"
+        let sniffed = CGImageSourceCreateWithData(data as CFData, nil)
+            .flatMap { CGImageSourceGetType($0) as String? }
+        return sniffed == dng || identifierHint == dng
+    }
+
+    /// The long edge the decodes that show the decoder's matrix are asked for at.
+    static let matrixProbeLongEdge = 128
+    /// How far those decodes' tints are moved either way, in the decoder's own tint units: far
+    /// enough to tell apart the red and blue of a camera whose balances a tint moves much alike.
+    static let matrixProbeTint: Float = 80
+
+    /// The matrix `decode` mixes a camera RAW's balanced channels into the film space with,
+    /// rows the scan's red, green and blue. The decoder does not say it, so it is found from
+    /// small decodes of the file on its own white and on two others of the same colour
+    /// temperature, one greener and one pinker (`NegativeScanDecoderMatrix`). Nil where they do
+    /// not show one matrix: a DNG's, whose white is adapted after its matrix.
+    static func decoderMatrix(data: Data, identifierHint: String? = nil) -> [SIMD3<Float>]? {
+        let context = CIContext(options: [.workingColorSpace: linearSpace,
+                                          .cacheIntermediates: false])
+        func pixels(tint: Float) -> [SIMD3<Float>]? {
+            guard let filter = scanFilter(data: data, identifierHint: identifierHint)
+            else { return nil }
+            filter.scaleFactor = RawDecode.scaleFactor(for: filter,
+                                                       targetLongEdge: matrixProbeLongEdge)
+            if tint != 0 {
+                // The temperature is set back: it turns the decoder's matrix, a tint does not.
+                let kelvin = filter.neutralTemperature
+                filter.neutralTint += tint
+                filter.neutralTemperature = kelvin
+            }
+            guard let image = filter.outputImage.map(atOrigin) else { return nil }
+            let width = Int(image.extent.width), height = Int(image.extent.height)
+            guard width > 0, height > 0, width * height <= 4_000_000 else { return nil }
+            var rgba = [Float](repeating: 0, count: width * height * 4)
+            context.render(image, toBitmap: &rgba, rowBytes: width * 16,
+                           bounds: CGRect(x: 0, y: 0, width: width, height: height),
+                           format: .RGBAf, colorSpace: filmSpace)
+            return (0..<width * height).map {
+                SIMD3(rgba[4 * $0], rgba[4 * $0 + 1], rgba[4 * $0 + 2])
+            }
+        }
+        guard let before = pixels(tint: 0), let greener = pixels(tint: matrixProbeTint),
+              let pinker = pixels(tint: -matrixProbeTint),
+              greener.count == before.count, pinker.count == before.count else { return nil }
+        return NegativeScanDecoderMatrix.recovered(before: before, tinted: [greener, pinker])
     }
 
     /// Whether a file says how its samples encode light: an embedded profile, or a PNG's colour
