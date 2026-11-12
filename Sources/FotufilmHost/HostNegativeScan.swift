@@ -17,18 +17,23 @@ final class HostNegativeScan {
     let scan: HostImage
     /// The light frames an edit may name, by id (`HostNegativeLightFrames`).
     let lightFrame: (String) -> NegativeLightFrame?
+    /// What the scan's file says of its camera and of how it was decoded, nil where its decoder
+    /// does not say: the readings then take a generic camera's channels.
+    let source: NegativeScanSource?
 
     private let lock = NSLock()
     /// The scan evened under the newest light frame it was asked for.
     private var lit: (id: String, image: HostImage)?
     private var estimates: [String: [Float]] = [:]
-    /// Framings' densest ends (`ApproximateNegativeScan.denseEnd`), which every film reads.
-    private var denseEnds: [(key: String, dense: SIMD3<Float>?)] = []
+    /// What framings measure (`Measure`), which every film reads.
+    private var measures: [(key: String, measure: ApproximateNegativeScan.RollBalance.Measure)] = []
     /// The newest plain positive asked for (`positive`), by its framing's key.
     private var plain: (key: String, image: HostImage)?
 
-    init(scan: HostImage, lightFrame: @escaping (String) -> NegativeLightFrame?) {
+    init(scan: HostImage, source: NegativeScanSource? = nil,
+         lightFrame: @escaping (String) -> NegativeLightFrame?) {
         self.scan = scan
+        self.source = source
         self.lightFrame = lightFrame
     }
 
@@ -65,68 +70,62 @@ final class HostNegativeScan {
         return border
     }
 
-    /// The reading of a framing on `stock`, balanced on `roll`'s colour when it has one, with
-    /// `correction` of the dyes' crosstalk. The framing's densest end is kept by `key` (the framing, border and
-    /// light), so each film and correction reads it without drawing the scan again; `preview` is
-    /// the framed scan, made only when none is kept.
+    /// The reading of a framing on `stock` as the edit's `negative` says to read it
+    /// (`WebNativeEdit.Negative.balance`). What the framing measures is kept by `key` (the
+    /// framing, border and light), so each film and each way of reading it takes it without
+    /// drawing the scan again; `preview` is the framed scan, made only when none is kept.
     func reading(_ key: String, stock: FilmStock, border: [Float],
-                 roll: ApproximateNegativeScan.RollBalance?,
-                 correction: NegativeScanCrosstalk.Correction = .none,
+                 negative: WebNativeEdit.Negative = .init(),
                  preview: () throws -> (rgba: [Float], width: Int, height: Int)) throws
         -> NegativeScanPrint.Reading {
-        let (border, measured) = try denseEnd(key, border: border, preview: preview)
-        let dense = ApproximateNegativeScan.denseEnd(measured, roll: roll)
+        let (border, measure) = try measure(key, border: border, preview: preview)
         return try NegativeScanPrint.Reading(
             stock: stock, border: border,
-            balance: ApproximateNegativeScan.balance(stock: stock, denseEnd: dense,
-                                                     correction: correction))
+            balance: negative.balance(stock: stock, border: border, denseEnd: measure.denseEnd,
+                                      source: source))
     }
 
-    /// What a framing measures for its roll: the clear film it is read against and its own
-    /// densest end, before any roll's colour. Arguments as `reading`.
+    /// What a framing measures for its roll: the clear film it is read against, its own densest
+    /// end, before any roll's colour, and the rises across its tonal steps. Arguments as
+    /// `reading`.
     func measure(_ key: String, border: [Float],
                  preview: () throws -> (rgba: [Float], width: Int, height: Int)) throws
-        -> (border: SIMD3<Float>, dense: SIMD3<Float>?) {
-        try denseEnd(key, border: border, preview: preview)
-    }
-
-    /// The scan read without a film (`PlainNegativeScan`), evened under the light frame `light`:
-    /// a scene-linear positive of the whole scan, which the editor frames and develops as it does
-    /// any photograph, balanced on `roll`'s colour when it has one, with `correction` of the
-    /// dyes' crosstalk. Arguments as `reading`.
-    func positive(_ key: String, border: [Float], light id: String?,
-                  roll: ApproximateNegativeScan.RollBalance?,
-                  correction: NegativeScanCrosstalk.Correction = .none,
-                  preview: () throws -> (rgba: [Float], width: Int, height: Int)) throws -> HostImage {
-        let plainKey = "\(key)|\(roll.map { "\($0.colour)" } ?? "")|\(correction)"
-        if let kept = lock.withLock({ plain }), kept.key == plainKey { return kept.image }
-        let (border, measured) = try denseEnd(key, border: border, preview: preview)
-        let dense = ApproximateNegativeScan.denseEnd(measured, roll: roll)
-        let positive = try prepared(light: id.flatMap(lightFrame),
-                                    plain: PlainNegativeScan(border: border, denseEnd: dense,
-                                                             correction: correction))
-        lock.withLock { plain = (plainKey, positive) }
-        return positive
-    }
-
-    /// `border` checked, and the framing's densest end over it, kept by `key`.
-    private func denseEnd(_ key: String, border: [Float],
-                          preview: () throws -> (rgba: [Float], width: Int, height: Int)) throws
-        -> (border: SIMD3<Float>, dense: SIMD3<Float>?) {
+        -> (border: SIMD3<Float>, measure: ApproximateNegativeScan.RollBalance.Measure) {
         guard border.count == 3, border.allSatisfy({ $0.isFinite && $0 > 0 }) else {
             throw Self.invalidBorder
         }
         let border = SIMD3(border[0], border[1], border[2])
-        if let kept = lock.withLock({ denseEnds.first { $0.key == key } }) { return (border, kept.dense) }
-        let framed = try preview()
-        let dense = ApproximateNegativeScan.denseEnd(
-            border: border, preview: Self.planes(framed.rgba, width: framed.width, height: framed.height))
-        lock.withLock {
-            denseEnds.removeAll { $0.key == key }
-            denseEnds.append((key, dense))
-            if denseEnds.count > 8 { denseEnds.removeFirst() }
+        if let kept = lock.withLock({ measures.first { $0.key == key } }) {
+            return (border, kept.measure)
         }
-        return (border, dense)
+        let framed = try preview()
+        let planes = Self.planes(framed.rgba, width: framed.width, height: framed.height)
+        let measure = ApproximateNegativeScan.RollBalance.Measure(
+            denseEnd: ApproximateNegativeScan.denseEnd(border: border, preview: planes),
+            slopes: ApproximateNegativeScan.tonalSlopes(border: border, preview: planes))
+        lock.withLock {
+            measures.removeAll { $0.key == key }
+            measures.append((key, measure))
+            if measures.count > 8 { measures.removeFirst() }
+        }
+        return (border, measure)
+    }
+
+    /// The scan read without a film (`PlainNegativeScan`), evened under the light frame `light`:
+    /// a scene-linear positive of the whole scan, which the editor frames and develops as it does
+    /// any photograph, read as the edit's `negative` says (`WebNativeEdit.Negative.plain`).
+    /// Arguments as `reading`.
+    func positive(_ key: String, border: [Float], light id: String?,
+                  negative: WebNativeEdit.Negative = .init(),
+                  preview: () throws -> (rgba: [Float], width: Int, height: Int)) throws -> HostImage {
+        let plainKey = "\(key)|\(negative.readingKey)"
+        if let kept = lock.withLock({ plain }), kept.key == plainKey { return kept.image }
+        let (border, measure) = try measure(key, border: border, preview: preview)
+        let positive = try prepared(
+            light: id.flatMap(lightFrame),
+            plain: negative.plain(border: border, denseEnd: measure.denseEnd, source: source))
+        lock.withLock { plain = (plainKey, positive) }
+        return positive
     }
 
     /// `rgba` drawn down to the readings' 512 pixels by area: the readings take a scan's extremes,

@@ -248,6 +248,74 @@ final class HostNegativeScanTests: XCTestCase {
         XCTAssertEqual(onRoll.negativeMeasure?["denseEnd"] as? [Double], dense)
     }
 
+    /// An edit made with the current reading is read through the scan's light and camera and
+    /// balanced as it says, from what its frame measures; one made before keeps its reading.
+    func testAnEditMadeWithTheCurrentReadingIsReadAsItSays() throws {
+        let (service, engine) = try service()
+        defer { fotufilm_engine_destroy(engine) }
+        let handle = open(service, width: 300, height: 200)
+        let border = self.border
+        let sampled: [String: Any] = ["border": border.indices.map { Double(border[$0]) }]
+        func prepared(_ negative: [String: Any], stock: String? = "gold200") throws -> HostService.Prepared {
+            try service.prepare(JSONSerialization.data(withJSONObject: request(
+                handle, stock: stock, maxEdge: 150, negative: sampled.merging(negative) { $1 })))
+        }
+        let first = try prepared([:])
+        let measure = try XCTUnwrap(first.negativeMeasure)
+        let dense = try XCTUnwrap(measure["denseEnd"] as? [Double]).map(Float.init)
+        let denseEnd = SIMD3<Float>(dense[0], dense[1], dense[2])
+        // The rises across the frame's tonal steps are measured with it, or said to be none.
+        if let slopes = measure["slopes"] as? [Double] {
+            XCTAssertEqual(slopes.count, 2)
+            XCTAssertTrue(slopes.allSatisfy { $0 > 0 })
+        } else {
+            XCTAssertTrue(measure["slopes"] is NSNull)
+        }
+
+        let stock = try NegativeScanPrint.film("gold200")
+        let roll: [String: Any] = ["colour": [0.9, 1.1], "frames": 12, "level": 1.1, "slopes": [0.9, 1.1]]
+        let neutral = [0.2, 0.05, 0.012]
+        let edits: [[String: Any]] = [
+            [:], ["crosstalk": 0.5, "roll": ["colour": [0.9, 1.1], "frames": 12]],
+            ["reading": 2], ["reading": 2, "scanLight": "screen", "camera": "scanner"],
+            ["reading": 2, "balance": "none"], ["reading": 2, "balance": "roll", "roll": roll],
+            ["reading": 2, "roll": roll], ["reading": 2, "neutral": neutral, "crosstalk": 0.4],
+        ]
+        var calibrations: [ApproximateNegativeScan] = []
+        for edit in edits {
+            let negative = try JSONDecoder().decode(
+                WebNativeEdit.Negative.self, from: JSONSerialization.data(withJSONObject: edit))
+            let read = try prepared(edit)
+            let expected = try NegativeScanPrint.Reading(
+                stock: stock, border: border,
+                balance: negative.balance(stock: stock, border: border, denseEnd: denseEnd))
+            let calibration = try XCTUnwrap(read.edit.negativeReading?.calibration, "\(edit)")
+            XCTAssertEqual(calibration, expected.calibration, "\(edit)")
+            XCTAssertEqual(read.edit.negativeReading?.highlightStops, expected.highlightStops, "\(edit)")
+            // The frame measures the same whichever way it is read.
+            XCTAssertEqual(read.negativeMeasure?["denseEnd"] as? [Double],
+                           measure["denseEnd"] as? [Double], "\(edit)")
+            XCTAssertFalse(calibrations.contains(calibration), "\(edit)")
+            calibrations.append(calibration)
+        }
+
+        // Without a film, each way of reading the frame makes its own positive.
+        func red(_ print: (rgba: [Float], width: Int, height: Int)) -> Float {
+            print.rgba[(50 * print.width + 60) * 4]
+        }
+        var reds: [Float] = []
+        for edit in [[:], ["reading": 2], ["reading": 2, "balance": "none"],
+                     ["reading": 2, "balance": "roll", "roll": roll],
+                     ["reading": 2, "neutral": neutral]] as [[String: Any]] {
+            let print = try develop(service, request(handle, stock: nil, maxEdge: 150,
+                                                     negative: sampled.merging(edit) { $1 }))
+            XCTAssertTrue(print.rgba.allSatisfy(\.isFinite), "\(edit)")
+            XCTAssertGreaterThan(red(print), 0, "\(edit)")
+            for other in reds { XCTAssertNotEqual(red(print), other, accuracy: 1e-4, "\(edit)") }
+            reds.append(red(print))
+        }
+    }
+
     /// The print stage on the CPU and on the GPU make the same print of a scan.
     func testCPUAndGPUPrintsAgree() throws {
         let (service, engine) = try service()

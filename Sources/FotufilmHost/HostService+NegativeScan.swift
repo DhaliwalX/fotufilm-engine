@@ -273,21 +273,21 @@ extension HostService {
             return HostNegativeScan.preview(try self.makeScene(image, geometry: framing, sizes: sizes),
                                             width: sizes.output.0, height: sizes.output.1)
         }
-        let roll = negative?.roll
-        let correction = negative?.correction ?? .none
+        let reading = negative ?? .init()
         if let stock {
             prepared.edit.negativeReading = try scan.reading(key, stock: stock, border: border,
-                                                             roll: roll, correction: correction,
-                                                             preview: preview)
+                                                             negative: reading, preview: preview)
         } else {
-            prepared.image = try scan.positive(key, border: border, light: light, roll: roll,
-                                               correction: correction, preview: preview)
+            prepared.image = try scan.positive(key, border: border, light: light,
+                                               negative: reading, preview: preview)
         }
         // What this frame measures for its roll, kept from the reading above.
-        let measured = try scan.measure(key, border: border, preview: preview)
+        let (read, measure) = try scan.measure(key, border: border, preview: preview)
         prepared.negativeMeasure = [
-            "border": (0..<3).map { Double(measured.border[$0]) },
-            "denseEnd": measured.dense.map { dense in (0..<3).map { Double(dense[$0]) } as Any }
+            "border": (0..<3).map { Double(read[$0]) },
+            "denseEnd": measure.denseEnd.map { dense in (0..<3).map { Double(dense[$0]) } as Any }
+                ?? NSNull(),
+            "slopes": measure.slopes.map { slopes in (0..<2).map { Double(slopes[$0]) } as Any }
                 ?? NSNull(),
         ]
     }
