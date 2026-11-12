@@ -123,16 +123,28 @@ final class EditLibrary {
 
     /// A roll of negatives: a folder on the shelf, named and dated by the photographer, holding the
     /// frames scanned from it. Its frames share a colour balance (`EditState.negative.roll`).
+    /// An album is the same folder holding photographs instead.
     struct Roll: Codable, Identifiable, Equatable, Sendable {
         let id: String
         var name: String
         /// The day the roll is filed under, as the photographer gives it.
         var date: Date
         let created: Date
+        /// Set on an album. Optional so the rolls written before albums still read.
+        var album: Bool?
+
+        /// Whether this folder holds photographs rather than a roll's scanned negatives.
+        var isAlbum: Bool { album == true }
     }
 
-    /// Every roll, newest date first.
+    /// Every roll and album, newest date first.
     private(set) var rolls: [Roll] = []
+
+    /// The albums of photographs, newest date first.
+    var albums: [Roll] { rolls.filter(\.isAlbum) }
+
+    /// The rolls of negatives, newest date first.
+    var negativeRolls: [Roll] { rolls.filter { !$0.isAlbum } }
 
     /// Where an entry's original lives.
     enum Original {
@@ -283,13 +295,15 @@ final class EditLibrary {
     /// asset it develops, and nothing else. A clip is always kept this way; a photograph is when
     /// the shelf stays on this device, where the library it links is.
     func create(linkedAsset identifier: String, rawTypeHint: String? = nil,
-                isVideo: Bool, edit: EditState) async -> String? {
+                isVideo: Bool, edit: EditState,
+                roll: String? = nil, name: String? = nil) async -> String? {
         let id = UUID().uuidString
         let dir = Self.root.appendingPathComponent(id)
         let record = Record(created: .now, modified: .now, rawTypeHint: rawTypeHint,
                             assetIdentifier: identifier, edit: edit,
                             isVideo: isVideo ? true : nil,
-                            linksOriginal: isVideo ? nil : true)
+                            linksOriginal: isVideo ? nil : true,
+                            roll: roll, name: name)
         let written = await Task.detached(priority: .utility) { () -> Bool in
             do {
                 try FileManager.default.createDirectory(
@@ -309,7 +323,8 @@ final class EditLibrary {
                              thumbStamp: record.modified,
                              stockID: edit.stockID,
                              isVideo: isVideo,
-                             linksOriginal: !isVideo), at: 0)
+                             linksOriginal: !isVideo,
+                             rollID: roll, name: name), at: 0)
         return id
     }
 
@@ -437,9 +452,10 @@ final class EditLibrary {
 
     // MARK: - Rolls
 
-    /// Starts a roll, empty, for frames to be filed in.
-    func createRoll(name: String, date: Date) -> Roll {
-        let roll = Roll(id: UUID().uuidString, name: name, date: date, created: .now)
+    /// Starts a roll, empty, for frames to be filed in — or an album, for photographs.
+    func createRoll(name: String, date: Date, album: Bool = false) -> Roll {
+        let roll = Roll(id: UUID().uuidString, name: name, date: date, created: .now,
+                        album: album ? true : nil)
         rolls = Self.ordered(rolls + [roll])
         writeRolls()
         return roll
