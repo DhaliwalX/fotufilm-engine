@@ -227,6 +227,61 @@ final class ReleasePrintTests: XCTestCase {
         XCTAssertEqual(FotufilmEngine.Options().printCorrection, 0)
     }
 
+    func testLADPatchIsTheViewersNeutralUnderEveryLamp() throws {
+        // Kodak H-61: the LAD patch of a correctly timed print looks neutral grey on the screen.
+        for id in ["gold200", "vision250d", "vision500t", "eterna500"] {
+            let stock = try XCTUnwrap(FilmStock.named(id))
+            for paper in prints {
+                let curves = paper.printCurves(for: stock)
+                let aim = try XCTUnwrap(paper.ladStatusA(for: stock))
+                let patch = SIMD3((0..<3).map { aim[$0] - curves[$0].dMin })
+                for kelvin: Float? in [nil, 2856, 6500] {
+                    let light = kelvin.map(SpectralRuntime.printLightSPD)
+                        ?? SpectralRuntime.referenceViewingLight(for: paper)
+                    let receiver = SpectralRuntime.printReceiver(stock: stock, paper: paper,
+                                                                 viewingLight: light)
+                    let grey = receiver.rgb(density: patch)
+                    XCTAssertEqual(grey.x, grey.y, accuracy: 1e-5, "\(id) \(paper)")
+                    XCTAssertEqual(grey.z, grey.y, accuracy: 1e-5, "\(id) \(paper)")
+                    // About 1.0 visual density, a little under for the display headroom.
+                    XCTAssertGreaterThan(grey.y, 0.09)
+                    XCTAssertLessThan(grey.y, 0.12)
+                    // Clear film is warmer than the grey it is judged against and still fits.
+                    let clear = receiver.rgb(density: .zero)
+                    XCTAssertEqual(clear.max(), 1, accuracy: 1e-5, "\(id) \(paper)")
+                    XCTAssertEqual(clear.x, 1, accuracy: 1e-5, "\(id) \(paper)")
+                    XCTAssertLessThan(clear.z, 0.9, "\(id) \(paper)")
+                    XCTAssertGreaterThan(clear.z, 0.7, "\(id) \(paper)")
+                }
+            }
+        }
+    }
+
+    func testOnlyAColourNegativeOnReleaseFilmMovesTheAdaptedWhite() throws {
+        let negative = TestStocks.negative
+        let xenon = Illuminant.xenonProjection
+        for paper in prints {
+            XCTAssertNotNil(SpectralRuntime.printReceiver(
+                stock: negative, paper: paper, viewingLight: xenon).adaptedWhite)
+            // The single-record monochrome convention and a projected transparency keep the lamp.
+            for id in ["trix400", "ektachromee100"] {
+                let stock = try XCTUnwrap(FilmStock.named(id))
+                XCTAssertNil(paper.ladStatusA(for: stock))
+                let receiver = SpectralRuntime.printReceiver(stock: stock, paper: paper,
+                                                             viewingLight: xenon)
+                XCTAssertNil(receiver.adaptedWhite, "\(id) \(paper)")
+                XCTAssertEqual(receiver.gain, 1)
+            }
+        }
+        // Reflection paper is balanced visually under its booth light and keeps paper white.
+        for paper: PrintPaper in [.ektacolorEdge, .enduraPremier, .crystalArchive] {
+            let receiver = SpectralRuntime.printReceiver(stock: negative, paper: paper,
+                                                         viewingLight: Illuminant.d50)
+            XCTAssertNil(receiver.adaptedWhite)
+            XCTAssertEqual(receiver.gain, 1)
+        }
+    }
+
     func testReflectiveAndScanLampsRetainTheirExistingSpectra() {
         let stock = TestStocks.negative
         let density = stock.curves.map { $0.density(logExposure: 0) }

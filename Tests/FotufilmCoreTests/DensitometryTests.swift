@@ -64,7 +64,9 @@ final class DensitometryTests: XCTestCase {
         }
     }
 
-    /// Clear paper carries no dye, so a print's white is display white under its own lamp.
+    /// Clear paper carries no dye, so a paper print's white is display white under its own lamp.
+    /// A release print is judged against its LAD grey, which leaves clear film warmer than
+    /// display white with its brightest channel on the display's peak.
     func testClearPaperIsDisplayWhite() {
         for paper in Self.physicalPrints {
             let unmix = PrintDyeUnmix(dyes: paper.analyticalDyes)
@@ -73,6 +75,11 @@ final class DensitometryTests: XCTestCase {
                 stock: stock, paper: paper,
                 viewingLight: SpectralRuntime.referenceViewingLight(for: paper))
             let white = receiver.rgb(density: .zero)
+            if paper.ladStatusA(for: stock) != nil {
+                XCTAssertEqual(white.max(), 1, accuracy: 1e-4, "\(paper.rawValue)")
+                XCTAssertLessThan(white.z, white.x, "\(paper.rawValue)")
+                continue
+            }
             for channel in 0..<3 {
                 XCTAssertEqual(white[channel], 1, accuracy: 1e-4, "\(paper.rawValue)")
             }
