@@ -80,11 +80,17 @@ final class NegativeDocument: @unchecked Sendable {
     private var holders: [HolderKey: Holder?] = [:]
     private var measures: [(key: MeasureKey, measure: Measure)] = []
 
+    private var readCapture: NegativeScanCapture?
+
     /// What the scan's file says of its camera and of how it was decoded
     /// (`NegativeScanImport.source`), which a reading through the scan's light and camera is
-    /// made of. Read once, when a reading first asks.
-    private(set) lazy var capture: NegativeScanCapture =
-        NegativeScanImport.source(data: original, identifierHint: typeHint)
+    /// made of. Read once, when a reading or a control first asks, whichever thread that is on.
+    var capture: NegativeScanCapture {
+        if let kept = lock.withLock({ readCapture }) { return kept }
+        let read = NegativeScanImport.source(data: original, identifierHint: typeHint)
+        lock.withLock { readCapture = read }
+        return read
+    }
 
     /// The camera the scan is read as taken with where its edit leaves that to the file
     /// (`NegativeScanCapture.readCamera`): its name, nil for the generic camera.
