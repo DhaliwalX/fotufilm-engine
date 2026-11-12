@@ -110,6 +110,32 @@ final class NegativeScanDecoderMatrixTests: XCTestCase {
                                                          after: after.map { $0 + 1 }))
     }
 
+    func testAWhiteAdaptedAfterTheMatrixShowsNone() {
+        // The cone space's axes, each to the scale that keeps white: every row adds up to one.
+        let adaptation = NegativeScanDecoderMatrix.adaptation
+        for row in 0..<3 { XCTAssertEqual(adaptation[row].sum(), 1, accuracy: 1e-5) }
+        XCTAssertTrue(NegativeScanDecoderMatrix.plausible(adaptation))
+        XCTAssertFalse(NegativeScanDecoderMatrix.adapts(matrix))
+        // A decoder that mixes the sensor's channels first and adapts the picture's white in the
+        // cone space: two tints of it differ by the cones' gains, whatever its own matrix.
+        let columns = (0..<3).map { SIMD3<Double>(Double(adaptation[0][$0]), Double(adaptation[1][$0]),
+                                                  Double(adaptation[2][$0])) }
+        let mixed = decoded(sensor(), balance: SIMD3(2.1, 1, 1.6))
+        func adapted(_ gains: SIMD3<Float>) -> [SIMD3<Float>] {
+            mixed.map { sample in
+                let cones = SIMD3<Float>(NegativeScanDecoderMatrix.solve(columns, SIMD3<Double>(sample))!)
+                    * gains
+                return SIMD3((adaptation[0] * cones).sum(), (adaptation[1] * cones).sum(),
+                             (adaptation[2] * cones).sum())
+            }
+        }
+        let before = adapted(SIMD3(1, 1, 1)), after = adapted(SIMD3(1.04, 0.9, 1.07))
+        XCTAssertNotNil(NegativeScanDecoderMatrix.linearMap(from: before, to: after))
+        XCTAssertNil(NegativeScanDecoderMatrix.recovered(before: before, after: after))
+        XCTAssertNil(NegativeScanDecoderMatrix.recovered(
+            before: before, tinted: [after, adapted(SIMD3(0.96, 1.1, 0.93))]))
+    }
+
     func testOnlyMatricesADecoderCouldUseArePlausible() {
         XCTAssertTrue(NegativeScanDecoderMatrix.plausible(matrix))
         XCTAssertFalse(NegativeScanDecoderMatrix.plausible(

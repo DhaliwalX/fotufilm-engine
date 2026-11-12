@@ -8,6 +8,10 @@ import Foundation
 /// decoded on a second white of the same colour temperature and another tint keep E and change D,
 /// so the second picture is T = E · (D₂ D₁⁻¹) · E⁻¹ of the first: a linear map whose eigenvectors
 /// are E's columns, each to the scale that takes balanced white to the picture's white.
+///
+/// Not every decoder balances the sensor's channels. A DNG's white is adapted after its matrix,
+/// in the Bradford cone space, and two tints of it show that space's axes in the picture's
+/// primaries: the same for every camera, and no matrix of any (`adaptation`).
 public enum NegativeScanDecoderMatrix {
     /// Fewest pixels a recovery takes.
     static let fewestSamples = 64
@@ -25,7 +29,8 @@ public enum NegativeScanDecoderMatrix {
     /// The matrix behind `before` and `after`: the same pixels decoded on two whites that differ
     /// in tint alone, in the picture's linear primaries. Rows are the picture's red, green and
     /// blue over the sensor's balanced channels. Nil where the pair does not show one: too few
-    /// usable pixels, a map that is not linear, or channels the tint moved alike.
+    /// usable pixels, a map that is not linear, channels the tint moved alike, or a white
+    /// adapted after the matrix.
     public static func recovered(before: [SIMD3<Float>], after: [SIMD3<Float>]) -> [SIMD3<Float>]? {
         guard before.count == after.count,
               let map = linearMap(from: before, to: after),
@@ -56,7 +61,32 @@ public enum NegativeScanDecoderMatrix {
             SIMD3<Float>(Float(ordered[0][row] * scales[0]), Float(ordered[1][row] * scales[1]),
                          Float(ordered[2][row] * scales[2]))
         }
-        return plausible(matrix) ? matrix : nil
+        return plausible(matrix) && !adapts(matrix) ? matrix : nil
+    }
+
+    /// What two tints show of a decoder that adapts its white after its matrix: the Bradford
+    /// cone space's axes in linear Rec. 2020, which scans are decoded to, each to the scale that
+    /// takes the cones' white to the picture's.
+    static let adaptation: [SIMD3<Float>] = {
+        // The cone space's axes as CIE XYZ: the Bradford matrix's inverse, by columns.
+        let axes: [SIMD3<Float>] = [
+            SIMD3(0.9869929, 0.4323053, -0.0085287), SIMD3(-0.1470543, 0.5183603, 0.0400428),
+            SIMD3(0.1599627, 0.0492912, 0.9684867),
+        ]
+        let columns = axes.map { SIMD3<Double>(SpectralGrid.linearRec2020(fromXYZ: $0)) }
+        let scales = solve(columns, SIMD3<Double>(1, 1, 1)) ?? SIMD3(1, 1, 1)
+        return (0..<3).map { row in
+            SIMD3<Float>(Float(columns[0][row] * scales[0]), Float(columns[1][row] * scales[1]),
+                         Float(columns[2][row] * scales[2]))
+        }
+    }()
+
+    /// Whether `matrix` is the one a decoder adapting its white after its own matrix shows.
+    static func adapts(_ matrix: [SIMD3<Float>]) -> Bool {
+        matrix.count == 3 && (0..<3).allSatisfy { row in
+            let difference = matrix[row] - adaptation[row]
+            return (0..<3).allSatisfy { abs(difference[$0]) <= agreement }
+        }
     }
 
     /// The matrix behind one decode and others of it on different tints: the mean of what each
