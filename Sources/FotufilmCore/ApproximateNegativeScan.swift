@@ -132,10 +132,12 @@ public struct ApproximateNegativeScan: Encodable, Equatable, Sendable {
     /// What a frame's own tones say about reading it on a film: per-record gains and offsets, and
     /// where its highlights sit.
     public struct Balance: Equatable, Sendable {
-        /// Make the frame's densest end, its highlights, read as one exposure on every record,
-        /// green held as it is. Broadband scanners and cameras see a cyan dye through a red
-        /// channel that also passes light the dye does not absorb, which otherwise leaves the
-        /// highlights off colour at every tone.
+        /// What each record's density over the clear film is multiplied by, green held as it
+        /// is. A reading without the scan model makes the frame's densest end, its highlights,
+        /// read as one exposure on every record this way: broadband scanners and cameras see a
+        /// cyan dye through a red channel that also passes light the dye does not absorb, which
+        /// otherwise leaves the highlights off colour at every tone. A reading on the model
+        /// keeps gains for how steep a roll's records read against each other (`contrast`).
         public var gains: SIMD3<Float>
         /// The highlights' exposure in stops over the film's mid-grey, for
         /// `FotufilmEngine.Options.sceneHighlightStops`. Nil for a frame too flat to tell.
@@ -145,7 +147,7 @@ public struct ApproximateNegativeScan: Encodable, Equatable, Sendable {
         public var weights: [SIMD3<Float>]? = nil
         /// Density added to each record, green held as it is, which puts a neutral of the frame
         /// on the film's own grey scale as a printer's filtration would
-        /// (`balance(stock:setup:separation:mode:tones:)`).
+        /// (`balance(stock:setup:separation:mode:tones:roll:)`).
         public var offset: SIMD3<Float> = .zero
 
         public static let neutral = Balance(gains: .one, highlightStops: nil)
@@ -179,28 +181,91 @@ public struct ApproximateNegativeScan: Encodable, Equatable, Sendable {
         return SIMD3(dense[0], dense[1], dense[2])
     }
 
-    /// The colour a roll's frames share: over the frames whose densest ends can be read, the
-    /// median of each end's red and blue density per unit of its green. The editor measures it
-    /// (web/src/negative-reading.js `rollBalance`) and keeps it with each frame's edit.
+    /// What a roll's frames share: the colour of their densest ends and how steep their records
+    /// read against each other. The editor measures it over the roll's frames and keeps it with
+    /// each frame's edit (web/src/negative-document.js `rollBalance` mirrors `init(measures:)`).
     public struct RollBalance: Codable, Equatable, Sendable {
-        /// The densest end's red and blue over its green.
+        /// The densest end's red and blue over its green: the median over the frames whose
+        /// densest ends can be read.
         public var colour: [Float]
         /// How many frames it was measured on.
         public var frames: Int
+        /// The green of the frames' densest ends, their median, in the scan channel's density
+        /// over the clear film. With `colour` it is the roll's neutral. Nil in a roll measured
+        /// before it was kept.
+        public var level: Float?
+        /// How red and blue rise per unit of green across the frames' tonal steps
+        /// (`tonalSlopes(border:preview:)`), the median over the frames that have enough. Nil
+        /// with fewer than `contrastFrames` of them.
+        public var slopes: [Float]?
 
-        public init(colour: [Float], frames: Int) {
+        /// How many frames' tonal steps a roll's contrast takes: fewer leave it to one
+        /// picture's colours.
+        public static let contrastFrames = 6
+
+        public init(colour: [Float], frames: Int, level: Float? = nil, slopes: [Float]? = nil) {
             self.colour = colour
             self.frames = frames
+            self.level = level
+            self.slopes = slopes
         }
 
         public init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             colour = try container.decode([Float].self, forKey: .colour)
             frames = try container.decode(Int.self, forKey: .frames)
-            guard colour.count == 2, colour.allSatisfy({ $0.isFinite && $0 > 0 }), frames >= 2 else {
+            level = try container.decodeIfPresent(Float.self, forKey: .level)
+            slopes = try container.decodeIfPresent([Float].self, forKey: .slopes)
+            let pair = { (values: [Float]) in
+                values.count == 2 && values.allSatisfy { $0.isFinite && $0 > 0 }
+            }
+            guard pair(colour), frames >= 2, level.map({ $0.isFinite && $0 > 0 }) ?? true,
+                  slopes.map(pair) ?? true else {
                 throw DecodingError.dataCorruptedError(
                     forKey: .colour, in: container, debugDescription: "Invalid roll balance.")
             }
+        }
+
+        /// What one frame gives its roll.
+        public struct Measure: Equatable, Sendable {
+            /// The frame's densest end (`denseEnd(border:preview:)`).
+            public var denseEnd: SIMD3<Float>?
+            /// The rises across its tonal steps (`tonalSlopes(border:preview:)`).
+            public var slopes: SIMD2<Float>?
+
+            public init(denseEnd: SIMD3<Float>? = nil, slopes: SIMD2<Float>? = nil) {
+                self.denseEnd = denseEnd
+                self.slopes = slopes
+            }
+        }
+
+        /// The roll of the frames measured as `measures`. A frame filled by one colour moves a
+        /// median little. Nil when fewer than two frames' densest ends can be read.
+        public init?(measures: [Measure]) {
+            let ends = measures.compactMap(\.denseEnd).filter { end in
+                (0..<3).allSatisfy { end[$0].isFinite && end[$0] > 0.05 }
+            }
+            guard ends.count >= 2 else { return nil }
+            let median = { (values: [Float]) -> Float in
+                let sorted = values.sorted(), middle = sorted.count / 2
+                return sorted.count % 2 == 1 ? sorted[middle]
+                    : (sorted[middle - 1] + sorted[middle]) / 2
+            }
+            colour = [median(ends.map { $0.x / $0.y }), median(ends.map { $0.z / $0.y })]
+            frames = ends.count
+            level = median(ends.map(\.y))
+            let stepped = measures.compactMap(\.slopes).filter { slope in
+                (0..<2).allSatisfy { slope[$0].isFinite && slope[$0] > 0 }
+            }
+            slopes = stepped.count >= Self.contrastFrames
+                ? [median(stepped.map(\.x)), median(stepped.map(\.y))] : nil
+        }
+
+        /// The roll's neutral in the scan channels' densities over the clear film: its colour
+        /// at the level of its densest ends, or at `green` for a roll kept without one.
+        func neutral(green: Float?) -> SIMD3<Float>? {
+            guard let green = level ?? green, green.isFinite, green > 0.05 else { return nil }
+            return SIMD3(colour[0] * green, green, colour[1] * green)
         }
     }
 
