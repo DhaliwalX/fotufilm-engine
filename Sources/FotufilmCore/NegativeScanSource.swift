@@ -49,6 +49,20 @@ public struct NegativeScanSource: Equatable, Codable, Sendable {
                                  matrix: rows)
     }
 
+    /// What a scan from this file is read as taken with where its edit leaves that to the file:
+    /// `id` as an edit names a camera (`NegativeScanSetup.Camera.name`), and a measured camera's
+    /// `name` as its file says it.
+    public var readCamera: (id: String, name: String?) {
+        let camera = setup(light: .white).camera
+        guard case .profile = camera, let identity = self.camera else { return (camera.name, nil) }
+        let make = identity.make?.trimmingCharacters(in: .whitespaces) ?? ""
+        let model = identity.model?.trimmingCharacters(in: .whitespaces) ?? ""
+        // Some cameras' models begin with their makers' names.
+        let name = (model.lowercased().hasPrefix(make.lowercased()) ? model : "\(make) \(model)")
+            .trimmingCharacters(in: .whitespaces)
+        return (camera.name, name.isEmpty ? nil : name)
+    }
+
     /// `matrix` as rows, where it is one a decoder could have used.
     private var matrixRows: [SIMD3<Float>]? {
         guard let matrix, matrix.count == 9, matrix.allSatisfy(\.isFinite) else { return nil }

@@ -68,6 +68,25 @@ final class NegativeScanSourceTests: XCTestCase {
         }
     }
 
+    func testASourceNamesTheCameraItIsReadAsTakenWith() {
+        let measured = NegativeScanSource(camera: sony, kelvin: 5100, matrix: matrix).readCamera
+        XCTAssertEqual(measured.id, "sony-ilce-7cm2")
+        XCTAssertEqual(measured.name, "SONY ILCE-7CM2")
+        // A maker's name is said once, whichever of the two the file puts it in.
+        let named = NegativeScanSource(
+            camera: CameraIdentity(make: "Sony", model: "Sony ILCE-7CM2 "), matrix: matrix).readCamera
+        XCTAssertEqual(named.id, "sony-ilce-7cm2")
+        XCTAssertEqual(named.name, "Sony ILCE-7CM2")
+        // A measured camera whose decoder's matrix is not known, one nobody measured, and a file
+        // that says nothing are read as the generic camera, which has no name of its own.
+        for source in [NegativeScanSource(camera: sony),
+                       NegativeScanSource(camera: CameraIdentity(make: "Unmeasured", model: "Camera"),
+                                          matrix: matrix), NegativeScanSource()] {
+            XCTAssertEqual(source.readCamera.id, "generic")
+            XCTAssertNil(source.readCamera.name)
+        }
+    }
+
     func testASourceCrossesToAFrontendAndBack() throws {
         let decoded = NegativeScanSource(camera: sony, kelvin: 5100, white: [0.343, 0.356],
                                          matrix: matrix)

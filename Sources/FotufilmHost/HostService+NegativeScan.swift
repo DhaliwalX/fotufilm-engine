@@ -255,16 +255,9 @@ extension HostService {
     /// What a scan is read as taken with where its edit leaves that to the file: `id` as an edit
     /// names a camera (`NegativeScanSetup.Camera.name`), and for a measured camera its `name`.
     static func readCamera(_ source: NegativeScanSource?) -> [String: Any] {
-        let camera = (source ?? NegativeScanSource()).setup(light: .white).camera
-        var read: [String: Any] = ["id": camera.name]
-        guard case .profile = camera, let identity = source?.camera else { return read }
-        let make = identity.make?.trimmingCharacters(in: .whitespaces) ?? ""
-        let model = identity.model?.trimmingCharacters(in: .whitespaces) ?? ""
-        // Some cameras' models begin with their makers' names.
-        let name = model.lowercased().hasPrefix(make.lowercased()) ? model : "\(make) \(model)"
-        if !name.trimmingCharacters(in: .whitespaces).isEmpty {
-            read["name"] = name.trimmingCharacters(in: .whitespaces)
-        }
+        let camera = (source ?? NegativeScanSource()).readCamera
+        var read: [String: Any] = ["id": camera.id]
+        if let name = camera.name { read["name"] = name }
         return read
     }
 
