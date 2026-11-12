@@ -4,12 +4,18 @@ import Foundation
 /// removes base/fog and the chosen film restores its model base. Optional per-record gains
 /// scale each channel's density, for scanners whose channels do not read the dyes' own
 /// densities, `weights` read each record from all three channels, undoing some of the
-/// dyes' crosstalk (`NegativeScanCrosstalk`), and an `offset` adds to each record's density as
-/// a printer's filtration does. This does not fit a scanner profile or correct illumination or
-/// flare.
+/// dyes' crosstalk (`NegativeScanCrosstalk`), `flare` takes the scan's stray light off before a
+/// density is read, and an `exposure` moves each record along the film's own curve as a
+/// printer's filtration moves a print. This does not fit a scanner profile or correct
+/// illumination.
 public struct ApproximateNegativeScan: Encodable, Equatable, Sendable {
+    /// Clear film as linear scan RGB, as it was sampled.
     public let border: [Float]
-    /// What the clear film reads: the film's model base, and the reading's offset over it.
+    /// Stray light the scan carries in each channel, linear scan RGB like `border`: the lens's
+    /// and the room's, which lifts every sample alike. The reading takes it off a sample and
+    /// off the clear film before their densities, so a dense highlight is not read thinner.
+    public let flare: [Float]
+    /// What the clear film reads: the film's model base.
     public let baseDensity: [Float]
     /// The scan channel each record mostly reads, which sets the usable range.
     public let recordChannels: [Int]
@@ -18,28 +24,49 @@ public struct ApproximateNegativeScan: Encodable, Equatable, Sendable {
     /// What each record reads from the scan channels' densities over the border
     /// (`NegativeScanCrosstalk.weights`): its own channel alone without crosstalk correction.
     public let weights: [SIMD3<Float>]
+    /// The usable samples, net of `flare`.
     public let minimumSample: [Float]
     public let maximumSample: [Float]
+    /// The frame's balance, as the density each record gains over what the scan reads of it:
+    /// `balanceSamples` values per record, across `balanceRange` of the record's weighted
+    /// density over the clear film, read linearly between them and held past the ends. An
+    /// exposure moves a record along the film's curve, so the gain is none at the clear film,
+    /// grows through the toe and is one density on the straight line. All zero for a reading
+    /// that moves nothing.
+    public let balance: [[Float]]
 
     public static let gainRange: ClosedRange<Float> = 0.5...2
-    /// How far an offset can move a record's density.
-    public static let offsetRange: ClosedRange<Float> = -1...1
+    /// How far a balance can move a record, in log exposure.
+    public static let exposureRange: ClosedRange<Float> = -1.5...1.5
+    /// How much of a channel's clear film can be stray light.
+    public static let flareLimit: Float = 0.5
+    /// The samples of `balance` for each record, and the weighted densities over the clear film
+    /// they span (FOTUFILM_SCAN_BALANCE_SAMPLES and FOTUFILM_SCAN_BALANCE_MAX).
+    public static let balanceSamples = 65
+    public static let balanceRange: ClosedRange<Float> = 0...4
 
-    /// Reads `stock` against `border` with the frame's `gains`, its `offset` in density, and
-    /// crosstalk `weights` (`Balance.weights`), each record from its own channel alone when nil.
+    /// Reads `stock` against `border` with the frame's `gains`, its balance as an `exposure`
+    /// added to each record in log exposure, crosstalk `weights` (`Balance.weights`), each
+    /// record from its own channel alone when nil, and the scan's `flare`.
     public init(stock: FilmStock, border: SIMD3<Float>, gains: SIMD3<Float> = .one,
-                offset: SIMD3<Float> = .zero, weights: [SIMD3<Float>]? = nil) throws {
+                exposure: SIMD3<Float> = .zero, weights: [SIMD3<Float>]? = nil,
+                flare: SIMD3<Float> = .zero) throws {
         guard !stock.isReversal else { throw ScannedNegativeError.positiveOutputRequired }
         _ = try ScannedNegativeConverter(dark: .zero, light: border, reference: .filmBase)
         guard (0..<3).allSatisfy({ gains[$0].isFinite && Self.gainRange.contains(gains[$0]) }),
-              (0..<3).allSatisfy({ offset[$0].isFinite && Self.offsetRange.contains(offset[$0]) }),
+              (0..<3).allSatisfy({ exposure[$0].isFinite
+                  && Self.exposureRange.contains(exposure[$0]) }),
+              (0..<3).allSatisfy({ flare[$0].isFinite && flare[$0] >= 0
+                  && flare[$0] <= Self.flareLimit * border[$0] }),
               weights.map({ $0.count == 3 && $0.allSatisfy { row in
                   (0..<3).allSatisfy { row[$0].isFinite } } }) ?? true else {
             throw ScannedNegativeError.invalidCalibration
         }
         self.border = [border.x, border.y, border.z]
+        self.flare = [flare.x, flare.y, flare.z]
+        let clear = border - flare
         let filmBase = (0..<3).map { stock.curves[$0].dMin }
-        baseDensity = stock.isMonochrome ? filmBase : (0..<3).map { filmBase[$0] + offset[$0] }
+        baseDensity = filmBase
         recordChannels = stock.isMonochrome ? [1, 1, 1] : [0, 1, 2]
         self.gains = stock.isMonochrome ? [1, 1, 1] : [gains.x, gains.y, gains.z]
         self.weights = stock.isMonochrome || weights == nil
@@ -52,31 +79,68 @@ public struct ApproximateNegativeScan: Encodable, Equatable, Sendable {
             let gain = self.gains[record]
             // Leave the same interior margin used by native scanned-negative import, about the
             // film's own base: a frame's balance does not move what counts as film.
-            let low = border[channel] * pow(10, (filmBase[record] - NegativeInterchange.range.upperBound) / gain + 0.0001)
-            let high = border[channel] * pow(10, (filmBase[record] - NegativeInterchange.range.lowerBound) / gain - 0.0001)
+            let low = clear[channel] * pow(10, (filmBase[record] - NegativeInterchange.range.upperBound) / gain + 0.0001)
+            let high = clear[channel] * pow(10, (filmBase[record] - NegativeInterchange.range.lowerBound) / gain - 0.0001)
             minimum[channel] = max(minimum[channel], low)
             maximum[channel] = min(maximum[channel], high)
         }
         minimumSample = minimum
         maximumSample = maximum
+        let recordGains = self.gains
+        balance = (0..<3).map { record in
+            let moved = stock.isMonochrome ? 0 : exposure[record]
+            guard moved != 0 else { return [Float](repeating: 0, count: Self.balanceSamples) }
+            let curve = stock.curves[record]
+            return (0..<Self.balanceSamples).map { sample in
+                let read = Self.balanceRange.lowerBound
+                    + (Self.balanceRange.upperBound - Self.balanceRange.lowerBound)
+                    * Float(sample) / Float(Self.balanceSamples - 1)
+                // What the scan reads of the record, and where the film's curve puts that
+                // density: the clear film, which no exposure made, stays as it is.
+                let density = curve.dMin + recordGains[record] * read
+                guard density > curve.dMin else { return 0 }
+                let made = curve.logExposure(density: density)
+                return curve.density(logExposure: made + moved) - curve.density(logExposure: made)
+            }
+        }
     }
 
-    /// One linear scan sample's record densities: the border's scanner density removed, each
-    /// record read from the channels by its weights, and the film's model base restored, inside
-    /// `NegativeInterchange.range`. `nil` where `convert` would mark the pixel invalid.
+    /// The density `balance` adds to `record` where the scan reads `read` of it over the clear
+    /// film.
+    @inlinable
+    public func balance(record: Int, read: Float) -> Float {
+        let table = balance[record]
+        let span = Self.balanceRange.upperBound - Self.balanceRange.lowerBound
+        let position = min(max((read - Self.balanceRange.lowerBound) / span
+                               * Float(Self.balanceSamples - 1), 0),
+                           Float(Self.balanceSamples - 1))
+        // A reading that is no number moves nothing.
+        guard position.isFinite else { return 0 }
+        let index = min(Int(position), Self.balanceSamples - 2)
+        let between = position - Float(index)
+        return table[index] * (1 - between) + table[index + 1] * between
+    }
+
+    /// One linear scan sample's record densities: the stray light taken off, the border's
+    /// scanner density removed, each record read from the channels by its weights, the film's
+    /// model base restored and the frame's balance added, inside `NegativeInterchange.range`.
+    /// `nil` where `convert` would mark the pixel invalid.
     @inlinable
     public func density(of sample: SIMD3<Float>) -> SIMD3<Float>? {
+        var net = SIMD3<Float>.zero
         for channel in 0..<3 {
-            let value = sample[channel]
+            let value = sample[channel] - flare[channel]
             guard value.isFinite, value > minimumSample[channel],
                   value < maximumSample[channel] else { return nil }
+            net[channel] = value
         }
-        let scanner = SIMD3((0..<3).map { -log10(sample[$0] / border[$0]) })
+        let scanner = SIMD3((0..<3).map { -log10(net[$0] / (border[$0] - flare[$0])) })
         var density = SIMD3<Float>.zero
         for record in 0..<3 {
             let weight = weights[record]
             let read = weight.x * scanner.x + weight.y * scanner.y + weight.z * scanner.z
-            density[record] = min(max(baseDensity[record] + gains[record] * read,
+            density[record] = min(max(baseDensity[record] + gains[record] * read
+                                      + balance(record: record, read: read),
                                       NegativeInterchange.range.lowerBound),
                                   NegativeInterchange.range.upperBound)
         }
@@ -145,10 +209,12 @@ public struct ApproximateNegativeScan: Encodable, Equatable, Sendable {
         /// What each record reads from the scan channels, undoing the dyes' crosstalk on the
         /// frame's own grey (`NegativeScanCrosstalk.weights`); nil reads each from its own channel.
         public var weights: [SIMD3<Float>]? = nil
-        /// Density added to each record, green held as it is, which puts a neutral of the frame
-        /// on the film's own grey scale as a printer's filtration would
-        /// (`balance(stock:setup:separation:mode:tones:roll:)`).
-        public var offset: SIMD3<Float> = .zero
+        /// Log exposure added to each record, green held as it is, which puts a neutral of the
+        /// frame on the film's own grey scale as a printer's filtration would
+        /// (`balance(stock:setup:separation:mode:tones:roll:)`). An exposure, not a density: the
+        /// scene's light moved each record along its curve, so the clear film and the toe move
+        /// less than the straight line does.
+        public var exposure: SIMD3<Float> = .zero
 
         public static let neutral = Balance(gains: .one, highlightStops: nil)
     }

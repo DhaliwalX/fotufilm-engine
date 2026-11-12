@@ -127,7 +127,7 @@ final class NegativeScanContrastTests: XCTestCase {
                 stock: stock, setup: setup, separation: 1, mode: .frame,
                 tones: .init(denseEnd: highlight), roll: roll)
             let reading = try ApproximateNegativeScan(
-                stock: stock, border: model.clear, gains: balance.gains, offset: balance.offset,
+                stock: stock, border: model.clear, gains: balance.gains, exposure: balance.exposure,
                 weights: balance.weights)
             var worst: Float = 0
             for exposure in stride(from: Float(-1.2), through: 0.6, by: 0.3) {
@@ -139,7 +139,7 @@ final class NegativeScanContrastTests: XCTestCase {
             return worst
         }
         XCTAssertLessThan(try worst(roll), 0.04)
-        XCTAssertGreaterThan(try worst(nil), 0.12)
+        XCTAssertGreaterThan(try worst(nil), 0.1)
     }
 
     func testContrastStaysInsideWhatARollCanBe() throws {

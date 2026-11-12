@@ -27,38 +27,87 @@ final class ApproximateNegativeScanTests: XCTestCase {
         XCTAssertThrowsError(try plan.convert(malformed))
     }
 
-    /// An offset adds to every density a record reads, the clear film's too, as filtration does,
-    /// and leaves what counts as film where it was.
-    func testAnOffsetMovesEveryDensityAndNotTheFilmsRange() throws {
+    /// A balance moves each record along the film's own curve: nothing at the clear film, one
+    /// density on the straight line, and what counts as film stays where it was.
+    func testABalanceMovesARecordAlongItsCurveAndNotTheFilmsRange() throws {
         let stock = TestStocks.negative
         let border = SIMD3<Float>(0.4, 0.6, 0.2)
         let plain = try ApproximateNegativeScan(stock: stock, border: border)
-        let offset = SIMD3<Float>(0.12, 0, -0.2)
-        let moved = try ApproximateNegativeScan(stock: stock, border: border, offset: offset)
+        XCTAssertEqual(plain.balance, [[Float]](
+            repeating: [Float](repeating: 0, count: ApproximateNegativeScan.balanceSamples),
+            count: 3))
+        let exposure = SIMD3<Float>(0.2, 0, -0.3)
+        let moved = try ApproximateNegativeScan(stock: stock, border: border, exposure: exposure)
         XCTAssertEqual(moved.minimumSample, plain.minimumSample)
         XCTAssertEqual(moved.maximumSample, plain.maximumSample)
-        for sample in [border, SIMD3<Float>(0.04, 0.06, 0.02), SIMD3(0.1, 0.3, 0.004)] {
+        XCTAssertEqual(moved.baseDensity, plain.baseDensity)
+        XCTAssertEqual(moved.balance[1], plain.balance[1])
+        // The clear film is the film's base whatever the balance.
+        XCTAssertEqual(try XCTUnwrap(moved.density(of: border)),
+                       try XCTUnwrap(plain.density(of: border)))
+        for sample in [SIMD3<Float>(0.3, 0.45, 0.15), SIMD3(0.12, 0.18, 0.06),
+                       SIMD3(0.04, 0.06, 0.02), SIMD3(0.1, 0.3, 0.004)] {
             let read = try XCTUnwrap(moved.density(of: sample))
             let unmoved = try XCTUnwrap(plain.density(of: sample))
-            for record in 0..<3 {
-                XCTAssertEqual(read[record], unmoved[record] + offset[record], accuracy: 0.000001)
+            XCTAssertEqual(read.y, unmoved.y)
+            for record in [0, 2] {
+                // The density the film's curve gives the exposure that made the reading, moved.
+                let curve = stock.curves[record]
+                let made = curve.logExposure(density: unmoved[record])
+                XCTAssertEqual(read[record], curve.density(logExposure: made + exposure[record]),
+                               accuracy: 0.004, "\(sample) \(record)")
+                XCTAssertEqual(read[record] > unmoved[record], exposure[record] > 0)
             }
         }
-        // The kernels take the offset in the base's slots.
-        let packed = ApproximateNegativeScan.packedReading(moved)
-        for record in 0..<3 {
-            XCTAssertEqual(packed[4 + record], stock.curves[record].dMin + offset[record],
-                           accuracy: 0.000001)
-        }
-        for invalid in [SIMD3<Float>(.nan, 0, 0), SIMD3(0, 1.5, 0), SIMD3(0, 0, -1.5)] {
+        // More exposure moves a dense record further than a thin one, up to the curve's slope.
+        let thin = try XCTUnwrap(moved.density(of: SIMD3(0.3, 0.45, 0.15))).x
+            - (try XCTUnwrap(plain.density(of: SIMD3(0.3, 0.45, 0.15))).x)
+        let dense = try XCTUnwrap(moved.density(of: SIMD3(0.04, 0.06, 0.02))).x
+            - (try XCTUnwrap(plain.density(of: SIMD3(0.04, 0.06, 0.02))).x)
+        XCTAssertGreaterThan(dense, thin)
+        XCTAssertEqual(dense, stock.curves[0].gamma * exposure.x, accuracy: 0.02)
+        for invalid in [SIMD3<Float>(.nan, 0, 0), SIMD3(0, 1.6, 0), SIMD3(0, 0, -1.6)] {
             XCTAssertThrowsError(try ApproximateNegativeScan(stock: stock, border: border,
-                                                             offset: invalid))
+                                                             exposure: invalid))
         }
         // A black-and-white film has one record and nothing to balance.
         let monochrome = try XCTUnwrap(FilmStock.presetDefinitions["hp5plus400"]).validated().stock
         XCTAssertEqual(
-            try ApproximateNegativeScan(stock: monochrome, border: border, offset: offset),
+            try ApproximateNegativeScan(stock: monochrome, border: border, exposure: exposure),
             try ApproximateNegativeScan(stock: monochrome, border: border))
+    }
+
+    /// Stray light lifts every sample alike, which reads a dense highlight thinner than it is.
+    /// Taken off the sample and the clear film before their densities, the film reads as it is.
+    func testFlareIsTakenOffBeforeADensityIsRead() throws {
+        let stock = TestStocks.negative
+        let border = SIMD3<Float>(0.4, 0.6, 0.2)
+        let plain = try ApproximateNegativeScan(stock: stock, border: border)
+        let flare = SIMD3<Float>(0.002, 0.003, 0.001)
+        let cleaned = try ApproximateNegativeScan(stock: stock, border: border + flare,
+                                                  flare: flare)
+        XCTAssertEqual(cleaned.flare, [0.002, 0.003, 0.001])
+        for density in [Float(0), 0.5, 1.5, 2.5] {
+            let film = border * pow(10, -density)
+            let read = try XCTUnwrap(cleaned.density(of: film + flare))
+            let expected = try XCTUnwrap(plain.density(of: film))
+            let lifted = try XCTUnwrap(plain.density(of: film + flare))
+            for record in 0..<3 {
+                XCTAssertEqual(read[record], expected[record], accuracy: 2e-4)
+                // Left in, a hundredth of the clear film's light costs the densest film most.
+                if density >= 1.5 {
+                    XCTAssertLessThan(lifted[record], expected[record] - 0.05 * (density - 1))
+                }
+            }
+        }
+        // A sample at the stray light's level or under it shows no film.
+        XCTAssertNil(cleaned.density(of: flare))
+        XCTAssertNil(cleaned.density(of: flare * 0.5))
+        // Stray light is no more than half the clear film's, and never less than none.
+        for invalid in [SIMD3<Float>(-0.001, 0, 0), SIMD3(0, .nan, 0), SIMD3(0.21, 0, 0)] {
+            XCTAssertThrowsError(try ApproximateNegativeScan(stock: stock, border: border,
+                                                             flare: invalid))
+        }
     }
 
     func testMonochromeUsesGreenForEveryFilmRecord() throws {
