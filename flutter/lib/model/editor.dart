@@ -196,8 +196,9 @@ class EditorModel extends ChangeNotifier implements RenderHost {
   List<Panel> get inspectorTabs => negatives.tabs(Panel.tabs);
   bool filmOpen = true;
   bool inspectorOpen = true;
-  @override
   bool histogramOpen = false;
+  @override
+  bool get histogramShown => histogramOpen || toneCurve.charted;
 
   /// Whether the format tiles show a quarter of the frame, where grain and halation tell.
   @override
@@ -296,6 +297,7 @@ class EditorModel extends ChangeNotifier implements RenderHost {
 
   @override
   void measured(HistogramData? data) {
+    if (identical(histogram, data)) return;
     histogram = data;
     notifyListeners();
   }

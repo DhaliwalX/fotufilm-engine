@@ -977,9 +977,8 @@ public final class HostService {
     /// holds them, developed exactly as the shown photograph is — its film, output medium, grade
     /// and output levels, on the photograph's own Auto Levels readings — and read back as the
     /// Display P3 codes the preview shows, 0…1 per channel. Grain, regional tone and veiling glare
-    /// are left off, so the strip shows tone alone. With it, the photograph's own tones binned on
-    /// the same input axis (Rec. 709 luma of its sRGB-encoded scene), for the chart's background.
-    /// Nil with no film or for a scanned negative, which prints its scan rather than a scene.
+    /// are left off, so the strip shows tone alone. Nil with no film or for a scanned negative,
+    /// which prints its scan rather than a scene.
     private func toneCurve(_ parameters: [String: Any]) throws -> Any {
         guard var render = parameters["render"] as? [String: Any] else { return NSNull() }
         render["viewport"] = nil
@@ -1033,21 +1032,7 @@ public final class HostService {
             }
             for channel in 0..<3 { curve[channel][step] = sum[channel] / count / 255 }
         }
-
-        var histogram = [Int](repeating: 0, count: steps)
-        let stride = max(1, Int((Double(sceneWidth * sceneHeight) / 65_536).squareRoot()))
-        for y in Swift.stride(from: 0, to: sceneHeight, by: stride) {
-            for x in Swift.stride(from: 0, to: sceneWidth, by: stride) {
-                let i = (y * sceneWidth + x) * 4
-                guard scene[i + 3] > 0 else { continue }
-                let linear = ColorScience.linearDisplayP3ToSRGB(ColorScience.linearRec2020ToDisplayP3(
-                    SIMD3(scene[i], scene[i + 1], scene[i + 2])))
-                let encoded = SIMD3((0..<3).map { ColorScience.gradingEncode(max(linear[$0], 0)) })
-                let luma = 0.2126 * encoded.x + 0.7152 * encoded.y + 0.0722 * encoded.z
-                histogram[Int((min(max(luma, 0), 1) * Float(steps - 1)).rounded())] += 1
-            }
-        }
-        return ["red": curve[0], "green": curve[1], "blue": curve[2], "histogram": histogram]
+        return ["red": curve[0], "green": curve[1], "blue": curve[2]]
     }
 
     /// Develops the whole frame at the export size and writes it where the host's save panel said.
