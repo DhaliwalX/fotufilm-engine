@@ -6,11 +6,12 @@ import { assetUrl } from './engine.js'
 // inspection, which can otherwise enumerate millions of samples.
 class RawImage {
   #pixels
-  constructor(width, height, data, colors, sceneScale, profile, sceneKelvin, lensShot) {
+  constructor(width, height, data, colors, sceneScale, profile, sceneKelvin, lensShot, scanSource) {
     this.lensMetadata = { shot: lensShot }
     this.naturalWidth = width
     this.naturalHeight = height
-    this.#pixels = { data, colors, sceneScale, profile, sceneKelvin }
+    // `scanSource`: what a negative's file says of its camera and decode (camera-profile.js).
+    this.#pixels = { data, colors, sceneScale, profile, sceneKelvin, scanSource }
   }
   get raw() {
     return this.#pixels
@@ -97,6 +98,7 @@ export function decodeRaw(
           data.profile,
           data.sceneKelvin,
           data.lensShot,
+          data.scanSource ?? null,
         ),
       )
     }

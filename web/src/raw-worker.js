@@ -1,4 +1,9 @@
-import { loadCameraProfiles, resolveCameraProfile, estimateAsShotKelvin } from './camera-profile.js'
+import {
+  loadCameraProfiles,
+  resolveCameraProfile,
+  estimateAsShotKelvin,
+  scanSource,
+} from './camera-profile.js'
 import { relatedAssetUrl } from './runtime-assets.js'
 
 // One worker per import releases the decoder's entire WASM heap on completion.
@@ -68,11 +73,14 @@ self.onmessage = async ({ data: { bytes, decoderURL, negative = false, exposure 
       cameraModel: camera.model, focalLength: positive(module._raw_focal_length()),
       aperture: positive(module._raw_aperture()),
     } : null
-    let profile = null, sceneKelvin = null
+    let profile = null, sceneKelvin = null, source = null
     if (negative || exposure) {
       // Reflectance-based scene corrections and photographic highlight recovery
       // are inappropriate for transmission through an already-developed negative.
       self.postMessage({ status: 'Decoding RAW negative without highlight reconstruction' })
+      // What the negative's reading takes of its camera and this decode. An exposure under one
+      // coloured light is balanced on daylight, not on the white its file says.
+      if (!exposure) source = scanSource(camera)
     } else {
       self.postMessage({ status: 'Loading camera spectral profiles' })
       const catalog = await loadCameraProfiles(relatedAssetUrl('camera-profiles.json', decoderURL))
@@ -95,9 +103,10 @@ self.onmessage = async ({ data: { bytes, decoderURL, negative = false, exposure 
     self.postMessage({ status: 'Copying decoded RAW pixels' })
     const start = module._raw_pixels() / 2
     const pixels = module.HEAPU16.slice(start, start + width * height * colors)
-    self.postMessage({ width, height, colors, sceneScale, profile, sceneKelvin, lensShot, pixels }, [
-      pixels.buffer,
-    ])
+    self.postMessage(
+      { width, height, colors, sceneScale, profile, sceneKelvin, scanSource: source, lensShot, pixels },
+      [pixels.buffer],
+    )
   } catch (error) {
     self.postMessage({ error: error.message || 'Could not decode RAW image.' })
   } finally {

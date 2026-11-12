@@ -1,3 +1,5 @@
+import { INGEST_COLOR } from './engine-constants.js'
+
 // Anchors and the white-balance locus are exported by the native engine. The
 // browser performs only the same small matrix interpolation as the Mac app.
 export function cameraKey(make, model) {
@@ -97,6 +99,57 @@ export function estimateAsShotKelvin(metadata, locus) {
   }
   // Do not invent a temperature from corrupt metadata or a white far off-locus.
   return best <= 0.05 ** 2 ? kelvin : null
+}
+
+// The decoder's linear sRGB as CIE XYZ (web/engine/raw_wasm.cpp `raw_camera_to_xyz`).
+const SRGB_TO_XYZ = [
+  0.412453, 0.35758, 0.180423, 0.212671, 0.71516, 0.072169, 0.019334, 0.119193, 0.950227,
+]
+
+const product3 = (a, b) =>
+  Array.from({ length: 9 }, (_, i) =>
+    [0, 1, 2].reduce((sum, k) => sum + a[Math.floor(i / 3) * 3 + k] * b[k * 3 + (i % 3)], 0),
+  )
+
+// What a scanned negative's reading takes from its RAW file and this decode of it
+// (Sources/FotufilmCore/NegativeScanCapture.swift): the camera the file names, the white it was
+// decoded on (CIE x and y, and its temperature by McCamy's formula, as the desktop's decoder
+// says them) and the matrix its balanced channels were mixed into Rec. 2020 with, nine values by
+// rows. `cameraToXYZ` holds the decoder's own matrix into sRGB with each column at the camera's
+// daylight level; that matrix keeps white, each row adding up to one, which finds the levels.
+export function scanSource(metadata) {
+  const source = {}
+  const name = (text) => (typeof text === 'string' && text.trim() ? text.trim() : null)
+  const make = name(metadata.make),
+    model = name(metadata.model)
+  if (make && model) source.camera = { make, model }
+  const toXYZ = metadata.cameraToXYZ
+  if (metadata.channels !== 3 || !inverse3(toXYZ)) return source
+  const balance = metadata.whiteBalance
+  if (balance?.length === 3 && balance.every((v) => Number.isFinite(v) && v > 0)) {
+    const [X, Y, Z] = [0, 1, 2].map((r) =>
+      balance.reduce((sum, v, c) => sum + toXYZ[r * 3 + c] / v, 0),
+    )
+    const x = X / (X + Y + Z),
+      y = Y / (X + Y + Z)
+    if (x > 0 && y > 0 && x + y < 1) {
+      source.white = [x, y]
+      const n = (x - 0.332) / (0.1858 - y)
+      const kelvin = 449 * n ** 3 + 3525 * n ** 2 + 6823.3 * n + 5520.33
+      if (kelvin > 1000 && kelvin < 50000) source.kelvin = kelvin
+    }
+  }
+  const scaled = product3(inverse3(SRGB_TO_XYZ), toXYZ)
+  const levels = inverse3(scaled)
+  if (!levels) return source
+  const level = [0, 1, 2].map((c) => levels[c * 3] + levels[c * 3 + 1] + levels[c * 3 + 2])
+  if (!level.every((v) => Number.isFinite(v) && v > 0)) return source
+  const matrix = product3(
+    INGEST_COLOR.linearSRGBToRec2020,
+    scaled.map((v, i) => v * level[i % 3]),
+  )
+  if (matrix.every(Number.isFinite)) source.matrix = matrix
+  return source
 }
 
 export function resolveCameraProfile(metadata, catalog) {

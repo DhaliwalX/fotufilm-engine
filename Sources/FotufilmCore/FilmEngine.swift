@@ -1710,6 +1710,8 @@ public struct FilmEngineInvocation {
         configuration += [runsDonor ? Float(uncolouredDonors.count) : 0]
         configuration += [0] // DONOR_EXTRA_LUT_ID, populated below once scene illuminant resolves
         configuration += [couplerCrossPointwiseShare]
+        configuration += ApproximateNegativeScan.packedBalance(
+            options.stage == .print ? options.scanReading : nil)
         precondition(configuration.count == Self.configurationCount)
 
         var optical = 0

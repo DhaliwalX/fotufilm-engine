@@ -47,6 +47,10 @@ for name in ['linearSRGBToRec2020', 'linearDisplayP3ToRec2020']:
 ingest['luminanceWeights'] = [float(value.strip()) for value in re.search(
     r'luminanceWeights:.*?= \(([^)]+)\)', color)[1].split(',')]
 result += 'export const INGEST_COLOR = ' + json.dumps(ingest) + '\n'
+# The reading a new scanned negative's edit is made with (`WebNativeEdit.Negative`).
+reading = re.search(r'public static let currentReading = (\d+)',
+                    (root / 'Sources/FotufilmEditModel/WebNativeEdit.swift').read_text())
+result += 'export const NEGATIVE = ' + json.dumps({'currentReading': int(reading[1])}) + '\n'
 if '--check' in sys.argv:
     if not target.exists() or target.read_text() != result:
         sys.exit('Browser constants are stale. Run python3 tools/export-web-constants.py.')

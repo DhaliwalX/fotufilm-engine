@@ -13,6 +13,7 @@ import 'controls.dart';
 import 'grade_deck.dart';
 import 'lens_filters.dart';
 import 'lens_section.dart';
+import 'negative_panel.dart';
 
 final _gradeKeys = [
   for (final band in GradeDeck.bands)
@@ -71,8 +72,11 @@ Section? sourceIlluminantSection(InspectorControls c) {
   ]);
 }
 
-Section whiteBalanceSection(InspectorControls c) =>
-    Section(title: 'White Balance', children: c.sliders('White Balance'));
+/// The light's white balance, under what a scanned negative's frame is balanced on.
+Section whiteBalanceSection(InspectorControls c) => Section(title: 'White Balance', children: [
+      ...negativeBalanceControls(c),
+      ...c.sliders('White Balance'),
+    ]);
 
 Section colorSection(InspectorControls c) => Section(title: 'Color', children: c.sliders('Color'));
 

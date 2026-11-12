@@ -59,22 +59,73 @@ void main() {
   });
 
   test('a roll\'s colour is the median of its readable frames, red and blue per green', () {
-    expect(rollBalance([
-      [1.0, 1.0, 1.0],
-    ]), isNull);
-    expect(rollBalance([
-      [1.0, 1.0, 1.0],
-      [0.01, 1.0, 1.0],
-      null,
-    ]), isNull);
+    Map end(List<double> dense) => {'denseEnd': dense};
+    expect(rollBalance([end([1.0, 1.0, 1.0])]), isNull);
+    expect(rollBalance([end([1.0, 1.0, 1.0]), end([0.01, 1.0, 1.0]), null]), isNull);
     final roll = rollBalance([
-      [1.2, 1.0, 0.8],
-      [2.6, 2.0, 1.8],
-      [1.0, 0.5, 0.6],
+      end([1.2, 1.0, 0.8]),
+      end([2.6, 2.0, 1.8]),
+      end([1.0, 0.5, 0.6]),
+      {'denseEnd': null, 'slopes': null},
     ])!;
     expect(roll['frames'], 3);
     expect(roll['colour'][0], closeTo(1.3, 1e-9));
     expect(roll['colour'][1], closeTo(0.9, 1e-9));
+    // Its level is the median green of those ends; its steepness needs six frames' steps.
+    expect(roll['level'], closeTo(1.0, 1e-9));
+    expect(roll.containsKey('slopes'), isFalse);
+    final steps = [
+      [0.8, 1.1], [0.9, 1.2], [1.0, 1.3], [0.85, 1.25], [0.95, 1.15], [0.9, 1.2],
+    ];
+    Map stepped(int i) => {
+          'denseEnd': [1.2, 1.0, 0.8],
+          'slopes': steps[i],
+        };
+    expect(rollBalance([for (var i = 0; i < 5; i++) stepped(i)])!.containsKey('slopes'), isFalse);
+    final contrast = rollBalance([
+      for (var i = 0; i < 6; i++) stepped(i),
+      {'denseEnd': [1.2, 1.0, 0.8], 'slopes': [double.nan, 1.0]},
+    ])!;
+    expect(contrast['slopes'][0], closeTo(0.9, 1e-9));
+    expect(contrast['slopes'][1], closeTo(1.2, 1e-9));
+    expect(contrast['frames'], 7);
+  });
+
+  test('a new negative takes the reading its scan opens with, an older edit keeps its own', () {
+    expect(newNegative(), {
+      'border': null, 'lightFrame': null, 'roll': null, 'crosstalk': 0, 'scanLight': 'white',
+    });
+    final fresh = newNegative('screen', 2, true);
+    expect(fresh['reading'], 2);
+    expect(fresh['crosstalk'], 1);
+    // A camera nobody measured starts with the dyes unseparated; LED exposures separate.
+    expect(newNegative('white', 2)['crosstalk'], 0);
+    expect(newNegative('rgb', 2)['crosstalk'], 1);
+    expect(measuredCamera({'camera': {'id': 'sony-ilce-7cm2', 'name': 'SONY ILCE-7CM2'}}), isTrue);
+    expect(measuredCamera({'camera': {'id': 'generic'}}), isFalse);
+    expect(measuredCamera(null), isFalse);
+    expect(fresh['scanLight'], 'screen');
+    expect(readsModel(fresh), isTrue);
+    expect(readsModel(newNegative()), isFalse);
+    expect(readsModel(null), isFalse);
+    expect(balanceOf(fresh), 'frame');
+    expect(balanceOf({...fresh, 'balance': 'none'}), 'none');
+
+    // Update Reading: the dyes separated all the way unless the edit said how far, and a frame
+    // on its roll stays on it.
+    final roll = {'colour': [0.9, 1.2], 'frames': 4};
+    final updated = updatedReading(
+        {...newNegative('rgb'), 'roll': roll, 'border': [.8, .5, .2]}, 2, separates: true);
+    expect(updated['reading'], 2);
+    expect(updated['crosstalk'], 1);
+    expect(updated['balance'], 'roll');
+    expect(updated['roll'], roll);
+    expect(updated['border'], [.8, .5, .2]);
+    expect(updated['scanLight'], 'rgb');
+    final kept = updatedReading({...newNegative(), 'crosstalk': 0.4}, 2, separates: true);
+    expect(updatedReading(newNegative(), 2)['crosstalk'], 0);
+    expect(kept['crosstalk'], 0.4);
+    expect(kept.containsKey('balance'), isFalse);
   });
 
   test('Show Negative develops the negative without touching the edit', () {

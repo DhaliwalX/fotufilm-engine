@@ -65,6 +65,16 @@ public enum Illuminant {
     static func matching(_ xy: SIMD2<Float>, base: [Float]) -> [Float] {
         precondition(xy.x.isFinite && xy.y.isFinite && xy.x > 0 && xy.y > 0,
                      "invalid illuminant chromaticity")
+        guard let values = matched(xy, base: base) else {
+            preconditionFailure("illuminant chromaticity solve did not converge")
+        }
+        return values
+    }
+
+    /// `matching(_:base:)` for a chromaticity that comes from a file: nil where it is none, or
+    /// one the solve does not reach.
+    static func matched(_ xy: SIMD2<Float>, base: [Float]) -> [Float]? {
+        guard xy.x.isFinite, xy.y.isFinite, xy.x > 0, xy.y > 0 else { return nil }
         let origin = WhiteBalance.uvFromXY(chromaticity(base))
         let xy = WhiteBalance.boundedChromaticity(
             fromUV: origin, displacement: WhiteBalance.uvFromXY(xy) - origin)
@@ -89,7 +99,7 @@ public enum Illuminant {
             }
             if max(abs(f), abs(g)) < 1e-10 { break }
             let determinant = aa * bb - ab * ab
-            precondition(determinant > 0, "illuminant chromaticity is outside the spectral support")
+            guard determinant > 0 else { return nil }
             let da = (bb * f - ab * g) / determinant
             let db = (aa * g - ab * f) / determinant
             let scale = min(1, 1 / max(abs(da), abs(db)))
@@ -97,9 +107,11 @@ public enum Illuminant {
             b -= scale * db
         }
         let values = result.map(Float.init)
+        guard values.allSatisfy({ $0.isFinite }), values.contains(where: { $0 > 0 }) else {
+            return nil
+        }
         let white = chromaticity(values)
-        precondition(abs(white.x - xy.x) < 1e-5 && abs(white.y - xy.y) < 1e-5,
-                     "illuminant chromaticity solve did not converge")
+        guard abs(white.x - xy.x) < 1e-5, abs(white.y - xy.y) < 1e-5 else { return nil }
         return values
     }
 

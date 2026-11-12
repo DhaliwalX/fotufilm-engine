@@ -84,17 +84,36 @@ final class ScannedNegativePrintTests: XCTestCase {
         try assertBandedScanPrintMatchesThePrintStage(crosstalk: 1)
     }
 
-    private func assertBandedScanPrintMatchesThePrintStage(crosstalk: Float) throws {
+    /// The kernels take off a scan's stray light and add each record's balance as
+    /// `ApproximateNegativeScan.density(of:)` does.
+    func testBandedScanPrintTakesOffFlareAndBalancesAsTheReadingDoes() throws {
+        try assertBandedScanPrintMatchesThePrintStage(
+            crosstalk: 1, exposure: SIMD3(0.2, 0, -0.3), flare: SIMD3(0.002, 0.0015, 0.0008))
+    }
+
+    private func assertBandedScanPrintMatchesThePrintStage(
+        crosstalk: Float, exposure: SIMD3<Float> = .zero, flare: SIMD3<Float> = .zero
+    ) throws {
         #if canImport(Metal)
         let gpu = try XCTUnwrap(HalideMetalFilmRenderer.shared)
         let width = 96, height = 64
         let image = scan(width: width, height: height)
         let stock = TestStocks.negative
         let calibration = try ApproximateNegativeScan(
-            stock: stock, border: border,
+            stock: stock, border: border, exposure: exposure,
             weights: NegativeScanCrosstalk.weights(
-                for: stock, correction: .init(strength: crosstalk, light: .white), neutral: nil))
+                for: stock, correction: .init(strength: crosstalk, light: .white), neutral: nil),
+            flare: flare)
         let converted = try calibration.convert(image)
+        if exposure != .zero || flare != .zero {
+            // The reading is not the plain one: the balance and the stray light move it.
+            let plain = try ApproximateNegativeScan(
+                stock: stock, border: border, weights: calibration.weights).convert(image)
+            let moved = (0..<image.pixelCount).filter { !converted.invalid[$0] }.map {
+                abs(converted.density.planes[0][$0] - plain.density.planes[0][$0])
+            }
+            XCTAssertGreaterThan(moved.max() ?? 0, 0.05)
+        }
         var options = FotufilmEngine.Options()
         options.paper = .screen
         options.stage = .print

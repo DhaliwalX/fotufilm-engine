@@ -4,6 +4,8 @@
 //   {"trichromatic": ["/r.tif", ...]}       merges exposures and opens the scans
 //   {"sampling": true}                      Pick Clear Film on or off
 //   {"sampleFilmBase": [0.02, 0.5]}         samples clear film at a point of the picture (0–1)
+//   {"sampleNeutral": [0.5, 0.5]}           picks something neutral at a point of the picture
+//   {"updateReading": true}                 Update Reading on the shown negative
 //   {"showNegative": true}                  View › Show Negative
 //   {"measureRoll": true}                   Measure Roll on the shown frame's roll
 //   {"clearRoll": true}                     Balance Every Frame Alone
@@ -24,8 +26,17 @@ Future<void> driveNegatives(
   if (c['sampling'] case final bool on) scans.setSampling(on);
   if (c['sampleFilmBase'] case [final num x, final num y]) {
     scans.setSampling(true);
-    await scans.sampleFilmBase(Offset(x.toDouble(), y.toDouble()));
+    await scans.sample(Offset(x.toDouble(), y.toDouble()));
     log('border ${scans.negative?['border']} error ${editor.error}');
+  }
+  if (c['sampleNeutral'] case [final num x, final num y]) {
+    scans.setPicking('neutral');
+    await scans.sample(Offset(x.toDouble(), y.toDouble()));
+    log('neutral ${scans.negative?['neutral']} error ${editor.error}');
+  }
+  if (c['updateReading'] == true) {
+    scans.updateReading();
+    log('reading ${scans.negative?['reading']} balance ${scans.negative?['balance']}');
   }
   if (c['showNegative'] case final bool on) {
     if (scans.showNegative != on) scans.toggleShowNegative();

@@ -107,8 +107,8 @@ final class HostNegativeLightFrames {
 /// develop of it prints the framed scan through the edit's own print (`HostEngine.printNegative`).
 extension HostService {
     static let negativeScanMethods: Set<String> = [
-        "negativeSampleFilmBase", "negativeLightFrames", "negativeAddLightFrame",
-        "negativeRemoveLightFrame",
+        "negativeSampleFilmBase", "negativeSampleNeutral", "negativeLightFrames",
+        "negativeAddLightFrame", "negativeRemoveLightFrame",
     ]
 
     func negativeScan(_ method: String, parameters: [String: Any],
@@ -116,7 +116,11 @@ extension HostService {
         do {
             switch method {
             case "negativeSampleFilmBase":
-                return try answer(value: sampleFilmBase(parameters))
+                return try answer(value: sampleScan(parameters, pointing: Self.pointAtFilmBase,
+                                                    unreadable: HostNegativeScan.invalidBorder))
+            case "negativeSampleNeutral":
+                return try answer(value: sampleScan(parameters, pointing: Self.pointAtNeutral,
+                                                    unreadable: Self.pointAtNeutral))
             case "negativeLightFrames":
                 return try answer(value: negativeScans.lights.all().map { ["id": $0.id, "name": $0.name] })
             case "negativeAddLightFrame":
@@ -235,17 +239,30 @@ extension HostService {
         } else {
             image = try HostImage.open(url)
         }
+        let source = image.scanSource
         let lights = negativeScans.lights
         var descriptor = image.descriptor
         let handle = register(image)
-        negativeScans.add(HostNegativeScan(scan: image) { lights.frame($0)?.measured },
-                          handle: handle)
+        negativeScans.add(
+            HostNegativeScan(scan: image, source: source) { lights.frame($0)?.measured },
+            handle: handle)
         descriptor["handle"] = handle
         descriptor["negative"] = [
             "suggestions": negativeFilmSuggestions(image),
             "lightFrames": lights.all().map { ["id": $0.id, "name": $0.name] },
+            "reading": WebNativeEdit.Negative.currentReading,
+            "camera": Self.readCamera(source),
         ]
         return try answer(descriptor, images: ["preview": previewPNG(image)])
+    }
+
+    /// What a scan is read as taken with where its edit leaves that to the file: `id` as an edit
+    /// names a camera (`NegativeScanSetup.Camera.name`), and for a measured camera its `name`.
+    static func readCamera(_ source: NegativeScanCapture?) -> [String: Any] {
+        let camera = (source ?? NegativeScanCapture()).readCamera
+        var read: [String: Any] = ["id": camera.id]
+        if let name = camera.name { read["name"] = name }
+        return read
     }
 
     /// A negative document's develop: the scan evened under the edit's light frame, and its
@@ -262,7 +279,8 @@ extension HostService {
             guard NegativeScanPrint.reads(stock) else { throw NegativeScanPrint.Failure.reversalFilm }
             return stock
         }
-        let border = try negative?.border ?? scan.estimatedBorder(light: light)
+        let border = try negative?.border
+            ?? scan.estimatedBorder(light: light, filmBase: negative?.readsModel ?? false)
         // The picture as framed, crop included even while the crop tool shows the whole frame:
         // the reading follows what will print.
         let image = prepared.image
@@ -273,32 +291,44 @@ extension HostService {
             return HostNegativeScan.preview(try self.makeScene(image, geometry: framing, sizes: sizes),
                                             width: sizes.output.0, height: sizes.output.1)
         }
-        let roll = negative?.roll
-        let correction = negative?.correction ?? .none
+        let reading = negative ?? .init()
         if let stock {
-            prepared.edit.negativeReading = try scan.reading(key, stock: stock, border: border,
-                                                             roll: roll, correction: correction,
-                                                             preview: preview)
+            prepared.edit.negativeReading = try scan.reading(
+                key, stock: stock, border: border, light: light, negative: reading,
+                preview: preview)
         } else {
-            prepared.image = try scan.positive(key, border: border, light: light, roll: roll,
-                                               correction: correction, preview: preview)
+            prepared.image = try scan.positive(key, border: border, light: light,
+                                               negative: reading, preview: preview)
         }
         // What this frame measures for its roll, kept from the reading above.
-        let measured = try scan.measure(key, border: border, preview: preview)
+        let (read, flare, _, measure) = try scan.measure(key, border: border, light: light,
+                                                      negative: reading, preview: preview)
         prepared.negativeMeasure = [
-            "border": (0..<3).map { Double(measured.border[$0]) },
-            "denseEnd": measured.dense.map { dense in (0..<3).map { Double(dense[$0]) } as Any }
+            "border": (0..<3).map { Double(read[$0]) },
+            "flare": (0..<3).map { Double(flare[$0]) },
+            "denseEnd": measure.denseEnd.map { dense in (0..<3).map { Double(dense[$0]) } as Any }
+                ?? NSNull(),
+            "slopes": measure.slopes.map { slopes in (0..<2).map { Double(slopes[$0]) } as Any }
                 ?? NSNull(),
         ]
     }
 
-    /// Clear film sampled where the page points on the framed scan: the median over a patch a
-    /// fortieth of the picture's long edge across.
-    private func sampleFilmBase(_ parameters: [String: Any]) throws -> [Double] {
+    static let pointAtFilmBase = HostEngine.Failure(
+        description: "Point at clear film on the negative.")
+    static let pointAtNeutral = HostEngine.Failure(
+        description: "Pick something grey or white in the picture, where the scan shows the film.")
+
+    /// The scan sampled where the page points on the framed scan, as linear Rec. 2020 scan RGB:
+    /// the median over a patch a fortieth of the picture's long edge across. Clear film to read
+    /// the scan against (`border`), or something neutral in the picture to balance it on
+    /// (`neutral`). Fails as `pointing` for a call that points nowhere, and as `unreadable`
+    /// where the patch shows too little film.
+    private func sampleScan(_ parameters: [String: Any], pointing: HostEngine.Failure,
+                            unreadable: HostEngine.Failure) throws -> [Double] {
         guard var render = parameters["render"] as? [String: Any],
               let point = parameters["point"] as? [Double], point.count == 2,
               (0...1).contains(point[0]), (0...1).contains(point[1]) else {
-            throw HostEngine.Failure(description: "Point at clear film on the negative.")
+            throw pointing
         }
         render["viewport"] = nil
         let prepared = try prepare(JSONSerialization.data(withJSONObject: render), readsNegative: false)
@@ -306,10 +336,10 @@ extension HostService {
         let (width, height) = prepared.sizes.output
         let radius = max(2, max(width, height) / 80)
         let x = Int(point[0] * Double(width)), y = Int(point[1] * Double(height))
-        return try HostNegativeScan.border(scene, width: width, height: height,
-                                           x0: x - radius, y0: y - radius,
-                                           x1: x + radius + 1, y1: y + radius + 1)
-            .map(Double.init)
+        guard let sampled = try? HostNegativeScan.border(
+            scene, width: width, height: height, x0: x - radius, y0: y - radius,
+            x1: x + radius + 1, y1: y + radius + 1) else { throw unreadable }
+        return sampled.map(Double.init)
     }
 
     /// Up to three readings of the film base, each naming the films it could be.

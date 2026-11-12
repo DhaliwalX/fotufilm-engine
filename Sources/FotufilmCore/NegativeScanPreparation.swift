@@ -27,9 +27,10 @@ public enum NegativeScanPreparation {
         guard light != nil || plain != nil else { return }
         var parameters: [Float] = [light == nil ? 0 : 1, plain == nil ? 0 : 1, 1, 1, 1, 1, 1, 1, 0,
                                    1, 0, 0, 0, 1, 0, 0, 0, 1]
+        parameters += plain.map(Self.packedLight) ?? [0, 0, 0, 0, 1, 1, 1]
         if let plain {
             for c in 0..<3 {
-                parameters[2 + c] = plain.border[c]
+                parameters[2 + c] = plain.border[c] - plain.flare[c]
                 parameters[5 + c] = plain.gains[c]
                 for k in 0..<3 { parameters[9 + 3 * c + k] = plain.weights[c][k] }
             }
@@ -42,6 +43,14 @@ public enum NegativeScanPreparation {
                                   Int32(light?.height ?? 1), parameters)
         }
         guard status == 0 else { throw Failure.unprepared }
+    }
+
+    /// The last seven of the kernel's parameters for `plain`: the scan's stray light, the toe's
+    /// light, and each channel's light scale.
+    public static func packedLight(_ plain: PlainNegativeScan) -> [Float] {
+        let scales = plain.lightScales
+        return [plain.flare.x, plain.flare.y, plain.flare.z, plain.toeLight,
+                scales.x, scales.y, scales.z]
     }
 
     public enum Failure: LocalizedError {

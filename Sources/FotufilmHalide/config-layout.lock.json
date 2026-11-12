@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "count": 18334,
+  "count": 18532,
   "fields": {
     "CURVES": {
       "offset": 0,
@@ -469,6 +469,14 @@
     "COUPLER_CROSS_POINTWISE_SHARE": {
       "offset": 18333,
       "count": 1
+    },
+    "SCAN_FLARE": {
+      "offset": 18334,
+      "count": 3
+    },
+    "SCAN_BALANCE": {
+      "offset": 18337,
+      "count": 195
     }
   }
 }

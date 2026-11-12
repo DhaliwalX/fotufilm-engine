@@ -111,13 +111,85 @@ strengths blend toward one channel per record. A reading without a film uses a t
 negative's dyes. The print kernels take the weights in `FOTUFILM_CONFIG_SCAN_CROSSTALK` and clamp
 densities to `NegativeInterchange.range`.
 
-The white-light model is not yet fitted to a measured camera. On camera scans under white light
-it amplifies red against green about 1.6 times at full strength, so warm areas the frame's balance
+That is the first reading, which an edit saved with it keeps (`WebNativeEdit.Negative.reading`
+absent). Its white-light model is not fitted to a camera: on camera scans under white light it
+amplifies red against green about 1.6 times at full strength, so warm areas the frame's balance
 leaves slightly warm turn red; values around 0.3 to 0.5 separate skies and foliage with little of
-that. The linear model also under-corrects dense, saturated patches of one dye.
+that.
+
+### The current reading
+
+A new scan's edit is made with the current reading (`reading` 2), which every surface resolves
+in one place (`WebNativeEdit.Negative.balance`, `.plain` and `.strayLight`):
+
+- **The scan's light and camera.** `NegativeScanSetup` is what the scan was made with and under:
+  a white LED panel, a phone or tablet screen, a halogen lamp or red, green and blue LEDs, seen
+  by a generic camera, a film scanner, or a camera with measured channels. A measured camera is
+  taken only where the file's decoder says the matrix it mixed the camera's channels with
+  (`NegativeScanCapture`), since decoders differ and a dense negative's blue follows the matrix
+  closely. `NegativeScanModel` carries the film's record densities to its spectral density, as
+  the print stage does, and through each channel of that setup.
+- **The fit.** The weights each record reads from the scan's three channel densities are the
+  least squares on the film's own greys and the colours about them (`NegativeScanModel.weights`),
+  so the densities read are the ones that made the scan: within 0.025 of a density on the
+  greys and 0.035 on the colours in the model, under every lamp and camera. Colour Separation
+  (`crosstalk`) runs from one channel per record, scaled to hold the greys, to the full fit.
+- **What the model knows.** A measured camera, a film scanner's bands and LEDs that light one
+  channel each say how much density a channel reads of a dye (`NegativeScanSetup.knowsScale`).
+  A camera nobody measured, under a lamp of unknown spectrum, is modelled as reading colour as
+  the eye does, which says which dyes a channel sees but not how strongly: a white lamp's red
+  end alone moves that by a third. Such a reading keeps the scan's own density of green as the
+  film's, as the first reading did, and the editor starts it with the dyes unseparated.
+- **Stray light.** `flare` is the scan's stray light as a share of the frame's average light, or
+  is left to be measured from the holder (`ApproximateNegativeScan.strayLight`): the holder is
+  taken to be in view only where the darkest twentieth of the scan lies around its edge, is even
+  to within a stop and is a stop darker than any film in the scan's middle. It is taken off each
+  sample and the clear film before their densities (`FOTUFILM_CONFIG_SCAN_FLARE`), and the frame's
+  tones are read net of it.
+- **Balance.** `balance` is `frame`, `roll` or `none`. The frame's neutral, one picked on it
+  (`neutral`) or else its densest end, or its roll's, is put on the film's own grey scale. Two
+  things move a neutral off it: how steep each record reads, which the film's age and
+  development and the scan's own light and camera set, and the scene's light, which is one
+  exposure at every tone. One neutral cannot tell them apart. Without a roll's contrast the
+  neutral scales red's and blue's densities, which holds the greys between the clear film and
+  the neutral however steep the records read. With it, the neutral adds an exposure to red and
+  blue, as a printer's filtration does, and each record moves along the film's own curve
+  (`ApproximateNegativeScan.balance`, `FOTUFILM_CONFIG_SCAN_BALANCE`): nothing at the clear
+  film, more through the toe, one density on the straight line.
+- **The clear film and the holder.** Until clear film is picked it is estimated: the brightest
+  of the scan, or where the scan shows its bare light through sprocket holes or around a strip,
+  the film's base under that light (`ApproximateNegativeScan.estimatedFilmBase`). A holder the
+  scan shows is left out of what the frame measures, so the print is timed on the picture's
+  highlights and not on the holder (`ApproximateNegativeScan.withoutHolder`), and prints black.
+  The holder ends where the fewest pixels lie between it and the densest film in the scan's
+  middle (`ApproximateNegativeScan.holder`).
+- **A roll's contrast.** A frame's tonal steps, where light falls off across a surface or a
+  shadow lies on it, change every record's exposure alike, so the rises of red and blue per unit
+  of green across them say how steep the roll's records read against each other
+  (`ApproximateNegativeScan.tonalSlopes`). With six frames' steps or more a roll's records are
+  made as steep against green as the film's own, on every frame balanced on its frame or roll.
+- **Without a film.** Normal's weights are fitted on an ordinary orange-masked colour negative
+  through the same setup. Its light follows a negative's curve with a toe, density growing as
+  gamma times the logarithm of one plus the exposure over the toe's, so the clear film is no
+  exposure and reads black. With no film to say how steep its records are, red's and blue's
+  densities are scaled onto green's at the frame's neutral, which holds the greys between the
+  clear film and the neutral; once a roll's contrast is measured the records are made as steep
+  as each other by it and the neutral is balanced by each channel's light. It takes the scan's
+  stray light off the same way (`PlainNegativeScan`).
+
+Three further steps were measured and left out. Reading a camera's own channels before its
+decoder's matrix read the model's colours worse, not better, and carries more of the scan's
+noise. A table solving the three dyes exactly gains no more than the fit's own few hundredths of
+a density. Keeping the fine detail on one channel per record lowers fine-detail noise by a few
+percent on real camera scans, for a spatial filter in every kernel. A neutral estimated jointly
+across the channels was no better than each channel's densest end on real frames.
 
 The browser profile protocol's film request takes
-`negative: {border, denseEnd, light, crosstalk, scanLight}`:
+`negative: {border, denseEnd, light, crosstalk, scanLight}`, and for the current reading also
+`reading`, `camera`, `balance`, `neutral`, `roll`, `strayLight` (the stray light the browser
+resolved, as linear scan RGB) and `source` (what the RAW decoder says of the scan's camera,
+white and matrix). The browser's builder carries no measured cameras, so the request brings the
+record of the camera its scan names (`cameraProfile`). The first reading's fields are
 the clear film as three linear scan values, the framed picture's densest end
 (`ApproximateNegativeScan.denseEnd`, or nothing for a frame too small to read), the edit's
 `ev`, `temperature` and `tint`, which the enlarger or the scan takes, and the crosstalk correction
@@ -233,22 +305,25 @@ from the film, film settings, clear film, light frame and roll balance of its ro
 edited last, as frames of one roll share them.
 
 The **Roll** panel works on the whole roll. **Measure Roll** develops every frame of the roll in
-the strip and reads each one's densest end, its highlights. The roll's colour is the median
-over its frames of each end's red and blue density per unit of its green; a frame filled by one
-colour, such as a sunset, moves a median little. Every frame is then balanced on that colour
-instead of its own, but each keeps its own green density, so it is still timed on its own
-highlights and a darker frame does not print darker. The roll's colour is kept with each frame's
-edit and travels with Copy Settings; the shown frame's change can be undone. **Balance This Frame
-Alone** returns one frame to its own colour, and **Balance Every Frame Alone** returns the whole
-roll. Measure again after cropping frames or adding them to the roll. Fewer than two frames with
-readable highlights cannot be measured. A roll shot under several lights is better balanced
-frame by frame.
+the strip and reads each one's densest end, its highlights, and the rises across its tonal
+steps. The roll's colour is the median over its frames of each end's red and blue density per
+unit of its green; a frame filled by one colour, such as a sunset, moves a median little. What
+the roll measured is kept with each frame's edit and travels with Copy Settings; the shown
+frame's change can be undone. A frame whose **Balance** is **Roll** is balanced on the roll's
+colour instead of its own highlights, still timed on its own highlights so a darker frame does
+not print darker; **Frame** balances it on its own, and **None** leaves the film as it reads.
+With six frames' tonal steps or more, the roll's contrast is used on every frame balanced on
+its frame or its roll. Measure again after cropping frames or adding them to the roll. Fewer
+than two frames with readable highlights cannot be measured. A roll shot under several lights
+is better balanced frame by frame. On an edit saved with the first reading, measuring the roll
+balances every frame on it, and **Balance This Frame Alone** and **Balance Every Frame Alone**
+return one frame or the whole roll to their own colour.
 
 With **Normal**, the scan is read without a film and edited as a plain positive photograph.
-Each channel's density above the clear base is balanced on the frame's densest end and taken
-back to scene light along a straight-line negative of gamma 0.6, the densest end landing on
-diffuse white (`PlainNegativeScan`). Every photo control then applies; no print simulation
-does.
+Each channel's density above the clear base is balanced on the frame's neutral and taken back
+to scene light along a negative of gamma 0.6 with a toe, the densest end landing on diffuse
+white and the clear film on black (`PlainNegativeScan`); an edit saved with the first reading
+runs along a straight line. Every photo control then applies; no print simulation does.
 
 Those densities then take the print exactly as a simulated negative does: every output
 medium, lamp, screen conversion and print frame applies, and an enlarged paper is timed

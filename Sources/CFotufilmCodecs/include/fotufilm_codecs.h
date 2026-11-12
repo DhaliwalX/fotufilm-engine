@@ -60,6 +60,9 @@ typedef struct ffc_image {
     float as_shot_kelvin;
     float as_shot_x;
     float as_shot_y;
+    /* The matrix a RAW's channels, balanced on its as-shot white, were mixed into Rec. 2020
+     * with: nine values by rows, each row adding up to one. All zero when unknown. */
+    float camera_matrix[9];
     ffc_capture capture;
 } ffc_image;
 

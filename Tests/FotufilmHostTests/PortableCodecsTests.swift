@@ -141,7 +141,132 @@ final class PortableCodecsTests: XCTestCase {
         let url = temporary("tif")
         defer { try? FileManager.default.removeItem(at: url) }
         _ = try PortableStillEncoder().write(still(deep: true), type: "image/tiff", quality: 1, to: url)
-        XCTAssertLessThan(worst(try PortableScanDecoder().decodeScan(url), deep: true), 2e-4)
+        let scan = try PortableScanDecoder().decodeScan(url)
+        XCTAssertLessThan(worst(scan, deep: true), 2e-4)
+        // Only a camera's RAW says what took it and how it was decoded.
+        XCTAssertEqual(scan.scanSource, NegativeScanCapture())
+    }
+
+    /// A linear DNG of one colour from a camera named `make` and `model`, whose channels are
+    /// sRGB's primaries, each at its level of `neutral` under white.
+    private func dng(make: String, model: String, colour: SIMD3<Float>,
+                     neutral: SIMD3<Float>) -> Data {
+        var entries: [(tag: UInt16, type: UInt16, count: UInt32, value: [UInt8])] = []
+        func bytes<T: FixedWidthInteger>(_ values: [T]) -> [UInt8] {
+            values.flatMap { value in withUnsafeBytes(of: value.littleEndian) { Array($0) } }
+        }
+        func short(_ tag: UInt16, _ values: [UInt16]) {
+            entries.append((tag, 3, UInt32(values.count), bytes(values)))
+        }
+        func long(_ tag: UInt16, _ values: [UInt32]) {
+            entries.append((tag, 4, UInt32(values.count), bytes(values)))
+        }
+        func byte(_ tag: UInt16, _ values: [UInt8]) {
+            entries.append((tag, 1, UInt32(values.count), values))
+        }
+        func ascii(_ tag: UInt16, _ text: String) {
+            let value = Array(text.utf8) + [0]
+            entries.append((tag, 2, UInt32(value.count), value))
+        }
+        func rational(_ tag: UInt16, signed: Bool, _ values: [Float]) {
+            let value = values.flatMap { bytes([Int32(($0 * 1_000_000).rounded()), 1_000_000]) }
+            entries.append((tag, signed ? 10 : 5, UInt32(values.count), value))
+        }
+        let sample = (0..<3).map { UInt16((colour[$0] * neutral[$0] * 65535).rounded()) }
+        let samples = [UInt16]((0..<width * height).flatMap { _ in sample })
+        let toSRGB: [Float] = [3.2404542, -1.5371385, -0.4985314, -0.969266, 1.8760108, 0.041556,
+                               0.0556434, -0.2040259, 1.0572252]
+        long(254, [0])
+        long(256, [UInt32(width)])
+        long(257, [UInt32(height)])
+        short(258, [16, 16, 16])
+        short(259, [1])
+        short(262, [34892])
+        ascii(271, make)
+        ascii(272, model)
+        long(273, [0])  // The strip's offset, set below.
+        short(274, [1])
+        short(277, [3])
+        long(278, [UInt32(height)])
+        long(279, [UInt32(samples.count * 2)])
+        short(284, [1])
+        byte(50706, [1, 4, 0, 0])
+        byte(50707, [1, 1, 0, 0])
+        ascii(50708, "\(make) \(model)")
+        long(50717, [65535])
+        rational(50721, signed: true, (0..<9).map { toSRGB[$0] * neutral[$0 / 3] })
+        rational(50728, signed: false, [neutral.x, neutral.y, neutral.z])
+        short(50778, [21])
+
+        let directory = 8, directoryLength = 2 + entries.count * 12 + 4
+        var overflow = 0
+        for entry in entries where entry.value.count > 4 {
+            overflow += entry.value.count + entry.value.count % 2
+        }
+        let strip = directory + directoryLength + overflow
+        var file: [UInt8] = [0x49, 0x49, 42, 0] + bytes([UInt32(directory)])
+        file += bytes([UInt16(entries.count)])
+        // Values too long for an entry follow the directory, the strip after them.
+        var extra: [UInt8] = []
+        for entry in entries {
+            file += bytes([entry.tag, entry.type]) + bytes([entry.count])
+            var value = entry.tag == 273 ? bytes([UInt32(strip)]) : entry.value
+            if value.count > 4 {
+                file += bytes([UInt32(directory + directoryLength + extra.count)])
+                extra += value + (value.count % 2 == 1 ? [0] : [])
+            } else {
+                value += [UInt8](repeating: 0, count: 4 - value.count)
+                file += value
+            }
+        }
+        file += bytes([UInt32(0)]) + extra + bytes(samples)
+        return Data(file)
+    }
+
+    /// A camera RAW's scan says its camera, the white it was decoded on and the matrix its
+    /// balanced channels were mixed with, from the decode that made its picture.
+    func testARAWScanSaysItsCameraWhiteAndMatrix() throws {
+        let url = temporary("dng")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let colour = SIMD3<Float>(0.4, 0.2, 0.1)
+        try dng(make: "SONY", model: "ILCE-7CM2", colour: colour,
+                neutral: SIMD3(0.5, 1, 0.25)).write(to: url)
+        let scan = try PortableScanDecoder().decodeScan(url)
+        let source = try XCTUnwrap(scan.scanSource)
+        XCTAssertEqual(source.camera, CameraIdentity(make: "SONY", model: "ILCE-7CM2"))
+        XCTAssertEqual(try XCTUnwrap(source.kelvin), 6500, accuracy: 300)
+        let white = try XCTUnwrap(source.white)
+        XCTAssertEqual(white.count, 2)
+        XCTAssertEqual(white[0], 0.3127, accuracy: 0.003)
+        XCTAssertEqual(white[1], 0.3290, accuracy: 0.003)
+        // The camera's channels are sRGB's balanced on its white: the matrix is sRGB's into
+        // Rec. 2020, and the picture is that matrix of the colour.
+        let matrix = try XCTUnwrap(source.matrix)
+        XCTAssertEqual(matrix.count, 9)
+        let expected = ColorScience.linearSRGBToRec2020(colour)
+        let rgba = scan.scene(width: scan.width, height: scan.height)
+        let centre = (scan.height / 2 * scan.width + scan.width / 2) * 4
+        for row in 0..<3 {
+            XCTAssertEqual(matrix[row * 3] + matrix[row * 3 + 1] + matrix[row * 3 + 2], 1,
+                           accuracy: 1e-4)
+            let mixed = matrix[row * 3] * colour.x + matrix[row * 3 + 1] * colour.y
+                + matrix[row * 3 + 2] * colour.z
+            XCTAssertEqual(mixed, expected[row], accuracy: 0.002)
+            XCTAssertEqual(rgba[centre + row], mixed, accuracy: 0.002)
+        }
+        // A measured camera is read through its own channels and this decode's matrix.
+        let setup = source.setup(light: .white)
+        XCTAssertEqual(setup.camera, .profile("sony-ilce-7cm2"))
+        XCTAssertEqual(setup.matrix?.count, 3)
+        XCTAssertEqual(setup.matrix?[1].y, matrix[4])
+
+        // A camera nobody measured says as much, and is read as the generic one.
+        try dng(make: "Unmeasured", model: "Camera", colour: colour,
+                neutral: SIMD3(0.5, 1, 0.25)).write(to: url)
+        let unmeasured = try XCTUnwrap(try PortableScanDecoder().decodeScan(url).scanSource)
+        XCTAssertEqual(unmeasured.camera, CameraIdentity(make: "Unmeasured", model: "Camera"))
+        XCTAssertEqual(unmeasured.matrix, matrix)
+        XCTAssertEqual(unmeasured.setup(light: .white).camera, .generic)
     }
 
     func testCapabilitiesOfferImportAndExport() {

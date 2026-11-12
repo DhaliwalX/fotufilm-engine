@@ -4,16 +4,54 @@
 // the scan reads as a plain positive. These are the rules, without state.
 import 'catalogue.dart';
 
-/// How the scan is read: the clear film it is measured against (null to estimate it), the light
-/// frame that evens its light, the roll's colour it is balanced on, how far the crosstalk between
-/// the scan's channels and the film's dyes is undone, and the light it was scanned under ("white",
-/// or "rgb" for red, green and blue LED exposures merged into one scan).
-Json newNegative([String scanLight = 'white']) => {
+/// How the scan is read (`WebNativeEdit.Negative`): the clear film it is measured against (null
+/// to estimate it), the light frame that evens its light, what its roll measured, how far the
+/// crosstalk between the scan's channels and the film's dyes is undone, and the light it was
+/// scanned under ("white" for a white LED panel, "screen", "halogen", or "rgb" for red, green and
+/// blue LED exposures merged into one scan). `reading` is the reading its scan opens with (the
+/// descriptor's `negative.reading`): from the second on the film is read through the scan's light
+/// and camera, the dyes separated all the way, and the edit may also keep what took the scan
+/// (`camera`: "generic" or "scanner", absent for the camera its file names), the scan's stray
+/// light (`flare`, a share of the frame's light, absent to measure it), what the frame is
+/// balanced on (`balance`: "frame", "roll" or "none", absent for the frame) and a neutral picked
+/// on it (`neutral`, scan RGB like `border`).
+///
+/// `separates` is whether the reading starts with the dyes separated all the way: where the scan
+/// was taken with a camera whose colour channels are measured, or under LEDs that light one
+/// channel each, the separation is worked out from what took the scan; for any other camera it
+/// is a guess at its channels, so it starts off, as an earlier reading's did.
+Json newNegative([String scanLight = 'white', int reading = 1, bool separates = false]) => {
       'border': null,
       'lightFrame': null,
       'roll': null,
-      'crosstalk': 0,
+      'crosstalk': reading >= 2 && (separates || scanLight == 'rgb') ? 1 : 0,
       'scanLight': scanLight,
+      if (reading >= 2) 'reading': reading,
+    };
+
+/// Whether a scan's descriptor names a camera whose colour channels are measured
+/// (`negative.camera`), which a reading takes over the generic one.
+bool measuredCamera(Json? scan) {
+  final id = (scan?['camera'] as Map?)?['id'];
+  return id is String && id != 'generic' && id != 'scanner';
+}
+
+/// Whether a negative is read through its scan's light and camera and balanced as it says, or
+/// with the first reading, which an edit saved with it keeps (`readsModel`).
+bool readsModel(Json? negative) => ((negative?['reading'] as num?) ?? 1) >= 2;
+
+/// What a frame is balanced on (`ApproximateNegativeScan.BalanceMode`): its own tones unless its
+/// edit says its roll's, or nothing.
+String balanceOf(Json? negative) => negative?['balance'] as String? ?? 'frame';
+
+/// An edit saved with an earlier reading moved to `reading`: where the scan `separates`
+/// (`newNegative`) the dyes separated all the way unless the edit had set how far, and a frame
+/// that was balanced on its roll still on it.
+Json updatedReading(Json negative, int reading, {bool separates = false}) => {
+      ...negative,
+      'reading': reading,
+      if (separates && (negative['crosstalk'] as num? ?? 0) == 0) 'crosstalk': 1,
+      if (negative['roll'] != null) 'balance': 'roll',
     };
 
 /// The inspector panels a negative read as a film offers (`NEGATIVE_PANELS`).
@@ -91,13 +129,20 @@ bool _readableEnd(List? dense) =>
     dense.length == 3 &&
     dense.every((v) => v is num && v.isFinite && v > _readable);
 
-/// A roll's colour (ApproximateNegativeScan.RollBalance): over the frames whose densest ends can
-/// be read, the median of each end's red and blue density per unit of its green. Null when fewer
-/// than two frames can be read.
-Json? rollBalance(List<List?> denseEnds) {
+// How many frames' tonal steps a roll's contrast takes (RollBalance.contrastFrames).
+const _contrastFrames = 6;
+
+/// What a roll's frames share (ApproximateNegativeScan.RollBalance(measures:)), from what each
+/// frame measures (a develop's `negativeMeasure`): its densest end (`denseEnd`) and the rises
+/// across its tonal steps (`slopes`). Over the frames whose densest ends can be read, `colour`
+/// is the median of each end's red and blue density per unit of its green and `level` the
+/// median green; `slopes` is the median rise over the frames that have one, left out with fewer
+/// than six. Null when fewer than two frames' densest ends can be read.
+Json? rollBalance(List<Map?> measures) {
   final frames = [
-    for (final d in denseEnds)
-      if (_readableEnd(d)) [for (final v in d!) (v as num).toDouble()],
+    for (final m in measures)
+      if (_readableEnd(m?['denseEnd'] as List?))
+        [for (final v in m!['denseEnd'] as List) (v as num).toDouble()],
   ];
   if (frames.length < 2) return null;
   double median(List<double> values) {
@@ -106,11 +151,22 @@ Json? rollBalance(List<List?> denseEnds) {
     return values.length.isOdd ? values[middle] : (values[middle - 1] + values[middle]) / 2;
   }
 
+  final stepped = [
+    for (final m in measures)
+      if (m?['slopes'] case final List slopes
+          when slopes.length == 2 && slopes.every((v) => v is num && v.isFinite && v > 0))
+        [for (final v in slopes) (v as num).toDouble()],
+  ];
   return {
     'colour': [
       for (final c in const [0, 2]) median([for (final d in frames) d[c] / d[1]]),
     ],
     'frames': frames.length,
+    'level': median([for (final d in frames) d[1]]),
+    if (stepped.length >= _contrastFrames)
+      'slopes': [
+        for (final c in const [0, 1]) median([for (final s in stepped) s[c]]),
+      ],
   };
 }
 

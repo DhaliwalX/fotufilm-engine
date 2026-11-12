@@ -27,6 +27,10 @@ public struct WebNegativeFilmRequest: Decodable {
         let suggestions: [Suggestion]
         /// Whether the scan showed its light past the film, which the base was read against.
         let lamp: Bool
+        /// The film's base under that light, linear Rec. 2020, where the scan showed it: the
+        /// clear film the current reading is measured against until one is sampled
+        /// (`ApproximateNegativeScan.estimatedFilmBase`).
+        let base: [Float]?
     }
 
     public func prepare() throws -> Data {
@@ -43,7 +47,8 @@ public struct WebNegativeFilmRequest: Decodable {
         let suggestions = reading.map { catalogue.suggest($0, limit: min(max(limit ?? 3, 1), 10)) } ?? []
         return try JSONEncoder().encode(Result(
             suggestions: suggestions.map { .init(films: $0.films.map(\.id), likelihood: $0.likelihood) },
-            lamp: reading?.lamp != nil))
+            lamp: reading?.lamp != nil,
+            base: reading.flatMap { $0.lamp == nil ? nil : [$0.border.x, $0.border.y, $0.border.z] }))
     }
 
     /// Three planes of `count` little-endian float32 samples, or nil when the size disagrees.

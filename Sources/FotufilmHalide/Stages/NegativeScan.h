@@ -60,8 +60,31 @@ inline Halide::Expr scan_reading_slot(Halide::ImageParam &configuration, int off
     return configuration(FOTUFILM_CONFIG_SCAN_READING + offset + index);
 }
 
-// Whether a film reading can place the sample: every channel inside the usable range, which a
-// nonfinite sample is not. ApproximateNegativeScan.density(of:) returns nil otherwise.
+// One channel of a scan as a film reading takes it: the scan's stray light taken off
+// (FOTUFILM_CONFIG_SCAN_FLARE). The clear film and the usable range are net of it already.
+inline Halide::Expr scan_film_sample(Halide::ImageParam &configuration, int channel,
+                                     Halide::Expr sample) {
+    return sample - configuration(FOTUFILM_CONFIG_SCAN_FLARE + channel);
+}
+
+// What a record's balance adds to its density where the scan reads `read` of it over the clear
+// film (FOTUFILM_CONFIG_SCAN_BALANCE): linear between the samples, held past the ends. Mirrors
+// ApproximateNegativeScan.balance(record:read:).
+inline Halide::Expr scan_film_balance(Halide::ImageParam &configuration, Halide::Expr record,
+                                      Halide::Expr read) {
+    using namespace Halide;
+    constexpr int samples = FOTUFILM_SCAN_BALANCE_SAMPLES;
+    constexpr float per_density = float(samples - 1) / float(FOTUFILM_SCAN_BALANCE_MAX);
+    Expr position = clamp(read * per_density, 0.0f, float(samples - 1));
+    Expr index = clamp(cast<int32_t>(position), 0, samples - 2);
+    Expr between = position - cast<float>(index);
+    Expr at = FOTUFILM_CONFIG_SCAN_BALANCE + record * samples + index;
+    return configuration(at) * (1.0f - between) + configuration(at + 1) * between;
+}
+
+// Whether a film reading can place the sample (scan_film_sample): every channel inside the
+// usable range, which a nonfinite sample is not. ApproximateNegativeScan.density(of:) returns
+// nil otherwise.
 inline Halide::Expr scan_film_readable(Halide::ImageParam &configuration,
                                        Halide::Expr r, Halide::Expr g, Halide::Expr b) {
     using namespace Halide;
@@ -72,10 +95,10 @@ inline Halide::Expr scan_film_readable(Halide::ImageParam &configuration,
     return inside(0, r) && inside(1, g) && inside(2, b);
 }
 
-// One record's density from the scan: its base density plus its gain times its weighted density
-// of the scan channels over the clear film (FOTUFILM_CONFIG_SCAN_CROSSTALK), held inside the
-// negative interchange range; the base where the sample cannot be read, which then prints black.
-// Mirrors ApproximateNegativeScan.density(of:).
+// One record's density from the scan (scan_film_sample): its base density plus its gain times
+// its weighted density of the scan channels over the clear film (FOTUFILM_CONFIG_SCAN_CROSSTALK),
+// plus its balance there, held inside the negative interchange range; the base where the sample
+// cannot be read, which then prints black. Mirrors ApproximateNegativeScan.density(of:).
 inline Halide::Expr scan_film_density(Halide::ImageParam &configuration, Halide::Expr record,
                                       Halide::Expr r, Halide::Expr g, Halide::Expr b,
                                       bool approximate) {
@@ -90,21 +113,28 @@ inline Halide::Expr scan_film_density(Halide::ImageParam &configuration, Halide:
     Expr read = weight(0) * scanner(0, r) + weight(1) * scanner(1, g) + weight(2) * scanner(2, b);
     Expr base = scan_reading_slot(configuration, 4, record);
     // NegativeInterchange.range.
-    Expr density = clamp(base + scan_reading_slot(configuration, 10, record) * read, -0.5f, 8.0f);
+    Expr density = clamp(base + scan_reading_slot(configuration, 10, record) * read
+                             + scan_film_balance(configuration, record, read), -0.5f, 8.0f);
     return select(scan_film_readable(configuration, r, g, b), density, base);
 }
 
 // One channel's scene light from a plain reading of its `density` over the clear film, weighted
 // across the channels against their crosstalk: that density times `gain`, back to light along a
-// straight-line negative with the densest end, density `reference`, at diffuse white. Mirrors
-// PlainNegativeScan.light(of:); the caller blacks out a pixel where any channel passes no light.
+// negative's curve with the densest end, density `reference`, at diffuse white. `toe_light` is
+// what the clear film's light reads on the straight line, taken off for a curve with a toe, and
+// `scale` the channel's balance and what the toe took from the densest end; none and one read
+// along the straight line as before. Mirrors PlainNegativeScan.light(of:); the caller blacks
+// out a pixel where any channel passes no light.
 inline Halide::Expr plain_negative_light(Halide::Expr density, Halide::Expr gain,
-                                         Halide::Expr reference, bool approximate) {
+                                         Halide::Expr reference, Halide::Expr toe_light,
+                                         Halide::Expr scale, bool approximate) {
     using namespace Halide;
     // PlainNegativeScan.gamma and .highlight.
     constexpr float kGamma = 0.6f;
     constexpr float kHighlight = 0.18f * 5.656854f;
-    return kHighlight * fs_pow10((gain * density - reference) * (1.0f / kGamma), approximate);
+    return max(0.0f, kHighlight
+        * (fs_pow10((gain * density - reference) * (1.0f / kGamma), approximate) - toe_light)
+        * scale);
 }
 }
 #endif

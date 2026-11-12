@@ -71,11 +71,32 @@ final class NegativeScanPreparationTests: XCTestCase {
         try assertPlainReading(.init(strength: 1, light: .rgb))
     }
 
+    /// The current reading: a toe, a balance as light, a roll's contrast, and the scan's stray
+    /// light taken off.
+    func testThePlainReadingTakesItsToeBalanceAndFlareAsPlainNegativeScan() throws {
+        let roll = ApproximateNegativeScan.RollBalance(colour: [1.05, 0.9], frames: 9, level: 1.1,
+                                                       slopes: [0.85, 1.2])
+        let plain = PlainNegativeScan(
+            border: SIMD3(0.8, 0.45, 0.2), setup: NegativeScanSetup(light: .screen),
+            separation: 1, mode: .frame,
+            tones: .init(denseEnd: SIMD3(1.3, 1.2, 1.1), picked: SIMD3(0.7, 0.6, 0.66)),
+            roll: roll, flare: SIMD3(0.003, 0.002, 0.0012))
+        XCTAssertEqual(plain.toe, 1)
+        XCTAssertNotEqual(plain.balance, .one)
+        XCTAssertNotEqual(plain.gains, .one)
+        try assertPlainReading(plain)
+    }
+
     private func assertPlainReading(_ correction: NegativeScanCrosstalk.Correction, file: StaticString = #filePath,
                                     line: UInt = #line) throws {
+        try assertPlainReading(
+            PlainNegativeScan(border: SIMD3(0.8, 0.45, 0.2), denseEnd: SIMD3(1.3, 1.2, 1.1),
+                              correction: correction), file: file, line: line)
+    }
+
+    private func assertPlainReading(_ plain: PlainNegativeScan, file: StaticString = #filePath,
+                                    line: UInt = #line) throws {
         let rgba = scan()
-        let plain = PlainNegativeScan(border: SIMD3(0.8, 0.45, 0.2), denseEnd: SIMD3(1.3, 1.2, 1.1),
-                                      correction: correction)
         var expected = rgba
         for i in 0..<(width * height) {
             let light = plain.light(of: SIMD3(rgba[i * 4], rgba[i * 4 + 1], rgba[i * 4 + 2]))

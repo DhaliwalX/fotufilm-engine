@@ -45,6 +45,14 @@
     "FILM_TILE_LAYERS": {
       "value": 2,
       "doc": "Independent layings of the tile each pixel reads, each through its own blocks on an offset grid, their grain summed and divided by the square root of their number, so no patch of grain recurs whole."
+    },
+    "SCAN_BALANCE_SAMPLES": {
+      "value": 65,
+      "doc": "Samples of a scanned negative's balance for each record (FOTUFILM_CONFIG_SCAN_BALANCE)."
+    },
+    "SCAN_BALANCE_MAX": {
+      "value": 4,
+      "doc": "The record's weighted density over the clear film at the last sample of its balance; the first is at none."
     }
   },
   "fields": [
@@ -570,6 +578,16 @@
       "name": "COUPLER_CROSS_POINTWISE_SHARE",
       "count": 1,
       "doc": "Pointwise share beta = 1 - min((sigma_phys / sigma_coupler)^2, 1) in [0, 1] for cross-layer 3x3 coupler terms (j != c) under COUPLER_MODEL == 1 when sigma_coupler applies the 0.85 px preview floor. Zero at full resolution (sigma_phys >= 0.85 px) and on legacy models; on sub-pixel previews, 100% of intra-layer self-retention K[c][c] blurs at sigma_coupler for visible Edge Contrast while cross-layer terms conserve exact physical variance sigma_phys^2. Appended without renumbering earlier fields."
+    },
+    {
+      "name": "SCAN_FLARE",
+      "count": 3,
+      "doc": "Stray light a scanned negative's scan carries (FOTUFILM_CONFIG_SCAN_READING mode 1), red, green and blue as linear scan RGB: taken off each sample before it is read, the clear film and the usable range in FOTUFILM_CONFIG_SCAN_READING being net of it already. Zero takes nothing off. Appended without renumbering earlier fields."
+    },
+    {
+      "name": "SCAN_BALANCE",
+      "count": "3 * SCAN_BALANCE_SAMPLES",
+      "doc": "A scanned negative's balance (ApproximateNegativeScan.balance): the density each record gains over its base plus its gain times its weighted density, by that weighted density over the clear film. FOTUFILM_SCAN_BALANCE_SAMPLES values for red, then green, then blue, evenly from none to FOTUFILM_SCAN_BALANCE_MAX, read linearly between them and held past the ends. An exposure moves a record along the film's own curve, so the values are none at the clear film and grow through the toe. All zero reads as before. Appended without renumbering earlier fields."
     }
   ]
 }

@@ -27,6 +27,11 @@ enum {
     /// grid, their grain summed and divided by the square root of their number, so no patch of
     /// grain recurs whole.
     FOTUFILM_FILM_TILE_LAYERS = 2,
+    /// Samples of a scanned negative's balance for each record (FOTUFILM_CONFIG_SCAN_BALANCE).
+    FOTUFILM_SCAN_BALANCE_SAMPLES = 65,
+    /// The record's weighted density over the clear film at the last sample of its balance; the
+    /// first is at none.
+    FOTUFILM_SCAN_BALANCE_MAX = 4,
 };
 
 enum {
@@ -365,6 +370,19 @@ enum {
     /// visible Edge Contrast while cross-layer terms conserve exact physical variance sigma_phys^2.
     /// Appended without renumbering earlier fields.
     FOTUFILM_CONFIG_COUPLER_CROSS_POINTWISE_SHARE = 18333,
+    /// Stray light a scanned negative's scan carries (FOTUFILM_CONFIG_SCAN_READING mode 1), red,
+    /// green and blue as linear scan RGB: taken off each sample before it is read, the clear film
+    /// and the usable range in FOTUFILM_CONFIG_SCAN_READING being net of it already. Zero takes
+    /// nothing off. Appended without renumbering earlier fields.
+    FOTUFILM_CONFIG_SCAN_FLARE = 18334,
+    /// A scanned negative's balance (ApproximateNegativeScan.balance): the density each record
+    /// gains over its base plus its gain times its weighted density, by that weighted density over
+    /// the clear film. FOTUFILM_SCAN_BALANCE_SAMPLES values for red, then green, then blue, evenly
+    /// from none to FOTUFILM_SCAN_BALANCE_MAX, read linearly between them and held past the ends.
+    /// An exposure moves a record along the film's own curve, so the values are none at the clear
+    /// film and grow through the toe. All zero reads as before. Appended without renumbering
+    /// earlier fields.
+    FOTUFILM_CONFIG_SCAN_BALANCE = 18337,
 };
 
 enum {
@@ -485,8 +503,10 @@ enum {
     FOTUFILM_CONFIG_DONOR_COUNT_COUNT = 1,
     FOTUFILM_CONFIG_DONOR_EXTRA_LUT_ID_COUNT = 1,
     FOTUFILM_CONFIG_COUPLER_CROSS_POINTWISE_SHARE_COUNT = 1,
+    FOTUFILM_CONFIG_SCAN_FLARE_COUNT = 3,
+    FOTUFILM_CONFIG_SCAN_BALANCE_COUNT = 195,
 };
 
-enum { FOTUFILM_FRAME_CONFIGURATION_COUNT = 18334 };
+enum { FOTUFILM_FRAME_CONFIGURATION_COUNT = 18532 };
 
 #endif

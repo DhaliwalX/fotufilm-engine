@@ -131,11 +131,15 @@ public enum NegativeScanPrint {
         public let highlightStops: Float?
 
         /// Reads a scan as `stock` against `border`, with its frame's `balance` and the crosstalk
-        /// correction it carries (`ApproximateNegativeScan.balance(stock:denseEnd:correction:)`).
+        /// correction it carries (`ApproximateNegativeScan.balance(stock:denseEnd:correction:)`),
+        /// the scan's stray light, `flare`, as linear scan RGB like `border`, and where its
+        /// holder begins, `holder` (`ApproximateNegativeScan.holder(border:preview:)`).
         public init(stock: FilmStock, border: SIMD3<Float>,
-                    balance: ApproximateNegativeScan.Balance) throws {
-            calibration = try ApproximateNegativeScan(stock: stock, border: border,
-                                                      gains: balance.gains, weights: balance.weights)
+                    balance: ApproximateNegativeScan.Balance,
+                    flare: SIMD3<Float> = .zero, holder: Float? = nil) throws {
+            calibration = try ApproximateNegativeScan(
+                stock: stock, border: border, gains: balance.gains, exposure: balance.exposure,
+                weights: balance.weights, flare: flare, holder: holder)
             highlightStops = balance.highlightStops
         }
 

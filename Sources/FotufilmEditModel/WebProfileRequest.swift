@@ -30,19 +30,94 @@ public struct WebProfileRequest: Decodable {
         /// Clear film as linear Rec. 2020 scan RGB.
         public let border: [Float]
         /// The framed picture's densest end (`ApproximateNegativeScan.denseEnd`), nil for a frame
-        /// too small to read: the reading is then unbalanced.
+        /// too small to read: the reading is then unbalanced. With `roll` it is the frame's own,
+        /// before the roll's colour.
         public let denseEnd: [Float]?
         /// The edit's `ev`, `temperature` and `tint`, in the web's units: the light controls an
         /// enlarger or a scan carries into the print. The rest finish the print at render time.
         public let light: [String: Double]?
         /// How far the reading undoes the dyes' crosstalk (`NegativeScanCrosstalk.range`); nil
-        /// reads each record from its own channel.
+        /// reads each record from its own channel in the first reading, and separates the dyes
+        /// all the way in the current one.
         public let crosstalk: Float?
         /// The light the scan was made under (`NegativeScanCrosstalk.Light`); nil is white light.
         public let scanLight: NegativeScanCrosstalk.Light?
+        /// Which reading the edit was made with, what took the scan, what the frame is balanced
+        /// on, a neutral picked on it and the roll it belongs to, as the edit keeps them
+        /// (`WebNativeEdit.Negative`).
+        public let reading: Int?
+        public let camera: String?
+        public let balance: ApproximateNegativeScan.BalanceMode?
+        public let neutral: [Float]?
+        public let roll: ApproximateNegativeScan.RollBalance?
+        /// What the scan's file says of its camera and decoder, which the current reading's
+        /// setup is made of.
+        public let source: NegativeScanCapture?
+        /// The measured channels of the camera `source` names, as one record of the cameras the
+        /// desktop app carries (`CameraSpectralProfileStore.register(rawtoaces:)`): the browser
+        /// carries none inside the builder, and sends the record of a camera it has.
+        public let cameraProfile: String?
+        /// The stray light the reading takes off the scan, linear scan RGB like `border`, as
+        /// the browser resolved it from the edit's flare and what the frame and the scan show
+        /// (`WebNativeEdit.Negative.strayLight`). `border` still carries it; `denseEnd` is net
+        /// of it. Nil takes none off, and the first reading never does.
+        public let strayLight: [Float]?
+        /// Where the scan's holder begins, a density over the clear film, where the browser
+        /// found one (`ApproximateNegativeScan.holder(border:preview:)`): past it the scan prints
+        /// black. The first reading has none.
+        public let holder: Float?
 
         /// The keys `light` may hold.
         static let lightKeys: Set<String> = ["ev", "temperature", "tint"]
+
+        /// The request's reading as an edit keeps it, with what the frame measures.
+        struct Measured {
+            var edit: WebNativeEdit.Negative
+            var border: SIMD3<Float>
+            var denseEnd: SIMD3<Float>?
+            /// The scan's stray light, none on the first reading.
+            var flare: SIMD3<Float> = .zero
+        }
+
+        /// Makes `record`'s camera one a reading can resolve.
+        static func register(cameraProfile record: String?) {
+            if let record { CameraSpectralProfileStore.register(rawtoaces: Data(record.utf8)) }
+        }
+
+        func measured() throws -> Measured {
+            Self.register(cameraProfile: cameraProfile)
+            guard border.count == 3, border.allSatisfy({ $0.isFinite && $0 > 0 }) else {
+                throw Failure(description: "Pick clear, unexposed film.")
+            }
+            if let crosstalk {
+                guard crosstalk.isFinite, NegativeScanCrosstalk.range.contains(crosstalk) else {
+                    throw Failure(description: "Invalid crosstalk correction.")
+                }
+            }
+            if let reading, reading < 1 { throw Failure(description: "Invalid negative reading.") }
+            if let neutral {
+                guard neutral.count == 3, neutral.allSatisfy({ $0.isFinite && $0 > 0 }) else {
+                    throw Failure(description: "Invalid picked neutral.")
+                }
+            }
+            let dense = try denseEnd.map { dense -> SIMD3<Float> in
+                guard dense.count == 3 else { throw Failure(description: "Invalid scene measurement.") }
+                return SIMD3(dense[0], dense[1], dense[2])
+            }
+            let edit = WebNativeEdit.Negative(
+                roll: roll, crosstalk: crosstalk, scanLight: scanLight, reading: reading,
+                camera: camera, balance: balance, neutral: neutral)
+            var flare = SIMD3<Float>.zero
+            if let strayLight {
+                guard strayLight.count == 3, (0..<3).allSatisfy({
+                    strayLight[$0].isFinite && strayLight[$0] >= 0
+                        && strayLight[$0] <= ApproximateNegativeScan.flareLimit * border[$0]
+                }) else { throw Failure(description: "Invalid stray light.") }
+                if edit.readsModel { flare = SIMD3(strayLight[0], strayLight[1], strayLight[2]) }
+            }
+            return Measured(edit: edit, border: SIMD3(border[0], border[1], border[2]),
+                            denseEnd: dense, flare: flare)
+        }
     }
 
     public enum Value: Decodable {
@@ -126,23 +201,15 @@ public struct WebProfileRequest: Decodable {
         }
         if let negative {
             stock = try NegativeScanPrint.film(stock)
-            let border = negative.border
-            guard border.count == 3, border.allSatisfy({ $0.isFinite && $0 > 0 }) else {
-                throw Failure(description: "Pick clear, unexposed film.")
-            }
-            let correction = NegativeScanCrosstalk.Correction(
-                strength: negative.crosstalk ?? 0, light: negative.scanLight ?? .white)
-            guard correction.isValid else { throw Failure(description: "Invalid crosstalk correction.") }
-            let dense = try negative.denseEnd.map { dense -> SIMD3<Float> in
-                guard dense.count == 3 else { throw Failure(description: "Invalid scene measurement.") }
-                return SIMD3(dense[0], dense[1], dense[2])
-            }
-            let balance = ApproximateNegativeScan.balance(stock: stock, denseEnd: dense,
-                                                          correction: correction)
+            let measured = try negative.measured()
+            let balance = measured.edit.balance(
+                stock: stock, border: measured.border, denseEnd: measured.denseEnd,
+                source: negative.source, flare: measured.flare)
             // Exposure and development, which transport belongs to, already happened to the film.
             stock.layeredTransport = nil
             options = try NegativeScanPrint.Reading(
-                stock: stock, border: SIMD3(border[0], border[1], border[2]), balance: balance)
+                stock: stock, border: measured.border, balance: balance, flare: measured.flare,
+                holder: measured.edit.readsModel ? negative.holder : nil)
                 .printing(options, stock: stock)
         }
         return (stock, options)

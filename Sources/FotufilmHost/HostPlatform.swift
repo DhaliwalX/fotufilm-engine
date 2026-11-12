@@ -118,7 +118,8 @@ protocol HostImageDecoder {
 /// `NegativeScanImport` does, and measures photographs of a bare light source.
 protocol HostScanDecoder {
     /// The scan in linear Rec. 2020: through the file's colour profile, its samples read as
-    /// linear light where it has none, a camera RAW with every rendering choice off.
+    /// linear light where it has none, a camera RAW with every rendering choice off. The image
+    /// says what its file tells of its camera and of this decode (`HostImage.scanSource`).
     func decodeScan(_ url: URL) throws -> HostImage
     /// One exposure of a trichromatic scan (`TrichromaticRoll.Decode`).
     func decodeExposure(_ url: URL) throws -> (rgba: [Float], width: Int, height: Int)

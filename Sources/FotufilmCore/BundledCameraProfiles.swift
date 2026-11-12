@@ -24,6 +24,16 @@ extension CameraSpectralProfileStore {
         _ = bundledRegistration
     }
 
+    /// Registers the camera one record of the dataset measures, as a bundled one is, for a host
+    /// that does not carry the dataset beside the engine and brings the cameras it meets. Nil
+    /// for a record without a usable measurement.
+    @discardableResult
+    public static func register(rawtoaces record: Data) -> CameraSpectralProfile? {
+        guard let profile = parseRawtoacesProfile(record) else { return nil }
+        registerIfAbsent(profile)
+        return profile
+    }
+
     private static let bundledRegistration: Void = {
         // `registerIfAbsent`, not `profile(id:)` + `register`: the lookups call back into
         // `loadBundledProfiles()`, and re-entering this initializer would deadlock the

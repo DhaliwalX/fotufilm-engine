@@ -35,6 +35,21 @@ public enum CameraProfileCorrection {
     private static let lock = NSLock()
     nonisolated(unsafe) private static var anchors: [String: DualIlluminantMatrices] = [:]
 
+    /// `profile`'s two anchor solves, from the cache.
+    static func matrices(for profile: CameraSpectralProfile) -> DualIlluminantMatrices {
+        lock.lock()
+        if let held = anchors[profile.id] {
+            lock.unlock()
+            return held
+        }
+        lock.unlock()
+        let solved = profile.dualIlluminantMatrices()
+        lock.lock()
+        anchors[profile.id] = solved
+        lock.unlock()
+        return solved
+    }
+
     /// The correction a decoded frame still needs, or nil when there is nothing to apply:
     /// no resolvable profile, no scene temperature, or an exactly identity matrix.
     public static func resolve(camera: CameraIdentity?,
@@ -42,20 +57,7 @@ public enum CameraProfileCorrection {
         guard !isDisabled,
               let sceneKelvin, sceneKelvin > 0,
               let profile = CameraSpectralProfileStore.resolve(camera) else { return nil }
-        let pair: DualIlluminantMatrices
-        lock.lock()
-        if let held = anchors[profile.id] {
-            pair = held
-            lock.unlock()
-        } else {
-            lock.unlock()
-            let solved = profile.dualIlluminantMatrices()
-            lock.lock()
-            anchors[profile.id] = solved
-            lock.unlock()
-            pair = solved
-        }
-        let matrix = pair.correction(cct: sceneKelvin)
+        let matrix = matrices(for: profile).correction(cct: sceneKelvin)
         let deviation = DualIlluminantMatrices.maxDeviationFromIdentity(matrix)
         guard deviation > minimumDeviation else { return nil }
         return Resolved(profileID: profile.id, cct: sceneKelvin,

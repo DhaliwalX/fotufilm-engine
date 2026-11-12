@@ -17,12 +17,17 @@ public enum NegativeScanCrosstalk {
 
     /// The light a scan was made under, which sets how broad its channels are.
     public enum Light: String, Codable, CaseIterable, Sendable {
-        /// A camera or scanner under white light: the scan's linear Rec. 2020 channels see the
-        /// spectrum as the Rec. 2020 primaries' colour-matching functions do, through a flat lamp.
+        /// A camera or scanner under white light, a white LED panel where the lamp's own spectrum
+        /// is modelled (`NegativeScanSetup`). This correction takes every one-light scan as the
+        /// Rec. 2020 primaries' colour-matching functions see the spectrum through a flat lamp.
         case white
         /// One exposure under each of a red, green and blue LED, merged (`TrichromaticRoll`): each
         /// channel sees its own LED's narrow band, peaks 625, 522 and 455 nm.
         case rgb
+        /// A phone's or tablet's screen showing white: three narrow emitters.
+        case screen
+        /// A halogen or tungsten lamp, as in an enlarger's head or a slide copier.
+        case halogen
     }
 
     /// How far a reading undoes crosstalk, and the light the scan was made under.
@@ -102,7 +107,7 @@ public enum NegativeScanCrosstalk {
     }
 
     static func sensitivities(_ light: Light) -> [SIMD3<Float>] {
-        light == .white ? whiteSensitivities : rgbSensitivities
+        light == .rgb ? rgbSensitivities : whiteSensitivities
     }
 
     /// The Rec. 2020 channels' spectral sensitivities, per grid wavelength.
@@ -112,12 +117,10 @@ public enum NegativeScanCrosstalk {
             * SpectralGrid.equalEnergy[i]
     }
 
-    /// Red, green and blue LEDs (a SmallRig RM120's, measured on a scanning camera): Gaussian
-    /// bands at their peaks and full widths at half maximum, in nm.
+    /// The red, green and blue LEDs' bands (`Light.rgbBands`), per grid wavelength.
     static let rgbSensitivities: [SIMD3<Float>] = {
-        let bands: [(peak: Float, width: Float)] = [(625, 18), (522, 30), (455, 22)]
-        return SpectralGrid.wavelengths.map { wavelength in
-            SIMD3(bands.map { band in
+        SpectralGrid.wavelengths.map { wavelength in
+            SIMD3(Light.rgbBands.map { band in
                 let sigma = band.width / 2.3548
                 return exp(-0.5 * pow((wavelength - band.peak) / sigma, 2))
             })

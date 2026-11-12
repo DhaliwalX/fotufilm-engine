@@ -142,6 +142,25 @@ final class HostNegativeScanTests: XCTestCase {
             XCTAssertEqual(Float(measured[c]), border[c] * pow(10, -0.02), accuracy: 1e-3)
         }
 
+        // Something in the picture picked as neutral reads the same way: the scan's own samples
+        // there, which the edit keeps beside the clear film.
+        let picked = try XCTUnwrap(JSONSerialization.jsonObject(with: service.call(
+            "negativeSampleNeutral",
+            params: JSONSerialization.data(withJSONObject: [
+                "render": request(handle, maxEdge: 150), "point": [0.5, 0.5]]),
+            payload: nil).json) as? [Double])
+        for (c, density) in [Float(0.4), 0.9, 1.3].enumerated() {
+            XCTAssertEqual(Float(picked[c]), border[c] * pow(10, -density), accuracy: 1e-3)
+        }
+        XCTAssertThrowsError(try service.call(
+            "negativeSampleNeutral",
+            params: JSONSerialization.data(withJSONObject: [
+                "render": request(handle, maxEdge: 150), "point": [1.5, 0.5]]),
+            payload: nil)) { error in
+            XCTAssertEqual((error as? HostEngine.Failure)?.description,
+                           HostService.pointAtNeutral.description)
+        }
+
         // Read as Gold 200 on Digital Reference: the denser negative prints brighter, and the open
         // holder, outside the film's densities, prints black.
         let reading = ["border": measured]
@@ -248,6 +267,74 @@ final class HostNegativeScanTests: XCTestCase {
         XCTAssertEqual(onRoll.negativeMeasure?["denseEnd"] as? [Double], dense)
     }
 
+    /// An edit made with the current reading is read through the scan's light and camera and
+    /// balanced as it says, from what its frame measures; one made before keeps its reading.
+    func testAnEditMadeWithTheCurrentReadingIsReadAsItSays() throws {
+        let (service, engine) = try service()
+        defer { fotufilm_engine_destroy(engine) }
+        let handle = open(service, width: 300, height: 200)
+        let border = self.border
+        let sampled: [String: Any] = ["border": border.indices.map { Double(border[$0]) }]
+        func prepared(_ negative: [String: Any], stock: String? = "gold200") throws -> HostService.Prepared {
+            try service.prepare(JSONSerialization.data(withJSONObject: request(
+                handle, stock: stock, maxEdge: 150, negative: sampled.merging(negative) { $1 })))
+        }
+        let first = try prepared([:])
+        let measure = try XCTUnwrap(first.negativeMeasure)
+        let dense = try XCTUnwrap(measure["denseEnd"] as? [Double]).map(Float.init)
+        let denseEnd = SIMD3<Float>(dense[0], dense[1], dense[2])
+        // The rises across the frame's tonal steps are measured with it, or said to be none.
+        if let slopes = measure["slopes"] as? [Double] {
+            XCTAssertEqual(slopes.count, 2)
+            XCTAssertTrue(slopes.allSatisfy { $0 > 0 })
+        } else {
+            XCTAssertTrue(measure["slopes"] is NSNull)
+        }
+
+        let stock = try NegativeScanPrint.film("gold200")
+        let roll: [String: Any] = ["colour": [0.9, 1.1], "frames": 12, "level": 1.1, "slopes": [0.9, 1.1]]
+        let neutral = [0.2, 0.05, 0.012]
+        let edits: [[String: Any]] = [
+            [:], ["crosstalk": 0.5, "roll": ["colour": [0.9, 1.1], "frames": 12]],
+            ["reading": 2], ["reading": 2, "scanLight": "screen", "camera": "scanner"],
+            ["reading": 2, "balance": "none"], ["reading": 2, "balance": "roll", "roll": roll],
+            ["reading": 2, "roll": roll], ["reading": 2, "neutral": neutral, "crosstalk": 0.4],
+        ]
+        var calibrations: [ApproximateNegativeScan] = []
+        for edit in edits {
+            let negative = try JSONDecoder().decode(
+                WebNativeEdit.Negative.self, from: JSONSerialization.data(withJSONObject: edit))
+            let read = try prepared(edit)
+            let expected = try NegativeScanPrint.Reading(
+                stock: stock, border: border,
+                balance: negative.balance(stock: stock, border: border, denseEnd: denseEnd))
+            let calibration = try XCTUnwrap(read.edit.negativeReading?.calibration, "\(edit)")
+            XCTAssertEqual(calibration, expected.calibration, "\(edit)")
+            XCTAssertEqual(read.edit.negativeReading?.highlightStops, expected.highlightStops, "\(edit)")
+            // The frame measures the same whichever way it is read.
+            XCTAssertEqual(read.negativeMeasure?["denseEnd"] as? [Double],
+                           measure["denseEnd"] as? [Double], "\(edit)")
+            XCTAssertFalse(calibrations.contains(calibration), "\(edit)")
+            calibrations.append(calibration)
+        }
+
+        // Without a film, each way of reading the frame makes its own positive.
+        func red(_ print: (rgba: [Float], width: Int, height: Int)) -> Float {
+            print.rgba[(50 * print.width + 60) * 4]
+        }
+        var reds: [Float] = []
+        for edit in [[:], ["reading": 2], ["reading": 2, "balance": "none"],
+                     ["reading": 2, "balance": "roll", "roll": roll],
+                     ["reading": 2, "neutral": neutral]] as [[String: Any]] {
+            let print = try develop(service, request(handle, stock: nil, maxEdge: 150,
+                                                     negative: sampled.merging(edit) { $1 }))
+            XCTAssertTrue(print.rgba.allSatisfy(\.isFinite), "\(edit)")
+            XCTAssertGreaterThan(red(print), 0, "\(edit)")
+            for other in reds { XCTAssertNotEqual(red(print), other, accuracy: 1e-4, "\(edit)") }
+            reds.append(red(print))
+        }
+    }
+
     /// The print stage on the CPU and on the GPU make the same print of a scan.
     func testCPUAndGPUPrintsAgree() throws {
         let (service, engine) = try service()
@@ -258,14 +345,25 @@ final class HostNegativeScanTests: XCTestCase {
         let width = 120, height = 80
         let scan = strip(width: width, height: height)
         let stock = try NegativeScanPrint.film("gold200")
-        for crosstalk: Float in [0, 1] {
-        let reading = try NegativeScanPrint.Reading(
-            stock: stock, border: border,
-            balance: ApproximateNegativeScan.balance(
-                stock: stock,
-                denseEnd: ApproximateNegativeScan.denseEnd(
-                    border: border, preview: HostNegativeScan.planes(scan, width: width, height: height)),
-                correction: .init(strength: crosstalk, light: .white)))
+        let dense = ApproximateNegativeScan.denseEnd(
+            border: border, preview: HostNegativeScan.planes(scan, width: width, height: height))
+        var readings: [(String, NegativeScanPrint.Reading)] = try [Float(0), 1].map { crosstalk in
+            ("crosstalk \(crosstalk)", try NegativeScanPrint.Reading(
+                stock: stock, border: border,
+                balance: ApproximateNegativeScan.balance(
+                    stock: stock, denseEnd: dense,
+                    correction: .init(strength: crosstalk, light: .white))))
+        }
+        // The current reading: fitted on the scan's light and camera, its roll's contrast
+        // measured so its neutral is balanced by an exposure, the scan's stray light taken off.
+        let balanced = ApproximateNegativeScan.balance(
+            stock: stock, setup: NegativeScanSetup(light: .white), separation: 1, mode: .frame,
+            tones: .init(denseEnd: dense),
+            roll: .init(colour: [1, 1], frames: 8, level: 1, slopes: [0.55, 1.1]))
+        XCTAssertNotEqual(balanced.exposure, .zero)
+        readings.append(("balance and flare", try NegativeScanPrint.Reading(
+            stock: stock, border: border, balance: balanced, flare: border * 0.002)))
+        for (name, reading) in readings {
         var edit = FotufilmEngine.Options()
         edit.paper = .crystalArchive
         let options = reading.printing(edit, stock: stock)
@@ -289,7 +387,7 @@ final class HostNegativeScanTests: XCTestCase {
         let gpu = try print(service.engine.developer), cpu = try print(HalideCPUDeveloper())
         var worst: Float = 0
         for i in gpu.indices where i % 4 != 3 { worst = max(worst, abs(gpu[i] - cpu[i])) }
-        XCTAssertLessThan(worst, 0.01, "crosstalk \(crosstalk)")
+        XCTAssertLessThan(worst, 0.01, name)
         }
     }
 
@@ -484,7 +582,13 @@ final class HostNegativeScanTests: XCTestCase {
         let negative = try XCTUnwrap(opened.json["negative"] as? [String: Any])
         XCTAssertNotNil(negative["suggestions"] as? [Any])
         XCTAssertNotNil(negative["lightFrames"] as? [Any])
-        XCTAssertNotNil(service.negativeScans.scan(handle))
+        // A new document's edit is made with the current reading, and a file that names no
+        // camera is read as the generic one.
+        XCTAssertEqual(negative["reading"] as? Int, WebNativeEdit.Negative.currentReading)
+        XCTAssertEqual((negative["camera"] as? [String: Any])?["id"] as? String, "generic")
+        XCTAssertNil((negative["camera"] as? [String: Any])?["name"])
+        let scan = try XCTUnwrap(service.negativeScans.scan(handle))
+        XCTAssertEqual(scan.source, NegativeScanCapture())
 
         // The clear film reads back as it was written, through the file's linear profile.
         let sampled = try JSONSerialization.jsonObject(with: service.call(
@@ -591,6 +695,25 @@ final class HostNegativeScanTests: XCTestCase {
         }
     }
 
+    /// A document names the camera its scan is read as taken with: a measured one where the
+    /// decoder says the matrix it used, the generic one otherwise.
+    func testADocumentSaysWhatItsScanIsReadAsTakenWith() {
+        let matrix: [Float] = [1.18, -0.09, -0.09, -0.04, 1.52, -0.48, 0.01, -0.25, 1.24]
+        let measured = HostService.readCamera(NegativeScanCapture(
+            camera: CameraIdentity(make: "SONY", model: "ILCE-7CM2"), kelvin: 5100, matrix: matrix))
+        XCTAssertEqual(measured["id"] as? String, "sony-ilce-7cm2")
+        XCTAssertEqual(measured["name"] as? String, "SONY ILCE-7CM2")
+        // A measured camera whose decoder's matrix is not known, one nobody measured, and a
+        // decoder that says nothing are all read as the generic camera.
+        for source in [NegativeScanCapture(camera: CameraIdentity(make: "SONY", model: "ILCE-7CM2")),
+                       NegativeScanCapture(camera: CameraIdentity(make: "Unmeasured", model: "Camera"),
+                                          matrix: matrix), nil] {
+            let read = HostService.readCamera(source)
+            XCTAssertEqual(read["id"] as? String, "generic")
+            XCTAssertNil(read["name"])
+        }
+    }
+
     /// A scan with no colour profile is the scanner's raw output: its samples are linear light,
     /// though ImageIO would read them as sRGB.
     func testAnUntaggedScanIsReadAsLinearSamples() throws {
@@ -620,6 +743,8 @@ final class HostNegativeScanTests: XCTestCase {
         XCTAssertFalse(NegativeScanImport.statesEncoding(Data(bytes)))
 
         let scan = try CoreImageScanDecoder().decodeScan(url)
+        // A file that names no camera says nothing of one.
+        XCTAssertEqual(scan.scanSource, NegativeScanCapture())
         let rgba = scan.scene(width: width, height: height)
         let expected = ColorScience.linearSRGBToRec2020(SIMD3(sample[0], sample[1], sample[2]))
         for c in 0..<3 { XCTAssertEqual(rgba[c], expected[c], accuracy: 0.002) }

@@ -1,7 +1,8 @@
 import { defaultEdit } from "../editor-state.js";
 import { loadFilmProfile } from "../film-profile.js";
 import { decodeRGBA } from "../engine.js";
-import { areaPreview, filmBase } from "../negative-reading.js";
+import { NEGATIVE } from "../engine-constants.js";
+import { areaPreview, filmBase, pickedNeutral } from "../negative-reading.js";
 import { rawSource, scaledLinearImage } from "../raw-source.js";
 import { loadStockIndex } from "../stock-index.js";
 import { importMedia } from "./browser-import.js";
@@ -10,19 +11,45 @@ import { importMedia } from "./browser-import.js";
 // framed scan as the edit's film and prints it (RenderSession.negativeReading). Light frames are
 // kept by the desktop host only.
 
-// A scan opened with `negative` carries the films its clear base looks like.
+// A scan opened with `negative` carries the films its clear base looks like, the reading a new
+// edit of it is made with, and the camera it is read as taken with where the edit leaves that to
+// its file, as the desktop host describes a negative it opens
+// (Sources/FotufilmHost/HostService+NegativeScan.swift `importNegative`).
 export async function importNegativeMedia(file, options) {
   const opened = await importMedia(file, options);
-  if (options?.negative)
+  if (options?.negative) {
+    const [films, camera] = await Promise.all([
+      suggestNegativeFilms(opened.image).catch(() => ({ suggestions: [], base: null })),
+      readCamera(opened.image).catch(() => ({ id: "generic" })),
+    ]);
+    // `base`: the film's base where the scan shows its bare light past the film, which the
+    // current reading is measured against until clear film is picked (RenderSession).
     opened.image.negative = {
-      suggestions: await suggestNegativeFilms(opened.image).catch(() => []),
+      suggestions: films.suggestions,
+      reading: NEGATIVE.currentReading,
+      camera,
+      base: films.base,
     };
+  }
   return opened;
+}
+
+// What a scan's file says of its camera and decode (camera-profile.js `scanSource`): only a
+// camera RAW says anything.
+export const scanSourceOf = (image) => image?.raw?.scanSource ?? null;
+
+// The camera a scan is read as taken with (WebNegativeCameraRequest): `id` as an edit names it,
+// and a measured camera's `name`.
+async function readCamera(image) {
+  const bytes = await loadFilmProfile({ kind: "negative-camera", source: scanSourceOf(image) });
+  return JSON.parse(new TextDecoder().decode(bytes));
 }
 
 export const negativeScans = Object.freeze({
   // Clear film where `point` falls on a shown render: linear Rec. 2020 scan RGB.
   sampleFilmBase: async (result, point) => filmBase(result.scanSource, point),
+  // Something neutral in the picture there, read the same way.
+  sampleNeutral: async (result, point) => pickedNeutral(result.scanSource, point),
   // Exposures under red, green and blue light merged into scans, each offered as a download.
   mergeTrichromatic: async (files, options) =>
     (await import("./browser-trichromatic.js")).mergeTrichromatic(files, options),
@@ -66,15 +93,20 @@ function loadNegativeFilms() {
   });
 }
 
-// Up to three readings of the scan's film base, each naming the installed films it could be.
+// Up to three readings of the scan's film base, each naming the installed films it could be, and
+// the base itself where the scan shows its bare light past the film.
 async function suggestNegativeFilms(image) {
   const films = await loadNegativeFilms();
-  const preview = films.length ? scanPreview(image) : null;
-  if (!preview) return [];
+  const preview = scanPreview(image);
+  if (!preview) return { suggestions: [], base: null };
   const bytes = await loadFilmProfile({ kind: "negative-film", ...preview, films });
   const names = new Map(films.map((film) => [film.id, film.name]));
-  return JSON.parse(new TextDecoder().decode(bytes)).suggestions.map((suggestion) => ({
-    films: suggestion.films.map((id) => ({ id, name: names.get(id) })),
-    likelihood: suggestion.likelihood,
-  }));
+  const read = JSON.parse(new TextDecoder().decode(bytes));
+  return {
+    suggestions: read.suggestions.map((suggestion) => ({
+      films: suggestion.films.map((id) => ({ id, name: names.get(id) })),
+      likelihood: suggestion.likelihood,
+    })),
+    base: read.base ?? null,
+  };
 }

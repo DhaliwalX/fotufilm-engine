@@ -19,6 +19,13 @@ cp Sources/FotufilmCore/Resources/rec2020-reflectance-prior.coeff "$OUTPUT/"
 # Ship only the public source checkout's stock records, never environment-selected packs.
 cp Sources/FotufilmCore/Stocks/*.json "$OUTPUT/stocks/"
 cp licenses/FILM-PROFILES.txt licenses/CC-BY-SA-4.0.txt "$OUTPUT/"
+# The measured cameras a scanned negative is read through: the builder carries none, so a request
+# brings the record of the camera its scan names (web/src/profile-worker.js). The dataset ships
+# verbatim with its licence.
+rm -rf "$OUTPUT/cameras"
+mkdir -p "$OUTPUT/cameras"
+cp Sources/FotufilmCore/CameraProfiles/*.json Sources/FotufilmCore/CameraProfiles/LICENSE \
+  "$OUTPUT/cameras/"
 # The native catalogue supplies stock-specific availability; the browser does not infer it.
 swift build -c release --product fotufilm-web-profile
 python3 - <<'PY'
@@ -29,6 +36,13 @@ definitions = {p.stem: json.loads(p.read_text()) for p in (root / 'stocks').glob
 catalogue = subprocess.check_output(['.build/release/fotufilm-web-profile', '--catalogue'],
     input=json.dumps(definitions).encode())
 (root / 'catalogue.json').write_bytes(catalogue)
+cameras = []
+for record in sorted((root / 'cameras').glob('*.json')):
+    header = json.loads(record.read_text()).get('header', {})
+    make, model = header.get('manufacturer', '').strip(), header.get('model', '').strip()
+    if make and model:
+        cameras.append({'make': make, 'model': model, 'file': f'cameras/{record.name}'})
+(root / 'cameras.json').write_text(json.dumps(cameras, separators=(',', ':')) + '\n')
 assets = [p for p in root.rglob('*') if p.is_file() and p.name != 'index.json']
 manifest = {str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest()
             for p in sorted(assets)}
