@@ -107,8 +107,8 @@ final class HostNegativeLightFrames {
 /// develop of it prints the framed scan through the edit's own print (`HostEngine.printNegative`).
 extension HostService {
     static let negativeScanMethods: Set<String> = [
-        "negativeSampleFilmBase", "negativeLightFrames", "negativeAddLightFrame",
-        "negativeRemoveLightFrame",
+        "negativeSampleFilmBase", "negativeSampleNeutral", "negativeLightFrames",
+        "negativeAddLightFrame", "negativeRemoveLightFrame",
     ]
 
     func negativeScan(_ method: String, parameters: [String: Any],
@@ -116,7 +116,11 @@ extension HostService {
         do {
             switch method {
             case "negativeSampleFilmBase":
-                return try answer(value: sampleFilmBase(parameters))
+                return try answer(value: sampleScan(parameters, pointing: Self.pointAtFilmBase,
+                                                    unreadable: HostNegativeScan.invalidBorder))
+            case "negativeSampleNeutral":
+                return try answer(value: sampleScan(parameters, pointing: Self.pointAtNeutral,
+                                                    unreadable: Self.pointAtNeutral))
             case "negativeLightFrames":
                 return try answer(value: negativeScans.lights.all().map { ["id": $0.id, "name": $0.name] })
             case "negativeAddLightFrame":
@@ -305,13 +309,22 @@ extension HostService {
         ]
     }
 
-    /// Clear film sampled where the page points on the framed scan: the median over a patch a
-    /// fortieth of the picture's long edge across.
-    private func sampleFilmBase(_ parameters: [String: Any]) throws -> [Double] {
+    static let pointAtFilmBase = HostEngine.Failure(
+        description: "Point at clear film on the negative.")
+    static let pointAtNeutral = HostEngine.Failure(
+        description: "Pick something grey or white in the picture, where the scan shows the film.")
+
+    /// The scan sampled where the page points on the framed scan, as linear Rec. 2020 scan RGB:
+    /// the median over a patch a fortieth of the picture's long edge across. Clear film to read
+    /// the scan against (`border`), or something neutral in the picture to balance it on
+    /// (`neutral`). Fails as `pointing` for a call that points nowhere, and as `unreadable`
+    /// where the patch shows too little film.
+    private func sampleScan(_ parameters: [String: Any], pointing: HostEngine.Failure,
+                            unreadable: HostEngine.Failure) throws -> [Double] {
         guard var render = parameters["render"] as? [String: Any],
               let point = parameters["point"] as? [Double], point.count == 2,
               (0...1).contains(point[0]), (0...1).contains(point[1]) else {
-            throw HostEngine.Failure(description: "Point at clear film on the negative.")
+            throw pointing
         }
         render["viewport"] = nil
         let prepared = try prepare(JSONSerialization.data(withJSONObject: render), readsNegative: false)
@@ -319,10 +332,10 @@ extension HostService {
         let (width, height) = prepared.sizes.output
         let radius = max(2, max(width, height) / 80)
         let x = Int(point[0] * Double(width)), y = Int(point[1] * Double(height))
-        return try HostNegativeScan.border(scene, width: width, height: height,
-                                           x0: x - radius, y0: y - radius,
-                                           x1: x + radius + 1, y1: y + radius + 1)
-            .map(Double.init)
+        guard let sampled = try? HostNegativeScan.border(
+            scene, width: width, height: height, x0: x - radius, y0: y - radius,
+            x1: x + radius + 1, y1: y + radius + 1) else { throw unreadable }
+        return sampled.map(Double.init)
     }
 
     /// Up to three readings of the film base, each naming the films it could be.

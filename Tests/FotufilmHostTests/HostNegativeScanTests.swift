@@ -142,6 +142,25 @@ final class HostNegativeScanTests: XCTestCase {
             XCTAssertEqual(Float(measured[c]), border[c] * pow(10, -0.02), accuracy: 1e-3)
         }
 
+        // Something in the picture picked as neutral reads the same way: the scan's own samples
+        // there, which the edit keeps beside the clear film.
+        let picked = try XCTUnwrap(JSONSerialization.jsonObject(with: service.call(
+            "negativeSampleNeutral",
+            params: JSONSerialization.data(withJSONObject: [
+                "render": request(handle, maxEdge: 150), "point": [0.5, 0.5]]),
+            payload: nil).json) as? [Double])
+        for (c, density) in [Float(0.4), 0.9, 1.3].enumerated() {
+            XCTAssertEqual(Float(picked[c]), border[c] * pow(10, -density), accuracy: 1e-3)
+        }
+        XCTAssertThrowsError(try service.call(
+            "negativeSampleNeutral",
+            params: JSONSerialization.data(withJSONObject: [
+                "render": request(handle, maxEdge: 150), "point": [1.5, 0.5]]),
+            payload: nil)) { error in
+            XCTAssertEqual((error as? HostEngine.Failure)?.description,
+                           HostService.pointAtNeutral.description)
+        }
+
         // Read as Gold 200 on Digital Reference: the denser negative prints brighter, and the open
         // holder, outside the film's densities, prints black.
         let reading = ["border": measured]
