@@ -120,13 +120,20 @@ final class PlainNegativeScanTests: XCTestCase {
             XCTAssertEqual(light.x, light.y, accuracy: 1e-4 * light.y, line: line)
             XCTAssertEqual(light.z, light.y, accuracy: 1e-4 * light.y, line: line)
         }
+        func gains(_ neutral: SIMD3<Float>) -> SIMD3<Float> {
+            let read = NegativeScanCrosstalk.apply(weights, neutral)
+            return SIMD3(read.y / read.x, 1, read.y / read.z)
+        }
+        func assertEqual(_ a: SIMD3<Float>, _ b: SIMD3<Float>, line: UInt = #line) {
+            for c in 0..<3 { XCTAssertEqual(a[c], b[c], accuracy: 1e-6, line: line) }
+        }
         let own = PlainNegativeScan(border: border, setup: setup, separation: 1, mode: .frame,
                                     tones: Tones(denseEnd: dense))
         XCTAssertEqual(own.weights, weights)
-        // The balance is an exposure, each channel's light scaled: no density is.
-        XCTAssertEqual(own.gains, .one)
-        XCTAssertEqual(own.balance.y, 1)
-        XCTAssertNotEqual(own.balance.x, 1, accuracy: 0.01)
+        // With no film and no roll to say how steep its records are, red's and blue's densities
+        // are scaled onto green's at the neutral.
+        assertEqual(own.gains, gains(dense))
+        XCTAssertEqual(own.balance, .one)
         XCTAssertEqual(own.toe, PlainNegativeScan.modelToe)
         XCTAssertEqual(own.reference, NegativeScanCrosstalk.apply(weights, dense).y)
         // The densest end prints as diffuse white, and the clear film, which no exposure made,
@@ -139,9 +146,12 @@ final class PlainNegativeScanTests: XCTestCase {
         let chosen = PlainNegativeScan(border: border, setup: setup, separation: 1, mode: .frame,
                                        tones: Tones(denseEnd: dense, picked: picked))
         XCTAssertEqual(chosen.reference, own.reference)
+        assertEqual(chosen.gains, gains(picked))
         assertGrey(chosen.light(of: sample(picked)))
         XCTAssertEqual(chosen.light(of: sample(dense)).y, PlainNegativeScan.highlight,
                        accuracy: 1e-4)
+        // Scaled there, a grey halfway to the neutral is grey too, whatever its records' contrast.
+        assertGrey(chosen.light(of: sample(picked * 0.5)))
 
         // On its roll the frame takes the roll's neutral over its own.
         let roll = ApproximateNegativeScan.RollBalance(colour: [1.05, 0.85], frames: 12, level: 1)
@@ -149,13 +159,14 @@ final class PlainNegativeScanTests: XCTestCase {
                                        tones: Tones(denseEnd: dense, picked: picked), roll: roll)
         assertGrey(rolled.light(of: sample(SIMD3(1.05, 1, 0.85))))
         XCTAssertEqual(rolled.reference, own.reference)
-        XCTAssertEqual(rolled.gains, .one)
+        assertEqual(rolled.gains, gains(SIMD3(1.05, 1, 0.85)))
         // Without a roll measured, it is balanced as a frame of its own.
         XCTAssertEqual(PlainNegativeScan(border: border, setup: setup, separation: 1, mode: .roll,
                                          tones: Tones(denseEnd: dense, picked: picked)), chosen)
 
-        // A roll that measured its tonal steps makes red and blue as steep as green, whichever
-        // neutral balances the frame.
+        // A roll that measured its tonal steps says the contrast: red and blue are made as steep
+        // as green by it, whichever neutral balances the frame, and the neutral is then balanced
+        // by each channel's light.
         let stepped = ApproximateNegativeScan.RollBalance(colour: [1.05, 0.85], frames: 12,
                                                           level: 1, slopes: [0.95, 1.1])
         let read = NegativeScanCrosstalk.apply(weights, SIMD3(0.95, 1, 1.1))
@@ -165,6 +176,10 @@ final class PlainNegativeScanTests: XCTestCase {
             XCTAssertEqual(steep.gains.x, read.y / read.x, accuracy: 1e-6)
             XCTAssertEqual(steep.gains.y, 1)
             XCTAssertEqual(steep.gains.z, read.y / read.z, accuracy: 1e-6)
+            XCTAssertNotEqual(steep.balance.x, 1, accuracy: 0.01)
+            XCTAssertEqual(steep.balance.y, 1)
+            let white = steep.light(of: sample(mode == .roll ? SIMD3(1.05, 1, 0.85) : dense))
+            assertGrey(white)
         }
 
         // Unbalanced, the film reads as it is, timed on its densest end all the same.
@@ -185,11 +200,18 @@ final class PlainNegativeScanTests: XCTestCase {
         XCTAssertEqual(PlainNegativeScan(border: border, setup: setup, separation: 1, mode: .frame,
                                          tones: Tones(denseEnd: SIMD3(.nan, 1, 1),
                                                       picked: SIMD3(0.01, 0.02, 0.01))), flat)
-        // A balance stays within what a channel's light can plausibly be off by.
+        // Gains stay within what a channel can plausibly be off by, and with a roll's contrast a
+        // balance within what a channel's light can be.
         let far = PlainNegativeScan(border: border, setup: setups[3], separation: 0, mode: .frame,
                                     tones: Tones(denseEnd: SIMD3(0.1, 1, 3)))
-        XCTAssertEqual(far.balance.x, PlainNegativeScan.balanceRange.upperBound)
-        XCTAssertEqual(far.balance.z, PlainNegativeScan.balanceRange.lowerBound)
+        XCTAssertEqual(far.gains.x, 2)
+        XCTAssertEqual(far.gains.z, 0.5)
+        let steep = ApproximateNegativeScan.RollBalance(colour: [1, 1], frames: 8, level: 1,
+                                                        slopes: [1, 1])
+        let wide = PlainNegativeScan(border: border, setup: setups[3], separation: 0, mode: .frame,
+                                     tones: Tones(denseEnd: SIMD3(0.1, 1, 3)), roll: steep)
+        XCTAssertEqual(wide.balance.x, PlainNegativeScan.balanceRange.upperBound)
+        XCTAssertEqual(wide.balance.z, PlainNegativeScan.balanceRange.lowerBound)
     }
 
     /// The first reading runs along a straight line. The current one has a toe: the clear film

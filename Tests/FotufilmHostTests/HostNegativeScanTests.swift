@@ -354,11 +354,12 @@ final class HostNegativeScanTests: XCTestCase {
                     stock: stock, denseEnd: dense,
                     correction: .init(strength: crosstalk, light: .white))))
         }
-        // The current reading: fitted on the scan's light and camera, balanced by an exposure,
-        // the scan's stray light taken off.
+        // The current reading: fitted on the scan's light and camera, its roll's contrast
+        // measured so its neutral is balanced by an exposure, the scan's stray light taken off.
         let balanced = ApproximateNegativeScan.balance(
             stock: stock, setup: NegativeScanSetup(light: .white), separation: 1, mode: .frame,
-            tones: .init(denseEnd: dense))
+            tones: .init(denseEnd: dense),
+            roll: .init(colour: [1, 1], frames: 8, level: 1, slopes: [0.55, 1.1]))
         XCTAssertNotEqual(balanced.exposure, .zero)
         readings.append(("balance and flare", try NegativeScanPrint.Reading(
             stock: stock, border: border, balance: balanced, flare: border * 0.002)))

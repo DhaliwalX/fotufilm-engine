@@ -66,12 +66,15 @@ extension PlainNegativeScan {
     }
 
     /// Reads against `border` through `setup`, its weights across the channels at `separation`,
-    /// along a negative's curve with its toe, balanced as `mode` says: red's and blue's light
-    /// brought onto green's at the frame's neutral, one picked on it or else its densest end, or
-    /// at its roll's; or left as the film reads. A measured `roll` also makes red and blue as
-    /// steep against green as each other, whichever neutral the frame is balanced on. The
-    /// frame's own densest end prints as `highlight` whichever it is balanced on. `tones` are
-    /// net of the scan's stray light, `flare`, which `border` still carries.
+    /// along a negative's curve with its toe, balanced as `mode` says on the frame's neutral, one
+    /// picked on it or else its densest end, or on its roll's; or left as the film reads. With
+    /// no film to say how steep its records are, red's and blue's densities are scaled onto
+    /// green's at that neutral, which holds the greys between the clear film and the neutral
+    /// whatever each record's contrast. A `roll` that measured its tonal steps says the
+    /// contrast itself: red and blue are then made as steep as green by it, and the neutral is
+    /// balanced by each channel's light, as an exposure. The frame's own densest end prints as
+    /// `highlight` whichever it is balanced on. `tones` are net of the scan's stray light,
+    /// `flare`, which `border` still carries.
     public init(border: SIMD3<Float>, setup: NegativeScanSetup, separation: Float,
                 mode: ApproximateNegativeScan.BalanceMode, tones: ApproximateNegativeScan.Tones,
                 roll: ApproximateNegativeScan.RollBalance? = nil, flare: SIMD3<Float> = .zero) {
@@ -87,6 +90,7 @@ extension PlainNegativeScan {
         var gains = SIMD3<Float>.one
         // A roll's tonal steps say how steep red and blue read against green: with no film to
         // say otherwise, a grey's records are as steep as each other.
+        var steepened = false
         if mode != .none, let slopes = roll?.slopes, slopes.count == 2 {
             let read = NegativeScanCrosstalk.apply(weights, SIMD3(slopes[0], 1, slopes[1]))
             if read.y.isFinite, read.y > 0 {
@@ -95,6 +99,36 @@ extension PlainNegativeScan {
                     gains[channel] = min(max(read.y / read[channel], range.lowerBound),
                                          range.upperBound)
                 }
+                steepened = true
+            }
+        }
+        var balance = SIMD3<Float>.one
+        let toeLight = Self.modelToe * pow(10, -reference / Self.gamma)
+        // As a known film's balance takes its neutral
+        // (`ApproximateNegativeScan.balance(stock:setup:separation:mode:tones:roll:)`).
+        let neutrals = mode == .none ? [] : [
+            mode == .roll ? roll?.neutral(green: dense?.y) : nil, readable(tones.picked), dense,
+        ]
+        if let neutral = neutrals.lazy.compactMap({ $0 }).map({
+            NegativeScanCrosstalk.apply(weights, $0) }).first(where: { $0.y > 0.05 }) {
+            if steepened {
+                // The exposure that made each channel's density there, brought onto green's.
+                let exposure = { (channel: Int) -> Float in
+                    pow(10, (gains[channel] * neutral[channel] - reference) / Self.gamma) - toeLight
+                }
+                let green = exposure(1)
+                for channel in [0, 2] where neutral[channel] > 0.05 {
+                    let own = exposure(channel)
+                    guard green > 0, own > 0 else { continue }
+                    balance[channel] = min(max(green / own, Self.balanceRange.lowerBound),
+                                           Self.balanceRange.upperBound)
+                }
+            } else {
+                for channel in [0, 2] where neutral[channel] > 0.05 {
+                    gains[channel] = min(max(neutral.y / neutral[channel],
+                                             ApproximateNegativeScan.gainRange.lowerBound),
+                                         ApproximateNegativeScan.gainRange.upperBound)
+                }
             }
         }
         self.border = border
@@ -102,28 +136,7 @@ extension PlainNegativeScan {
         self.weights = weights
         self.reference = reference
         self.flare = flare
-        toe = Self.modelToe
-        // As a known film's balance takes its neutral
-        // (`ApproximateNegativeScan.balance(stock:setup:separation:mode:tones:roll:)`): the
-        // exposure that made each channel's density there, brought onto green's.
-        let neutrals = mode == .none ? [] : [
-            mode == .roll ? roll?.neutral(green: dense?.y) : nil, readable(tones.picked), dense,
-        ]
-        if let neutral = neutrals.lazy.compactMap({ $0 }).map({
-            NegativeScanCrosstalk.apply(weights, $0) }).first(where: { $0.y > 0.05 }) {
-            let toeLight = self.toeLight
-            let exposure = { (channel: Int) -> Float in
-                pow(10, (gains[channel] * neutral[channel] - reference) / Self.gamma) - toeLight
-            }
-            let green = exposure(1)
-            var balance = SIMD3<Float>.one
-            for channel in [0, 2] where neutral[channel] > 0.05 {
-                let own = exposure(channel)
-                guard green > 0, own > 0 else { continue }
-                balance[channel] = min(max(green / own, Self.balanceRange.lowerBound),
-                                       Self.balanceRange.upperBound)
-            }
-            self.balance = balance
-        }
+        self.toe = Self.modelToe
+        self.balance = balance
     }
 }

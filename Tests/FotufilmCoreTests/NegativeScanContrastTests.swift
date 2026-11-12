@@ -139,7 +139,9 @@ final class NegativeScanContrastTests: XCTestCase {
             return worst
         }
         XCTAssertLessThan(try worst(roll), 0.04)
-        XCTAssertGreaterThan(try worst(nil), 0.1)
+        // Without the roll the frame's own neutral scales the records, which holds these greys
+        // nearly as well; the roll's contrast frees the neutral to set an exposure.
+        XCTAssertLessThan(try worst(nil), 0.06)
     }
 
     func testContrastStaysInsideWhatARollCanBe() throws {

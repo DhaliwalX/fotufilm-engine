@@ -1,10 +1,15 @@
 import Foundation
 
-/// How a reading fitted on the scan model (`NegativeScanModel.weights`) balances a frame. The fit
-/// reads the film's own densities, so a neutral lit as the film expects already lies on the
-/// film's grey scale. What is left is the scene's light and the film's own drift, which a printer
-/// takes out with filtration: the same exposure added to a record at every tone, which moves it
-/// along the film's own curve.
+/// How a reading fitted on the scan model (`NegativeScanModel.weights`) balances a frame. Two
+/// things move a neutral off the film's grey scale. One is how steep each record reads, which
+/// the film's age and development and the scan's own light and camera all set, and which the
+/// model knows only as well as it knows them: a white lamp's red end alone moves red's by half.
+/// The other is the scene's light and the film's drift, which a printer takes out with
+/// filtration: the same exposure added to a record at every tone, moving it along the film's
+/// own curve. One neutral cannot tell the two apart. A roll that measured its tonal steps says
+/// the first (`contrast`), and the neutral then sets the exposure. Without one, the neutral
+/// sets each record's gain, which holds the greys between the clear film and the neutral
+/// however steep the records read.
 extension ApproximateNegativeScan {
     /// What a frame is balanced on.
     public enum BalanceMode: String, Codable, CaseIterable, Sendable {
@@ -33,9 +38,9 @@ extension ApproximateNegativeScan {
 
     /// The balance of a frame read by the scan model for `setup`, its weights across the
     /// channels at `separation` (`NegativeScanModel.weights`): a neutral moved onto the film's
-    /// grey scale, and the highlights' exposure from the densest end. A measured `roll` also
-    /// makes red and blue as steep against green as the film's own (`contrast`), whichever
-    /// neutral the frame is balanced on.
+    /// grey scale, and the highlights' exposure from the densest end. A `roll` that measured its
+    /// tonal steps makes red and blue as steep against green as the film's own (`contrast`),
+    /// and the neutral then moves them by an exposure; without one the neutral scales them.
     public static func balance(stock: FilmStock, setup: NegativeScanSetup, separation: Float,
                                mode: BalanceMode, tones: Tones,
                                roll: RollBalance? = nil) -> Balance {
@@ -50,9 +55,11 @@ extension ApproximateNegativeScan {
             }
         }
         guard mode != .none else { return balance }
+        var steepened = false
         if let slopes = roll?.slopes, slopes.count == 2 {
             balance.gains = contrast(stock: stock, weights: weights,
                                      slopes: SIMD2(slopes[0], slopes[1]))
+            steepened = true
         }
         // The roll's neutral when the frame is on its roll; else one picked on the frame; else
         // its densest end. One too thin to tell a colour from is passed over.
@@ -60,10 +67,34 @@ extension ApproximateNegativeScan {
                         readable(tones.picked), dense]
         if let neutral = neutrals.lazy.compactMap({ $0 }).first(
             where: { NegativeScanCrosstalk.apply(weights, $0).y > 0.05 }) {
-            balance.exposure = exposure(stock: stock, weights: weights, gains: balance.gains,
-                                        neutral: neutral)
+            if steepened {
+                balance.exposure = exposure(stock: stock, weights: weights, gains: balance.gains,
+                                            neutral: neutral)
+            } else {
+                balance.gains = gains(stock: stock, weights: weights, neutral: neutral)
+            }
         }
         return balance
+    }
+
+    /// What red's and blue's densities over the clear film are multiplied by so `neutral`, the
+    /// scan channels' densities of a grey over the clear film, reads as the film's grey of its
+    /// green: the densities the film's other records give the exposure its green record reads,
+    /// over the densities they read. Held inside `gainRange`; one for a record the neutral reads
+    /// too thin to tell, or on a black-and-white film.
+    static func gains(stock: FilmStock, weights: [SIMD3<Float>],
+                      neutral: SIMD3<Float>) -> SIMD3<Float> {
+        guard !stock.isMonochrome else { return .one }
+        let read = NegativeScanCrosstalk.apply(weights, neutral)
+        let green = stock.curves[1].logExposure(density: stock.curves[1].dMin + read.y)
+        var gains = SIMD3<Float>.one
+        for record in [0, 2] where read[record] > 0.05 {
+            let expected = stock.curves[record].density(logExposure: green)
+                - stock.curves[record].dMin
+            gains[record] = min(max(expected / read[record], gainRange.lowerBound),
+                                gainRange.upperBound)
+        }
+        return gains
     }
 
     /// The log exposure to add to red and blue so `neutral`, the scan channels' densities of a
