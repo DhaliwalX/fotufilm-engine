@@ -141,11 +141,20 @@ in one place (`WebNativeEdit.Negative.balance`, `.plain` and `.strayLight`):
   sample and the clear film before their densities (`FOTUFILM_CONFIG_SCAN_FLARE`), and the frame's
   tones are read net of it.
 - **Balance.** `balance` is `frame`, `roll` or `none`. The frame's neutral, one picked on it
-  (`neutral`) or else its densest end, or its roll's, is put on the film's own grey scale by an
-  exposure added to red and blue, as a printer's filtration is. Each record then moves along the
-  film's own curve (`ApproximateNegativeScan.balance`, `FOTUFILM_CONFIG_SCAN_BALANCE`): nothing at
-  the clear film, more through the toe, one density on the straight line. The first reading
-  scaled each record's density instead, which holds one tone and leaves a cast at the others.
+  (`neutral`) or else its densest end, or its roll's, is put on the film's own grey scale. Two
+  things move a neutral off it: how steep each record reads, which the film's age and
+  development and the scan's own light and camera set, and the scene's light, which is one
+  exposure at every tone. One neutral cannot tell them apart. Without a roll's contrast the
+  neutral scales red's and blue's densities, which holds the greys between the clear film and
+  the neutral however steep the records read. With it, the neutral adds an exposure to red and
+  blue, as a printer's filtration does, and each record moves along the film's own curve
+  (`ApproximateNegativeScan.balance`, `FOTUFILM_CONFIG_SCAN_BALANCE`): nothing at the clear
+  film, more through the toe, one density on the straight line.
+- **The clear film and the holder.** Until clear film is picked it is estimated: the brightest
+  of the scan, or where the scan shows its bare light through sprocket holes or around a strip,
+  the film's base under that light (`ApproximateNegativeScan.estimatedFilmBase`). A holder the
+  scan shows is left out of what the frame measures, so the print is timed on the picture's
+  highlights and not on the holder (`ApproximateNegativeScan.withoutHolder`).
 - **A roll's contrast.** A frame's tonal steps, where light falls off across a surface or a
   shadow lies on it, change every record's exposure alike, so the rises of red and blue per unit
   of green across them say how steep the roll's records read against each other
@@ -154,8 +163,11 @@ in one place (`WebNativeEdit.Negative.balance`, `.plain` and `.strayLight`):
 - **Without a film.** Normal's weights are fitted on an ordinary orange-masked colour negative
   through the same setup. Its light follows a negative's curve with a toe, density growing as
   gamma times the logarithm of one plus the exposure over the toe's, so the clear film is no
-  exposure and reads black; it is balanced by each channel's light, and takes a roll's contrast
-  and the scan's stray light the same way (`PlainNegativeScan`).
+  exposure and reads black. With no film to say how steep its records are, red's and blue's
+  densities are scaled onto green's at the frame's neutral, which holds the greys between the
+  clear film and the neutral; once a roll's contrast is measured the records are made as steep
+  as each other by it and the neutral is balanced by each channel's light. It takes the scan's
+  stray light off the same way (`PlainNegativeScan`).
 
 Three further steps were measured and left out. Reading a camera's own channels before its
 decoder's matrix read the model's colours worse, not better, and carries more of the scan's
