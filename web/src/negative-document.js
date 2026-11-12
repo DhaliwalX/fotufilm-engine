@@ -15,8 +15,9 @@ import { NEGATIVE } from "./engine-constants.js";
 // halogen lamp, or "rgb" for exposures under red, green and blue LEDs merged into one scan. The
 // current reading adds which reading the edit was made with (`reading`), what took the scan
 // (`camera`: "generic", "scanner", or absent for the camera its file names), what the frame is
-// balanced on (`balance`, absent for its own tones) and something neutral picked on it
-// (`neutral`, scan RGB like `border`).
+// balanced on (`balance`, absent for its own tones), something neutral picked on it (`neutral`,
+// scan RGB like `border`) and the scan's stray light as a share of the frame's light (`flare`,
+// absent to measure it from the holder).
 export const SCAN_LIGHTS = ["white", "screen", "halogen", "rgb"];
 export const BALANCES = ["frame", "roll", "none"];
 // A new negative is read with the current reading (`reading`, engine-constants.js NEGATIVE):
@@ -130,10 +131,11 @@ export function rolledDenseEnd(dense, roll) {
 export const readsModel = (negative) => (negative?.reading ?? 1) >= 2;
 
 // What a request says of a negative's reading (WebProfileRequest.Negative), from its edit, what
-// its framing measures (`border`, its own densest end `dense`) and what the scan's file says of
-// its camera (`source`). The first reading takes the frame's densest end on its roll's colour;
-// the current one takes the frame's own and the roll beside it.
-export function readingRequest(negative, { border, dense }, source = null) {
+// its framing measures (`border`, its own densest end `dense`, and the stray light `flare` the
+// reading takes off, which `dense` is net of) and what the scan's file says of its camera
+// (`source`). The first reading takes the frame's densest end on its roll's colour; the current
+// one takes the frame's own and the roll beside it.
+export function readingRequest(negative, { border, dense, flare = null }, source = null) {
   if (!readsModel(negative))
     return {
       border,
@@ -144,7 +146,13 @@ export function readingRequest(negative, { border, dense }, source = null) {
   const kept = {};
   for (const key of ["reading", "crosstalk", "scanLight", "camera", "balance", "neutral", "roll"])
     if (negative[key] != null) kept[key] = negative[key];
-  return { border, denseEnd: dense, ...kept, ...(source ? { source } : {}) };
+  return {
+    border,
+    denseEnd: dense,
+    ...kept,
+    ...(flare?.some((v) => v > 0) ? { strayLight: flare } : {}),
+    ...(source ? { source } : {}),
+  };
 }
 
 // "Gold 200", "Vision3 500T or CineStill 800T", "Tri-X 400 and 7 similar films".
@@ -181,6 +189,7 @@ export function parseNegative(value) {
     camera = null,
     balance = null,
     neutral = null,
+    flare = null,
   } = value;
   const positives = (values, count) =>
     Array.isArray(values) &&
@@ -202,7 +211,8 @@ export function parseNegative(value) {
     (reading !== null && !(Number.isInteger(reading) && reading >= 1)) ||
     (camera !== null && (typeof camera !== "string" || !camera)) ||
     (balance !== null && !BALANCES.includes(balance)) ||
-    (neutral !== null && !positives(neutral, 3))
+    (neutral !== null && !positives(neutral, 3)) ||
+    (flare !== null && !(Number.isFinite(flare) && flare >= 0 && flare <= 0.02))
   )
     throw new Error("Invalid negative reading.");
   return {
@@ -220,5 +230,6 @@ export function parseNegative(value) {
     ...(camera !== null ? { camera } : {}),
     ...(balance !== null ? { balance } : {}),
     ...(neutral !== null ? { neutral: [...neutral] } : {}),
+    ...(flare !== null ? { flare } : {}),
   };
 }

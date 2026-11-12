@@ -8,7 +8,11 @@ import {
   denseEnd,
   estimatedBorder,
   filmBase,
+  frameLight,
+  netOfFlare,
   pickedNeutral,
+  readingFlare,
+  strayLight,
   plainReading,
   plainCrosstalk,
   PLAIN_CROSSTALK,
@@ -224,6 +228,78 @@ test("a roll's colour is the median of its frames' highlight colours", () => {
   assert.equal(contrast.frames, 7);
 });
 
+test("a scan's stray light is read from its holder only where it plainly shows one", () => {
+  // As Tests/FotufilmCoreTests/NegativeScanFlareTests.swift draws them.
+  const width = 200,
+    height = 140;
+  const picture = (u, v) => [0.2 + 1.3 * u, 0.25 + 1.5 * u * (0.7 + 0.3 * v), 0.3 + 1.7 * u];
+  const draw = (margin, holder, density = picture) =>
+    scan(width, height, (x, y) => {
+      const u = (x + 0.5) / width,
+        v = (y + 0.5) / height;
+      const inside = u > margin && u < 1 - margin && v > margin && v < 1 - margin;
+      if (holder && !inside) return holder.map((h) => h * (1 + 0.1 * (u - 0.5)));
+      return border.map((b, c) => b * 10 ** -density(u, v)[c]);
+    }).read(0, 0, width, height);
+  const stray = border.map((v) => v * 0.0006);
+  const held = draw(0.12, stray);
+  const found = strayLight(border, held, width, height);
+  found.forEach((v, c) => assert.ok(Math.abs(v - stray[c]) < 0.06 * stray[c], String(v)));
+  const light = frameLight(held, width, height);
+  light.forEach((v, c) => assert.ok(v > 20 * found[c]));
+
+  // The film filling the scan, a dense sky reaching into its middle, a lamp at its corner, a
+  // grey mask no darker than the film, and a holder that shows no light have none to measure.
+  assert.equal(strayLight(border, draw(0, null), width, height), null);
+  assert.equal(
+    strayLight(border, draw(0, null, (u, v) => (v < 0.35 ? [2.2, 2.4, 2.6] : picture(u, v))), width, height),
+    null,
+  );
+  assert.equal(
+    strayLight(
+      border,
+      draw(0, null, (u, v) => (u < 0.08 && v < 0.08 ? [2.9, 2.9, 2.9] : picture(u, v))),
+      width,
+      height,
+    ),
+    null,
+  );
+  assert.equal(strayLight(border, draw(0.12, border.map((v) => v * 0.02)), width, height), null);
+  assert.equal(strayLight(border, draw(0.12, [0, 0, 0]), width, height), null);
+  assert.equal(strayLight([0.8, 0, 0.25], held, width, height), null);
+  assert.equal(frameLight(new Float32Array(4), 1, 1), null);
+
+  // It is no more than the largest share of the middle's light an edit's flare can be.
+  const thin = draw(0.12, border.map((v) => v * 0.1), (u) => [0, 1, 2].map(() => 0.05 + 0.5 * u));
+  const capped = strayLight(border, thin, width, height);
+  const thinLight = frameLight(thin, width, height);
+  capped.forEach((v, c) => {
+    assert.ok(v < 0.05 * border[c]);
+    assert.ok(Math.abs(v - 0.02 * thinLight[c]) < 0.3 * v);
+  });
+});
+
+test("a reading's flare is the edit's share of the frame's light, else the holder's", () => {
+  const light = [0.2, 0.1, 0.04],
+    holder = [0.001, 0.0006, 0.0002];
+  assert.deepEqual(readingFlare({ reading: 2 }, border, light, holder), holder);
+  assert.deepEqual(readingFlare({ reading: 2 }, border, light, null), [0, 0, 0]);
+  readingFlare({ reading: 2, flare: 0.01 }, border, light, holder).forEach((v, c) =>
+    assert.ok(Math.abs(v - light[c] * 0.01) < 1e-12),
+  );
+  assert.deepEqual(readingFlare({ reading: 2, flare: 0 }, border, light, holder), [0, 0, 0]);
+  assert.deepEqual(readingFlare({ reading: 2, flare: 0.01 }, border, null, holder), [0, 0, 0]);
+  // The first reading takes none off; and no more than half the clear film's is taken.
+  assert.deepEqual(readingFlare({ flare: 0.01 }, border, light, holder), [0, 0, 0]);
+  assert.deepEqual(readingFlare({ reading: 2 }, border, light, [0.7, NaN, -1]), [0.4, 0, 0]);
+
+  // The measures a reading takes are net of it.
+  const pixels = new Float32Array([0.5, 0.4, 0.3, 1, 0.1, 0.2, 0.3, 0.5]);
+  assert.equal(netOfFlare(pixels, [0, 0, 0]), pixels);
+  const net = netOfFlare(pixels, [0.1, 0.05, 0]);
+  [0.4, 0.35, 0.3, 1, 0, 0.15, 0.3, 0.5].forEach((v, i) => assert.ok(Math.abs(net[i] - v) < 1e-6));
+});
+
 test("a new negative is read with the current reading, an older one as it was", () => {
   const fresh = newNegative("screen");
   assert.equal(fresh.reading, NEGATIVE.currentReading);
@@ -243,6 +319,7 @@ test("a new negative is read with the current reading, an older one as it was", 
     camera: "scanner",
     balance: "roll",
     neutral: [0.2, 0.1, 0.05],
+    flare: 0.0125,
   };
   assert.deepEqual(parseNegative(kept), kept);
   for (const change of [
@@ -251,6 +328,8 @@ test("a new negative is read with the current reading, an older one as it was", 
     { balance: "page" },
     { neutral: [0.2, 0.1] },
     { neutral: [0.2, 0, 0.05] },
+    { flare: 0.03 },
+    { flare: -0.001 },
     { scanLight: "uv" },
     { roll: { colour: [0.9, 1.2], frames: 7, slopes: [0.9, -1] } },
     { roll: { colour: [0.9, 1.2], frames: 7, level: 0 } },
@@ -295,6 +374,12 @@ test("a request says of a reading what its edit keeps and its frame measures", (
     roll,
     source,
   });
+  // Stray light the reading takes off goes with it, none where there is none, and never with
+  // the first reading.
+  const lit = { ...measured, flare: [0.002, 0.001, 0.0005] };
+  assert.deepEqual(readingRequest({ reading: 2, roll: null }, lit).strayLight, lit.flare);
+  assert.equal("strayLight" in readingRequest({ reading: 2 }, { ...measured, flare: [0, 0, 0] }), false);
+  assert.equal("strayLight" in readingRequest({ roll: null }, lit), false);
   // A scan whose file says nothing sends no source, and an edit only what it keeps.
   assert.deepEqual(readingRequest({ reading: 2, roll: null }, { border, dense: null }), {
     border,

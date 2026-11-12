@@ -30,6 +30,10 @@ import {
   areaPreview,
   denseEnd,
   tonalSlopes,
+  frameLight,
+  strayLight,
+  readingFlare,
+  netOfFlare,
   estimatedBorder,
   loadScanPreparation,
   plainReading,
@@ -371,12 +375,16 @@ export class RenderSession {
     return entry.value
   }
   // What a scanned negative's reading takes from its framing: the clear film it is measured
-  // against, sampled or else the thinnest film of the whole scan, and the framing's densest end.
-  // The densest end is kept, so each film reads it without drawing the scan again.
+  // against, sampled or else the thinnest film of the whole scan, the stray light the reading
+  // takes off, and, net of that, the framing's densest end and the rises across its tonal steps.
+  // What a framing measures is kept, so each film reads it without drawing the scan again.
   async negativeFraming(image, edit, report, stale) {
     let kept = this.negativeReadings.get(image)
     if (!kept)
-      this.negativeReadings.set(image, (kept = { border: null, framings: [] }))
+      this.negativeReadings.set(
+        image,
+        (kept = { border: null, whole: null, holders: new Map(), framings: [] }),
+      )
     // The framed scan by area at 512 pixels, from a copy four times that across: close to the
     // desktop host's reduction of the whole scan, at a size a browser reads quickly.
     const read = async (edit) => {
@@ -389,10 +397,13 @@ export class RenderSession {
         source.height,
       )
     }
+    // The whole scan, for the readings that look past the framing: the clear film where none
+    // is sampled, and the holder.
+    const whole = async () => (kept.whole ??= await read(defaultEdit()))
     if (!edit.negative.border && !kept.border) {
-      const whole = await read(defaultEdit())
-      if (!whole) return null
-      kept.border = estimatedBorder(whole.pixels)
+      const scan = await whole()
+      if (!scan) return null
+      kept.border = estimatedBorder(scan.pixels)
       if (!kept.border) throw new Error(INVALID_BORDER)
     }
     const border = edit.negative.border ?? kept.border
@@ -413,13 +424,37 @@ export class RenderSession {
       framed = {
         key: framing,
         border,
-        dense: denseEnd(border, preview.pixels, preview.width, preview.height),
-        slopes: tonalSlopes(border, preview.pixels, preview.width, preview.height),
+        preview,
+        light: frameLight(preview.pixels, preview.width, preview.height),
+        measures: new Map(),
       }
       kept.framings.push(framed)
       if (kept.framings.length > 8) kept.framings.shift()
     }
-    return framed
+    // The holder is looked for only where the edit leaves the stray light to be measured.
+    let holder = null
+    if (readsModel(edit.negative) && edit.negative.flare == null) {
+      const key = JSON.stringify(border)
+      if (!kept.holders.has(key)) {
+        const scan = await whole()
+        if (!scan) return null
+        if (kept.holders.size >= 8) kept.holders.clear()
+        kept.holders.set(key, strayLight(border, scan.pixels, scan.width, scan.height))
+      }
+      holder = kept.holders.get(key)
+    }
+    const flare = readingFlare(edit.negative, border, framed.light, holder)
+    const measured = JSON.stringify(flare)
+    if (!framed.measures.has(measured)) {
+      const { preview } = framed
+      const pixels = netOfFlare(preview.pixels, flare),
+        clear = border.map((v, c) => v - flare[c])
+      framed.measures.set(measured, {
+        dense: denseEnd(clear, pixels, preview.width, preview.height),
+        slopes: tonalSlopes(clear, pixels, preview.width, preview.height),
+      })
+    }
+    return { border, flare, ...framed.measures.get(measured) }
   }
   async capturePack(pack, stock, kelvin, report) {
     if (!pack || !Number.isFinite(kelvin) || kelvin <= 0) return pack
@@ -581,7 +616,12 @@ export class RenderSession {
         if (edit.negative && (!reading || stale())) return null
         // What this frame measures for its roll, before any roll's colour.
         const negativeMeasure = reading
-          ? { border: reading.border, denseEnd: reading.dense, slopes: reading.slopes }
+          ? {
+              border: reading.border,
+              flare: reading.flare,
+              denseEnd: reading.dense,
+              slopes: reading.slopes,
+            }
           : undefined
         // What a request says of the reading: the edit's, what the frame measures, and what the
         // scan's file says of its camera.
