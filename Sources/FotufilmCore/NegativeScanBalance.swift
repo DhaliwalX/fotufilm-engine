@@ -7,7 +7,7 @@ import Foundation
 extension ApproximateNegativeScan {
     /// What a frame is balanced on.
     public enum BalanceMode: String, Codable, CaseIterable, Sendable {
-        /// The frame's own neutral: one picked on it, else the one its tones give.
+        /// The frame's own neutral: one picked on it, else its densest end.
         case frame
         /// The neutrals of the roll's frames together.
         case roll
@@ -18,18 +18,14 @@ extension ApproximateNegativeScan {
     /// What a framed picture's tones give its reading, each the scan channels' densities over
     /// the clear film.
     public struct Tones: Equatable, Sendable {
-        /// The densest end, the highlights (`denseEnd(border:preview:)`), which times the print.
+        /// The densest end, the highlights (`denseEnd(border:preview:)`), which times the print
+        /// and stands for the frame's neutral.
         public var denseEnd: SIMD3<Float>?
-        /// The frame's own neutral: its brightest tones that are dense on every channel
-        /// together. Nil balances on the densest end.
-        public var neutral: SIMD3<Float>?
-        /// A neutral picked on the frame, which takes the found one's place.
+        /// A neutral picked on the frame, which takes the densest end's place.
         public var picked: SIMD3<Float>?
 
-        public init(denseEnd: SIMD3<Float>? = nil, neutral: SIMD3<Float>? = nil,
-                    picked: SIMD3<Float>? = nil) {
+        public init(denseEnd: SIMD3<Float>? = nil, picked: SIMD3<Float>? = nil) {
             self.denseEnd = denseEnd
-            self.neutral = neutral
             self.picked = picked
         }
     }
@@ -52,10 +48,10 @@ extension ApproximateNegativeScan {
         if let picked = readable(tones.picked) {
             balance.offset = offset(stock: stock, weights: weights, gains: balance.gains,
                                     neutral: picked)
-        } else if let found = [tones.neutral, tones.denseEnd].lazy.compactMap(readable).first(
-            where: { NegativeScanCrosstalk.apply(weights, $0).y > 0.05 }) {
+        } else if let dense = readable(tones.denseEnd),
+                  NegativeScanCrosstalk.apply(weights, dense).y > 0.05 {
             balance.offset = offset(stock: stock, weights: weights, gains: balance.gains,
-                                    neutral: found)
+                                    neutral: dense)
         }
         return balance
     }

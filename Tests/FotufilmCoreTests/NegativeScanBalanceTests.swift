@@ -31,7 +31,7 @@ final class NegativeScanBalanceTests: XCTestCase {
         let neutral = try XCTUnwrap(model.scannerDensity(density: highlight))
         let balance = ApproximateNegativeScan.balance(
             stock: stock, setup: setup, separation: 1, mode: .frame,
-            tones: .init(denseEnd: neutral, neutral: neutral))
+            tones: .init(denseEnd: neutral))
         XCTAssertEqual(balance.gains, .one)
         XCTAssertEqual(balance.offset.y, 0)
         XCTAssertLessThan(balance.offset.x, -0.05)
@@ -61,7 +61,7 @@ final class NegativeScanBalanceTests: XCTestCase {
         let model = NegativeScanModel(stock: stock, setup: setup)
         let highlight = NegativeScanModel.density(stock: stock, logExposure: 0.6, shift: cast)
         let neutral = try XCTUnwrap(model.scannerDensity(density: highlight))
-        let tones = ApproximateNegativeScan.Tones(denseEnd: neutral, neutral: neutral)
+        let tones = ApproximateNegativeScan.Tones(denseEnd: neutral)
         let none = ApproximateNegativeScan.balance(stock: stock, setup: setup, separation: 1,
                                                    mode: .none, tones: tones)
         XCTAssertEqual(none.offset, .zero)
@@ -72,7 +72,7 @@ final class NegativeScanBalanceTests: XCTestCase {
         for record in 0..<3 { XCTAssertEqual(read[record], highlight[record], accuracy: 0.03) }
     }
 
-    func testAPickedNeutralTakesTheFoundOnesPlace() throws {
+    func testAPickedNeutralTakesTheDensestEndsPlace() throws {
         let stock = try stock("portra400")
         let model = NegativeScanModel(stock: stock, setup: setup)
         let found = try XCTUnwrap(model.scannerDensity(
@@ -81,7 +81,7 @@ final class NegativeScanBalanceTests: XCTestCase {
         let picked = try XCTUnwrap(model.scannerDensity(density: midtone))
         let balance = ApproximateNegativeScan.balance(
             stock: stock, setup: setup, separation: 1, mode: .frame,
-            tones: .init(denseEnd: found, neutral: found, picked: picked))
+            tones: .init(denseEnd: found, picked: picked))
         let read = try XCTUnwrap(try reading(stock, model, balance)
             .density(of: model.sample(density: midtone)))
         let expected = grey(stock, green: read.y)
@@ -89,10 +89,10 @@ final class NegativeScanBalanceTests: XCTestCase {
         // The print is still timed on the highlights.
         XCTAssertEqual(balance.highlightStops, ApproximateNegativeScan.balance(
             stock: stock, setup: setup, separation: 1, mode: .frame,
-            tones: .init(denseEnd: found, neutral: found)).highlightStops)
+            tones: .init(denseEnd: found)).highlightStops)
     }
 
-    func testAFrameWithoutANeutralBalancesOnItsDensestEndOrNotAtAll() throws {
+    func testAFrameTooFlatOrUnreadableIsLeftAsTheFilmReads() throws {
         let stock = try stock("gold200")
         let model = NegativeScanModel(stock: stock, setup: setup)
         let dense = try XCTUnwrap(model.scannerDensity(
@@ -101,12 +101,10 @@ final class NegativeScanBalanceTests: XCTestCase {
             ApproximateNegativeScan.balance(stock: stock, setup: setup, separation: 1,
                                             mode: .frame, tones: tones)
         }
-        XCTAssertEqual(balance(.init(denseEnd: dense)),
-                       balance(.init(denseEnd: dense, neutral: dense)))
-        // A frame too flat to tell, or one that cannot be read, is left as the film reads.
+        XCTAssertNotEqual(balance(.init(denseEnd: dense)).offset, .zero)
         let flat = SIMD3<Float>(0.03, 0.02, 0.04)
-        XCTAssertEqual(balance(.init(denseEnd: flat, neutral: flat)).offset, .zero)
-        XCTAssertNil(balance(.init(denseEnd: flat, neutral: flat)).highlightStops)
+        XCTAssertEqual(balance(.init(denseEnd: flat)).offset, .zero)
+        XCTAssertNil(balance(.init(denseEnd: flat)).highlightStops)
         XCTAssertEqual(balance(.init()).offset, .zero)
         XCTAssertEqual(balance(.init(denseEnd: SIMD3(.nan, 1, 1))).offset, .zero)
         // An offset stops at the range a reading takes.
@@ -120,7 +118,7 @@ final class NegativeScanBalanceTests: XCTestCase {
         let dense = SIMD3<Float>(0.9, 1.1, 1.3)
         let balance = ApproximateNegativeScan.balance(
             stock: stock, setup: setup, separation: 1, mode: .frame,
-            tones: .init(denseEnd: dense, neutral: dense))
+            tones: .init(denseEnd: dense))
         XCTAssertEqual(balance.offset, .zero)
         XCTAssertNotNil(balance.highlightStops)
     }
