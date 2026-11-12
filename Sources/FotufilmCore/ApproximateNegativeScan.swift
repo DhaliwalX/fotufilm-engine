@@ -145,7 +145,7 @@ public struct ApproximateNegativeScan: Encodable, Equatable, Sendable {
         public var weights: [SIMD3<Float>]? = nil
         /// Density added to each record, green held as it is, which puts a neutral of the frame
         /// on the film's own grey scale as a printer's filtration would
-        /// (`balance(stock:setup:separation:mode:tones:roll:)`).
+        /// (`balance(stock:setup:separation:mode:tones:)`).
         public var offset: SIMD3<Float> = .zero
 
         public static let neutral = Balance(gains: .one, highlightStops: nil)
