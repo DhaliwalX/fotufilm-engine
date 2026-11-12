@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "count": 18281,
+  "count": 18479,
   "fields": {
     "CURVES": {
       "offset": 0,
@@ -417,6 +417,14 @@
     "PRINT_DETAIL": {
       "offset": 18271,
       "count": 10
+    },
+    "SCAN_FLARE": {
+      "offset": 18281,
+      "count": 3
+    },
+    "SCAN_BALANCE": {
+      "offset": 18284,
+      "count": 195
     }
   }
 }

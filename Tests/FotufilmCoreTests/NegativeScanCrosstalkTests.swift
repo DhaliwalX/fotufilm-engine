@@ -171,6 +171,35 @@ final class NegativeScanCrosstalkTests: XCTestCase {
         XCTAssertEqual(ApproximateNegativeScan.packedReading(nil), [Float](repeating: 0, count: offset + 9))
     }
 
+    /// The stray light and the balance follow in their own fields, the clear film net of the
+    /// stray light.
+    func testThePackedBalanceCarriesTheFlareAndEachRecordsTable() throws {
+        let flare = SIMD3<Float>(0.002, 0.003, 0.001)
+        let reading = try ApproximateNegativeScan(
+            stock: try stock("gold200"), border: border, exposure: SIMD3(0.2, 0, -0.3),
+            flare: flare)
+        let samples = ApproximateNegativeScan.balanceSamples
+        XCTAssertEqual(samples, Int(FOTUFILM_SCAN_BALANCE_SAMPLES))
+        XCTAssertEqual(ApproximateNegativeScan.balanceRange, 0...Float(FOTUFILM_SCAN_BALANCE_MAX))
+        let packed = ApproximateNegativeScan.packedBalance(reading)
+        XCTAssertEqual(packed.count, Int(FOTUFILM_CONFIG_SCAN_FLARE_COUNT
+                                         + FOTUFILM_CONFIG_SCAN_BALANCE_COUNT))
+        XCTAssertEqual(Array(packed[0..<3]), [flare.x, flare.y, flare.z])
+        for record in 0..<3 {
+            XCTAssertEqual(Array(packed[(3 + record * samples)..<(3 + (record + 1) * samples)]),
+                           reading.balance[record])
+        }
+        XCTAssertTrue(reading.balance[0].contains { $0 > 0.05 })
+        XCTAssertTrue(reading.balance[2].contains { $0 < -0.05 })
+        let slots = ApproximateNegativeScan.packedReading(reading)
+        for c in 0..<3 { XCTAssertEqual(slots[1 + c], border[c] - flare[c]) }
+        XCTAssertEqual(ApproximateNegativeScan.packedBalance(nil),
+                       [Float](repeating: 0, count: packed.count))
+        // The whole configuration ends with them.
+        XCTAssertEqual(Int(FOTUFILM_CONFIG_SCAN_BALANCE + FOTUFILM_CONFIG_SCAN_BALANCE_COUNT),
+                       Int(FOTUFILM_FRAME_CONFIGURATION_COUNT))
+    }
+
     /// The browser reads a scan without a film with these weights before it keeps the frame's
     /// densest end (web/src/negative-reading.js PLAIN_CROSSTALK).
     func testThePlainWeightsAreTheBrowsers() {

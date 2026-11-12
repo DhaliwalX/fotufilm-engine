@@ -557,7 +557,9 @@ public:
         // A scanned negative arrives as its scan, read here as the film's densities
         // (FOTUFILM_CONFIG_SCAN_READING); a staged print's input arrives as density.
         Expr scan_mode = scan_reading_mode(configuration_);
-        Expr scan_r = input_density(0), scan_g = input_density(1), scan_b = input_density(2);
+        Expr scan_r = scan_film_sample(configuration_, 0, input_density(0)),
+             scan_g = scan_film_sample(configuration_, 1, input_density(1)),
+             scan_b = scan_film_sample(configuration_, 2, input_density(2));
         Expr reads_scan = density_in_ ? Expr(scan_mode == kScanFilm)
                                       : Expr(Halide::Internal::const_false());
         auto density_source = [&](Expr plane_index) {

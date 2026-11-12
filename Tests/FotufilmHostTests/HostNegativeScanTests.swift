@@ -345,14 +345,24 @@ final class HostNegativeScanTests: XCTestCase {
         let width = 120, height = 80
         let scan = strip(width: width, height: height)
         let stock = try NegativeScanPrint.film("gold200")
-        for crosstalk: Float in [0, 1] {
-        let reading = try NegativeScanPrint.Reading(
-            stock: stock, border: border,
-            balance: ApproximateNegativeScan.balance(
-                stock: stock,
-                denseEnd: ApproximateNegativeScan.denseEnd(
-                    border: border, preview: HostNegativeScan.planes(scan, width: width, height: height)),
-                correction: .init(strength: crosstalk, light: .white)))
+        let dense = ApproximateNegativeScan.denseEnd(
+            border: border, preview: HostNegativeScan.planes(scan, width: width, height: height))
+        var readings: [(String, NegativeScanPrint.Reading)] = try [Float(0), 1].map { crosstalk in
+            ("crosstalk \(crosstalk)", try NegativeScanPrint.Reading(
+                stock: stock, border: border,
+                balance: ApproximateNegativeScan.balance(
+                    stock: stock, denseEnd: dense,
+                    correction: .init(strength: crosstalk, light: .white))))
+        }
+        // The current reading: fitted on the scan's light and camera, balanced by an exposure,
+        // the scan's stray light taken off.
+        let balanced = ApproximateNegativeScan.balance(
+            stock: stock, setup: NegativeScanSetup(light: .white), separation: 1, mode: .frame,
+            tones: .init(denseEnd: dense))
+        XCTAssertNotEqual(balanced.exposure, .zero)
+        readings.append(("balance and flare", try NegativeScanPrint.Reading(
+            stock: stock, border: border, balance: balanced, flare: border * 0.002)))
+        for (name, reading) in readings {
         var edit = FotufilmEngine.Options()
         edit.paper = .crystalArchive
         let options = reading.printing(edit, stock: stock)
@@ -376,7 +386,7 @@ final class HostNegativeScanTests: XCTestCase {
         let gpu = try print(service.engine.developer), cpu = try print(HalideCPUDeveloper())
         var worst: Float = 0
         for i in gpu.indices where i % 4 != 3 { worst = max(worst, abs(gpu[i] - cpu[i])) }
-        XCTAssertLessThan(worst, 0.01, "crosstalk \(crosstalk)")
+        XCTAssertLessThan(worst, 0.01, name)
         }
     }
 

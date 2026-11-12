@@ -45,6 +45,14 @@
     "FILM_TILE_LAYERS": {
       "value": 2,
       "doc": "Independent layings of the tile each pixel reads, each through its own blocks on an offset grid, their grain summed and divided by the square root of their number, so no patch of grain recurs whole."
+    },
+    "SCAN_BALANCE_SAMPLES": {
+      "value": 65,
+      "doc": "Samples of a scanned negative's balance for each record (FOTUFILM_CONFIG_SCAN_BALANCE)."
+    },
+    "SCAN_BALANCE_MAX": {
+      "value": 4,
+      "doc": "The record's weighted density over the clear film at the last sample of its balance; the first is at none."
     }
   },
   "fields": [
@@ -505,6 +513,16 @@
       "name": "PRINT_DETAIL",
       "count": 10,
       "doc": "Shadow and Highlight Detail: how a print moves its printing light at the two ends of its tone scale, the same log exposure on every record so each pixel keeps the paper's own colour. Shadow strength (0...1) first: a hold shaped as a bump on the luminance-weighted paper exposure between a knee, a fixed share of the way from the film's mid-grey to whichever extreme prints black (a negative's clear base, a slide's densest), and that extreme, which keeps its black. Then highlight strength (0...1), the luminance-weighted paper exposure of the highlight knee, where the paper prints a stop above its aim, and of the paper's white: past the knee the exposure x is drawn in to W x / (x + W), W the knee's room to the white, so highlights roll toward the white instead of clipping. A directly viewed transparency runs the same curve on its displayed density and takes the hold as light. Then the film's clear (every activation zero) and densest (every activation one) relative exposures, red, green and blue each, read once from the film cube's corners so a pixel does not sample them. Zero strengths leave the print unchanged. Appended without renumbering earlier fields."
+    },
+    {
+      "name": "SCAN_FLARE",
+      "count": 3,
+      "doc": "Stray light a scanned negative's scan carries (FOTUFILM_CONFIG_SCAN_READING mode 1), red, green and blue as linear scan RGB: taken off each sample before it is read, the clear film and the usable range in FOTUFILM_CONFIG_SCAN_READING being net of it already. Zero takes nothing off. Appended without renumbering earlier fields."
+    },
+    {
+      "name": "SCAN_BALANCE",
+      "count": "3 * SCAN_BALANCE_SAMPLES",
+      "doc": "A scanned negative's balance (ApproximateNegativeScan.balance): the density each record gains over its base plus its gain times its weighted density, by that weighted density over the clear film. FOTUFILM_SCAN_BALANCE_SAMPLES values for red, then green, then blue, evenly from none to FOTUFILM_SCAN_BALANCE_MAX, read linearly between them and held past the ends. An exposure moves a record along the film's own curve, so the values are none at the clear film and grow through the toe. All zero reads as before. Appended without renumbering earlier fields."
     }
   ]
 }

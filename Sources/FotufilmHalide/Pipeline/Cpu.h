@@ -398,7 +398,9 @@ public:
         // A scanned negative arrives as its scan and is read as the film's densities here
         // (FOTUFILM_CONFIG_SCAN_READING); anything else arrives as density.
         Expr scan_mode = scan_reading_mode(configuration_);
-        Expr scan_r = input_(x, y, 0), scan_g = input_(x, y, 1), scan_b = input_(x, y, 2);
+        Expr scan_r = scan_film_sample(configuration_, 0, input_(x, y, 0)),
+             scan_g = scan_film_sample(configuration_, 1, input_(x, y, 1)),
+             scan_b = scan_film_sample(configuration_, 2, input_(x, y, 2));
         Expr reads_scan = scan_mode == kScanFilm;
         Func developed("print_developed" + suffix);
         developed(x, y, c) = Halide::select(

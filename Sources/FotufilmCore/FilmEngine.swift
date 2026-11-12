@@ -1518,6 +1518,8 @@ public struct FilmEngineInvocation {
                 grade: SpectralRuntime.effectiveScreenGrade(
                     options.screenGrade, stock: stock, paper: printMedium,
                     digitalReference: options.digitalReference)) : nil)
+        configuration += ApproximateNegativeScan.packedBalance(
+            options.stage == .print ? options.scanReading : nil)
         precondition(configuration.count == Self.configurationCount)
 
         var optical = 0
