@@ -21,21 +21,41 @@ extension NegativeScanModel {
 
     func weights(separation: Float, patches: [Patch]) -> [SIMD3<Float>] {
         if stock.isMonochrome { return Array(repeating: SIMD3(0, 1, 0), count: 3) }
+        return Self.weights(separation: separation, readings: patches.compactMap { patch in
+            scannerDensity(density: patch.density).map { read in
+                Reading(scanner: read,
+                        target: SIMD3((0..<3).map { patch.density[$0] - base[$0] }),
+                        weight: patch.weight, isNeutral: patch.isNeutral)
+            }
+        })
+    }
+
+    /// One patch as a fit takes it: the scan channels' densities over the clear film, and the
+    /// densities over the clear film that made them.
+    struct Reading {
+        var scanner: SIMD3<Float>
+        var target: SIMD3<Float>
+        var weight: Float
+        var isNeutral: Bool
+    }
+
+    /// The least squares from `readings`' channel densities back to their targets, `separation`
+    /// of the way from each target's own channel alone, scaled to keep the greys.
+    static func weights(separation: Float, readings: [Reading]) -> [SIMD3<Float>] {
         let identity = [SIMD3<Float>(1, 0, 0), SIMD3(0, 1, 0), SIMD3(0, 0, 1)]
         // In double precision: a camera's channels overlap, and the moments of their densities
         // are too nearly dependent to solve in single.
         var moments = [SIMD3<Double>](repeating: .zero, count: 3)
         var products = [SIMD3<Double>](repeating: .zero, count: 3)
         var greyMoments = SIMD3<Double>.zero, greyProducts = SIMD3<Double>.zero
-        for patch in patches {
-            guard let read = scannerDensity(density: patch.density) else { continue }
-            let scanner = SIMD3<Double>(read), weight = Double(patch.weight)
-            let target = SIMD3<Double>((0..<3).map { Double(patch.density[$0] - base[$0]) })
+        for reading in readings {
+            let scanner = SIMD3<Double>(reading.scanner), weight = Double(reading.weight)
+            let target = SIMD3<Double>(reading.target)
             for row in 0..<3 {
                 moments[row] += weight * scanner[row] * scanner
                 products[row] += weight * target[row] * scanner
             }
-            if patch.isNeutral {
+            if reading.isNeutral {
                 greyMoments += weight * scanner * scanner
                 greyProducts += weight * scanner * target
             }
