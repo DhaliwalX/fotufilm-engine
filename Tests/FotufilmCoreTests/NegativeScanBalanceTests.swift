@@ -211,6 +211,33 @@ final class NegativeScanBalanceTests: XCTestCase {
                        accuracy: 0.01)
     }
 
+    /// A neutral that reads red a little dense is moved by that density on the straight line,
+    /// wherever on the curve the neutral lies. On the shoulder the curve's own inverse asks for
+    /// an exposure several times as long, which would tint every tone below the neutral.
+    func testANeutralOnTheShoulderMovesTheStraightLineByNoMoreThanItIsOff() throws {
+        let stock = try stock("gold200")
+        let identity: [SIMD3<Float>] = [SIMD3(1, 0, 0), SIMD3(0, 1, 0), SIMD3(0, 0, 1)]
+        let slopes = try XCTUnwrap(ApproximateNegativeScan.greySlopes(stock))
+        let off: Float = 0.13
+        func exposure(at logExposure: Float) -> (limited: Float, inverse: Float) {
+            let film = NegativeScanModel.density(stock: stock, logExposure: logExposure)
+            var neutral = SIMD3((0..<3).map { film[$0] - stock.curves[$0].dMin })
+            neutral.x += off
+            let limited = ApproximateNegativeScan.exposure(
+                stock: stock, weights: identity, gains: .one, neutral: neutral)
+            let red = stock.curves[0]
+            return (limited.x, logExposure - red.logExposure(density: red.dMin + neutral.x))
+        }
+        // On the straight line the limit is the curve's own inverse.
+        let line = exposure(at: 0.5)
+        XCTAssertEqual(line.limited, line.inverse, accuracy: 0.02)
+        XCTAssertEqual(line.limited, -off / slopes.x, accuracy: 0.03)
+        // Past the knee the inverse is much longer; the balance stays what the line needs.
+        let shoulder = exposure(at: 1.6)
+        XCTAssertLessThan(shoulder.inverse, 1.4 * line.inverse)
+        XCTAssertEqual(shoulder.limited, -off / slopes.x, accuracy: 0.03)
+    }
+
     /// The cast is one exposure at every tone, so the balance holds from the deepest shadow
     /// to the highlights, and the clear film, which no exposure made, stays the film's base. One
     /// density added at every tone, as a balance in density is, tints the shadows by most of it.

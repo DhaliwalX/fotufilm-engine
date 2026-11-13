@@ -84,6 +84,16 @@ extension ApproximateNegativeScan {
     /// that put green 0.2 and 1.2 over its base, where a picture's steps lie. Nil for a film
     /// too flat to have that span.
     static func greyRise(_ stock: FilmStock) -> SIMD3<Float>? {
+        greySpan(stock)?.rise
+    }
+
+    /// How steep each record's straight line is: its rise along the film's grey scale
+    /// (`greyRise`) per unit of log exposure. Nil for a film too flat to have that span.
+    static func greySlopes(_ stock: FilmStock) -> SIMD3<Float>? {
+        greySpan(stock).map { $0.rise / $0.exposure }
+    }
+
+    private static func greySpan(_ stock: FilmStock) -> (rise: SIMD3<Float>, exposure: Float)? {
         let green = stock.curves[1]
         let top = min(1.2, 0.8 * (green.dMax - green.dMin))
         guard top >= 0.5 else { return nil }
@@ -92,7 +102,9 @@ extension ApproximateNegativeScan {
         let rise = SIMD3((0..<3).map {
             stock.curves[$0].density(logExposure: high) - stock.curves[$0].density(logExposure: low)
         })
-        guard (0..<3).allSatisfy({ rise[$0].isFinite && rise[$0] > 0.05 }) else { return nil }
-        return rise
+        guard (0..<3).allSatisfy({ rise[$0].isFinite && rise[$0] > 0.05 }), high > low else {
+            return nil
+        }
+        return (rise, high - low)
     }
 }

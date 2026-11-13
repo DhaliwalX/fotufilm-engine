@@ -161,7 +161,9 @@ in one place (`WebNativeEdit.Negative.balance`, `.plain` and `.strayLight`):
   green's; the neutral then adds a log exposure to red and blue, as a printer's filtration does,
   so each record moves along the film's own characteristic curve (`ApproximateNegativeScan.balance`,
   `FOTUFILM_CONFIG_SCAN_BALANCE`): nothing at the clear film, more through the toe, one density
-  on the straight line.
+  on the straight line. That density is no more than the neutral itself is off: a neutral on the
+  film's shoulder, where the curve is flat, would otherwise ask for a much longer exposure and
+  tint the tones below it.
 - **The clear film and the holder.** Until clear film is picked it is estimated: the brightest
   of the scan, or where the scan shows its bare light through sprocket holes or around a strip,
   the film's base under that light (`ApproximateNegativeScan.estimatedFilmBase`). A holder the

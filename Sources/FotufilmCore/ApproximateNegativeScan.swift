@@ -269,7 +269,8 @@ public struct ApproximateNegativeScan: Encodable, Equatable, Sendable {
         /// frame on the film's own grey scale as a printer's filtration would
         /// (`balance(stock:setup:separation:mode:tones:roll:)`). An exposure, not a density: the
         /// scene's light moved each record along its curve, so the clear film and the toe move
-        /// less than the straight line does.
+        /// less than the straight line does, and the straight line by no more than the neutral
+        /// is off.
         public var exposure: SIMD3<Float> = .zero
 
         public static let neutral = Balance(gains: .one, highlightStops: nil)

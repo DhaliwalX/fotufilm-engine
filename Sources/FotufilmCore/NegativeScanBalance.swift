@@ -106,19 +106,28 @@ extension ApproximateNegativeScan {
 
     /// The log exposure to add to red and blue so `neutral`, the scan channels' densities of a
     /// grey over the clear film, reads as the film's grey of its green: the exposure its green
-    /// record reads, less the exposure each other record reads. Held inside `exposureRange`;
-    /// none for a record the neutral reads too thin to place on its curve, or on a
-    /// black-and-white film.
+    /// record reads, less the exposure each other record reads. It moves a record's straight
+    /// line by no more density than the neutral is off its grey: a neutral on the shoulder,
+    /// where the curve is flat, would otherwise ask for an exposure several times that, and
+    /// tint every tone below it. Held inside `exposureRange`; none for a record the neutral
+    /// reads too thin to place on its curve, or on a black-and-white film.
     static func exposure(stock: FilmStock, weights: [SIMD3<Float>], gains: SIMD3<Float>,
                          neutral: SIMD3<Float>) -> SIMD3<Float> {
         guard !stock.isMonochrome else { return .zero }
         let read = NegativeScanCrosstalk.apply(weights, neutral) * gains
         let green = stock.curves[1].logExposure(density: stock.curves[1].dMin + read.y)
+        let slopes = greySlopes(stock)
         var exposure = SIMD3<Float>.zero
         for record in [0, 2] where read[record] > 0.05 {
-            let own = stock.curves[record]
-                .logExposure(density: stock.curves[record].dMin + read[record])
-            exposure[record] = min(max(green - own, exposureRange.lowerBound),
+            let curve = stock.curves[record]
+            var moved = green - curve.logExposure(density: curve.dMin + read[record])
+            if let slopes {
+                // On the straight line this is the exposure itself; past the knee it is less.
+                let off = curve.density(logExposure: green) - curve.dMin - read[record]
+                let limit = abs(off) / slopes[record]
+                moved = min(max(moved, -limit), limit)
+            }
+            exposure[record] = min(max(moved, exposureRange.lowerBound),
                                    exposureRange.upperBound)
         }
         return exposure
