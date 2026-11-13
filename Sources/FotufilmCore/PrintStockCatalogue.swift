@@ -6,6 +6,29 @@ import Foundation
 /// Those files are written by the calibration extractors and must not be edited by hand; this
 /// file holds everything that is not generated. See docs/print-stocks.md.
 extension PrintStock {
+    /// Parametric spectral reflectance of a TiO₂-pigmented photographic paper support on
+    /// `SpectralGrid`: rutile/gelatin UV rolloff near 406 nm, optional stilbene optical-brightener
+    /// fluorescence lift around 442 nm, and visible base whiteness + warm/cool spectral tilt.
+    private static func paperBaseReflectance(body: Float, warmSlope: Float,
+                                             brightener: Float) -> [Float] {
+        SpectralGrid.wavelengths.map { nm in
+            let uvPass = 1 / (1 + exp(-(nm - 406) / 6.5))
+            let oba = brightener * exp(-0.5 * pow((nm - 442) / 14, 2))
+            let tilt = warmSlope * min(max((nm - 550) / 150, -1), 1)
+            let visible = body + tilt + oba
+            return min(max(0.28 + (visible - 0.28) * uvPass, 0.05), 0.98)
+        }
+    }
+
+    private static let ektacolorEdgeBase = paperBaseReflectance(
+        body: 0.896, warmSlope: 0.012, brightener: 0.010)
+    private static let enduraPremierBase = paperBaseReflectance(
+        body: 0.892, warmSlope: 0.022, brightener: 0.002)
+    private static let crystalArchiveBase = paperBaseReflectance(
+        body: 0.900, warmSlope: -0.008, brightener: 0.032)
+    private static let ilfochromePolyesterBase = paperBaseReflectance(
+        body: 0.914, warmSlope: 0.000, brightener: 0.008)
+
     /// KODAK EKTACOLOR EDGE Paper (E-7020), measured. Its spectra also stand in wherever an
     /// output needs a neutral visual judge but has no dyes of its own.
     static let ektacolorEdge = PrintStock(
@@ -16,7 +39,8 @@ extension PrintStock {
         spectra: Spectra(dyeDensity: PrintPaperSpectra.dyeDensity,
                          neutralAmounts: PrintPaperSpectra.neutralAmounts,
                          layerSensitivity: PrintPaperSpectra.layerSensitivity,
-                         process: .photoPaper))
+                         process: .photoPaper,
+                         baseReflectance: ektacolorEdgeBase))
 
     /// KODAK PROFESSIONAL ENDURA Premier Paper (E-4070), measured.
     static let enduraPremier = PrintStock(
@@ -28,7 +52,8 @@ extension PrintStock {
         spectra: Spectra(dyeDensity: EnduraPremierPaperSpectra.dyeDensity,
                          neutralAmounts: EnduraPremierPaperSpectra.neutralAmounts,
                          layerSensitivity: EnduraPremierPaperSpectra.layerSensitivity,
-                         process: .photoPaper))
+                         process: .photoPaper,
+                         baseReflectance: enduraPremierBase))
 
     /// Fujicolor Crystal Archive Type CA (AF3-0250U2), measured.
     ///
@@ -42,7 +67,8 @@ extension PrintStock {
         spectra: Spectra(dyeDensity: CrystalArchivePaperSpectra.dyeDensity,
                          neutralAmounts: CrystalArchivePaperSpectra.neutralAmounts,
                          layerSensitivity: CrystalArchivePaperSpectra.layerSensitivity,
-                         process: .photoPaper))
+                         process: .photoPaper,
+                         baseReflectance: crystalArchiveBase))
 
     /// KODAK VISION Color Print Film 2383 (H-1-2383), measured. Setup aims from the sheet's
     /// LAD section; sensitivity measured at a gross density of 1.0.
@@ -154,7 +180,7 @@ extension PrintStock {
         detail: "Normal-contrast positive paper for slide film. Approximate color response; more paper exposure lightens the print.",
         process: .positivePaper,
         curves: Array(repeating: IlfochromeCurves.normal, count: 3),
-        spectra: PrintStock.ektacolorEdge.spectra)
+        spectra: PrintStock.ektacolorEdge.spectra.withBaseReflectance(ilfochromePolyesterBase))
 
     /// Ilfochrome Classic CLM.1K (Cibachrome), medium contrast. See `IlfochromeCurves`.
     static let ilfochromeCLM1K = PrintStock(
@@ -162,7 +188,7 @@ extension PrintStock {
         detail: "Medium-contrast positive paper for slide film, softer than CPS.1K. Approximate color response.",
         process: .positivePaper,
         curves: Array(repeating: IlfochromeCurves.medium, count: 3),
-        spectra: PrintStock.ektacolorEdge.spectra)
+        spectra: PrintStock.ektacolorEdge.spectra.withBaseReflectance(ilfochromePolyesterBase))
 }
 
 /// KODAK EKTACOLOR EDGE records from E-7020 page 3, fitted by `extract_fit.py`, each named

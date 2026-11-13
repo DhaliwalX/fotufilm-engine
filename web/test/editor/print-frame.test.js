@@ -84,7 +84,7 @@ test("transmission frame follows native medium override and retains the saved ed
   const edit = {
     ...defaultEdit("gold200"),
     medium: "endura-premier",
-    profile: { printLight: "tungsten", negativeViewing: "scanner", push: 1 },
+    profile: { printLight: "tungsten", printSurface: "matte", negativeViewing: "scanner", push: 1 },
   };
   const output = frameRenderEdit(edit, {
     configuration: { frame: "film" },
@@ -93,6 +93,7 @@ test("transmission frame follows native medium override and retains the saved ed
   assert.equal(output.medium, "negative");
   assert.equal(output.profile.negativeViewing, "light-box");
   assert.equal(output.profile.printLight, "reference");
+  assert.equal(output.profile.printSurface, "clean");
   assert.equal(output.profile.push, 1);
   assert.equal(edit.medium, "endura-premier");
   assert.equal(edit.profile.negativeViewing, "scanner");
@@ -101,6 +102,7 @@ test("transmission frame follows native medium override and retains the saved ed
     edit,
   );
   assert.equal(frameRequest(edit).viewingKelvin, 2856);
+  assert.equal(frameRequest(edit).printSurface, "matte");
 });
 test("sampling converts the bordered canvas to photo coordinates and ignores margins", () => {
   const plan = {

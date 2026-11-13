@@ -381,6 +381,7 @@ public enum SpectralRuntime {
                               paper: PrintPaper = .default,
                               bleachBypass: Float = 0,
                               printViewingKelvin: Float? = nil,
+                              printSurface: PrintSurface = .clean,
                               callier: Float = 1,
                               printer: PrinterProfile? = nil,
                               printerLights: PrinterLights? = nil,
@@ -402,9 +403,11 @@ public enum SpectralRuntime {
                                                   digitalReference: digitalReference)
         let printViewingKelvin = !paper.acceptsViewingIlluminant ? nil
             : printLightKelvin(printViewingKelvin)
+        let printSurface = printSurface.resolved(for: stock, paper: paper)
         let callier = callierCoefficient(callier, stock: stock, paper: paper)
         let key = cacheIdentifier(for: stock, paper: paper, bleachBypass: bleachBypass,
-                                  printViewingKelvin: printViewingKelvin, callier: callier,
+                                  printViewingKelvin: printViewingKelvin,
+                                  printSurface: printSurface, callier: callier,
                                   printer: printer, printerLights: printerLights,
                                   digitalReference: digitalReference,
                                   screenGrade: screenGrade, screenExposureEV: screenExposureEV,
@@ -425,7 +428,8 @@ public enum SpectralRuntime {
         lock.unlock()
 
         let built = buildTables(for: stock, paper: paper, bleachBypass: bleachBypass,
-                                printViewingKelvin: printViewingKelvin, callier: callier,
+                                printViewingKelvin: printViewingKelvin,
+                                printSurface: printSurface, callier: callier,
                                 printer: printer, printerLights: printerLights,
                                 digitalReference: digitalReference,
                                 screenGrade: screenGrade, screenExposureEV: screenExposureEV,
@@ -497,6 +501,7 @@ public enum SpectralRuntime {
                                        paper: PrintPaper = .default,
                                        bleachBypass: Float = 0,
                                        printViewingKelvin: Float? = nil,
+                                       printSurface: PrintSurface = .clean,
                                        callier: Float = 1,
                                        printer: PrinterProfile? = nil,
                                        printerLights: PrinterLights? = nil,
@@ -572,6 +577,10 @@ public enum SpectralRuntime {
            let kelvin = printLightKelvin(printViewingKelvin) {
             h = (h ^ UInt64(kelvin.bitPattern)) &* 0x9E3779B97F4A7C15
         }
+        let surface = printSurface.resolved(for: stock, paper: paper)
+        if surface != .clean {
+            for byte in surface.rawValue.utf8 { h = (h ^ UInt64(byte)) &* 0x9E3779B97F4A7C15 }
+        }
         // A diffuser head is the read the sheets were measured in, so it leaves the identity alone.
         let callier = callierCoefficient(callier, stock: stock, paper: paper)
         if callier != 1 {
@@ -595,6 +604,7 @@ public enum SpectralRuntime {
                                     paper: PrintPaper,
                                     bleachBypass: Float = 0,
                                     printViewingKelvin: Float? = nil,
+                                    printSurface: PrintSurface = .clean,
                                     callier: Float = 1,
                                     printer: PrinterProfile? = nil,
                                     printerLights: PrinterLights? = nil,
@@ -813,21 +823,14 @@ public enum SpectralRuntime {
                 return paper.deliversRec709
                     ? ColorScience.linearSRGBToDisplayP3(rgb) : rgb
             }
-        } else if !stock.isMonochrome {
+        } else {
             let receiver = printReceiver(stock: stock, paper: paper,
-                                         viewingLight: viewingLight)
+                                         viewingLight: viewingLight,
+                                         printSurface: printSurface)
             paperOutput = buildLUT { activation in
                 receiver.rgb(density: SIMD3(activation.x * paperRanges[0],
                                             activation.y * paperRanges[1],
                                             activation.z * paperRanges[2]))
-            }
-        } else {
-            paperOutput = buildLUT { activation in
-                let density = [activation.x * paperRanges[0],
-                               activation.y * paperRanges[1],
-                               activation.z * paperRanges[2]]
-                return transmissionRGB(density: density, dyes: paper.dyes,
-                                       illuminant: viewingLight)
             }
         }
         return SpectralPipelineTables(exposure: exposure, filmOutput: printing,
@@ -2221,6 +2224,26 @@ public enum SpectralRuntime {
             stops: min(max(stops, -6), 6), stock: stock, style: digitalReference, grade: grade)
     }
 
+    /// Pre-curve `screenCMY` filtration that carries `balance` (`1 / whiteBalance.gains`) into
+    /// Digital Reference or Lab Scan before the positive curve.
+    public static func screenCMY(forWhiteBalanceGains balance: SIMD3<Float>, stock: FilmStock,
+                                 paper: PrintPaper,
+                                 digitalReference: DigitalReferenceStyle = .default,
+                                 screenGrade: Float = 2) -> SIMD3<Float> {
+        let paper = paper.resolved(for: stock)
+        switch paper {
+        case .screen:
+            let grade = effectiveScreenGrade(screenGrade, stock: stock, paper: paper,
+                                             digitalReference: digitalReference)
+            return DigitalReferenceReceiver.cmy(
+                forWhiteBalanceGains: balance, stock: stock, style: digitalReference, grade: grade)
+        case .labScan:
+            return LabScanTiming.cmy(forWhiteBalanceGains: balance, stock: stock)
+        default:
+            return .zero
+        }
+    }
+
     /// Auto Levels balances the toe per record the way a lab scanner's per-channel black point
     /// does: along the stock's own neutral wedge each record's toe is carried onto green's, so the
     /// base reads where green's does.
@@ -2393,37 +2416,75 @@ public enum SpectralRuntime {
         let dyes: [[Float]]
         let viewingLight: [Float]?
         let unmix: PrintDyeUnmix?
+        let baseReflectance: [Float]?
+        let surfaceReflectance: Float
         /// The white the viewer has adapted to, as XYZ. Nil is the bare viewing light.
         var adaptedWhite: SIMD3<Float>?
         /// Places the clear medium's brightest channel on the display's peak.
         var gain: Float = 1
 
+        init(dyes: [[Float]], viewingLight: [Float]?, unmix: PrintDyeUnmix?,
+             baseReflectance: [Float]? = nil, surfaceReflectance: Float = 0,
+             adaptedWhite: SIMD3<Float>? = nil, gain: Float = 1) {
+            self.dyes = dyes
+            self.viewingLight = viewingLight
+            self.unmix = unmix
+            self.baseReflectance = baseReflectance
+            self.surfaceReflectance = surfaceReflectance
+            self.adaptedWhite = adaptedWhite
+            self.gain = gain
+        }
+
         func rgb(density: SIMD3<Float>) -> SIMD3<Float> {
-            guard let unmix else {
-                return SpectralRuntime.transmissionRGB(
-                    density: [density.x, density.y, density.z], dyes: dyes,
-                    illuminant: viewingLight)
+            let amounts: SIMD3<Float>
+            if let unmix {
+                amounts = unmix.amounts(forStatusA: density)
+            } else {
+                amounts = density
             }
-            let amounts = unmix.amounts(forStatusA: density)
-            return SpectralRuntime.transmissionRGB(
-                density: [amounts.x, amounts.y, amounts.z], dyes: dyes,
-                illuminant: viewingLight, adaptedWhite: adaptedWhite) * gain
+            guard let baseReflectance else {
+                return SpectralRuntime.transmissionRGB(
+                    density: [amounts.x, amounts.y, amounts.z], dyes: dyes,
+                    illuminant: viewingLight, adaptedWhite: adaptedWhite) * gain
+            }
+            let bodyScale = max(1 - surfaceReflectance, 0)
+            var spectrum = [Float](repeating: 0, count: SpectralGrid.count)
+            for i in 0..<SpectralGrid.count {
+                let d = amounts.x * dyes[0][i] + amounts.y * dyes[1][i] + amounts.z * dyes[2][i]
+                spectrum[i] = bodyScale * baseReflectance[i] * pow(10, -d) + surfaceReflectance
+            }
+            guard let viewingLight else {
+                return SpectralGrid.toLinearDisplayP3(reflectance: spectrum) * gain
+            }
+            return SpectralGrid.toLinearDisplayP3(reflectance: spectrum,
+                                                  under: viewingLight,
+                                                  adaptedTo: adaptedWhite) * gain
         }
     }
 
+    static func viewingLight(for paper: PrintPaper, kelvin: Float?) -> [Float]? {
+        kelvin.map(printLightSPD) ?? referenceViewingLight(for: paper)
+    }
+
     static func printReceiver(stock: FilmStock, paper: PrintPaper,
-                              viewingLight: [Float]?) -> PrintReceiver {
+                              viewingLight: [Float]?,
+                              printSurface: PrintSurface = .clean) -> PrintReceiver {
+        let surface = printSurface.resolved(for: stock, paper: paper)
+        let base = surface == .clean ? nil : paper.baseReflectance
+        let glare = surface.surfaceReflectance
         // A scan has no viewing dyes, the digital reference is not a sheet, and a monochrome
         // print is forced neutral, so none of them unmix.
         let unmixes = !stock.isMonochrome && !paper.isScan
             && paper != .screen && !paper.isNegative
         guard unmixes else {
             return PrintReceiver(dyes: paper.dyes,
-                                 viewingLight: viewingLight, unmix: nil)
+                                 viewingLight: viewingLight, unmix: nil,
+                                 baseReflectance: base, surfaceReflectance: glare)
         }
         let unmix = PrintDyeUnmix(dyes: paper.analyticalDyes)
         var receiver = PrintReceiver(dyes: paper.analyticalDyes,
-                                     viewingLight: viewingLight, unmix: unmix)
+                                     viewingLight: viewingLight, unmix: unmix,
+                                     baseReflectance: base, surfaceReflectance: glare)
         // A release print is timed until its LAD patch looks neutral on the screen, and that
         // patch is not the colour of the lamp through clear film: the gross Status A aims are
         // unequal and the dyes are not flat. A theatre audience sees nothing but the print, so
@@ -2655,6 +2716,7 @@ extension SpectralRuntime {
                                  paper: PrintPaper = .default,
                                  printCorrection: Float,
                                  callier: Float = 1,
+                                 printSurface: PrintSurface = .clean,
                                  digitalReference: DigitalReferenceStyle = .default,
                                  sceneHighlightStops: Float? = nil,
                                  screenGrade: Float = 2,
@@ -2664,6 +2726,7 @@ extension SpectralRuntime {
         let paper = paper.resolved(for: stock)
         let receiverBands = effectiveReceiverBands(receiverBands, stock: stock, paper: paper)
         let callier = callierCoefficient(callier, stock: stock, paper: paper)
+        let printSurface = printSurface.resolved(for: stock, paper: paper)
         let grade = effectiveScreenGrade(screenGrade, stock: stock, paper: paper,
                                          digitalReference: digitalReference)
         let exposureShift = screenExposureShift(screenExposureEV, stock: stock, paper: paper,
@@ -2775,7 +2838,8 @@ extension SpectralRuntime {
         for channel in 0..<3 { xMids[channel] += colourShift[channel] }
         let viewingLight = referenceViewingLight(for: paper)
         let receiver = printReceiver(stock: stock, paper: paper,
-                                     viewingLight: viewingLight)
+                                     viewingLight: viewingLight,
+                                     printSurface: printSurface)
         return stops.map { s in
             let density = (0..<3).map {
                 stock.developedDensity(layer: $0, logExposure: s * perStop)

@@ -54,7 +54,9 @@ async function cameraRecord({ read, has, cameras }, camera) {
 
 // A request that reads a negative, with the record of the camera its scan's file names.
 async function withCamera(assets, request) {
-  const negative = request.kind === "negative-camera" ? request : request.negative;
+  const negative = ["negative-camera", "negative-film"].includes(request.kind)
+    ? request
+    : request.negative;
   const cameraProfile = negative?.source
     ? await cameraRecord(assets, negative.source.camera)
     : null;

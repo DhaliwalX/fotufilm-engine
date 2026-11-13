@@ -63,6 +63,10 @@ public struct PrintStock: Sendable {
         public let sensitivityAboveMinimum: Bool
     }
 
+    /// Idealized unit reflectance across the wavelength grid, used when a stock states no paper
+    /// base (`releasePrintFilm`) or under `PrintSurface.clean`.
+    static let unitBaseReflectance = [Float](repeating: 1, count: SpectralGrid.count)
+
     /// The material's dye and receiver spectra on the engine's wavelength grid.
     public struct Spectra: Sendable {
         /// The sheet's dye shapes at their neutral-forming amounts. A spectrum is composed from
@@ -72,6 +76,9 @@ public struct PrintStock: Sendable {
         let dyes: [[Float]]
         /// Layer sensitivities with publication tails extended.
         let sensitivity: [[Float]]
+        /// Unexposed paper-base diffuse spectral reflectance on `SpectralGrid`, read when a
+        /// physical `PrintSurface` (`Glossy`, `Lustre`, `Matte`) is active.
+        let baseReflectance: [Float]
 
         /// Spectra as a datasheet publishes them.
         ///
@@ -83,10 +90,14 @@ public struct PrintStock: Sendable {
         ///   - layerSensitivity: Red-, green- and blue-sensitive layer response on the grid.
         ///   - process: The material's family, which decides whether the layers keep the
         ///     sheet's inter-layer speed scale; see `Process.keepsLayerSpeedScale`.
+        ///   - baseReflectance: Diffuse reflectance of the unexposed reflection support on the grid.
         init(dyeDensity: [[Float]], neutralAmounts: [Float]? = nil,
-             layerSensitivity: [[Float]], process: Process) {
+             layerSensitivity: [[Float]], process: Process,
+             baseReflectance: [Float] = PrintStock.unitBaseReflectance) {
             precondition(dyeDensity.count == 3 && layerSensitivity.count == 3)
             precondition((dyeDensity + layerSensitivity).allSatisfy { $0.count == SpectralGrid.count })
+            precondition(baseReflectance.count == SpectralGrid.count
+                         && baseReflectance.allSatisfy { $0.isFinite && $0 >= 0 })
             let amounts = neutralAmounts.map { amounts in
                 zip(dyeDensity, amounts).map { record, amount in record.map { $0 * amount } }
             } ?? dyeDensity
@@ -94,6 +105,23 @@ public struct PrintStock: Sendable {
             analyticalDyes = amounts
             dyes = SpectralGrid.partition(amounts)
             sensitivity = process.keepsLayerSpeedScale ? tailed : SpectralGrid.normalizeSensitivities(tailed)
+            self.baseReflectance = baseReflectance
+        }
+
+        /// Returns a copy of these spectra coated on a different reflection support.
+        func withBaseReflectance(_ baseReflectance: [Float]) -> Spectra {
+            precondition(baseReflectance.count == SpectralGrid.count
+                         && baseReflectance.allSatisfy { $0.isFinite && $0 >= 0 })
+            return Spectra(analyticalDyes: analyticalDyes, dyes: dyes,
+                           sensitivity: sensitivity, baseReflectance: baseReflectance)
+        }
+
+        private init(analyticalDyes: [[Float]], dyes: [[Float]],
+                     sensitivity: [[Float]], baseReflectance: [Float]) {
+            self.analyticalDyes = analyticalDyes
+            self.dyes = dyes
+            self.sensitivity = sensitivity
+            self.baseReflectance = baseReflectance
         }
     }
 

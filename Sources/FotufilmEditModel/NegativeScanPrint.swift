@@ -159,9 +159,10 @@ public enum NegativeScanPrint {
     ///
     /// The camera already exposed the film, so the edit's light controls act on the print
     /// instead. Exposure and warmth reach what makes the print where it can carry them: an
-    /// enlarger's exposure and filtration, scaled by the paper's contrast so a stop moves the
-    /// picture about a stop, or a scan's exposure. What it cannot carry, and highlights,
-    /// shadows, saturation and vibrance, finish the printed picture (`PrintFinish`).
+    /// enlarger's exposure and filtration on optical papers, additive printer lights on release
+    /// print films, or pre-curve exposure and CMY balance on Digital Reference and Lab Scan. What
+    /// the receiver cannot carry, and highlights, shadows, saturation and vibrance, finish the
+    /// printed picture (`PrintFinish`).
     public static func printing(_ edit: FotufilmEngine.Options, stock: FilmStock,
                                 highlightStops: Float?) -> FotufilmEngine.Options {
         var options = edit
@@ -178,17 +179,25 @@ public enum NegativeScanPrint {
         if Enlarger.illuminates(stock: stock, paper: paper) {
             var printer = options.printer ?? .simulatedTungsten
             printer.exposureEV += NegativeScanRecipe.printerTiming(
-                for: stock, highlightStops: highlightStops) - edit.exposureEV / paperContrast
-            // A yellow filter takes blue out of the lamp and the print gets less yellow dye, so
-            // warming the print takes filtration away. Magenta works the same way on green.
-            let stops = SIMD3(log2(balance.x), log2(balance.y), log2(balance.z))
-            let perStop = log10(Float(2)) / paperContrast
-            printer.yellow -= (stops.x - stops.z) * perStop
-            printer.magenta -= ((stops.x + stops.z) / 2 - stops.y) * perStop
-            options.printer = printer.normalized
+                for: stock, highlightStops: highlightStops)
+            options.printer = printer.normalized.timed(
+                exposureStops: edit.exposureEV, whiteBalanceGains: balance,
+                stock: stock, paper: paper, enlarger: options.enlarger,
+                bleachBypass: options.bleachBypass,
+                printViewingKelvin: options.printViewingKelvin)
+        } else if PrinterLights.applies(stock: stock, paper: paper) {
+            options.printerLights = options.printerLights.timed(
+                exposureStops: edit.exposureEV, whiteBalanceGains: balance,
+                stock: stock, paper: paper)
         } else if paper == .screen || paper == .labScan {
             options.screenExposureEV += edit.exposureEV
-            finish.gains = balance
+            let cmy = SpectralRuntime.screenCMY(
+                forWhiteBalanceGains: balance, stock: stock, paper: paper,
+                digitalReference: options.digitalReference, screenGrade: options.screenGrade)
+            let combined = options.screenCMY + cmy
+            options.screenCMY = SIMD3(min(max(combined.x, -1), 1),
+                                      min(max(combined.y, -1), 1),
+                                      min(max(combined.z, -1), 1))
         } else {
             finish.gains = balance * exp2(edit.exposureEV)
         }

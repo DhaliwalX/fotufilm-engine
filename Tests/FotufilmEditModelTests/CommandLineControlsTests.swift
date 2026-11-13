@@ -73,6 +73,8 @@ final class CommandLineControlsTests: XCTestCase {
         XCTAssertEqual(try applying(.couplerSelf, "0").couplerSelfScale, 0)
         XCTAssertEqual(try applying(.halationModel, "layered").halationModel, .layered)
         XCTAssertEqual(try applying(.enlarger, "condenser").enlarger, .condenser)
+        XCTAssertEqual(try applying(.printSurface, "lustre").printSurface, .lustre)
+        XCTAssertThrowsError(try applying(.printSurface, "satin"))
         XCTAssertTrue(try applying(.estimatedHalation, "").useEstimatedHalationProfile)
         XCTAssertFalse(try applying(.localTone, "0").localTone)
         XCTAssertThrowsError(try applying(.halationModel, "unknown"))

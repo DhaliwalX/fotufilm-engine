@@ -5,8 +5,9 @@ import Foundation
 public struct NegativeScanSetup: Equatable, Sendable {
     /// What took the scan.
     public enum Camera: Equatable, Sendable {
-        /// A camera whose file reads colour as the eye does: the Rec. 2020 primaries'
-        /// colour-matching functions.
+        /// A camera without a measured profile of its own: modelled with the median spectral
+        /// sensitivity of the bundled Bayer CMOS cameras (`genericCMOSProfile`), white-balanced
+        /// on the lamp and mapped to Rec. 2020.
         case generic
         /// A film scanner: three narrow bands under its own lamp, whatever `light` says.
         case scanner
@@ -57,10 +58,11 @@ public struct NegativeScanSetup: Equatable, Sendable {
 
     /// Whether the model knows the setup well enough to say how much density a scan's channel
     /// reads of a dye: a measured camera, a film scanner's bands, or LEDs that light one channel
-    /// each. A camera nobody measured under a lamp of unknown spectrum is modelled as reading
-    /// colour as the eye does, which says which dyes a channel sees but not how strongly: a
-    /// white lamp's red end alone moves that by a third. A reading then keeps the scan's own
-    /// density of green as the film's (`weights(_:knownScale:)`).
+    /// each. A camera nobody measured under a lamp of unknown spectrum is modelled with the median
+    /// bundled Bayer CMOS sensor (`genericCMOSProfile`), which predicts dye cross-talk far closer
+    /// than colorimetric eye curves yet still leaves overall red/blue scale uncertain: a white
+    /// lamp's red end alone moves that by a third. A reading then keeps the scan's own density of
+    /// green as the film's (`weights(_:knownScale:)`).
     public var knowsScale: Bool {
         if light == .rgb || camera == .scanner { return true }
         if case .profile(let id) = camera { return CameraSpectralProfileStore.profile(id: id) != nil }
@@ -98,21 +100,22 @@ public struct NegativeScanSetup: Equatable, Sendable {
 
     /// The camera's channels as its decoded file carries them, before the lamp.
     private func cameraChannels(lamp: [Float]) -> [[Float]] {
-        guard case .profile(let id) = camera,
-              let profile = CameraSpectralProfileStore.profile(id: id) else {
-            return (0..<3).map { channel in
-                (0..<SpectralGrid.count).map { i in
-                    SpectralGrid.linearRec2020(fromXYZ: SIMD3(
-                        SpectralGrid.xBar[i], SpectralGrid.yBar[i], SpectralGrid.zBar[i]))[channel]
-                }
-            }
+        let measured: CameraSpectralProfile?
+        if case .profile(let id) = camera {
+            measured = CameraSpectralProfileStore.profile(id: id)
+        } else {
+            measured = nil
         }
-        // The file's decoder balances each sensor channel on its white, then mixes the three into
-        // Rec. 2020 with the camera's matrix for that white.
-        let cct = kelvin.flatMap { $0.isFinite && $0 > 0 ? $0 : nil } ?? light.kelvin
+        let profile = measured ?? Self.genericCMOSProfile
+        // A measured camera's file carries its decoder's white and matrix; a generic camera is
+        // balanced on the lamp's locus and mapped with the median CMOS sensor's own matrix.
+        let cct = (measured != nil ? kelvin.flatMap { $0.isFinite && $0 > 0 ? $0 : nil } : nil)
+            ?? light.kelvin
         let locus = Illuminant.atLocus(kelvin: cct)
-        let white = self.white.flatMap { Illuminant.matched($0, base: locus) } ?? locus
-        let matrix = decoderMatrix ?? CameraProfileCorrection.matrices(for: profile).matrix(cct: cct)
+        let white = (measured != nil ? self.white.flatMap { Illuminant.matched($0, base: locus) } : nil)
+            ?? locus
+        let matrix = (measured != nil ? decoderMatrix : nil)
+            ?? CameraProfileCorrection.matrices(for: profile).matrix(cct: cct)
         let balanced: [[Float]] = profile.sensitivity.map { sensor in
             let level = zip(sensor, white).reduce(Float(0)) { $0 + $1.0 * $1.1 }
             return level > 0 ? sensor.map { $0 / level } : sensor
@@ -124,6 +127,45 @@ public struct NegativeScanSetup: Equatable, Sendable {
             }
         }
     }
+
+    /// Wavelength-wise median relative spectral sensitivity across the bundled Academy `rawtoaces`
+    /// Bayer CMOS camera profiles on `SpectralGrid` (380–780 nm, 5 nm steps), embedded directly so
+    /// hosts without the bundled profile directory (such as WASM) share the exact prior.
+    static let genericCMOSProfile = CameraSpectralProfile(id: "_generic-cmos", gridSensitivity: [
+        [
+            0.00033, 0.00065, 0.00098, 0.00174, 0.00317, 0.00444, 0.00792, 0.01732, 0.02892,
+            0.04461, 0.05835, 0.05054, 0.04709, 0.03905, 0.03561, 0.03553, 0.03391, 0.03851,
+            0.04120, 0.04437, 0.05279, 0.06105, 0.06103, 0.06528, 0.07345, 0.08448, 0.09740,
+            0.11980, 0.14198, 0.15434, 0.16584, 0.16581, 0.13824, 0.11018, 0.08812, 0.08208,
+            0.07866, 0.10487, 0.20348, 0.42992, 0.67028, 0.85180, 1.00000, 0.99002, 0.97346,
+            0.92904, 0.87627, 0.78356, 0.69861, 0.62108, 0.54858, 0.49330, 0.44966, 0.39700,
+            0.34353, 0.29612, 0.25398, 0.21761, 0.17399, 0.12337, 0.07730, 0.04837, 0.02085,
+            0.01276, 0.00442, 0.00373, 0.00304, 0.00236, 0.00177, 0.00101, 0.00032, 0.00032,
+            0.00032, 0.00032, 0.00031, 0.00031, 0.00030, 0.00030, 0.00030, 0.00030, 0.00030,
+        ],
+        [
+            0.00029, 0.00058, 0.00086, 0.00142, 0.00269, 0.00374, 0.01097, 0.02715, 0.05677,
+            0.07127, 0.08112, 0.09905, 0.11763, 0.12753, 0.14227, 0.16206, 0.18837, 0.28247,
+            0.38602, 0.45590, 0.49904, 0.51920, 0.55409, 0.61465, 0.71036, 0.80385, 0.90351,
+            0.93294, 0.97674, 0.98916, 1.00000, 0.99674, 0.97769, 0.94632, 0.92351, 0.86853,
+            0.81175, 0.74998, 0.68559, 0.61526, 0.54488, 0.46610, 0.39258, 0.32326, 0.25347,
+            0.19763, 0.14069, 0.10482, 0.07290, 0.05811, 0.04642, 0.03928, 0.03396, 0.02903,
+            0.02422, 0.02147, 0.01840, 0.01647, 0.01560, 0.01306, 0.00969, 0.00664, 0.00372,
+            0.00261, 0.00114, 0.00100, 0.00084, 0.00067, 0.00053, 0.00037, 0.00021, 0.00021,
+            0.00021, 0.00021, 0.00020, 0.00020, 0.00020, 0.00020, 0.00020, 0.00020, 0.00020,
+        ],
+        [
+            0.00077, 0.00141, 0.00211, 0.00497, 0.01433, 0.02270, 0.10072, 0.26711, 0.51079,
+            0.64499, 0.77923, 0.83929, 0.90817, 0.93530, 0.96497, 0.98113, 1.00000, 0.98808,
+            0.98324, 0.95403, 0.92622, 0.84904, 0.77508, 0.69118, 0.59996, 0.50941, 0.42198,
+            0.34512, 0.26885, 0.22148, 0.17469, 0.14466, 0.12407, 0.10006, 0.07507, 0.05930,
+            0.04360, 0.03305, 0.02509, 0.02141, 0.01809, 0.01607, 0.01425, 0.01262, 0.01083,
+            0.00989, 0.00894, 0.00856, 0.00805, 0.00846, 0.00892, 0.00910, 0.00897, 0.00976,
+            0.01040, 0.01027, 0.00985, 0.00911, 0.00836, 0.00663, 0.00378, 0.00266, 0.00138,
+            0.00090, 0.00046, 0.00041, 0.00035, 0.00028, 0.00022, 0.00015, 0.00008, 0.00008,
+            0.00008, 0.00008, 0.00008, 0.00008, 0.00008, 0.00008, 0.00008, 0.00008, 0.00008,
+        ],
+    ])
 
     /// `matrix` where it is one a decoder could have used: three finite rows.
     private var decoderMatrix: [SIMD3<Float>]? {

@@ -29,7 +29,7 @@ extension EditState: Codable {
     static let bespokeKeys: [String] = [
         "stockID", "chosenFormatID", "captureIlluminantKelvin",
         "filmLightKelvin", "sourceLightIndex", "halationReturnRatio", "grainMottleShare", "grainModel", "couplerGapReach", "paper", "paperFollowsStock",
-        "seed", "shutterSeconds", "printLightKelvin", "printFrame", "printFrameNumber", "printFrameFraming", "printFrameCount", "printFrameCamera", "negativeViewing", "digitalReference", "enlarger", "printerProfile", "rotation", "crop", "cornerCrop", "framingZoom",
+        "seed", "shutterSeconds", "printLightKelvin", "printSurface", "printFrame", "printFrameNumber", "printFrameFraming", "printFrameCount", "printFrameCamera", "negativeViewing", "digitalReference", "enlarger", "printerProfile", "rotation", "crop", "cornerCrop", "framingZoom",
         "grade", "lensProfileID", "lensAdjustment", "lensFilterIDs", "lensFilterMetering", "selective", "negative",
     ]
 
@@ -110,6 +110,8 @@ extension EditState: Codable {
         seed = try c.decodeIfPresent(UInt64.self, forKey: EditKey("seed")) ?? seed
         shutterSeconds = try c.decodeIfPresent(Double.self, forKey: EditKey("shutterSeconds"))
         printLightKelvin = try c.decodeIfPresent(Double.self, forKey: EditKey("printLightKelvin"))
+        printSurface = try c.decodeIfPresent(String.self, forKey: EditKey("printSurface"))
+            .flatMap(PrintSurface.preset(id:)) ?? .default
         digitalReference = try c.decodeIfPresent(DigitalReferenceStyle.self, forKey: EditKey("digitalReference"))
             ?? EditState.defaultDigitalReference
         enlarger = try c.decodeIfPresent(String.self, forKey: EditKey("enlarger"))
@@ -175,6 +177,7 @@ extension EditState: Codable {
         try c.encode(seed, forKey: EditKey("seed"))
         try c.encodeIfPresent(shutterSeconds, forKey: EditKey("shutterSeconds"))
         try c.encodeIfPresent(printLightKelvin, forKey: EditKey("printLightKelvin"))
+        try c.encode(printSurface.id, forKey: EditKey("printSurface"))
         try c.encode(digitalReference, forKey: EditKey("digitalReference"))
         try c.encode(enlarger.id, forKey: EditKey("enlarger"))
         try c.encode(printerProfile.normalized, forKey: EditKey("printerProfile"))

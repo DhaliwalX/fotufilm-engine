@@ -7,9 +7,9 @@ import Foundation
 /// The other is the scene's light and the film's drift, which a printer takes out with
 /// filtration: the same exposure added to a record at every tone, moving it along the film's
 /// own curve. One neutral cannot tell the two apart. A roll that measured its tonal steps says
-/// the first (`contrast`), and the neutral then sets the exposure. Without one, the neutral
-/// sets each record's gain, which holds the greys between the clear film and the neutral
-/// however steep the records read.
+/// the first (`contrast`), or a single frame's own tonal steps provide a regularized estimate
+/// (`frameContrastRange`), and the neutral then sets the exposure along each record's
+/// characteristic curve.
 extension ApproximateNegativeScan {
     /// What a frame is balanced on.
     public enum BalanceMode: String, Codable, CaseIterable, Sendable {
@@ -29,18 +29,24 @@ extension ApproximateNegativeScan {
         public var denseEnd: SIMD3<Float>?
         /// A neutral picked on the frame, which takes the densest end's place.
         public var picked: SIMD3<Float>?
+        /// How red and blue rise per unit of green across this frame's own tonal steps
+        /// (`tonalSlopes(border:preview:)`), when the frame has enough steps to tell.
+        public var slopes: SIMD2<Float>?
 
-        public init(denseEnd: SIMD3<Float>? = nil, picked: SIMD3<Float>? = nil) {
+        public init(denseEnd: SIMD3<Float>? = nil, picked: SIMD3<Float>? = nil,
+                    slopes: SIMD2<Float>? = nil) {
             self.denseEnd = denseEnd
             self.picked = picked
+            self.slopes = slopes
         }
     }
 
     /// The balance of a frame read by the scan model for `setup`, its weights across the
     /// channels at `separation` (`NegativeScanModel.weights`): a neutral moved onto the film's
-    /// grey scale, and the highlights' exposure from the densest end. A `roll` that measured its
-    /// tonal steps makes red and blue as steep against green as the film's own (`contrast`),
-    /// and the neutral then moves them by an exposure; without one the neutral scales them.
+    /// grey scale along each record's characteristic curve (`exposure`), and the highlights'
+    /// exposure from the densest end. Tonal steps on a `roll` (or regularized steps on the
+    /// frame itself when no roll contrast is measured) calibrate red and blue steepness against
+    /// green (`gains`) before the neutral shifts each record's exposure.
     public static func balance(stock: FilmStock, setup: NegativeScanSetup, separation: Float,
                                mode: BalanceMode, tones: Tones,
                                roll: RollBalance? = nil) -> Balance {
@@ -57,11 +63,14 @@ extension ApproximateNegativeScan {
             }
         }
         guard mode != .none else { return balance }
-        var steepened = false
         if let slopes = roll?.slopes, slopes.count == 2 {
             balance.gains = contrast(stock: stock, weights: weights,
                                      slopes: SIMD2(slopes[0], slopes[1]))
-            steepened = true
+        } else if let slopes = tones.slopes,
+                  slopes.x.isFinite, slopes.y.isFinite, slopes.x > 0, slopes.y > 0 {
+            balance.gains = contrast(stock: stock, weights: weights, slopes: slopes,
+                                     weight: setup.knowsScale ? 0.65 : 0.8,
+                                     range: frameContrastRange)
         }
         // The roll's neutral when the frame is on its roll; else one picked on the frame; else
         // its densest end. One too thin to tell a colour from is passed over.
@@ -69,12 +78,8 @@ extension ApproximateNegativeScan {
                         readable(tones.picked), dense]
         if let neutral = neutrals.lazy.compactMap({ $0 }).first(
             where: { NegativeScanCrosstalk.apply(weights, $0).y > 0.05 }) {
-            if steepened {
-                balance.exposure = exposure(stock: stock, weights: weights, gains: balance.gains,
-                                            neutral: neutral)
-            } else {
-                balance.gains = gains(stock: stock, weights: weights, neutral: neutral)
-            }
+            balance.exposure = exposure(stock: stock, weights: weights, gains: balance.gains,
+                                        neutral: neutral)
         }
         return balance
     }

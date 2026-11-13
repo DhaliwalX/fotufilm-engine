@@ -69,11 +69,13 @@ final class WebProfileRequestTests: XCTestCase {
     func testPrinterControlsComposeAndDisablingRestoresDefaultPath() throws {
         var values: [String: Any] = ["printerEnabled": true, "printerLamp": 3400,
             "printerExposure": 1.25, "printerMagenta": 0.6, "printerYellow": 0.7,
-            "printerPreflash": 0.05, "enlarger": "condenser"]
+            "printerPreflash": 0.05, "enlarger": "condenser", "printSurface": "matte"]
         let options = try request(values).configured().1
         XCTAssertEqual(options.printer, PrinterProfile(lampKelvin: 3400, exposureEV: 1.25, magenta: 0.6, yellow: 0.7))
         XCTAssertEqual(options.printerPreflash, 0.05)
         XCTAssertEqual(options.enlarger, .condenser)
+        XCTAssertEqual(options.printSurface, .matte)
+        XCTAssertThrowsError(try request(["printSurface": "satin"]).configured())
         values["printerEnabled"] = false
         XCTAssertNil(try request(values).configured().1.printer)
         values["printerLamp"] = 3700

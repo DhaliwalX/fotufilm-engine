@@ -548,26 +548,69 @@ enum DigitalReferenceReceiver {
         SIMD3(pow(10, -density.x), pow(10, -density.y), pow(10, -density.z))
     }
 
-    /// The receiver's small-signal density response at a neutral synthetic negative. Because
-    /// the reference dyes partition unity, equal amounts transmit a constant spectrum. The
-    /// derivative of measured density is therefore the band-weighted mean of each dye.
-    /// This characterizes the receiver once per set of bands, without looking at a selected
-    /// stock or its curves.
-    struct DensityUnmix {
-        private let rows: [SIMD3<Float>]
+    /// Canonical masked C-41 image-dye partition and base-mask transmittance used to calibrate
+    /// `DensityUnmix` once per `ReceiverBands`. Keeping this basis fixed across stocks preserves
+    /// inter-stock spectral differences while matching real C-41 cyan/magenta/yellow crossover
+    /// locations (~492 nm and ~600 nm) and orange-mask passband weighting.
+    static let referenceDyes: [[Float]] = {
+        let specs: [(peak: Float, left: Float, right: Float)] = [
+            (680, 56, 85),
+            (546, 44, 48),
+            (448, 55, 34),
+        ]
+        let raw = specs.map { spec in
+            SpectralGrid.asymmetricGaussian(
+                peak: spec.peak, leftSigma: spec.left, rightSigma: spec.right
+            ).map { pow($0 + 0.02, 6.0) }
+        }
+        return SpectralGrid.partition(raw)
+    }()
+
+    static let referenceIlluminant: [Float] = zip(SpectralGrid.wavelengths, illuminant).map { wavelength, light in
+        let maskDensity = 0.20 + 0.56 / (1 + exp((wavelength - 535) / 18))
+        return light * pow(10, -maskDensity)
+    }
+
+    /// Nonlinear broadband transmittance unmix against the canonical negative reference dyes.
+    /// Equal dye amounts sum to unity at every wavelength, so factoring out the mean log energy
+    /// holds the neutral axis exact at any exposure while damped Gauss-Newton removes broadband
+    /// Beer-Lambert cross-band compression on saturated colours. Characterized once per band set,
+    /// independent of the selected stock, so inter-stock spectral differences stay intact.
+    struct DensityUnmix: Sendable {
+        private typealias Rows = (SIMD3<Float>, SIMD3<Float>, SIMD3<Float>)
+
+        private let rows: Rows
+        private let dye: [SIMD3<Float>]
+        private let band: [SIMD3<Float>]
+
+        private static let log2Of10: Float = 3.321928
 
         init(bands: ReceiverBands) {
-            let dyes = SpectralGrid.dyes(family: .kodakNegative)
+            let dyes = DigitalReferenceReceiver.referenceDyes
+            let light = DigitalReferenceReceiver.referenceIlluminant
             let sensitivity = bands.sensitivity
-            let response: [SIMD3<Float>] = (0..<3).map { band in
-                var response = SIMD3<Float>(repeating: 0)
-                var total: Float = 0
+            var normalized = [SIMD3<Float>](repeating: .zero, count: SpectralGrid.count)
+            var totals = SIMD3<Float>.zero
+            for i in 0..<SpectralGrid.count {
+                let weight = SIMD3(light[i] * sensitivity[0][i],
+                                   light[i] * sensitivity[1][i],
+                                   light[i] * sensitivity[2][i])
+                normalized[i] = weight
+                totals += weight
+            }
+            let scale = SIMD3(1 / max(totals.x, 1e-12),
+                              1 / max(totals.y, 1e-12),
+                              1 / max(totals.z, 1e-12))
+            for i in 0..<SpectralGrid.count { normalized[i] *= scale }
+            self.band = normalized
+            let packedDye = (0..<SpectralGrid.count).map { SIMD3(dyes[0][$0], dyes[1][$0], dyes[2][$0]) }
+            self.dye = packedDye
+            let response: [SIMD3<Float>] = (0..<3).map { b in
+                var r = SIMD3<Float>.zero
                 for i in 0..<SpectralGrid.count {
-                    let weight = illuminant[i] * sensitivity[band][i]
-                    total += weight
-                    for dye in 0..<3 { response[dye] += weight * dyes[dye][i] }
+                    r += normalized[i][b] * packedDye[i]
                 }
-                return response / total
+                return r
             }
             func cross(_ a: SIMD3<Float>, _ b: SIMD3<Float>) -> SIMD3<Float> {
                 SIMD3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z,
@@ -578,17 +621,118 @@ enum DigitalReferenceReceiver {
             let c = cross(response[0], response[1])
             // Transpose the cofactors into inverse rows. Normalizing their sums cancels the
             // common determinant and holds an equal-channel exposure exactly on the neutral axis.
-            rows = (0..<3).map { i in
-                let row = SIMD3(a[i], b[i], c[i])
-                return row / (row.x + row.y + row.z)
+            let r0 = SIMD3(a.x, b.x, c.x)
+            let r1 = SIMD3(a.y, b.y, c.y)
+            let r2 = SIMD3(a.z, b.z, c.z)
+            rows = (r0 / (r0.x + r0.y + r0.z),
+                    r1 / (r1.x + r1.y + r1.z),
+                    r2 / (r2.x + r2.y + r2.z))
+        }
+
+        private func linearRead(_ v: SIMD3<Float>) -> SIMD3<Float> {
+            let (r0, r1, r2) = rows
+            return SIMD3(r0.x * v.x + r0.y * v.y + r0.z * v.z,
+                         r1.x * v.x + r1.y * v.y + r1.z * v.z,
+                         r2.x * v.x + r2.y * v.y + r2.z * v.z)
+        }
+
+        private func logEnergy(_ u: SIMD3<Float>) -> (value: SIMD3<Float>, jacobian: Rows) {
+            var sum = SIMD3<Float>.zero
+            var m0 = SIMD3<Float>.zero
+            var m1 = SIMD3<Float>.zero
+            var m2 = SIMD3<Float>.zero
+            let k = Self.log2Of10
+            dye.withUnsafeBufferPointer { dyePtr in
+                band.withUnsafeBufferPointer { bandPtr in
+                    for i in 0..<dyePtr.count {
+                        let d = dyePtr[i]
+                        let t = exp2(-(u.x * d.x + u.y * d.y + u.z * d.z) * k)
+                        let w = bandPtr[i] * t
+                        sum += w
+                        m0 += d * w.x
+                        m1 += d * w.y
+                        m2 += d * w.z
+                    }
+                }
             }
+            let sx = max(sum.x, 1e-20), sy = max(sum.y, 1e-20), sz = max(sum.z, 1e-20)
+            return (
+                SIMD3(log10(sx), log10(sy), log10(sz)),
+                (-m0 / sx, -m1 / sy, -m2 / sz)
+            )
+        }
+
+        private func dot(_ a: SIMD3<Float>, _ b: SIMD3<Float>) -> Float {
+            a.x * b.x + a.y * b.y + a.z * b.z
+        }
+
+        private func solve3(n00: Float, n01: Float, n02: Float,
+                            n11: Float, n12: Float, n22: Float,
+                            rhs: SIMD3<Float>) -> SIMD3<Float>? {
+            guard n00 > 1e-10 else { return nil }
+            let f10 = n01 / n00
+            let f20 = n02 / n00
+            let a11 = n11 - f10 * n01
+            let a12 = n12 - f10 * n02
+            let b1 = rhs.y - f10 * rhs.x
+            guard a11 > 1e-10 else { return nil }
+            let f21 = a12 / a11
+            let a22 = n22 - f20 * n02 - f21 * a12
+            guard a22 > 1e-10 else { return nil }
+            let z = (rhs.z - f20 * rhs.x - f21 * b1) / a22
+            let y = (b1 - a12 * z) / a11
+            let x = (rhs.x - n01 * y - n02 * z) / n00
+            return SIMD3(x, y, z)
         }
 
         func read(_ relativeLogEnergy: SIMD3<Float>) -> SIMD3<Float> {
-            SIMD3(rows.map { row in
-                row.x * relativeLogEnergy.x + row.y * relativeLogEnergy.y
-                    + row.z * relativeLogEnergy.z
-            })
+            guard relativeLogEnergy.x.isFinite, relativeLogEnergy.y.isFinite,
+                  relativeLogEnergy.z.isFinite else {
+                return linearRead(relativeLogEnergy)
+            }
+            let level = (relativeLogEnergy.x + relativeLogEnergy.y + relativeLogEnergy.z) / 3
+            let chroma = relativeLogEnergy - SIMD3(repeating: level)
+            if max(abs(chroma.x), max(abs(chroma.y), abs(chroma.z))) < 1e-6 {
+                return relativeLogEnergy
+            }
+            func clampChroma(_ v: SIMD3<Float>) -> SIMD3<Float> {
+                SIMD3(min(max(v.x, -6), 6), min(max(v.y, -6), 6), min(max(v.z, -6), 6))
+            }
+            var u = clampChroma(-linearRead(chroma))
+            var (measured, jacobian) = logEnergy(u)
+            for _ in 0..<8 {
+                let f = measured - chroma
+                if max(abs(f.x), max(abs(f.y), abs(f.z))) < 2e-7 { break }
+                let (j0, j1, j2) = jacobian
+                let reg: Float = 1e-7
+                let c0 = SIMD3(j0.x, j1.x, j2.x)
+                let c1 = SIMD3(j0.y, j1.y, j2.y)
+                let c2 = SIMD3(j0.z, j1.z, j2.z)
+                let rhs = -SIMD3(dot(c0, f), dot(c1, f), dot(c2, f))
+                guard let step = solve3(
+                    n00: dot(c0, c0) + reg, n01: dot(c0, c1), n02: dot(c0, c2),
+                    n11: dot(c1, c1) + reg, n12: dot(c1, c2), n22: dot(c2, c2) + reg,
+                    rhs: rhs) else { break }
+                if max(abs(step.x), max(abs(step.y), abs(step.z))) < 2e-7 { break }
+                let err = dot(f, f)
+                var scale: Float = 1
+                var accepted = false
+                for _ in 0..<6 {
+                    let candidate = clampChroma(u + scale * step)
+                    let (nextVal, nextJac) = logEnergy(candidate)
+                    let next = nextVal - chroma
+                    if dot(next, next) < err {
+                        u = candidate
+                        measured = nextVal
+                        jacobian = nextJac
+                        accepted = true
+                        break
+                    }
+                    scale *= 0.5
+                }
+                if !accepted { break }
+            }
+            return SIMD3(repeating: level) - u
         }
     }
 
@@ -624,6 +768,39 @@ enum DigitalReferenceReceiver {
             if output(mid) > target { low = mid } else { high = mid }
         }
         return (low + high) / 2
+    }
+
+    /// Pre-curve `screenCMY` filtration that shifts mid-grey chromaticity by `balance`
+    /// (`1 / whiteBalance.gains`) on Digital Reference, leaving highlights to roll off smoothly
+    /// through the receiver shoulder and keeping shadow blacks untinted.
+    static func cmy(forWhiteBalanceGains balance: SIMD3<Float>, stock: FilmStock,
+                    style: DigitalReferenceStyle, grade: Float) -> SIMD3<Float> {
+        guard !stock.isMonochrome, !stock.isReversal, !stock.isReflectionPrint,
+              balance != .one else { return .zero }
+        let w = ColorScience.displayP3LuminanceWeights
+        let luma = max(w.0 * balance.x + w.1 * balance.y + w.2 * balance.z, 1e-6)
+        let chromatic = balance / luma
+        let curve = curve(for: style, stock: stock)
+        let xMid = curve.logExposure(density: curve.dMin + anchorDensity)
+        let baseDensity = curve.density(logExposure: xMid) - curve.dMin
+        let baseRGB = rgb(density: SIMD3(repeating: baseDensity), style: style, stock: stock,
+                          grade: grade)
+        return SIMD3((0..<3).map { channel in
+            let target = baseRGB[channel] * chromatic[channel]
+            func output(_ shift: Float) -> Float {
+                var densities = SIMD3<Float>(repeating: baseDensity)
+                densities[channel] = curve.density(logExposure: xMid + shift) - curve.dMin
+                return rgb(density: densities, style: style, stock: stock, grade: grade)[channel]
+            }
+            var low: Float = -0.30, high: Float = 0.30
+            if target >= output(low) { return -1 }
+            if target <= output(high) { return 1 }
+            for _ in 0..<32 {
+                let mid = (low + high) / 2
+                if output(mid) > target { low = mid } else { high = mid }
+            }
+            return min(max(((low + high) / 2) / 0.30, -1), 1)
+        })
     }
 
     /// Digital output has display primaries, not a second set of photographic paper dyes.

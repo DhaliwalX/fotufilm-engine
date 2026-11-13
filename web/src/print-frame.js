@@ -58,6 +58,7 @@ export function parsePrintFrameCamera(value) {
   return value;
 }
 export function frameRequest(edit, width = 1, height = 1) {
+  const surface = edit.profile?.printSurface;
   return {
     kind: "print-frame",
     stock: edit.stock,
@@ -73,6 +74,7 @@ export function frameRequest(edit, width = 1, height = 1) {
     viewingKelvin:
       PROFILE_MENUS.printLight.find((c) => c.id === edit.profile?.printLight)
         ?.value ?? null,
+    ...(surface ? { printSurface: surface } : {}),
     width,
     height,
   };
@@ -87,7 +89,7 @@ export function frameRenderEdit(edit, plan) {
     medium: plan.renderMedium || edit.medium,
     profile: {
       ...edit.profile,
-      ...(transparency ? { printLight: "reference" } : {}),
+      ...(transparency ? { printLight: "reference", printSurface: "clean" } : {}),
       ...(plan.renderMedium === "negative"
         ? { negativeViewing: "light-box" }
         : {}),

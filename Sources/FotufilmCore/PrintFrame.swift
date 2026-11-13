@@ -553,11 +553,13 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
 
     public init(frame: PrintFrame, formatID: String?, stockID: String,
                 paper: PrintPaper, viewingKelvin: Float? = nil,
+                printSurface: PrintSurface = .clean,
                 negativeViewing: NegativeViewing = .lightBox, margin: Double = 1,
                 frameNumber: Int = FilmEdgePrinting.recordedFrameNumber, showsEdgePrinting: Bool = true,
                 framing: SIMD2<Double> = .zero, frames: Int = 1, camera: FilmBorderCamera = .panoramic) {
         self.init(frame: frame, formatID: formatID, definition: FilmStock.presetDefinitions[stockID],
-                  paper: paper, viewingKelvin: viewingKelvin, negativeViewing: negativeViewing,
+                  paper: paper, viewingKelvin: viewingKelvin, printSurface: printSurface,
+                  negativeViewing: negativeViewing,
                   margin: margin, frameNumber: frameNumber, showsEdgePrinting: showsEdgePrinting,
                   framing: framing, frames: frames, camera: camera)
     }
@@ -565,6 +567,7 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
     /// Explicit stock metadata also supports isolated runtimes without a process-wide pack registry.
     public init(frame: PrintFrame, formatID: String?, definition: FilmStockDefinition?,
                 paper: PrintPaper, viewingKelvin: Float? = nil,
+                printSurface: PrintSurface = .clean,
                 negativeViewing: NegativeViewing = .lightBox, margin: Double = 1,
                 frameNumber: Int = FilmEdgePrinting.recordedFrameNumber, showsEdgePrinting: Bool = true,
                 framing: SIMD2<Double> = .zero, frames: Int = 1, camera: FilmBorderCamera = .panoramic) {
@@ -678,7 +681,7 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
             edgeRGB = .zero
             barcodeRGB = .zero
         }
-        rebateRGB = self.frame == .carrier ? paper.frameDenseRGB(viewingKelvin: viewingKelvin) ?? .zero : .zero
+        rebateRGB = self.frame == .carrier ? paper.frameDenseRGB(viewingKelvin: viewingKelvin, printSurface: printSurface) ?? .zero : .zero
         switch frame {
         case .none:
             baseRGB = .zero
@@ -737,25 +740,25 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
                 detail = "Choose a slide film in 35mm or 120."
             }
         case .paper, .paper5x7, .paper8x10, .paper5x5:
-            baseRGB = paper.frameBaseRGB(viewingKelvin: viewingKelvin) ?? .zero
+            baseRGB = paper.frameBaseRGB(viewingKelvin: viewingKelvin, printSurface: printSurface) ?? .zero
             let size = sheet.map { "\(Int(($0.widthMM / 25.4).rounded())) × \(Int(($0.heightMM / 25.4).rounded())) in" } ?? ""
             detail = reflective ? "\(paper.name) · \(hasLustre ? "lustre" : "high gloss") · \(size)"
                 : "Choose a reflection paper such as Ektacolor Edge or Ilfochrome."
         case .carrier:
-            baseRGB = paper.frameBaseRGB(viewingKelvin: viewingKelvin) ?? .zero
+            baseRGB = paper.frameBaseRGB(viewingKelvin: viewingKelvin, printSurface: printSurface) ?? .zero
             detail = carrierAvailable
                 ? "\(paper.name) · filed carrier · 8 × 10 in"
                 : "Choose a negative film and a reflection paper such as Ektacolor Edge."
         case .emulsion:
             // The band itself is developed by the host; the margin around it is the paper's white.
-            baseRGB = paper.frameBaseRGB(viewingKelvin: viewingKelvin) ?? SIMD3(repeating: 0.91)
+            baseRGB = paper.frameBaseRGB(viewingKelvin: viewingKelvin, printSurface: printSurface) ?? SIMD3(repeating: 0.91)
             detail = edgeAvailable
                 ? "\(name) · \(definition?.name ?? "Film") · unexposed edge"
                 : "Choose a film and a roll or sheet film format."
         case .mount:
             // Reflection outputs retain their modelled paper white. Other outputs use a
             // neutral presentation mount; this style does not identify a manufactured stock.
-            baseRGB = paper.frameBaseRGB(viewingKelvin: viewingKelvin) ?? SIMD3(repeating: 0.91)
+            baseRGB = paper.frameBaseRGB(viewingKelvin: viewingKelvin, printSurface: printSurface) ?? SIMD3(repeating: 0.91)
             detail = frame.detail
         case .darkMount:
             // A neutral presentation board, not the paper's own maximum density.
@@ -780,27 +783,31 @@ public struct PrintFrameConfiguration: Codable, Equatable, Sendable {
 extension PrintPaper {
     /// An unexposed border is clear paper for negative paper and maximum density for positive
     /// paper, under the viewing lamp. Only a reflection print has a border.
-    func frameBaseRGB(viewingKelvin: Float?) -> SIMD3<Float>? {
-        frameRGB(viewingKelvin: viewingKelvin, dense: false)
+    func frameBaseRGB(viewingKelvin: Float?, printSurface: PrintSurface = .clean) -> SIMD3<Float>? {
+        frameRGB(viewingKelvin: viewingKelvin, printSurface: printSurface, dense: false)
     }
 
     /// A fully exposed negative-paper border, as the clear rebate of a negative prints through
     /// a filed carrier. Positive paper has no dark rebate exposure to print.
-    func frameDenseRGB(viewingKelvin: Float?) -> SIMD3<Float>? {
-        isPositivePaper ? nil : frameRGB(viewingKelvin: viewingKelvin, dense: true)
+    func frameDenseRGB(viewingKelvin: Float?, printSurface: PrintSurface = .clean) -> SIMD3<Float>? {
+        isPositivePaper ? nil : frameRGB(viewingKelvin: viewingKelvin, printSurface: printSurface, dense: true)
     }
 
     /// Density above the paper base, which is what the receiver reads and what the photograph's
     /// own tones are made of: clear paper is the print's white in the frame and in the picture.
-    private func frameRGB(viewingKelvin: Float?, dense: Bool) -> SIMD3<Float>? {
+    private func frameRGB(viewingKelvin: Float?, printSurface: PrintSurface = .clean, dense: Bool) -> SIMD3<Float>? {
         guard let stock = printStock, stock.process.isReflection else { return nil }
         // Positive paper is at its maximum density where it was never exposed.
         let full = dense || stock.process.isPositiveWorking
         let records = stock.curves.map { full ? $0.dMax - $0.dMin : 0 }
         let density = SIMD3(records[0], records[1], records[2])
-        let receiver = SpectralRuntime.PrintReceiver(dyes: analyticalDyes,
+        let activeSurface = stock.process.isReflection ? printSurface : .clean
+        let receiver = SpectralRuntime.PrintReceiver(
+            dyes: analyticalDyes,
             viewingLight: viewingKelvin.map(SpectralRuntime.printLightSPD) ?? Illuminant.d50,
-            unmix: PrintDyeUnmix(dyes: analyticalDyes))
+            unmix: PrintDyeUnmix(dyes: analyticalDyes),
+            baseReflectance: activeSurface == .clean ? nil : baseReflectance,
+            surfaceReflectance: activeSurface.surfaceReflectance)
         return receiver.rgb(density: density)
     }
 }

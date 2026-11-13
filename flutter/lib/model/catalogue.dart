@@ -156,6 +156,8 @@ class Catalogue {
     switch (c['field']) {
       case 'printLight':
         return ((medium?['viewingLights'] as List?)?.length ?? 0) > 1;
+      case 'printSurface':
+        return flag('surface');
       case 'screenExposure':
         return flag('screenConversion');
       case 'screenCyan' || 'screenMagenta' || 'screenYellow':

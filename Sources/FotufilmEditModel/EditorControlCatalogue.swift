@@ -1704,6 +1704,33 @@ public enum EditorControlCatalogue {
                                          generic: false),
             documentation: "Changes the viewing lamp without re-timing the developed print; digital media ignore it."),
         EditorControl(
+            .printSurface, title: "Paper Surface",
+            detail: "Choose the surface finish and viewing glare of a reflection print.",
+            section: .printPaper,
+            kind: .menu(.fixed(PrintSurface.allCases.enumerated().map {
+                EditorMenuChoice(Double($0.offset), $0.element.name,
+                                 detail: $0.element.detail, id: $0.element.id)
+            })),
+            availability: .printStage,
+            persistence: .bespoke,
+            binding: .printSurfaceIndex,
+            surfaces: [.app, .desktop, .cli, .web],
+            omitted: [
+                .android: "Paper surface finish is currently exposed in the Apple apps, browser editor and CLI.",
+                .resolve: "The plugin bridge does not yet expose paper surface finishes.",
+                .finalcut: "The plugin bridge does not yet expose paper surface finishes.",
+            ],
+            web: .profile,
+            commandLine: CommandLineFlag(
+                "--print-surface", placeholder: "<finish>",
+                help: "Reflection paper surface finish: clean (default, pure reference white with "
+                    + "zero glare), glossy, lustre or matte. Evaluates the paper stock's base "
+                    + "reflectance and adds diffuse surface viewing scatter. Reflection papers only"),
+            documentation: "Selects a reflection paper's base tone and surface viewing glare: Clean "
+                + "keeps the pure 0/45° reference white with zero glare; Glossy, Lustre and Matte "
+                + "render the paper stock's base reflectance with progressive diffuse surface scatter "
+                + "in the shadows. Ignored outside reflection print media."),
+        EditorControl(
             .printCorrection, title: "Channel Contrast Match",
             detail: "Optional digital channel-contrast correction; not a printer-light adjustment.",
             section: .printPaper,

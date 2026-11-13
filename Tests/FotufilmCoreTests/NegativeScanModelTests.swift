@@ -184,4 +184,87 @@ final class NegativeScanModelTests: XCTestCase {
         dark.density = [9, 9, 9]
         XCTAssertEqual(model.error(of: reading, patches: [dark]).unread, 1)
     }
+
+    /// Every negative film's scan model carries its record densities to the exact spectral
+    /// transmission the print stage exposes through, whether its base spectrum is stored
+    /// separately (`gold200`) or formed by its base record densities (`cinestill400d`,
+    /// `lomocolor100`, `phoenix200`).
+    func testEveryNegativeFilmsSpectrumMatchesThePrintStage() throws {
+        let negatives = FilmStock.presetIDs.compactMap { id -> (String, FilmStock)? in
+            guard let stock = FilmStock.presets[id],
+                  !stock.isReversal, !stock.isReflectionPrint else { return nil }
+            return (id, stock)
+        }
+        XCTAssertTrue(negatives.contains { $0.0 == "cinestill400d" })
+        XCTAssertTrue(negatives.contains { $0.0 == "lomocolor100" })
+        XCTAssertTrue(negatives.contains { $0.0 == "phoenix200" })
+
+        let lamp = NegativeScanCrosstalk.Light.white.spectrum
+        let response = NegativeScanSetup(light: .white, camera: .scanner).response()
+        for (id, stock) in negatives {
+            let model = NegativeScanModel(stock: stock, response: response)
+            for logExposure in [Float(-1.2), 0, 0.8] {
+                let density = logExposure == -1.2 ? model.base
+                    : NegativeScanModel.density(stock: stock, logExposure: logExposure)
+                let expected = SpectralRuntime.paperExposure(
+                    density: density, stock: stock,
+                    lamp: [Float](repeating: 1, count: SpectralGrid.count),
+                    paperSensitivity: response)
+                let actual = model.sample(density: density)
+                for channel in 0..<3 {
+                    XCTAssertEqual(actual[channel], expected[channel], accuracy: 1e-6,
+                                   "\(id) @ \(logExposure) channel \(channel)")
+                }
+            }
+            if !stock.isMonochrome, stock.curves[2].dMin > stock.curves[0].dMin + 0.2 {
+                // Masked colour negatives pass less blue than red through their clear base.
+                let masked = NegativeScanModel(
+                    stock: stock,
+                    setup: NegativeScanSetup(light: .white, camera: .profile("sony-ilce-7cm2")))
+                XCTAssertGreaterThan(masked.clear.x, masked.clear.z, id)
+            }
+            _ = lamp
+        }
+    }
+
+    /// The generic camera's median CMOS prior sits closer to measured cameras on a real colour
+    /// negative than a colorimetric CIE Rec. 2020 observer would.
+    func testGenericCameraCMOSPriorApproximatesMeasuredCameras() throws {
+        let stock = try stock("portra400")
+        let patches = NegativeScanModel.patches(stock: stock)
+        let genericWeights = NegativeScanModel(
+            stock: stock, setup: NegativeScanSetup(light: .white, camera: .generic))
+            .weights(separation: 1)
+
+        let cmfResponse: [[Float]] = {
+            let lamp = NegativeScanCrosstalk.Light.white.spectrum
+            let raw = (0..<3).map { channel in
+                (0..<SpectralGrid.count).map { i in
+                    SpectralGrid.linearRec2020(fromXYZ: SIMD3(
+                        SpectralGrid.xBar[i], SpectralGrid.yBar[i], SpectralGrid.zBar[i]))[channel]
+                        * lamp[i]
+                }
+            }
+            return raw.map { row in
+                let s = row.reduce(0, +)
+                return row.map { $0 / s }
+            }
+        }()
+        let cmfWeights = NegativeScanModel(stock: stock, response: cmfResponse).weights(separation: 1)
+
+        var genericMiss: Float = 0, cmfMiss: Float = 0
+        for cameraID in ["sony-ilce-7cm2", "nikon-d850", "canon-eos-5d-mark-iv", "fujifilm-x-t3"] {
+            let realModel = NegativeScanModel(
+                stock: stock, setup: NegativeScanSetup(light: .white, camera: .profile(cameraID)))
+            let gErr = realModel.error(
+                of: try ApproximateNegativeScan(stock: stock, border: realModel.clear,
+                                                weights: genericWeights), patches: patches)
+            let cErr = realModel.error(
+                of: try ApproximateNegativeScan(stock: stock, border: realModel.clear,
+                                                weights: cmfWeights), patches: patches)
+            genericMiss += gErr.colours
+            cmfMiss += cErr.colours
+        }
+        XCTAssertLessThan(genericMiss, cmfMiss)
+    }
 }

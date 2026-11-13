@@ -211,6 +211,12 @@ public struct FotufilmEngine {
         /// values are bounded to 1000...25000 K and canonicalized to 100 K buckets; invalid or
         /// non-positive values use the reference. The developed print is not re-timed.
         public var printViewingKelvin: Float? = nil
+        /// Surface finish and diffuse viewing glare of a reflection print sheet. `.clean` — the
+        /// default — preserves the 0/45° reference read with pure unit paper white and zero glare.
+        /// `.glossy`, `.lustre` and `.matte` evaluate the print on its paper stock's spectral base
+        /// reflectance (`PrintStock.Spectra.baseReflectance`) and add diffuse first-surface viewing
+        /// scatter (`PrintSurface.surfaceReflectance`). Ignored outside reflection print media.
+        public var printSurface: PrintSurface = .clean
         /// The grade laid over the finished image — lift, gamma and gain by band.
         public var grade: ColorGrade = .neutral
         /// Which signal that grade works on. `.linear` is what this engine has always done and stays

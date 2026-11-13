@@ -103,6 +103,7 @@ _Kind _stepKind(Json? before, Json? after) {
     }
     if (_changed(before, after, const ['medium'])) return 'Output Medium';
     if (_profileChanged(before, after, (f) => f == 'printLight')) return 'Viewing Illuminant';
+    if (_profileChanged(before, after, (f) => f == 'printSurface')) return 'Paper Surface';
     if (_changed(before, after, const ['digitalReference'])) return 'Screen Conversion';
     if (_profileChanged(before, after, (f) => f == 'screenGrade')) return 'Paper Grade';
     if (_profileChanged(before, after, _bands.hasMatch)) return 'Receiver Bands';

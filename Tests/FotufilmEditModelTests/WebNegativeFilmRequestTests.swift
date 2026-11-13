@@ -40,4 +40,51 @@ final class WebNegativeFilmRequestTests: XCTestCase {
                                       "samples": Data(count: 12).base64EncodedString(), "films": []]
         XCTAssertThrowsError(try WebRenderRequest.prepare(JSONSerialization.data(withJSONObject: request)))
     }
+
+    func testBrowserSuggestionsProjectBaseSpectraThroughCameraCapture() throws {
+        let capture = NegativeScanCapture(
+            camera: .init(make: "SONY", model: "ILCE-7CM2"), kelvin: 5200,
+            matrix: [1.35, -0.2, -0.15, -0.05, 1.55, -0.5, 0.02, -0.32, 1.3])
+        let setup = capture.setup(light: .white)
+        let native = NegativeFilmSuggestions(stocks: FilmStock.presets, setup: setup)
+        let goldStock = try XCTUnwrap(FilmStock.presets["gold200"])
+        let clear = NegativeScanModel(stock: goldStock, setup: setup).clear
+        let width = 64, height = 8
+        var planes = [[Float]](repeating: [Float](repeating: 0, count: width * height), count: 3)
+        for y in 0..<height { for x in 0..<width { for c in 0..<3 {
+            planes[c][y * width + x] = x < 12 ? 0.8 : 0.8 * clear[c]
+        } } }
+        var samples = Data()
+        for plane in planes { for value in plane {
+            withUnsafeBytes(of: value.bitPattern.littleEndian) { samples.append(contentsOf: $0) }
+        } }
+        let films = FilmStock.presets
+            .filter { !$0.value.isReversal && !$0.value.isReflectionPrint }
+            .sorted { $0.key < $1.key }
+            .map { id, stock -> [String: Any] in
+                let base = NegativeFilmSuggestions.base(of: stock)
+                return [
+                    "id": id,
+                    "name": stock.name,
+                    "base": [base.x, base.y, base.z],
+                    "spectrum": NegativeFilmSuggestions.baseTransmittance(of: stock),
+                ]
+            }
+        let source: [String: Any] = [
+            "camera": ["make": "SONY", "model": "ILCE-7CM2"],
+            "kelvin": 5200,
+            "matrix": [1.35, -0.2, -0.15, -0.05, 1.55, -0.5, 0.02, -0.32, 1.3],
+        ]
+        let request: [String: Any] = [
+            "kind": "negative-film", "width": width, "height": height,
+            "samples": samples.base64EncodedString(), "films": films, "source": source,
+        ]
+        let response = try WebRenderRequest.prepare(JSONSerialization.data(withJSONObject: request))
+        let result = try XCTUnwrap(JSONSerialization.jsonObject(with: response) as? [String: Any])
+        let suggestions = try XCTUnwrap(result["suggestions"] as? [[String: Any]])
+        let expected = native.suggest(try XCTUnwrap(NegativeFilmSuggestions.read(
+            preview: ImageBuffer(width: width, height: height, planes: planes))), limit: 3)
+        XCTAssertEqual(suggestions.map { $0["films"] as? [String] }, expected.map { $0.films.map(\.id) })
+        XCTAssertTrue(suggestions.contains { ($0["films"] as? [String])?.contains("gold200") == true })
+    }
 }

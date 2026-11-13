@@ -41,7 +41,7 @@ public struct AutomaticNegativeScan: Encodable, Sendable {
         var low = [Float](), high = [Float]()
         for values in channels {
             let sorted = values.sorted()
-            // Order statistics commute with the monotone sRGB transfer used by Halide.
+            // Order statistics commute with the monotone optical-density transform used by Halide.
             low.append(sorted[Int(Float(sorted.count - 1) * 0.05)])
             high.append(sorted[Int(Float(sorted.count - 1) * 0.95)])
         }

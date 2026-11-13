@@ -140,7 +140,8 @@ public enum LabScanTiming {
     /// on the film.
     public static func setup(for stock: FilmStock, sceneHighlightStops: Float?,
                              sceneMedianStops: Float?, exposureEV: Float = 0,
-                             scanExposure: Float = 0, keys: SIMD3<Float> = .zero) -> Setup {
+                             scanExposure: Float = 0, keys: SIMD3<Float> = .zero,
+                             reexposesFilm: Bool = true) -> Setup {
         guard !stock.isReversal, !stock.isReflectionPrint else { return .identity }
         let colour = stock.isMonochrome ? SIMD3<Float>.zero : SIMD3((0..<3).map { layer in
             keys[layer].isFinite ? -keyReach * min(max(keys[layer], -1), 1) : 0
@@ -152,6 +153,9 @@ public enum LabScanTiming {
         var highlight: Float = 0
         var stops = scanExposure.isFinite ? min(max(scanExposure, -6), 6) : 0
         let metered = sceneHighlightStops?.isFinite == true && sceneMedianStops?.isFinite == true
+        let keyShift: SIMD3<Float> = (!reexposesFilm && colour != .zero)
+            ? (reads(for: stock, logExposures: colour) - reads(for: stock, stops: 0)) * points.masking
+            : .zero
         if metered, let high = sceneHighlightStops, let median = sceneMedianStops {
             middle = min(max(median - ev, -12), 12)
             highlight = max(min(max(high - ev, -12), 12), middle)
@@ -159,7 +163,7 @@ public enum LabScanTiming {
             contrast = reach > 1e-3
                 ? min(max((points.white - points.toe) / reach, 1), maxStretch) : maxStretch
         } else if stops == 0 {
-            return Setup(shift: 0, keys: colour)
+            return Setup(shift: 0, keys: reexposesFilm ? colour : .zero, print: keyShift)
         }
         func placed(_ stops: Float) -> Float { points.toe + contrast * (stops - points.toe) }
         if metered {
@@ -168,8 +172,9 @@ public enum LabScanTiming {
         }
         // A grey at stop x reaches the film at x + ev, lightened by `lift`, and each record scans
         // it where the fixed profile scans the grey at placed(x) + ev + stops, exactly at the two
-        // greys bracketing the frame.
-        let lift = max(stops, 0)
+        // greys bracketing the frame. When the negative is already developed (`!reexposesFilm`),
+        // positive stops and colour keys ride `scale` and `print` directly on the print stage.
+        let lift = reexposesFilm ? max(stops, 0) : 0
         let low = min(max(middle - recordAnchorBelow,
                           points.toe + (recordAnchorToeClearance - ev - stops) / contrast), middle)
         let high = max(highlight, middle + recordAnchorSpan)
@@ -181,8 +186,23 @@ public enum LabScanTiming {
         for c in 0..<3 where abs(readHigh[c] - readLow[c]) > 1e-3 {
             scale[c] = (targetHigh[c] - targetLow[c]) / (readHigh[c] - readLow[c])
         }
-        return Setup(shift: lift * Float(log10(2.0)), keys: colour, scale: scale,
-                     print: targetLow - scale * readLow)
+        return Setup(shift: lift * Float(log10(2.0)), keys: reexposesFilm ? colour : .zero,
+                     scale: scale, print: targetLow - scale * readLow + keyShift)
+    }
+
+    /// Lab Scan colour keys (`screenCMY`) that shift mid-grey chromaticity by `balance`
+    /// (`1 / whiteBalance.gains`) before the positive curve.
+    public static func cmy(forWhiteBalanceGains balance: SIMD3<Float>,
+                           stock: FilmStock) -> SIMD3<Float> {
+        guard !stock.isMonochrome, !stock.isReversal, !stock.isReflectionPrint,
+              balance != .one else { return .zero }
+        let w = ColorScience.displayP3LuminanceWeights
+        let luma = max(w.0 * balance.x + w.1 * balance.y + w.2 * balance.z, 1e-6)
+        let chromatic = balance / luma
+        return SIMD3((0..<3).map { c in
+            let v = -log10(max(chromatic[c], 1e-6)) / keyReach
+            return min(max(v, -1), 1)
+        })
     }
 
     /// The fixed profile's points: where it scans a neutral at `whiteDensity` and the film's toe,
@@ -238,17 +258,22 @@ public enum LabScanTiming {
     /// What the scanner's records read of a neutral patch `stops` over mid-grey, or of the bare
     /// film base for nil: log light relative to mid-grey, the print stage's own axis.
     public static func reads(for stock: FilmStock, stops: Float?) -> SIMD3<Float> {
+        let logExposure = (stops ?? -40) * Float(log10(2.0))
+        return reads(for: stock, logExposures: SIMD3(repeating: logExposure))
+    }
+
+    private static func reads(for stock: FilmStock, logExposures: SIMD3<Float>) -> SIMD3<Float> {
         let paper = PrintPaper.labScan
         let callier = SpectralRuntime.callierCoefficient(1, stock: stock, paper: paper)
-        let logExposure = (stops ?? -40) * Float(log10(2.0))
-        func density(_ logExposure: Float) -> [Float] {
-            (0..<3).map { stock.developedDensity(layer: $0, logExposure: logExposure) * callier }
+        let midDensity = (0..<3).map { stock.developedDensity(layer: $0, logExposure: 0) * callier }
+        let sampleDensity = (0..<3).map {
+            stock.developedDensity(layer: $0, logExposure: logExposures[$0]) * callier
         }
         let mid = SpectralRuntime.printingIllumination(
-            stock: stock, paper: paper, density: density(0),
+            stock: stock, paper: paper, density: midDensity,
             dyes: stock.spectralProfile.imageDyeDensity, densityScale: callier)
         let energy = SpectralRuntime.paperExposure(
-            density: density(logExposure), stock: stock, lamp: mid.lamp,
+            density: sampleDensity, stock: stock, lamp: mid.lamp,
             paperSensitivity: paper.sensitivity, densityScale: callier)
         let ratio = SIMD3((0..<3).map {
             log10(max(energy[$0], 1e-12) / max(mid.referenceEnergy[$0], 1e-12))

@@ -50,6 +50,7 @@ extension EditState {
         "grade": .lightGrade,
         "paper": .printPaper, "paperFollowsStock": .printPaper, "printFrame": .printPaper,
         "negativeViewing": .printPaper, "digitalReference": .printPaper, "printLightKelvin": .printPaper,
+        "printSurface": .printPaper,
         "enlarger": .printLamp, "printerProfile": .printLamp,
         "rotation": .frameGeometry, "crop": .frameGeometry, "cornerCrop": .frameGeometry,
         "selective": .frameLocal,

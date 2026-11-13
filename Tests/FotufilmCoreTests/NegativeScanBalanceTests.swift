@@ -75,9 +75,12 @@ final class NegativeScanBalanceTests: XCTestCase {
             NegativeScanModel(stock: stock, setup: known).weights(separation: 1))
     }
 
-    /// Without a roll's contrast the neutral scales red and blue onto the film's grey scale:
-    /// no exposure is added, and the clear film stays the film's base.
-    func testWithoutARollsContrastTheNeutralScalesEachRecord() throws {
+    /// Even on a single frame without a roll, the neutral balances by shifting exposure along
+    /// each record's characteristic curve rather than warping its gamma, holding greys down the
+    /// toe while keeping clear film at the stock's base. When the frame also measures its own
+    /// tonal steps, regularized contrast calibration brings drifted record steepness closer to
+    /// the film's grey scale.
+    func testASingleFrameBalancesByExposureAndRegularizesMeasuredSlopes() throws {
         let stock = try stock("gold200")
         let model = NegativeScanModel(stock: stock, setup: setup)
         let highlight = NegativeScanModel.density(stock: stock, logExposure: 0.6, shift: cast)
@@ -85,10 +88,10 @@ final class NegativeScanBalanceTests: XCTestCase {
         let balance = ApproximateNegativeScan.balance(
             stock: stock, setup: setup, separation: 1, mode: .frame,
             tones: .init(denseEnd: neutral))
-        XCTAssertEqual(balance.exposure, .zero)
-        XCTAssertEqual(balance.gains.y, 1)
-        XCTAssertLessThan(balance.gains.x, 0.97)
-        XCTAssertGreaterThan(balance.gains.z, 1.03)
+        XCTAssertEqual(balance.gains, .one)
+        XCTAssertEqual(balance.exposure.y, 0)
+        XCTAssertEqual(balance.exposure.x, -cast.x, accuracy: 0.05)
+        XCTAssertEqual(balance.exposure.z, -cast.z, accuracy: 0.05)
         let reading = try reading(stock, model, balance)
         let read = try XCTUnwrap(reading.density(of: model.sample(density: highlight)))
         let expected = grey(stock, green: read.y)
@@ -97,10 +100,22 @@ final class NegativeScanBalanceTests: XCTestCase {
         for record in 0..<3 {
             XCTAssertEqual(clear[record], stock.curves[record].dMin, accuracy: 1e-5)
         }
+        // Unlike scaling densities by a gain, the single-frame exposure balance holds down into
+        // the toe without mid-tone/shadow colour crossover.
+        for exposure in stride(from: Float(-1.8), through: 0.6, by: 0.3) {
+            let film = NegativeScanModel.density(stock: stock, logExposure: exposure, shift: cast)
+            let sampleRead = try XCTUnwrap(reading.density(of: model.sample(density: film)))
+            let target = grey(stock, green: sampleRead.y)
+            for record in [0, 2] {
+                XCTAssertLessThan(abs(sampleRead[record] - target[record]), 0.04,
+                                  "\(exposure) \(record)")
+            }
+        }
+
         // Film whose records are steeper or flatter than the model has them, as age and
-        // development leave them, is held on the grey scale between the clear film and the
-        // neutral all the same; left unscaled, its mid-tones are off colour by several times
-        // as much.
+        // development leave them, is brought back toward the grey scale when the frame measures
+        // its own tonal steps, regularized toward one so noisy single-frame steps cannot swing
+        // contrast wildly.
         let steepness = SIMD3<Float>(0.75, 1, 1.25)
         func developed(_ exposure: Float) -> [Float] {
             let film = NegativeScanModel.density(stock: stock, logExposure: exposure)
@@ -108,25 +123,31 @@ final class NegativeScanBalanceTests: XCTestCase {
                 stock.curves[$0].dMin + steepness[$0] * (film[$0] - stock.curves[$0].dMin)
             }
         }
+        let low = try XCTUnwrap(model.scannerDensity(density: developed(-0.6)))
         let top = try XCTUnwrap(model.scannerDensity(density: developed(0.6)))
-        let off = ApproximateNegativeScan.balance(
-            stock: stock, setup: setup, separation: 1, mode: .frame, tones: .init(denseEnd: top))
-        let held = try self.reading(stock, model, off)
-        let unscaled = try ApproximateNegativeScan(stock: stock, border: model.clear,
-                                                   weights: off.weights)
+        let rise = top - low
+        let frameSlopes = SIMD2(rise.x / rise.y, rise.z / rise.y)
+        let stepped = ApproximateNegativeScan.balance(
+            stock: stock, setup: setup, separation: 1, mode: .frame,
+            tones: .init(denseEnd: top, slopes: frameSlopes))
+        XCTAssertGreaterThan(stepped.gains.x, 1.05)
+        XCTAssertLessThan(stepped.gains.z, 0.95)
+        let held = try self.reading(stock, model, stepped)
+        let unstepped = try self.reading(stock, model, ApproximateNegativeScan.balance(
+            stock: stock, setup: setup, separation: 1, mode: .frame, tones: .init(denseEnd: top)))
         var worst: Float = 0, left: Float = 0
         for exposure in stride(from: Float(-0.9), through: 0.6, by: 0.3) {
             let scan = model.sample(density: developed(exposure))
             let read = try XCTUnwrap(held.density(of: scan))
-            let plain = try XCTUnwrap(unscaled.density(of: scan))
+            let plain = try XCTUnwrap(unstepped.density(of: scan))
             let expected = grey(stock, green: read.y), plainExpected = grey(stock, green: plain.y)
             for record in [0, 2] {
                 worst = max(worst, abs(read[record] - expected[record]))
                 left = max(left, abs(plain[record] - plainExpected[record]))
             }
         }
-        XCTAssertLessThan(worst, 0.06)
-        XCTAssertGreaterThan(left, 3 * worst)
+        XCTAssertLessThan(worst, 0.08)
+        XCTAssertGreaterThan(left, 1.8 * worst)
     }
 
     /// The film's grey of the exposure `green` density reads.
@@ -265,16 +286,16 @@ final class NegativeScanBalanceTests: XCTestCase {
         XCTAssertNil(balance(.init(denseEnd: flat)).highlightStops)
         XCTAssertEqual(balance(.init()).exposure, .zero)
         XCTAssertEqual(balance(.init(denseEnd: SIMD3(.nan, 1, 1))).exposure, .zero)
-        // Without a roll's contrast the same frames are left unscaled, and a wild one is scaled
-        // no further than a record can plausibly be off by.
-        func scaled(_ tones: ApproximateNegativeScan.Tones) -> SIMD3<Float> {
+        // Without a roll's contrast a single frame likewise leaves unreadable frames alone and
+        // clamps wild exposures to the range a reading takes.
+        func single(_ tones: ApproximateNegativeScan.Tones) -> ApproximateNegativeScan.Balance {
             ApproximateNegativeScan.balance(stock: stock, setup: setup, separation: 1,
-                                            mode: .frame, tones: tones).gains
+                                            mode: .frame, tones: tones)
         }
-        XCTAssertEqual(scaled(.init(denseEnd: flat)), .one)
-        XCTAssertEqual(scaled(.init()), .one)
-        XCTAssertEqual(scaled(.init(denseEnd: SIMD3(0.1, 0.8, 3.6))).z,
-                       ApproximateNegativeScan.gainRange.lowerBound)
+        XCTAssertEqual(single(.init(denseEnd: flat)).exposure, .zero)
+        XCTAssertEqual(single(.init()).exposure, .zero)
+        XCTAssertEqual(single(.init(denseEnd: SIMD3(0.1, 0.8, 3.6))).exposure.z,
+                       ApproximateNegativeScan.exposureRange.lowerBound)
         // An exposure stops at the range a reading takes, and a record the neutral reads no
         // density of has no exposure to be placed at.
         let wild = balance(.init(denseEnd: SIMD3(0.1, 1.2, 3)))
@@ -345,14 +366,15 @@ final class NegativeScanBalanceTests: XCTestCase {
         let own = ApproximateNegativeScan.balance(
             stock: stock, setup: setup, separation: 1, mode: .frame,
             tones: .init(denseEnd: SIMD3(0.62 * 1.1, 1.1, 1.2 * 1.1)))
-        // A roll kept without its tonal steps scales the records, as a frame's own neutral does.
-        XCTAssertEqual(rolled.exposure, .zero)
-        XCTAssertEqual(rolled.gains, own.gains)
-        XCTAssertNotEqual(rolled.gains, .one)
+        // A roll kept without its tonal steps balances by exposure at the frame's green level,
+        // just as a frame's own neutral does.
+        XCTAssertEqual(rolled.gains, .one)
+        XCTAssertEqual(rolled.exposure, own.exposure)
+        XCTAssertNotEqual(rolled.exposure, .zero)
         // A frame that cannot be read has no level to take the roll's colour at.
         XCTAssertEqual(ApproximateNegativeScan.balance(
-            stock: stock, setup: setup, separation: 1, mode: .roll, tones: .init(), roll: old).gains,
-            .one)
+            stock: stock, setup: setup, separation: 1, mode: .roll, tones: .init(), roll: old).exposure,
+            .zero)
     }
 
     func testARollsContrastHoldsWhicheverNeutralBalancesTheFrame() throws {

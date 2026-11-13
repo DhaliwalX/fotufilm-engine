@@ -1276,7 +1276,8 @@ public struct FilmEngineInvocation {
                                   sceneHighlightStops: labScanReading ? options.sceneHighlightStops : nil,
                                   sceneMedianStops: options.sceneToneStops?.x,
                                   exposureEV: options.exposureEV,
-                                  scanExposure: options.screenExposureEV, keys: options.screenCMY)
+                                  scanExposure: options.screenExposureEV, keys: options.screenCMY,
+                                  reexposesFilm: options.stage.readsScene)
             : .identity
         let filmCurves = labScanSetup.curves(for: stock)
         let levels: (scale: SIMD3<Float>, shift: SIMD3<Float>)
@@ -1821,6 +1822,7 @@ public struct FilmEngineInvocation {
                 for: stock, paper: printMedium,
                 bleachBypass: options.bleachBypass,
                 printViewingKelvin: options.printViewingKelvin,
+                printSurface: options.printSurface,
                 callier: callier, printer: printer, printerLights: printerLights,
                 digitalReference: options.digitalReference,
                 screenGrade: options.screenGrade, screenExposureEV: options.screenExposureEV,
@@ -1829,6 +1831,7 @@ public struct FilmEngineInvocation {
                 for: stock, paper: printMedium,
                 bleachBypass: options.bleachBypass,
                 printViewingKelvin: options.printViewingKelvin,
+                printSurface: options.printSurface,
                 callier: callier, printer: printer, printerLights: printerLights,
                 digitalReference: options.digitalReference,
                 screenGrade: options.screenGrade, screenExposureEV: options.screenExposureEV,

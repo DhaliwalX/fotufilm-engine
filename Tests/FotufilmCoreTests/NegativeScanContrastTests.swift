@@ -122,10 +122,11 @@ final class NegativeScanContrastTests: XCTestCase {
             }
         }
         let highlight = try XCTUnwrap(model.scannerDensity(density: developed(0.6)))
-        func worst(_ roll: ApproximateNegativeScan.RollBalance?) throws -> Float {
+        func worst(_ roll: ApproximateNegativeScan.RollBalance?,
+                   slopes: SIMD2<Float>? = nil) throws -> Float {
             let balance = ApproximateNegativeScan.balance(
                 stock: stock, setup: setup, separation: 1, mode: .frame,
-                tones: .init(denseEnd: highlight), roll: roll)
+                tones: .init(denseEnd: highlight, slopes: slopes), roll: roll)
             let reading = try ApproximateNegativeScan(
                 stock: stock, border: model.clear, gains: balance.gains, exposure: balance.exposure,
                 weights: balance.weights)
@@ -139,9 +140,10 @@ final class NegativeScanContrastTests: XCTestCase {
             return worst
         }
         XCTAssertLessThan(try worst(roll), 0.04)
-        // Without the roll the frame's own neutral scales the records, which holds these greys
-        // nearly as well; the roll's contrast frees the neutral to set an exposure.
-        XCTAssertLessThan(try worst(nil), 0.06)
+        // Regularized single-frame slopes bring the greys close on their own, whereas with no
+        // measured slopes at all the drifted records drift off colour down the scale.
+        XCTAssertLessThan(try worst(nil, slopes: measures[0].slopes), 0.06)
+        XCTAssertGreaterThan(try worst(nil), 2 * (try worst(roll)))
     }
 
     func testContrastStaysInsideWhatARollCanBe() throws {

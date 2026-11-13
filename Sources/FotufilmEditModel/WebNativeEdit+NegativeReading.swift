@@ -58,9 +58,10 @@ extension WebNativeEdit.Negative {
     }
 
     /// The frame's tones over `border` net of the scan's stray light, `flare`: its densest end
-    /// as measured, and the neutral picked on it, each the scan channels' densities over the
-    /// clear film.
+    /// as measured, the neutral picked on it, and the rises across its tonal steps, each in the
+    /// scan channels' densities over the clear film.
     public func tones(border: SIMD3<Float>, denseEnd: SIMD3<Float>?,
+                      slopes: SIMD2<Float>? = nil,
                       flare: SIMD3<Float> = .zero) -> ApproximateNegativeScan.Tones {
         let picked = neutral.flatMap { neutral -> SIMD3<Float>? in
             guard neutral.count == 3,
@@ -75,15 +76,15 @@ extension WebNativeEdit.Negative {
             }
             return density
         }
-        return .init(denseEnd: denseEnd, picked: picked)
+        return .init(denseEnd: denseEnd, picked: picked, slopes: slopes)
     }
 
     /// The frame's balance read as `stock`: `denseEnd` is its own densest end over `border`
-    /// (`ApproximateNegativeScan.denseEnd(border:preview:)`), before any roll's colour, both net
-    /// of the scan's stray light, `flare`, which `border` here still carries; `source` is what
-    /// the scan's file says of its camera.
+    /// (`ApproximateNegativeScan.denseEnd(border:preview:)`), before any roll's colour, and
+    /// `slopes` the rises across its tonal steps, both net of the scan's stray light, `flare`,
+    /// which `border` here still carries; `source` is what the scan's file says of its camera.
     public func balance(stock: FilmStock, border: SIMD3<Float>, denseEnd: SIMD3<Float>?,
-                        source: NegativeScanCapture? = nil,
+                        slopes: SIMD2<Float>? = nil, source: NegativeScanCapture? = nil,
                         flare: SIMD3<Float> = .zero) -> ApproximateNegativeScan.Balance {
         guard readsModel else {
             return ApproximateNegativeScan.balance(
@@ -93,13 +94,14 @@ extension WebNativeEdit.Negative {
         return ApproximateNegativeScan.balance(
             stock: stock, setup: setup(source: source), separation: separation,
             mode: balance ?? .frame,
-            tones: tones(border: border, denseEnd: denseEnd, flare: flare), roll: roll)
+            tones: tones(border: border, denseEnd: denseEnd, slopes: slopes, flare: flare),
+            roll: roll)
     }
 
     /// The frame read without a film, as Normal reads a negative. Arguments as
-    /// `balance(stock:border:denseEnd:source:flare:)`.
+    /// `balance(stock:border:denseEnd:slopes:source:flare:)`.
     public func plain(border: SIMD3<Float>, denseEnd: SIMD3<Float>?,
-                      source: NegativeScanCapture? = nil,
+                      slopes: SIMD2<Float>? = nil, source: NegativeScanCapture? = nil,
                       flare: SIMD3<Float> = .zero) -> PlainNegativeScan {
         guard readsModel else {
             return PlainNegativeScan(
@@ -109,8 +111,8 @@ extension WebNativeEdit.Negative {
         return PlainNegativeScan(
             border: border, setup: setup(source: source), separation: separation,
             mode: balance ?? .frame,
-            tones: tones(border: border, denseEnd: denseEnd, flare: flare), roll: roll,
-            flare: flare)
+            tones: tones(border: border, denseEnd: denseEnd, slopes: slopes, flare: flare),
+            roll: roll, flare: flare)
     }
 
     /// Everything of the edit a reading turns on, for keeping one made before: two edits with

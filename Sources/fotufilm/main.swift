@@ -245,7 +245,10 @@ if let scanPath = flags["--suggest-film"] {
                  reading.measuresDensity ? "" : reading.lamp == nil
                     ? " (colour only, against the scan's white balance)"
                     : " (colour only, against the light shown in the frame)"))
-    for suggestion in NegativeFilmSuggestions(stocks: FilmStock.presets).suggest(reading) {
+    let scanSetup = (try? Data(contentsOf: URL(fileURLWithPath: scanPath)))
+        .map { NegativeScanImport.source(data: $0, identifierHint: scanPath).setup(light: .white) }
+        ?? NegativeScanSetup(light: .white)
+    for suggestion in NegativeFilmSuggestions(stocks: FilmStock.presets, setup: scanSetup).suggest(reading) {
         let names = suggestion.films.map { "\($0.name) (\($0.id))" }.joined(separator: ", ")
         print(String(format: "%5.1f%%  ", suggestion.likelihood * 100) + names)
     }

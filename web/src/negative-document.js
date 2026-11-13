@@ -136,7 +136,11 @@ export const readsModel = (negative) => (negative?.reading ?? 1) >= 2;
 // over the clear film past which the scan prints black) and what the scan's file says of its camera
 // (`source`). The first reading takes the frame's densest end on its roll's colour; the current
 // one takes the frame's own and the roll beside it.
-export function readingRequest(negative, { border, dense, flare = null, holder = null }, source = null) {
+export function readingRequest(
+  negative,
+  { border, dense, slopes = null, flare = null, holder = null },
+  source = null,
+) {
   if (!readsModel(negative))
     return {
       border,
@@ -150,6 +154,11 @@ export function readingRequest(negative, { border, dense, flare = null, holder =
   return {
     border,
     denseEnd: dense,
+    ...(Array.isArray(slopes) &&
+    slopes.length === 2 &&
+    slopes.every((v) => Number.isFinite(v) && v > 0)
+      ? { slopes }
+      : {}),
     ...kept,
     ...(flare?.some((v) => v > 0) ? { strayLight: flare } : {}),
     ...(Number.isFinite(holder) ? { holder } : {}),

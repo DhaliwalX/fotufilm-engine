@@ -248,7 +248,7 @@ extension HostService {
             handle: handle)
         descriptor["handle"] = handle
         descriptor["negative"] = [
-            "suggestions": negativeFilmSuggestions(image),
+            "suggestions": negativeFilmSuggestions(image, source: source),
             "lightFrames": lights.all().map { ["id": $0.id, "name": $0.name] },
             "reading": WebNativeEdit.Negative.currentReading,
             "camera": Self.readCamera(source),
@@ -343,8 +343,10 @@ extension HostService {
     }
 
     /// Up to three readings of the film base, each naming the films it could be.
-    func negativeFilmSuggestions(_ image: HostImage) -> [[String: Any]] {
-        let catalogue = NegativeFilmSuggestions(stocks: FilmStock.presets)
+    func negativeFilmSuggestions(_ image: HostImage,
+                                 source: NegativeScanCapture? = nil) -> [[String: Any]] {
+        let setup = (source ?? NegativeScanCapture()).setup(light: .white)
+        let catalogue = NegativeFilmSuggestions(stocks: FilmStock.presets, setup: setup)
         let suggestions = NegativeFilmSuggestions.read(preview: HostNegativeScan.preview(image))
             .map { catalogue.suggest($0, limit: 3) } ?? []
         return suggestions.map { suggestion in

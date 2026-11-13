@@ -84,6 +84,7 @@ const separationFields = [
 /// The print's or the screen conversion's own controls.
 const printAdjustFields = [
   'printLight',
+  'printSurface',
   'printCorrection',
   'printerRed',
   'printerGreen',

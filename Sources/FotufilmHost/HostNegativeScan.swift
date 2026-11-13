@@ -110,7 +110,8 @@ final class HostNegativeScan {
         return try NegativeScanPrint.Reading(
             stock: stock, border: read.border,
             balance: negative.balance(stock: stock, border: read.border,
-                                      denseEnd: read.measure.denseEnd, source: source,
+                                      denseEnd: read.measure.denseEnd,
+                                      slopes: read.measure.slopes, source: source,
                                       flare: read.flare),
             flare: read.flare, holder: read.holder)
     }
@@ -186,7 +187,7 @@ final class HostNegativeScan {
         let positive = try prepared(
             light: id.flatMap(lightFrame),
             plain: negative.plain(border: read.border, denseEnd: read.measure.denseEnd,
-                                  source: source, flare: read.flare))
+                                  slopes: read.measure.slopes, source: source, flare: read.flare))
         lock.withLock { plain = (plainKey, positive) }
         return positive
     }

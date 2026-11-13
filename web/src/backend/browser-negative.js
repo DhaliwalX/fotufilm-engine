@@ -85,7 +85,12 @@ function loadNegativeFilms() {
   negativeFilms ??= loadStockIndex().then((stocks) =>
     stocks
       .filter((stock) => stock.profile.filmBase)
-      .map(({ id, name, profile }) => ({ id, name, base: profile.filmBase })),
+      .map(({ id, name, profile }) => ({
+        id,
+        name,
+        base: profile.filmBase,
+        ...(profile.filmBaseSpectrum ? { spectrum: profile.filmBaseSpectrum } : {}),
+      })),
   );
   return negativeFilms.catch((error) => {
     negativeFilms = null;
@@ -99,7 +104,13 @@ async function suggestNegativeFilms(image) {
   const films = await loadNegativeFilms();
   const preview = scanPreview(image);
   if (!preview) return { suggestions: [], base: null };
-  const bytes = await loadFilmProfile({ kind: "negative-film", ...preview, films });
+  const source = scanSourceOf(image);
+  const bytes = await loadFilmProfile({
+    kind: "negative-film",
+    ...preview,
+    films,
+    ...(source ? { source } : {}),
+  });
   const names = new Map(films.map((film) => [film.id, film.name]));
   const read = JSON.parse(new TextDecoder().decode(bytes));
   return {

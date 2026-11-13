@@ -220,6 +220,7 @@ public enum EngineBinding: Equatable, Sendable {
     case labScanDodging
     case labScanLook
     case enlargerIndex
+    case printSurfaceIndex
     case whiteBalanceKelvin
     case whiteBalanceDuv
     case halationScale
@@ -287,6 +288,7 @@ public enum EngineBinding: Equatable, Sendable {
         case .labScanDodging: return ["labScanDodging"]
         case .labScanLook: return ["labScanLook"]
         case .enlargerIndex: return ["enlarger"]
+        case .printSurfaceIndex: return ["printSurface"]
         case .whiteBalanceKelvin, .whiteBalanceDuv: return ["whiteBalance"]
         case .halationScale: return ["halationScale"]
         case .cameraPreflash: return ["cameraPreflash"]
@@ -437,6 +439,10 @@ public enum EngineBinding: Equatable, Sendable {
         case .enlargerIndex:
             if let index = value.choice, Enlarger.allCases.indices.contains(index) {
                 options.enlarger = Enlarger.allCases[index]
+            }
+        case .printSurfaceIndex:
+            if let index = value.choice, PrintSurface.allCases.indices.contains(index) {
+                options.printSurface = PrintSurface.allCases[index]
             }
         case .whiteBalanceKelvin:
             if let number = value.number { options.whiteBalance.kelvin = Float(number) }

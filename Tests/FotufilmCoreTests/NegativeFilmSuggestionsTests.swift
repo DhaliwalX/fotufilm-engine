@@ -72,4 +72,19 @@ final class NegativeFilmSuggestionsTests: XCTestCase {
     func testAScanWithNoLightReadsNothing() {
         XCTAssertNil(NegativeFilmSuggestions.read(preview: ImageBuffer(width: 8, height: 8)))
     }
+
+    func testSetupAwareSuggestionsPredictBasesThroughCameraAndDecoderMatrix() throws {
+        let setup = NegativeScanSetup(
+            light: .white, camera: .profile("sony-ilce-7cm2"), kelvin: 5200,
+            matrix: [SIMD3(1.35, -0.2, -0.15), SIMD3(-0.05, 1.55, -0.5), SIMD3(0.02, -0.32, 1.3)])
+        let aware = NegativeFilmSuggestions(stocks: FilmStock.presets, setup: setup)
+        let colour = aware.films.filter { $0.base.max() - $0.base.min() > 0.1 }
+        XCTAssertFalse(colour.isEmpty)
+        for film in colour {
+            let stock = try XCTUnwrap(FilmStock.presets[film.id])
+            let clear = NegativeScanModel(stock: stock, setup: setup).clear
+            let ranked = aware.suggest(.init(border: clear), limit: 3)
+            XCTAssertTrue(ranked.contains { $0.films.contains(film) }, film.id)
+        }
+    }
 }
