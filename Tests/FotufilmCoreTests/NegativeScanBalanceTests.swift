@@ -36,10 +36,11 @@ final class NegativeScanBalanceTests: XCTestCase {
                      slopes: [rise.x / rise.y, rise.z / rise.y])
     }
 
-    /// A camera nobody measured under a lamp of unknown spectrum is a guess at how strongly a
-    /// channel reads a dye. The reading then keeps the scan's own density of green as the
-    /// film's, as an earlier reading did, where a known setup takes the model's.
-    func testASetupWhoseScaleIsNotKnownKeepsTheScansOwnDensity() throws {
+    /// A camera nobody measured is read as the median sensor. Under a broad lamp, a white LED
+    /// panel or a halogen lamp, its fit's density scale is close enough to the film's to keep, as
+    /// a known setup's is. Under a screen, whose emitters differ between panels, the reading
+    /// keeps the scan's own density of green as the film's, as an earlier reading did.
+    func testAnUnmeasuredCameraKeepsTheFitsScaleUnderABroadLamp() throws {
         let stock = try stock("gold200")
         typealias Setup = NegativeScanSetup
         XCTAssertTrue(Setup(light: .white, camera: .profile("sony-ilce-7cm2")).knowsScale)
@@ -49,30 +50,57 @@ final class NegativeScanBalanceTests: XCTestCase {
             XCTAssertFalse(Setup(light: light, camera: .generic).knowsScale)
         }
         XCTAssertFalse(Setup(light: .white, camera: .profile("no-such-camera")).knowsScale)
+        for light in [NegativeScanCrosstalk.Light.white, .halogen] {
+            XCTAssertTrue(Setup(light: light, camera: .generic).keepsFittedScale)
+            XCTAssertTrue(Setup(light: light, camera: .profile("no-such-camera")).keepsFittedScale)
+        }
+        XCTAssertFalse(Setup(light: .screen, camera: .generic).keepsFittedScale)
+        XCTAssertFalse(Setup(light: .screen, camera: .profile("no-such-camera")).keepsFittedScale)
+        XCTAssertTrue(Setup(light: .screen, camera: .scanner).keepsFittedScale)
+        XCTAssertTrue(Setup(light: .screen, camera: .profile("sony-ilce-7cm2")).keepsFittedScale)
 
-        let guessed = Setup(light: .white, camera: .generic)
-        let model = NegativeScanModel(stock: stock, setup: guessed)
+        func weights(_ setup: Setup, _ separation: Float) throws -> [SIMD3<Float>] {
+            try XCTUnwrap(ApproximateNegativeScan.balance(
+                stock: stock, setup: setup, separation: separation, mode: .none,
+                tones: .init()).weights)
+        }
+        // A screen: the fit over what its green record reads of its own channel.
+        let screen = Setup(light: .screen, camera: .generic)
+        let model = NegativeScanModel(stock: stock, setup: screen)
         let fitted = model.weights(separation: 0), full = model.weights(separation: 1)
-        XCTAssertGreaterThan(fitted[1].y, 1.15)
+        XCTAssertGreaterThan(fitted[1].y, 1.02)
         for separation: Float in [0, 1] {
-            let balance = ApproximateNegativeScan.balance(
-                stock: stock, setup: guessed, separation: separation, mode: .none, tones: .init())
-            let weights = try XCTUnwrap(balance.weights)
+            let read = try weights(screen, separation)
             let expected = separation == 0 ? fitted : full
             for record in 0..<3 { for channel in 0..<3 {
-                XCTAssertEqual(weights[record][channel], expected[record][channel] / fitted[1].y,
+                XCTAssertEqual(read[record][channel], expected[record][channel] / fitted[1].y,
                                accuracy: 1e-6)
             } }
         }
         // With the dyes unseparated, green reads the density its channel does.
-        let own = try XCTUnwrap(ApproximateNegativeScan.balance(
-            stock: stock, setup: guessed, separation: 0, mode: .none, tones: .init()).weights)
-        XCTAssertEqual(own[1], SIMD3(0, 1, 0))
-        // A known setup takes the fit as it is.
-        let known = Setup(light: .white, camera: .profile("sony-ilce-7cm2"))
-        XCTAssertEqual(ApproximateNegativeScan.balance(
-            stock: stock, setup: known, separation: 1, mode: .none, tones: .init()).weights,
-            NegativeScanModel(stock: stock, setup: known).weights(separation: 1))
+        XCTAssertEqual(try weights(screen, 0)[1], SIMD3(0, 1, 0))
+        // A broad lamp and a known setup take the fit as it is.
+        for setup in [Setup(light: .white, camera: .generic), Setup(light: .halogen, camera: .generic),
+                      Setup(light: .white, camera: .profile("sony-ilce-7cm2"))] {
+            let model = NegativeScanModel(stock: stock, setup: setup)
+            for separation: Float in [0, 1] {
+                XCTAssertEqual(try weights(setup, separation), model.weights(separation: separation))
+            }
+        }
+        // So a grey the film made reads the density that made it, where the scan's own green
+        // reads it low.
+        let white = Setup(light: .white, camera: .generic)
+        let whiteModel = NegativeScanModel(stock: stock, setup: white)
+        XCTAssertGreaterThan(whiteModel.weights(separation: 0)[1].y, 1.1)
+        let grey = NegativeScanModel.density(stock: stock, logExposure: 0.3)
+        let scan = try XCTUnwrap(whiteModel.scannerDensity(density: grey))
+        for separation: Float in [0, 1] {
+            let read = NegativeScanCrosstalk.apply(try weights(white, separation), scan)
+            for record in 0..<3 {
+                XCTAssertEqual(read[record], grey[record] - stock.curves[record].dMin,
+                               accuracy: 0.04, "\(separation) \(record)")
+            }
+        }
     }
 
     /// Even on a single frame without a roll, the neutral balances by shifting exposure along

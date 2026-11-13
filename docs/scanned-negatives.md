@@ -138,9 +138,13 @@ in one place (`WebNativeEdit.Negative.balance`, `.plain` and `.strayLight`):
   channel each say how much density a channel reads of a dye (`NegativeScanSetup.knowsScale`).
   A camera nobody measured is modelled with the median spectral sensitivity of the bundled Bayer
   CMOS cameras (`NegativeScanSetup.genericCMOSProfile`), balanced on the lamp and mapped to
-  Rec. 2020: that predicts dye cross-talk closely enough for full Colour Separation by default,
-  though an unmeasured lamp's red end still leaves overall channel scale uncertain, so the
-  reading keeps the scan's own density of green as the film's.
+  Rec. 2020: that predicts dye cross-talk closely enough for full Colour Separation by default.
+  Under a white LED panel or a halogen lamp it also reads a grey's density closely (green within
+  about 5% of the film's across the bundled cameras, where the scan's own green channel reads it
+  10 to 16% low), so the reading keeps the fit's scale (`NegativeScanSetup.keepsFittedScale`).
+  Screens differ more between panels, so under one the reading keeps the scan's own density of
+  green as the film's. A screen or red, green and blue LEDs read with the light left on White
+  LED Panel read about 15% too steep; set the light the scan was made under.
 - **Stray light.** `flare` is the scan's stray light as a share of the frame's average light, or
   is left to be measured from the holder (`ApproximateNegativeScan.strayLight`): the holder is
   taken to be in view only where the darkest twentieth of the scan lies around its edge, is even

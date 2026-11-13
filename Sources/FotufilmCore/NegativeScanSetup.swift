@@ -56,25 +56,33 @@ public struct NegativeScanSetup: Equatable, Sendable {
         self.matrix = matrix
     }
 
-    /// Whether the model knows the setup well enough to say how much density a scan's channel
-    /// reads of a dye: a measured camera, a film scanner's bands, or LEDs that light one channel
-    /// each. A camera nobody measured under a lamp of unknown spectrum is modelled with the median
-    /// bundled Bayer CMOS sensor (`genericCMOSProfile`), which predicts dye cross-talk far closer
-    /// than colorimetric eye curves yet still leaves overall red/blue scale uncertain: a white
-    /// lamp's red end alone moves that by a third. A reading then keeps the scan's own density of
-    /// green as the film's (`weights(_:knownScale:)`).
+    /// Whether the setup itself is known: a measured camera, a film scanner's bands, or LEDs that
+    /// light one channel each. A camera nobody measured is modelled with the median bundled Bayer
+    /// CMOS sensor (`genericCMOSProfile`), a guess at how its channels overlap.
     public var knowsScale: Bool {
         if light == .rgb || camera == .scanner { return true }
         if case .profile(let id) = camera { return CameraSpectralProfileStore.profile(id: id) != nil }
         return false
     }
 
-    /// A fit's weights as a reading through this setup takes them: as fitted where the setup's
-    /// scale is known, else scaled so a grey's green record reads the density the scan's green
-    /// channel does, `green` being what the fit's green record reads of its own channel alone
-    /// along the greys.
+    /// Whether a reading takes the fit's own density scale as the film's: a known setup
+    /// (`knowsScale`), or a camera nobody measured under a broad lamp, a white LED panel or a
+    /// halogen lamp. Across the bundled cameras, under white LEDs, daylight and halogen, the
+    /// median sensor's fit reads a grey's green density within about a twentieth of the film's,
+    /// where the scan's own green channel reads it a tenth to a sixth low. Red and blue spread
+    /// wider, most under a warm lamp. A screen's emitters differ between panels by more than
+    /// that, so a reading under one keeps the scan's own density of green as the film's
+    /// (`weights(_:green:)`).
+    public var keepsFittedScale: Bool {
+        knowsScale || light == .white || light == .halogen
+    }
+
+    /// A fit's weights as a reading through this setup takes them: as fitted where the fit's
+    /// scale is kept (`keepsFittedScale`), else scaled so a grey's green record reads the density
+    /// the scan's green channel does, `green` being what the fit's green record reads of its own
+    /// channel alone along the greys.
     public func weights(_ fitted: [SIMD3<Float>], green: Float) -> [SIMD3<Float>] {
-        guard !knowsScale, green.isFinite, green > 0 else { return fitted }
+        guard !keepsFittedScale, green.isFinite, green > 0 else { return fitted }
         return fitted.map { $0 / green }
     }
 
