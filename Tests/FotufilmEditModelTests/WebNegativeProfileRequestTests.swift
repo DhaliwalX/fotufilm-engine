@@ -283,6 +283,36 @@ final class WebNegativeProfileRequestTests: XCTestCase {
         }
     }
 
+    /// The frame's mid-tones time the current reading's print where a small highlight lies far
+    /// over them, and never the first reading's.
+    func testARequestsMidTonesTimeTheCurrentReadingsPrint() throws {
+        let stock = try printed("gold200")
+        let border = SIMD3<Float>(0.4, 0.6, 0.2), dense = SIMD3<Float>(1.6, 1.5, 1.4)
+        let midtone = SIMD3<Float>(0.1, 0.1, 0.1)
+        let edit = WebNativeEdit.Negative(reading: 2)
+        let timed = edit.balance(stock: stock, border: border, denseEnd: dense, midtone: midtone)
+        let alone = edit.balance(stock: stock, border: border, denseEnd: dense)
+        XCTAssertEqual(timed.highlightStops, ApproximateNegativeScan.diffuseWhiteStops)
+        XCTAssertGreaterThan(try XCTUnwrap(alone.highlightStops), try XCTUnwrap(timed.highlightStops))
+        XCTAssertEqual(timed.exposure, alone.exposure)
+
+        let (_, options) = try JSONDecoder().decode(WebProfileRequest.self, from: profile(
+            denseEnd: [1.6, 1.5, 1.4], reading: ["reading": 2, "midtone": [0.1, 0.1, 0.1]]))
+            .configured()
+        XCTAssertEqual(options.scanReading, try NegativeScanPrint.Reading(
+            stock: stock, border: border, balance: timed).calibration)
+
+        let (_, first) = try JSONDecoder().decode(WebProfileRequest.self, from: profile(
+            denseEnd: [1.6, 1.5, 1.4], reading: ["midtone": [0.1, 0.1, 0.1]])).configured()
+        let (_, plain) = try JSONDecoder().decode(
+            WebProfileRequest.self, from: profile(denseEnd: [1.6, 1.5, 1.4])).configured()
+        XCTAssertEqual(first.scanReading, plain.scanReading)
+        for invalid: [Double] in [[0.1, 0.1], [0.1, 0.1, 0.1, 0.1]] {
+            XCTAssertThrowsError(try WebRenderRequest.prepare(
+                profile(reading: ["reading": 2, "midtone": invalid])), "\(invalid)")
+        }
+    }
+
     func testRejectsAReadingTheEditCouldNotKeep() throws {
         let invalid: [[String: Any]] = [
             ["reading": 0], ["reading": 2, "neutral": [0.05, 0.06]],

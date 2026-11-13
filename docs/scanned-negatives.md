@@ -164,6 +164,17 @@ in one place (`WebNativeEdit.Negative.balance`, `.plain` and `.strayLight`):
   on the straight line. That density is no more than the neutral itself is off: a neutral on the
   film's shoulder, where the curve is flat, would otherwise ask for a much longer exposure and
   tint the tones below it.
+- **The densest end and the print's timing.** The frame's densest end is one set of pixels: the
+  hundredth of the framed picture densest in its thinnest channel, each channel read at their
+  median (`ApproximateNegativeScan.denseEnd`). A saturated colour is thin in one channel, so a
+  yellow flower in the sun cannot lend its red and green to a neutral whose blue comes from
+  somewhere else. The print is timed where that end lies on the film's green curve, unless it
+  lies more than four stops over the frame's mid-tones, the framed picture's mean density
+  (`ApproximateNegativeScan.midtone`): a lamp or a window in a dark room is then no white to
+  time on, and the print is timed four stops over the mid-tones, never lighter than a diffuse
+  white prints as white (`ApproximateNegativeScan.timedHighlight`). An edit saved with the
+  first reading keeps each channel's own densest half percent
+  (`ApproximateNegativeScan.channelEnds`) and is timed on it alone.
 - **The clear film and the holder.** Until clear film is picked it is estimated: the brightest
   of the scan, or where the scan shows its bare light through sprocket holes or around a strip,
   the film's base under that light (`ApproximateNegativeScan.estimatedFilmBase`). A holder the
@@ -190,17 +201,18 @@ Three further steps were measured and left out. Reading a camera's own channels 
 decoder's matrix read the model's colours worse, not better, and carries more of the scan's
 noise. A table solving the three dyes exactly gains no more than the fit's own few hundredths of
 a density. Keeping the fine detail on one channel per record lowers fine-detail noise by a few
-percent on real camera scans, for a spatial filter in every kernel. A neutral estimated jointly
-across the channels was no better than each channel's densest end on real frames.
+percent on real camera scans, for a spatial filter in every kernel.
 
 The browser profile protocol's film request takes
 `negative: {border, denseEnd, light, crosstalk, scanLight}`, and for the current reading also
-`reading`, `camera`, `balance`, `neutral`, `roll`, `strayLight` (the stray light the browser
-resolved, as linear scan RGB) and `source` (what the RAW decoder says of the scan's camera,
+`reading`, `camera`, `balance`, `neutral`, `roll`, `midtone` (the framed picture's mid-tones,
+`ApproximateNegativeScan.midtone`), `strayLight` (the stray light the browser resolved, as
+linear scan RGB) and `source` (what the RAW decoder says of the scan's camera,
 white and matrix). The browser's builder carries no measured cameras, so the request brings the
 record of the camera its scan names (`cameraProfile`). The first reading's fields are
 the clear film as three linear scan values, the framed picture's densest end
-(`ApproximateNegativeScan.denseEnd`, or nothing for a frame too small to read), the edit's
+(`ApproximateNegativeScan.channelEnds`, and `denseEnd` for the current reading, or nothing for
+a frame too small to read), the edit's
 `ev`, `temperature` and `tint`, which the enlarger or the scan takes, and the crosstalk correction
 and the light it is computed for (0 and `white` when absent). It prepares the print
 profile `NegativeScanPrint.Reading.printing` describes, which enters the WebGPU or SIMD renderer
@@ -337,7 +349,9 @@ runs along a straight line. Every photo control then applies; no print simulatio
 
 Those densities then take the print exactly as a simulated negative does: every output
 medium, lamp, screen conversion and print frame applies, and an enlarged paper is timed
-to the negative's density, as a lab times each frame. Development and grain act before the
+to the negative's density, as a lab times each frame: on the frame's highlights, or four
+stops over its mid-tones where a lamp, a window or the sun's glint is all that is brighter.
+Development and grain act before the
 negative existed and do not apply. Crop, rotation and straightening are the editor's own and
 are saved with the edit; the scan itself is never changed.
 

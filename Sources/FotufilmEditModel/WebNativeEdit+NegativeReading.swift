@@ -58,10 +58,10 @@ extension WebNativeEdit.Negative {
     }
 
     /// The frame's tones over `border` net of the scan's stray light, `flare`: its densest end
-    /// as measured, the neutral picked on it, and the rises across its tonal steps, each in the
-    /// scan channels' densities over the clear film.
+    /// as measured, the neutral picked on it, the rises across its tonal steps and its
+    /// mid-tones, each in the scan channels' densities over the clear film.
     public func tones(border: SIMD3<Float>, denseEnd: SIMD3<Float>?,
-                      slopes: SIMD2<Float>? = nil,
+                      slopes: SIMD2<Float>? = nil, midtone: SIMD3<Float>? = nil,
                       flare: SIMD3<Float> = .zero) -> ApproximateNegativeScan.Tones {
         let picked = neutral.flatMap { neutral -> SIMD3<Float>? in
             guard neutral.count == 3,
@@ -76,15 +76,18 @@ extension WebNativeEdit.Negative {
             }
             return density
         }
-        return .init(denseEnd: denseEnd, picked: picked, slopes: slopes)
+        return .init(denseEnd: denseEnd, picked: picked, slopes: slopes, midtone: midtone)
     }
 
     /// The frame's balance read as `stock`: `denseEnd` is its own densest end over `border`
-    /// (`ApproximateNegativeScan.denseEnd(border:preview:)`), before any roll's colour, and
-    /// `slopes` the rises across its tonal steps, both net of the scan's stray light, `flare`,
-    /// which `border` here still carries; `source` is what the scan's file says of its camera.
+    /// (`ApproximateNegativeScan.denseEnd(border:preview:)`), before any roll's colour,
+    /// `slopes` the rises across its tonal steps and `midtone` its mid-tones
+    /// (`ApproximateNegativeScan.midtone(border:preview:)`), all net of the scan's stray light,
+    /// `flare`, which `border` here still carries; `source` is what the scan's file says of its
+    /// camera. The first reading times its print on the densest end alone.
     public func balance(stock: FilmStock, border: SIMD3<Float>, denseEnd: SIMD3<Float>?,
-                        slopes: SIMD2<Float>? = nil, source: NegativeScanCapture? = nil,
+                        slopes: SIMD2<Float>? = nil, midtone: SIMD3<Float>? = nil,
+                        source: NegativeScanCapture? = nil,
                         flare: SIMD3<Float> = .zero) -> ApproximateNegativeScan.Balance {
         guard readsModel else {
             return ApproximateNegativeScan.balance(
@@ -94,7 +97,8 @@ extension WebNativeEdit.Negative {
         return ApproximateNegativeScan.balance(
             stock: stock, setup: setup(source: source), separation: separation,
             mode: balance ?? .frame,
-            tones: tones(border: border, denseEnd: denseEnd, slopes: slopes, flare: flare),
+            tones: tones(border: border, denseEnd: denseEnd, slopes: slopes, midtone: midtone,
+                         flare: flare),
             roll: roll)
     }
 

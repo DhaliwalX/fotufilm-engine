@@ -281,8 +281,14 @@ final class HostNegativeScanTests: XCTestCase {
         }
         let first = try prepared([:])
         let measure = try XCTUnwrap(first.negativeMeasure)
-        let dense = try XCTUnwrap(measure["denseEnd"] as? [Double]).map(Float.init)
-        let denseEnd = SIMD3<Float>(dense[0], dense[1], dense[2])
+        let vector = { (measure: [String: Any], key: String) throws -> SIMD3<Float> in
+            let values = try XCTUnwrap(measure[key] as? [Double]).map(Float.init)
+            XCTAssertEqual(values.count, 3)
+            return SIMD3(values[0], values[1], values[2])
+        }
+        // The frame's mid-tones are measured with its densest end, and lie under it.
+        let midtone = try vector(measure, "midtone")
+        XCTAssertLessThan(midtone.y, try vector(measure, "denseEnd").y)
         // The rises across the frame's tonal steps are measured with it, or said to be none.
         let slopes: SIMD2<Float>?
         if let pair = measure["slopes"] as? [Double] {
@@ -308,16 +314,20 @@ final class HostNegativeScanTests: XCTestCase {
             let negative = try JSONDecoder().decode(
                 WebNativeEdit.Negative.self, from: JSONSerialization.data(withJSONObject: edit))
             let read = try prepared(edit)
+            // The first reading keeps its own densest end; each reading says the one it took.
+            let denseEnd = try vector(try XCTUnwrap(read.negativeMeasure), "denseEnd")
             let expected = try NegativeScanPrint.Reading(
                 stock: stock, border: border,
                 balance: negative.balance(stock: stock, border: border, denseEnd: denseEnd,
-                                          slopes: slopes))
+                                          slopes: slopes, midtone: midtone))
             let calibration = try XCTUnwrap(read.edit.negativeReading?.calibration, "\(edit)")
             XCTAssertEqual(calibration, expected.calibration, "\(edit)")
             XCTAssertEqual(read.edit.negativeReading?.highlightStops, expected.highlightStops, "\(edit)")
-            // The frame measures the same whichever way it is read.
-            XCTAssertEqual(read.negativeMeasure?["denseEnd"] as? [Double],
-                           measure["denseEnd"] as? [Double], "\(edit)")
+            // The frame's mid-tones and tonal steps measure the same whichever way it is read.
+            XCTAssertEqual(read.negativeMeasure?["midtone"] as? [Double],
+                           measure["midtone"] as? [Double], "\(edit)")
+            XCTAssertEqual(read.negativeMeasure?["slopes"] as? [Double],
+                           measure["slopes"] as? [Double], "\(edit)")
             XCTAssertFalse(calibrations.contains(calibration), "\(edit)")
             calibrations.append(calibration)
         }

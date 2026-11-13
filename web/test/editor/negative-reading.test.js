@@ -6,6 +6,8 @@ import { pixelSource } from "../../src/engine.js";
 import {
   areaPreview,
   denseEnd,
+  channelEnds,
+  midtone,
   estimatedBorder,
   filmBase,
   frameLight,
@@ -57,6 +59,34 @@ test("the densest end reads the central frame's highlights over the base", () =>
   const dense = denseEnd(border, source.read(0, 0, 50, 50), 50, 50);
   dense.forEach((v) => assert.ok(Math.abs(v - 39 / 40) < 1e-5, String(v)));
   assert.equal(denseEnd(border, new Float32Array(4 * 4), 1, 1), null);
+});
+
+test("the densest end is one set of pixels, which a saturated colour cannot stand in for", () => {
+  // A grey wall, a small white, and a yellow flower as dense as nothing else to red and green
+  // and thin to blue.
+  const wall = [0.6, 0.6, 0.6],
+    white = [1, 1.05, 1.1],
+    flower = [1.6, 1.3, 0.3];
+  const source = scan(100, 100, (x, y) => {
+    const density = y >= 40 && y < 60 ? (x >= 20 && x < 40 ? flower : x >= 60 && x < 70 ? white : wall) : wall;
+    return border.map((v, c) => v * 10 ** -density[c]);
+  });
+  const pixels = source.read(0, 0, 100, 100);
+  const dense = denseEnd(border, pixels, 100, 100);
+  dense.forEach((v, c) => assert.ok(Math.abs(v - white[c]) < 1e-5, String(v)));
+  // Each channel's own densest pixels are the flower's red and green and the white's blue.
+  const ends = channelEnds(border, pixels, 100, 100);
+  [flower[0], flower[1], white[2]].forEach((v, c) => assert.ok(Math.abs(ends[c] - v) < 1e-5));
+  assert.equal(channelEnds(border, new Float32Array(4 * 4), 1, 1), null);
+});
+
+test("the mid-tones are the central frame's mean density over the base", () => {
+  const source = scan(50, 50, (x, y) =>
+    x < 5 || y < 5 || x >= 45 || y >= 45 ? film(3) : border.map((v, c) => v * 10 ** -((c + 1) * (x < 25 ? 0.2 : 0.6))),
+  );
+  const mean = midtone(border, source.read(0, 0, 50, 50), 50, 50);
+  mean.forEach((v, c) => assert.ok(Math.abs(v - (c + 1) * 0.4) < 1e-5, String(v)));
+  assert.equal(midtone(border, new Float32Array(4 * 4), 1, 1), null);
 });
 
 test("picked clear film is the patch's median, and must be film", () => {
@@ -393,6 +423,11 @@ test("a request says of a reading what its edit keeps and its frame measures", (
     source,
   });
   assert.equal("slopes" in readingRequest({ reading: 2 }, { ...measured, slopes: [0, 1] }), false);
+  // The mid-tones go with the current reading, which times its print by them.
+  const toned = { ...measured, midtone: [0.5, 0.6, 0.7] };
+  assert.deepEqual(readingRequest({ reading: 2 }, toned).midtone, toned.midtone);
+  assert.equal("midtone" in readingRequest({ roll: null }, toned), false);
+  assert.equal("midtone" in readingRequest({ reading: 2 }, { ...measured, midtone: [NaN, 1, 1] }), false);
   // Stray light the reading takes off goes with it, none where there is none, and never with
   // the first reading.
   const lit = { ...measured, flare: [0.002, 0.001, 0.0005] };

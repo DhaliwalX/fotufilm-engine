@@ -36,6 +36,10 @@ public struct WebProfileRequest: Decodable {
         /// How red and blue rise per unit of green across this frame's own tonal steps
         /// (`ApproximateNegativeScan.tonalSlopes`), nil when the frame has too few steps to tell.
         public let slopes: [Float]?
+        /// The framed picture's mid-tones (`ApproximateNegativeScan.midtone`), net of the stray
+        /// light like `denseEnd`: they keep a small highlight far over them from timing the
+        /// print. Nil times it on the densest end, as the first reading always does.
+        public let midtone: [Float]?
         /// The edit's `ev`, `temperature` and `tint`, in the web's units: the light controls an
         /// enlarger or a scan carries into the print. The rest finish the print at render time.
         public let light: [String: Double]?
@@ -79,6 +83,7 @@ public struct WebProfileRequest: Decodable {
             var border: SIMD3<Float>
             var denseEnd: SIMD3<Float>?
             var slopes: SIMD2<Float>? = nil
+            var midtone: SIMD3<Float>? = nil
             /// The scan's stray light, none on the first reading.
             var flare: SIMD3<Float> = .zero
         }
@@ -114,6 +119,12 @@ public struct WebProfileRequest: Decodable {
                 }
                 return SIMD2(slopes[0], slopes[1])
             }
+            let middle = try midtone.map { midtone -> SIMD3<Float> in
+                guard midtone.count == 3, midtone.allSatisfy(\.isFinite) else {
+                    throw Failure(description: "Invalid scene measurement.")
+                }
+                return SIMD3(midtone[0], midtone[1], midtone[2])
+            }
             let edit = WebNativeEdit.Negative(
                 roll: roll, crosstalk: crosstalk, scanLight: scanLight, reading: reading,
                 camera: camera, balance: balance, neutral: neutral)
@@ -127,7 +138,7 @@ public struct WebProfileRequest: Decodable {
             }
             return Measured(edit: edit, border: SIMD3(border[0], border[1], border[2]),
                             denseEnd: dense, slopes: edit.readsModel ? frameSlopes : nil,
-                            flare: flare)
+                            midtone: edit.readsModel ? middle : nil, flare: flare)
         }
     }
 
@@ -215,7 +226,8 @@ public struct WebProfileRequest: Decodable {
             let measured = try negative.measured()
             let balance = measured.edit.balance(
                 stock: stock, border: measured.border, denseEnd: measured.denseEnd,
-                slopes: measured.slopes, source: negative.source, flare: measured.flare)
+                slopes: measured.slopes, midtone: measured.midtone, source: negative.source,
+                flare: measured.flare)
             // Exposure and development, which transport belongs to, already happened to the film.
             stock.layeredTransport = nil
             options = try NegativeScanPrint.Reading(

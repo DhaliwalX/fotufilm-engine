@@ -305,6 +305,107 @@ final class NegativeScanBalanceTests: XCTestCase {
         for record in 0..<3 { XCTAssertEqual(read[record], highlight[record], accuracy: 0.03) }
     }
 
+    /// A frame of `densities` over `border`, each filling the rectangle given in tenths of the
+    /// frame, the first the whole of it.
+    private func frame(border: SIMD3<Float>,
+                       _ patches: [(density: SIMD3<Float>, x: Range<Int>, y: Range<Int>)]) -> ImageBuffer {
+        var image = ImageBuffer(width: 100, height: 100)
+        for patch in patches {
+            for y in patch.y { for x in patch.x {
+                for c in 0..<3 {
+                    image.planes[c][y * 100 + x] = border[c] * pow(10, -patch.density[c])
+                }
+            } }
+        }
+        return image
+    }
+
+    func testTheDensestEndIsOneSetOfPixelsWhichASaturatedColourCannotStandInFor() throws {
+        let border = SIMD3<Float>(0.8, 0.5, 0.25)
+        // A grey wall, a small white, and a yellow flower in the sun: as dense as nothing else
+        // to red and green, and thin to blue.
+        let wall = SIMD3<Float>(0.6, 0.6, 0.6), white = SIMD3<Float>(1, 1.05, 1.1)
+        let flower = SIMD3<Float>(1.6, 1.3, 0.3)
+        let image = frame(border: border, [
+            (wall, 0..<100, 0..<100), (flower, 20..<40, 40..<60), (white, 60..<70, 40..<60),
+        ])
+        let dense = try XCTUnwrap(ApproximateNegativeScan.denseEnd(border: border, preview: image))
+        for c in 0..<3 { XCTAssertEqual(dense[c], white[c], accuracy: 1e-5) }
+        // Each channel's own densest pixels are the flower's red and green and the white's
+        // blue, no object of the frame; the first reading keeps them.
+        let ends = try XCTUnwrap(ApproximateNegativeScan.channelEnds(border: border, preview: image))
+        for (c, value) in [flower.x, flower.y, white.z].enumerated() {
+            XCTAssertEqual(ends[c], value, accuracy: 1e-5)
+        }
+        // A frame whose densest pixels are a grey reads the same either way.
+        let grey = frame(border: border, (0..<100).map { x in
+            (SIMD3(repeating: Float(x) / 100), x..<(x + 1), 0..<100)
+        })
+        let one = try XCTUnwrap(ApproximateNegativeScan.denseEnd(border: border, preview: grey))
+        let each = try XCTUnwrap(ApproximateNegativeScan.channelEnds(border: border, preview: grey))
+        for c in 0..<3 { XCTAssertEqual(one[c], each[c], accuracy: 1e-5) }
+        XCTAssertNil(ApproximateNegativeScan.denseEnd(border: border,
+                                                      preview: ImageBuffer(width: 1, height: 1)))
+    }
+
+    func testTheMidTonesAreTheFramesMeanDensity() throws {
+        let border = SIMD3<Float>(0.8, 0.5, 0.25)
+        let image = frame(border: border, [
+            (SIMD3(0.2, 0.4, 0.6), 0..<100, 0..<100), (SIMD3(0.6, 1.2, 1.8), 50..<100, 0..<100),
+        ])
+        let midtone = try XCTUnwrap(ApproximateNegativeScan.midtone(border: border, preview: image))
+        for (c, value) in [Float(0.4), 0.8, 1.2].enumerated() {
+            XCTAssertEqual(midtone[c], value, accuracy: 1e-4)
+        }
+        XCTAssertNil(ApproximateNegativeScan.midtone(border: border,
+                                                     preview: ImageBuffer(width: 1, height: 1)))
+    }
+
+    func testASmallHighlightFarOverTheMidTonesDoesNotTimeThePrint() throws {
+        let white = ApproximateNegativeScan.diffuseWhiteStops
+        let span = ApproximateNegativeScan.highlightSpan
+        let timed = ApproximateNegativeScan.timedHighlight
+        // Highlights within the span of the mid-tones, or under a diffuse white, time the print.
+        XCTAssertEqual(timed(5.5, 5.5 - span), 5.5)
+        XCTAssertEqual(timed(4, 2), 4)
+        XCTAssertEqual(timed(white, -6), white)
+        XCTAssertEqual(timed(1, -6), 1)
+        XCTAssertEqual(timed(5.5, .nan), 5.5)
+        // Further over them, the print is timed the span over the mid-tones,
+        XCTAssertEqual(timed(5.5, 1), 1 + span)
+        // and no lighter than the film was exposed: a diffuse white prints as white.
+        XCTAssertEqual(timed(5.5, -2), white)
+        XCTAssertEqual(timed(7.5, -8), white)
+
+        // A lamp in a dark room: a densest end five stops over the film's mid-grey, the frame's
+        // mean three stops under it.
+        let stock = try stock("gold200")
+        let model = NegativeScanModel(stock: stock, setup: setup)
+        let scanned = { (stops: Float) throws -> SIMD3<Float> in
+            try XCTUnwrap(model.scannerDensity(density: NegativeScanModel.density(
+                stock: stock, logExposure: stops * log10(2))))
+        }
+        let lamp = try scanned(5), room = try scanned(-3), day = try scanned(2.5)
+        let balance = { (tones: ApproximateNegativeScan.Tones, mode: ApproximateNegativeScan.BalanceMode) in
+            ApproximateNegativeScan.balance(stock: stock, setup: self.setup, separation: 1,
+                                            mode: mode, tones: tones)
+        }
+        let alone = balance(.init(denseEnd: lamp), .frame)
+        let dark = balance(.init(denseEnd: lamp, midtone: room), .frame)
+        let bright = balance(.init(denseEnd: lamp, midtone: day), .frame)
+        let highlight = try XCTUnwrap(alone.highlightStops)
+        XCTAssertEqual(highlight, 5, accuracy: 0.5)
+        XCTAssertEqual(try XCTUnwrap(dark.highlightStops), white, accuracy: 1e-4)
+        XCTAssertEqual(bright.highlightStops, highlight)
+        // The mid-tones time the print and nothing else: the balance is the neutral's.
+        XCTAssertEqual(dark.exposure, alone.exposure)
+        XCTAssertEqual(dark.gains, alone.gains)
+        XCTAssertEqual(balance(.init(denseEnd: lamp, midtone: room), .none).highlightStops,
+                       dark.highlightStops)
+        XCTAssertEqual(balance(.init(denseEnd: lamp, midtone: SIMD3(.nan, 0.3, 0.3)), .frame)
+            .highlightStops, highlight)
+    }
+
     func testAPickedNeutralTakesTheDensestEndsPlace() throws {
         let stock = try stock("portra400")
         let model = NegativeScanModel(stock: stock, setup: setup)

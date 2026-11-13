@@ -310,6 +310,8 @@ extension HostService {
                 ?? NSNull(),
             "slopes": measure.slopes.map { slopes in (0..<2).map { Double(slopes[$0]) } as Any }
                 ?? NSNull(),
+            "midtone": measure.midtone.map { tone in (0..<3).map { Double(tone[$0]) } as Any }
+                ?? NSNull(),
         ]
     }
 

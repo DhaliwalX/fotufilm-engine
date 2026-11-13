@@ -29,6 +29,8 @@ import {
   INVALID_BORDER,
   areaPreview,
   denseEnd,
+  channelEnds,
+  midtone,
   tonalSlopes,
   frameLight,
   holder,
@@ -458,13 +460,16 @@ export class RenderSession {
       framed.light,
       edit.negative.flare == null ? (shown?.stray ?? null) : null,
     )
-    const measured = JSON.stringify(flare)
+    const model = readsModel(edit.negative)
+    const measured = JSON.stringify([flare, model])
     if (!framed.measures.has(measured)) {
       const { preview } = framed
       const pixels = netOfFlare(preview.pixels, flare),
         clear = border.map((v, c) => v - flare[c])
       framed.measures.set(measured, {
-        dense: denseEnd(clear, pixels, preview.width, preview.height),
+        // The first reading keeps its own densest end, and times its print on that alone.
+        dense: (model ? denseEnd : channelEnds)(clear, pixels, preview.width, preview.height),
+        midtone: midtone(clear, pixels, preview.width, preview.height),
         slopes: tonalSlopes(clear, pixels, preview.width, preview.height),
       })
     }
@@ -635,6 +640,7 @@ export class RenderSession {
               flare: reading.flare,
               denseEnd: reading.dense,
               slopes: reading.slopes,
+              midtone: reading.midtone,
             }
           : undefined
         // What a request says of the reading: the edit's, what the frame measures, and what the

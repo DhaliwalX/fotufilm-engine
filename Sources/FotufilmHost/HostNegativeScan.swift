@@ -111,15 +111,16 @@ final class HostNegativeScan {
             stock: stock, border: read.border,
             balance: negative.balance(stock: stock, border: read.border,
                                       denseEnd: read.measure.denseEnd,
-                                      slopes: read.measure.slopes, source: source,
+                                      slopes: read.measure.slopes,
+                                      midtone: read.measure.midtone, source: source,
                                       flare: read.flare),
             flare: read.flare, holder: read.holder)
     }
 
     /// What a framing measures for its reading and its roll: the clear film it is read against,
     /// the stray light the reading takes off (`WebNativeEdit.Negative.strayLight`), and, net of
-    /// that, its own densest end, before any roll's colour, and the rises across its tonal
-    /// steps. Arguments as `reading`.
+    /// that, its own densest end, before any roll's colour, the rises across its tonal steps
+    /// and its mid-tones. Arguments as `reading`.
     func measure(_ key: String, border: [Float], light id: String? = nil,
                  negative: WebNativeEdit.Negative = .init(),
                  preview: () throws -> (rgba: [Float], width: Int, height: Int)) throws
@@ -153,7 +154,7 @@ final class HostNegativeScan {
         // The holder's stray light is taken only where the edit leaves it to be measured.
         let flare = negative.strayLight(border: border, frameLight: frame.light,
                                         holder: negative.flare == nil ? holder?.stray : nil)
-        let measured = "\(frameKey)|\(flare)"
+        let measured = "\(frameKey)|\(flare)|\(negative.readsModel)"
         if let kept = lock.withLock({ measures.first { $0.key == measured } }) {
             return (border, flare, holder?.limit, kept.measure)
         }
@@ -163,8 +164,11 @@ final class HostNegativeScan {
         }
         let clear = border - flare
         let measure = ApproximateNegativeScan.RollBalance.Measure(
-            denseEnd: ApproximateNegativeScan.denseEnd(border: clear, preview: planes),
-            slopes: ApproximateNegativeScan.tonalSlopes(border: clear, preview: planes))
+            denseEnd: negative.readsModel
+                ? ApproximateNegativeScan.denseEnd(border: clear, preview: planes)
+                : ApproximateNegativeScan.channelEnds(border: clear, preview: planes),
+            slopes: ApproximateNegativeScan.tonalSlopes(border: clear, preview: planes),
+            midtone: ApproximateNegativeScan.midtone(border: clear, preview: planes))
         lock.withLock {
             measures.removeAll { $0.key == measured }
             measures.append((measured, measure))

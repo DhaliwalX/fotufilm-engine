@@ -76,24 +76,59 @@ export function estimatedBorder(pixels) {
   });
 }
 
-// The framed picture's densest end, its highlights: each channel's scanner density over `border`
-// at the 99.5th percentile of the central 80%. Null for a frame too small to read.
-export function denseEnd(border, pixels, width, height) {
+// The scan channels' densities over `border` of the central 80% of the frame, at the pixels that
+// pass light in every channel. Null with fewer than sixteen of them.
+function framedDensities(border, pixels, width, height) {
   if (width < 2 || height < 2) return null;
-  const channels = [[], [], []];
+  const densities = [];
   const mx = Math.floor(width / 10),
     my = Math.floor(height / 10);
   for (let y = my; y < height - my; y++)
     for (let x = mx; x < width - mx; x++) {
       const i = (y * width + x) * 4;
       if (!positive(pixels, i)) continue;
-      for (let c = 0; c < 3; c++) channels[c].push(-Math.log10(pixels[i + c] / border[c]));
+      densities.push([0, 1, 2].map((c) => -Math.log10(pixels[i + c] / border[c])));
     }
-  if (channels[0].length < 16) return null;
-  return channels.map((values) => {
-    values.sort((a, b) => a - b);
+  return densities.length >= 16 ? densities : null;
+}
+
+// The framed picture's densest end, its highlights, in the scan channels' densities over
+// `border`: the densest hundredth of the central 80%, judged by each pixel's thinnest channel,
+// and each channel's median over those pixels. One set of pixels gives all three channels, so a
+// saturated colour, dense to one channel or two, cannot stand in for a white. Null for a frame
+// too small to read. Mirrors ApproximateNegativeScan.denseEnd(border:preview:).
+export function denseEnd(border, pixels, width, height) {
+  const densities = framedDensities(border, pixels, width, height);
+  if (!densities) return null;
+  const thinnest = densities.map((density) => Math.min(...density));
+  const level = [...thinnest].sort((a, b) => a - b)[Math.trunc((thinnest.length - 1) * 0.99)];
+  const densest = densities.filter((_, i) => thinnest[i] >= level);
+  return [0, 1, 2].map((c) => {
+    const values = densest.map((density) => density[c]).sort((a, b) => a - b);
+    return values[Math.floor(values.length / 2)];
+  });
+}
+
+// The densest end as the first reading takes it, which an edit made with it keeps: each
+// channel's own density over `border` at the 99.5th percentile of the central 80%. Mirrors
+// ApproximateNegativeScan.channelEnds.
+export function channelEnds(border, pixels, width, height) {
+  const densities = framedDensities(border, pixels, width, height);
+  if (!densities) return null;
+  return [0, 1, 2].map((c) => {
+    const values = densities.map((density) => density[c]).sort((a, b) => a - b);
     return values[Math.trunc((values.length - 1) * 0.995)];
   });
+}
+
+// The framed picture's mid-tones in the scan channels' densities over `border`: each channel's
+// mean over the central 80%. They keep a small highlight far over them from timing the print
+// (ApproximateNegativeScan.timedHighlight). Null for a frame too small to read. Mirrors
+// ApproximateNegativeScan.midtone.
+export function midtone(border, pixels, width, height) {
+  const densities = framedDensities(border, pixels, width, height);
+  if (!densities) return null;
+  return [0, 1, 2].map((c) => densities.reduce((sum, density) => sum + density[c], 0) / densities.length);
 }
 
 // A scan's stray light: what the lens and the room add to every sample alike, which a reading

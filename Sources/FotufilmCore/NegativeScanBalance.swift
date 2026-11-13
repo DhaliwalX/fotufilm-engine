@@ -32,19 +32,23 @@ extension ApproximateNegativeScan {
         /// How red and blue rise per unit of green across this frame's own tonal steps
         /// (`tonalSlopes(border:preview:)`), when the frame has enough steps to tell.
         public var slopes: SIMD2<Float>?
+        /// The mid-tones (`midtone(border:preview:)`), which keep a small highlight far over
+        /// them from timing the print (`timedHighlight`). Nil times it on the densest end.
+        public var midtone: SIMD3<Float>?
 
         public init(denseEnd: SIMD3<Float>? = nil, picked: SIMD3<Float>? = nil,
-                    slopes: SIMD2<Float>? = nil) {
+                    slopes: SIMD2<Float>? = nil, midtone: SIMD3<Float>? = nil) {
             self.denseEnd = denseEnd
             self.picked = picked
             self.slopes = slopes
+            self.midtone = midtone
         }
     }
 
     /// The balance of a frame read by the scan model for `setup`, its weights across the
     /// channels at `separation` (`NegativeScanModel.weights`): a neutral moved onto the film's
-    /// grey scale along each record's characteristic curve (`exposure`), and the highlights'
-    /// exposure from the densest end. Tonal steps on a `roll` (or regularized steps on the
+    /// grey scale along each record's characteristic curve (`exposure`), and the print's timing
+    /// from the densest end and the mid-tones (`timedHighlight`). Tonal steps on a `roll` (or regularized steps on the
     /// frame itself when no roll contrast is measured) calibrate red and blue steepness against
     /// green (`gains`) before the neutral shifts each record's exposure.
     public static func balance(stock: FilmStock, setup: NegativeScanSetup, separation: Float,
@@ -58,8 +62,15 @@ extension ApproximateNegativeScan {
         if let dense {
             let green = NegativeScanCrosstalk.apply(weights, dense).y
             if green > 0.05 {
-                balance.highlightStops = stock.curves[1]
-                    .logExposure(density: stock.curves[1].dMin + green) / log10(2)
+                let curve = stock.curves[1]
+                let stops = { (density: Float) in
+                    curve.logExposure(density: curve.dMin + density) / log10(2)
+                }
+                balance.highlightStops = stops(green)
+                if let midtone = readable(tones.midtone) {
+                    balance.highlightStops = timedHighlight(
+                        stops(green), midtone: stops(NegativeScanCrosstalk.apply(weights, midtone).y))
+                }
             }
         }
         guard mode != .none else { return balance }

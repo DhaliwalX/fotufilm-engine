@@ -259,8 +259,10 @@ public struct ApproximateNegativeScan: Encodable, Equatable, Sendable {
         /// otherwise leaves the highlights off colour at every tone. A reading on the model
         /// keeps gains for how steep a roll's records read against each other (`contrast`).
         public var gains: SIMD3<Float>
-        /// The highlights' exposure in stops over the film's mid-grey, for
-        /// `FotufilmEngine.Options.sceneHighlightStops`. Nil for a frame too flat to tell.
+        /// Where the print is timed, in stops over the film's mid-grey, for
+        /// `FotufilmEngine.Options.sceneHighlightStops`: the highlights' exposure, or less where
+        /// they sit far over the frame's mid-tones (`timedHighlight`). Nil for a frame too flat
+        /// to tell.
         public var highlightStops: Float?
         /// What each record reads from the scan channels, undoing the dyes' crosstalk on the
         /// frame's own grey (`NegativeScanCrosstalk.weights`); nil reads each from its own channel.
@@ -280,28 +282,90 @@ public struct ApproximateNegativeScan: Encodable, Equatable, Sendable {
     /// keeps the holder out, as automatic conversion does; a monochrome film reads one channel.
     public static func balance(stock: FilmStock, border: SIMD3<Float>,
                                preview: ImageBuffer) -> Balance {
-        denseEnd(border: border, preview: preview).map { balance(stock: stock, denseEnd: $0) }
+        channelEnds(border: border, preview: preview).map { balance(stock: stock, denseEnd: $0) }
             ?? .neutral
     }
 
-    /// The densest end of the framed picture, its highlights: each channel's scanner density over
-    /// `border` at the 99.5th percentile of the central 80%. Nil for a frame too small to read.
+    /// The densest end of the framed picture, its highlights, in the scan channels' densities
+    /// over `border`: the densest hundredth of the central 80%, judged by each pixel's thinnest
+    /// channel, and each channel's median over those pixels. One set of pixels gives all three
+    /// channels, so the end is something the frame holds: a channel's own densest pixels may be
+    /// a saturated colour, a yellow flower in the sun being as dense to red and green as a white
+    /// wall and far thinner to blue, and three channels read from three objects are no neutral.
+    /// The thinnest channel passes such a colour over for whatever is dense in all three. A
+    /// frame whose densest pixels are a grey reads as each channel's 99.5th percentile. Nil for
+    /// a frame too small to read.
     public static func denseEnd(border: SIMD3<Float>, preview: ImageBuffer) -> SIMD3<Float>? {
+        guard let densities = framedDensities(border: border, preview: preview) else { return nil }
+        let thinnest = densities.map { $0.min() }
+        let level = thinnest.sorted()[Int(Float(thinnest.count - 1) * 0.99)]
+        let densest = densities.indices.filter { thinnest[$0] >= level }
+        var dense = SIMD3<Float>.zero
+        for c in 0..<3 {
+            let values = densest.map { densities[$0][c] }.sorted()
+            dense[c] = values[values.count / 2]
+        }
+        return dense
+    }
+
+    /// The densest end as the first reading takes it, which an edit made with it keeps: each
+    /// channel's own density over `border` at the 99.5th percentile of the central 80%.
+    public static func channelEnds(border: SIMD3<Float>, preview: ImageBuffer) -> SIMD3<Float>? {
+        guard let densities = framedDensities(border: border, preview: preview) else { return nil }
+        var dense = SIMD3<Float>.zero
+        for c in 0..<3 {
+            let values = densities.map { $0[c] }.sorted()
+            dense[c] = values[Int(Float(values.count - 1) * 0.995)]
+        }
+        return dense
+    }
+
+    /// The framed picture's mid-tones in the scan channels' densities over `border`: each
+    /// channel's mean over the central 80%, what a printer's integrating meter reads of a
+    /// negative. It tells a frame whose highlights are most of the picture from one where they
+    /// are a lamp or a window in a dark room (`timedHighlight`). Nil for a frame too small to
+    /// read.
+    public static func midtone(border: SIMD3<Float>, preview: ImageBuffer) -> SIMD3<Float>? {
+        guard let densities = framedDensities(border: border, preview: preview) else { return nil }
+        return densities.reduce(SIMD3<Float>.zero, +) / Float(densities.count)
+    }
+
+    /// The scan channels' densities over `border` of the central 80% of `preview`, which keeps
+    /// the holder out, at the pixels that pass light in every channel. Nil with fewer than
+    /// sixteen of them.
+    private static func framedDensities(border: SIMD3<Float>,
+                                        preview: ImageBuffer) -> [SIMD3<Float>]? {
         guard preview.width >= 2, preview.height >= 2 else { return nil }
-        var channels = [[Float]](repeating: [], count: 3)
+        var densities: [SIMD3<Float>] = []
         let mx = preview.width / 10, my = preview.height / 10
         for y in my..<(preview.height - my) { for x in mx..<(preview.width - mx) {
             let i = y * preview.width + x
-            let pixel = (0..<3).map { preview.planes[$0][i] }
-            guard pixel.allSatisfy({ $0.isFinite && $0 > 0 }) else { continue }
-            for c in 0..<3 { channels[c].append(-log10(pixel[c] / border[c])) }
+            let pixel = SIMD3((0..<3).map { preview.planes[$0][i] })
+            guard (0..<3).allSatisfy({ pixel[$0].isFinite && pixel[$0] > 0 }) else { continue }
+            densities.append(SIMD3((0..<3).map { -log10(pixel[$0] / border[$0]) }))
         } }
-        guard channels[0].count >= 16 else { return nil }
-        let dense = channels.map { values -> Float in
-            let sorted = values.sorted()
-            return sorted[Int(Float(sorted.count - 1) * 0.995)]
-        }
-        return SIMD3(dense[0], dense[1], dense[2])
+        return densities.count >= 16 ? densities : nil
+    }
+
+    /// A diffuse white's exposure in stops over the film's mid-grey: a print is timed so the
+    /// film's density there prints white.
+    public static let diffuseWhiteStops: Float = log2(0.9 / 0.18)
+
+    /// How far over a frame's mid-tones its highlights sit and still time the print, in stops:
+    /// a diffuse white is two and a third stops over a mid-grey, and a backlit scene's sky
+    /// another stop and more over its average. Real frames lit as a whole sit within it.
+    public static let highlightSpan: Float = 4
+
+    /// Where a frame's print is timed: its highlights, `highlight` stops over the film's
+    /// mid-grey, which print as white, unless they sit far over its mid-tones, `midtone` stops
+    /// over the mid-grey. A lamp, a window or the sun on water in a dark picture is a small
+    /// part of it, and a print timed to hold it leaves everything else black; the print is then
+    /// timed `highlightSpan` over the mid-tones, and no lighter than the film was exposed, a
+    /// diffuse white printing as white, which keeps a night or a stage as dark as it was shot.
+    /// Highlights under a diffuse white time the print as they are.
+    public static func timedHighlight(_ highlight: Float, midtone: Float) -> Float {
+        guard highlight > diffuseWhiteStops, midtone.isFinite else { return highlight }
+        return min(highlight, max(diffuseWhiteStops, midtone + highlightSpan))
     }
 
     /// What a roll's frames share: the colour of their densest ends and how steep their records
@@ -355,10 +419,15 @@ public struct ApproximateNegativeScan: Encodable, Equatable, Sendable {
             public var denseEnd: SIMD3<Float>?
             /// The rises across its tonal steps (`tonalSlopes(border:preview:)`).
             public var slopes: SIMD2<Float>?
+            /// Its mid-tones (`midtone(border:preview:)`), which its own print's timing takes;
+            /// a roll takes nothing from them.
+            public var midtone: SIMD3<Float>?
 
-            public init(denseEnd: SIMD3<Float>? = nil, slopes: SIMD2<Float>? = nil) {
+            public init(denseEnd: SIMD3<Float>? = nil, slopes: SIMD2<Float>? = nil,
+                        midtone: SIMD3<Float>? = nil) {
                 self.denseEnd = denseEnd
                 self.slopes = slopes
+                self.midtone = midtone
             }
         }
 
