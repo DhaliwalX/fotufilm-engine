@@ -548,26 +548,15 @@ enum DigitalReferenceReceiver {
         SIMD3(pow(10, -density.x), pow(10, -density.y), pow(10, -density.z))
     }
 
-    /// Canonical masked C-41 image-dye partition and base-mask transmittance used to calibrate
-    /// `DensityUnmix` once per `ReceiverBands`. Keeping this basis fixed across stocks preserves
-    /// inter-stock spectral differences while matching real C-41 cyan/magenta/yellow crossover
-    /// locations (~492 nm and ~600 nm) and orange-mask passband weighting.
-    static let referenceDyes: [[Float]] = {
-        let specs: [(peak: Float, left: Float, right: Float)] = [
-            (680, 56, 85),
-            (546, 44, 48),
-            (448, 55, 34),
-        ]
-        let raw = specs.map { spec in
-            SpectralGrid.asymmetricGaussian(
-                peak: spec.peak, leftSigma: spec.left, rightSigma: spec.right
-            ).map { pow($0 + 0.02, 6.0) }
-        }
-        return SpectralGrid.partition(raw)
-    }()
+    /// Canonical negative image-dye partition and representative mid-mask passband weighting used
+    /// to calibrate `DensityUnmix` once per `ReceiverBands`. Real negative stocks span clear-base
+    /// aerial film (`aerocolor2460`), light motion-picture masks (`vision250d`, `vision500t`), and
+    /// fuller C-41 masks (`portra400`, `gold200`); a 0.30 D blue-over-red step balances nonlinear
+    /// Beer-Lambert cross-band decoupling across both masked and unmasked stocks.
+    static let referenceDyes: [[Float]] = SpectralGrid.dyes(family: .kodakNegative)
 
     static let referenceIlluminant: [Float] = zip(SpectralGrid.wavelengths, illuminant).map { wavelength, light in
-        let maskDensity = 0.20 + 0.56 / (1 + exp((wavelength - 535) / 18))
+        let maskDensity = 0.20 + 0.30 / (1 + exp((wavelength - 535) / 18))
         return light * pow(10, -maskDensity)
     }
 
