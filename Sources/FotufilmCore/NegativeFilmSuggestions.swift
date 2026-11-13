@@ -2,8 +2,9 @@ import Foundation
 
 /// Which installed films a scanned negative could be, from the colour of its clear film base.
 ///
-/// Each film's base is predicted from its spectral model as a colorimetric scan white-balanced on
-/// its light source would record it: linear Rec.2020 densities of the base against the bare lamp.
+/// Each film's base is predicted from its spectral model through the scan setup's lamp, camera
+/// sensor and decoding matrix (`NegativeScanModel.clear`), or as a lamp-balanced colorimetric scan
+/// when no setup is supplied: linear Rec.2020 densities of the base against the bare lamp.
 /// A scan's border is compared with those predictions. Without a light frame only the base's
 /// colour is known, not how dense it is overall, so films whose bases differ only in density —
 /// most black-and-white films — cannot be told apart and are suggested together.
@@ -33,6 +34,7 @@ public struct NegativeFilmSuggestions: Sendable {
     }
 
     public let films: [Film]
+    private let saturationPrior: (typical: Float, spread: Float)
 
     /// Density spread of a real base's colour about its prediction: model error, batch and the
     /// scanner's channel response together.
@@ -44,19 +46,67 @@ public struct NegativeFilmSuggestions: Sendable {
 
     public init(films: [Film]) {
         self.films = films
+        self.saturationPrior = Self.saturation
     }
 
-    /// The films a scan can be read as: every installed negative.
+    /// Precomputed film bases already projected through `setup`'s channel response.
+    public init(films: [Film], setup: NegativeScanSetup) {
+        self.films = films
+        self.saturationPrior = setup.knowsScale ? (1.0, 0.08) : (1.0, 0.15)
+    }
+
+    /// The films a scan can be read as: every installed negative, predicted colorimetrically.
     public init(stocks: [String: FilmStock]) {
         films = stocks.filter { !$0.value.isReversal && !$0.value.isReflectionPrint }
             .sorted { $0.key < $1.key }
             .map { Film(id: $0.key, name: $0.value.name, base: Self.base(of: $0.value)) }
+        saturationPrior = Self.saturation
+    }
+
+    /// The films a scan can be read as, each base predicted directly through `setup`'s lamp,
+    /// camera sensor and decoding matrix (`NegativeScanModel.clear`).
+    public init(stocks: [String: FilmStock], setup: NegativeScanSetup) {
+        films = stocks.filter { !$0.value.isReversal && !$0.value.isReflectionPrint }
+            .sorted { $0.key < $1.key }
+            .map { Film(id: $0.key, name: $0.value.name,
+                        base: Self.base(of: $0.value, setup: setup)) }
+        saturationPrior = setup.knowsScale ? (1.0, 0.08) : (1.0, 0.15)
     }
 
     /// The film base's densities as a lamp-balanced colorimetric scan records them.
     public static func base(of stock: FilmStock) -> SIMD3<Float> {
         let clear = ColorScience.linearDisplayP3ToRec2020(
             SpectralRuntime.transmissionRGB(density: stock.curves.map(\.dMin), stock: stock))
+        return SIMD3(density(clear.x), density(clear.y), density(clear.z))
+    }
+
+    /// The film base's densities as `setup` reads them against its bare lamp.
+    public static func base(of stock: FilmStock, setup: NegativeScanSetup) -> SIMD3<Float> {
+        let clear = NegativeScanModel(stock: stock, setup: setup).clear
+        return SIMD3(density(clear.x), density(clear.y), density(clear.z))
+    }
+
+    /// Clear-film spectral transmittance on `SpectralGrid`, matching `NegativeScanModel.clear`.
+    public static func baseTransmittance(of stock: FilmStock) -> [Float] {
+        let dyes = stock.spectralProfile.imageDyeDensity
+        let offset = SpectralRuntime.filmDensityOffset(for: stock)
+        let basis = stock.isReversal ? SpectralRuntime.neutralDensityBasis(for: stock) : nil
+        let base = stock.curves.map(\.dMin)
+        let amounts = basis?(base) ?? base
+        return (0..<SpectralGrid.count).map { i in
+            var d = offset?[i] ?? 0
+            for dye in 0..<dyes.count { d += amounts[dye] * dyes[dye][i] }
+            return pow(10, -d)
+        }
+    }
+
+    /// Clear-film densities from `baseTransmittance(of:)` through `setup.response()`.
+    public static func base(transmittance: [Float], response: [[Float]]) -> SIMD3<Float> {
+        precondition(transmittance.count == SpectralGrid.count && response.count == 3)
+        var clear = SIMD3<Float>.zero
+        for i in 0..<SpectralGrid.count {
+            clear += transmittance[i] * SIMD3(response[0][i], response[1][i], response[2][i])
+        }
         return SIMD3(density(clear.x), density(clear.y), density(clear.z))
     }
 
@@ -168,7 +218,8 @@ public struct NegativeFilmSuggestions: Sendable {
         guard observed.x.isFinite, observed.y.isFinite, observed.z.isFinite else { return [] }
         let absolute = reading.measuresDensity
         let scored = films.map { film -> (film: Film, energy: Float) in
-            (film, Self.energy(observed, film.base, absolute: absolute))
+            (film, Self.energy(observed, film.base, absolute: absolute,
+                               saturation: saturationPrior))
         }
         var groups: [(films: [Film], energy: Float)] = []
         for entry in scored.sorted(by: { $0.energy < $1.energy }) {
@@ -195,7 +246,8 @@ public struct NegativeFilmSuggestions: Sendable {
 
     /// Half the squared, spread-scaled distance: the base's colour at the best-fitting saturation
     /// always, its overall density only when a lamp fixes it.
-    static func energy(_ observed: SIMD3<Float>, _ base: SIMD3<Float>, absolute: Bool) -> Float {
+    static func energy(_ observed: SIMD3<Float>, _ base: SIMD3<Float>, absolute: Bool,
+                       saturation: (typical: Float, spread: Float) = saturation) -> Float {
         let o = observed - mean(observed), b = base - mean(base)
         var colour = Float.greatestFiniteMagnitude
         for step in 0...56 {

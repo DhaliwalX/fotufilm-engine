@@ -10,7 +10,7 @@ public struct NegativeScanModel: Sendable {
     let response: [[Float]]
     private let dyes: [[Float]]
     private let offset: [Float]?
-    private let basis: SpectralRuntime.NeutralDensityBasis
+    private let basis: SpectralRuntime.NeutralDensityBasis?
     /// The film's base densities, one per record.
     public let base: [Float]
     /// What the channels read of the clear film, the bare lamp reading one.
@@ -27,15 +27,17 @@ public struct NegativeScanModel: Sendable {
         self.response = response
         dyes = stock.spectralProfile.imageDyeDensity
         offset = SpectralRuntime.filmDensityOffset(for: stock)
-        basis = SpectralRuntime.neutralDensityBasis(for: stock)
+        basis = stock.isReversal ? SpectralRuntime.neutralDensityBasis(for: stock) : nil
         base = stock.curves.map(\.dMin)
-        clear = Self.sample(amounts: basis(base), dyes: dyes, offset: offset, response: response)
+        clear = Self.sample(amounts: basis?(base) ?? base, dyes: dyes, offset: offset,
+                            response: response)
     }
 
     /// What the scan's channels read of film at `density`, one density per record with the
     /// film's base in it: linear, the bare lamp reading one in every channel.
     public func sample(density: [Float]) -> SIMD3<Float> {
-        Self.sample(amounts: basis(density), dyes: dyes, offset: offset, response: response)
+        Self.sample(amounts: basis?(density) ?? density, dyes: dyes, offset: offset,
+                    response: response)
     }
 
     private static func sample(amounts: [Float], dyes: [[Float]], offset: [Float]?,

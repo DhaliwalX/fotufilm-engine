@@ -102,6 +102,18 @@ extension PlainNegativeScan {
                 }
                 steepened = true
             }
+        } else if mode != .none, let slopes = tones.slopes,
+                  slopes.x.isFinite, slopes.y.isFinite, slopes.x > 0, slopes.y > 0 {
+            let read = NegativeScanCrosstalk.apply(weights, SIMD3(slopes.x, 1, slopes.y))
+            if read.y.isFinite, read.y > 0 {
+                let weight: Float = setup.knowsScale ? 0.65 : 0.8
+                let range = ApproximateNegativeScan.frameContrastRange
+                for channel in [0, 2] where read[channel].isFinite && read[channel] > 0 {
+                    gains[channel] = min(max(pow(read.y / read[channel], weight),
+                                             range.lowerBound), range.upperBound)
+                }
+                steepened = true
+            }
         }
         var balance = SIMD3<Float>.one
         let toeLight = Self.modelToe * pow(10, -reference / Self.gamma)

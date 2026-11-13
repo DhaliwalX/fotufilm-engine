@@ -38,7 +38,7 @@ public enum WebProfileCatalogue {
 
     private struct Medium: Encodable {
         let viewingLights: [ControlsManifest.Choice]
-        let enlarger, correction, screenConversion, screenGrade, screenCMY, receiverBands, labScan,
+        let enlarger, surface, correction, screenConversion, screenGrade, screenCMY, receiverBands, labScan,
             printerLights, negative, printDetail: Bool
     }
     private struct Stock: Encodable {
@@ -51,6 +51,9 @@ public enum WebProfileCatalogue {
         /// A negative's predicted clear base, for suggesting films from a scan
         /// (`NegativeFilmSuggestions`). Absent for films with no negative.
         let filmBase: [Float]?
+        /// Clear-film spectral transmittance on `SpectralGrid`, so browser suggestions can project
+        /// each film's base through the scan's camera and decoding matrix (`NegativeScanSetup`).
+        let filmBaseSpectrum: [Float]?
         /// Whether a scanned negative can be read as this film (`NegativeScanPrint.reads`).
         let readsNegative: Bool
     }
@@ -73,6 +76,7 @@ public enum WebProfileCatalogue {
                 return (paper.id, Medium(
                     viewingLights: EditorControlCatalogue.viewingLights(for: paper).map(encodedChoice),
                     enlarger: offers(.enlarger),
+                    surface: offers(.printSurface),
                     correction: offers(.printCorrection),
                     screenConversion: offers(.screenExposure),
                     screenGrade: offers(.screenGrade),
@@ -90,6 +94,10 @@ public enum WebProfileCatalogue {
                 media: media, filterHalos: EditorLensFilters.previews(for: stock),
                 filmBase: NegativeScanPrint.reads(stock)
                     ? { let b = NegativeFilmSuggestions.base(of: stock); return [b.x, b.y, b.z] }() : nil,
+                filmBaseSpectrum: NegativeScanPrint.reads(stock)
+                    ? NegativeFilmSuggestions.baseTransmittance(of: stock).map {
+                        ( $0 * 100_000 ).rounded() / 100_000
+                    } : nil,
                 readsNegative: NegativeScanPrint.reads(stock))
         }
         let encoder = JSONEncoder()

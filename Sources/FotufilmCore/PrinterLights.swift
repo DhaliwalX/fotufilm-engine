@@ -66,6 +66,34 @@ public struct PrinterLights: Hashable, Sendable, Codable {
             && paper.resolved(for: stock) == paper
     }
 
+    /// Moves each additive printer light from this setup so mid-grey on `paper` shifts by
+    /// `exposureStops` in brightness and `balance` (`1 / whiteBalance.gains`) in colour, using
+    /// the release print stock's characteristic-curve slope at its LAD setup midpoint.
+    public func timed(exposureStops: Float, whiteBalanceGains balance: SIMD3<Float>,
+                      stock: FilmStock, paper: PrintPaper) -> PrinterLights {
+        let base = normalized
+        guard Self.applies(stock: stock, paper: paper),
+              (exposureStops != 0 || balance != .one) else {
+            return base
+        }
+        let w = ColorScience.displayP3LuminanceWeights
+        let luma = max(w.0 * balance.x + w.1 * balance.y + w.2 * balance.z, 1e-6)
+        let chromatic = stock.isMonochrome ? SIMD3<Float>.one : balance / luma
+        let curves = paper.printCurves(for: stock)
+        let mids = paper.printExposureMidpoints(for: stock)
+        var result = base
+        for c in 0..<3 {
+            let slope = max(
+                abs(curves[c].density(logExposure: mids[c] + 0.05)
+                    - curves[c].density(logExposure: mids[c] - 0.05)) / 0.10,
+                0.5)
+            let channelStops = exposureStops + log2(max(chromatic[c], 1e-6))
+            let deltaLogExposure = -paper.exposureDirection * channelStops * Float(log10(2.0)) / slope
+            result[c] += deltaLogExposure / Self.logExposurePerPoint
+        }
+        return result.normalized
+    }
+
     /// The lights the printing table is built with, or nil where they change nothing: on a
     /// medium no release printer exposes, and at the aim setup, so that setup keeps the
     /// identity every untimed release print already has.

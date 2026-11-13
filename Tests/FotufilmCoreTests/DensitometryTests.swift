@@ -102,6 +102,20 @@ final class DensitometryTests: XCTestCase {
                     "\(paper.rawValue) returned an emitting dye for \(target)")
                 XCTAssertTrue(amounts.x.isFinite && amounts.y.isFinite
                               && amounts.z.isFinite)
+                func error(_ a: SIMD3<Float>) -> Float {
+                    let r = Densitometry.statusADensity(amounts: a, dyes: paper.analyticalDyes) - target
+                    return r.x * r.x + r.y * r.y + r.z * r.z
+                }
+                for c in 0..<3 {
+                    for delta: Float in [-0.002, 0.002] {
+                        var adjacent = amounts; adjacent[c] += delta
+                        if adjacent[c] >= 0 {
+                            XCTAssertLessThanOrEqual(
+                                error(amounts), error(adjacent) + 1e-5,
+                                "\(paper.rawValue) did not project orthogonally onto gamut boundary at \(target)")
+                        }
+                    }
+                }
             }
         }
     }

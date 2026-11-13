@@ -179,12 +179,12 @@ final class DigitalReferenceReceiverTests: XCTestCase {
     }
 
     func testReceiverSeparatesSmallReferenceDyeChangesAndHoldsNeutral() {
-        let dyes = SpectralGrid.dyes(family: .kodakNegative)
+        let dyes = DigitalReferenceReceiver.referenceDyes
         for bands in Self.bandSets {
             let unmix = DigitalReferenceReceiver.unmix(bands)
             func energy(_ density: SIMD3<Float>) -> SIMD3<Float> {
                 SpectralRuntime.paperExposure(density: [density.x, density.y, density.z],
-                    dyes: dyes, lamp: DigitalReferenceReceiver.illuminant,
+                    dyes: dyes, lamp: DigitalReferenceReceiver.referenceIlluminant,
                     paperSensitivity: bands.sensitivity)
             }
             let center = SIMD3<Float>(repeating: 1)
@@ -200,6 +200,15 @@ final class DigitalReferenceReceiverTests: XCTestCase {
             for level: Float in [-3, -0.5, 0, 0.5, 3] {
                 let neutral = SIMD3<Float>(repeating: level)
                 XCTAssertLessThan(distance(unmix.read(neutral), neutral), 1e-6)
+            }
+            for delta in [SIMD3<Float>(1.4, -0.3, -1.1),
+                          SIMD3<Float>(-1.1, 1.3, -0.2),
+                          SIMD3<Float>(0.2, -1.2, 1.0)] {
+                let ratio = energy(center + delta) / reference
+                let reading = unmix.read(SIMD3(log10(ratio.x), log10(ratio.y), log10(ratio.z)))
+                XCTAssertLessThan(
+                    distance(reading, -delta), 1e-5,
+                    "\(bands): nonlinear unmix must recover saturated reference dye excursions")
             }
         }
     }

@@ -345,7 +345,7 @@
   },
   "Sources/FotufilmCore/Stocks/aerocolor2460.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Kodak AS-2652 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt.",
-    "sha256": "9da97d75879306981b3f41fe80423f057551d853301adc14b89e1374be799bf3"
+    "sha256": "4e7f21676fc57f097b3f528906b15707fa9d31b8ca6c0173b58e0421ccf76b8a"
   },
   "Sources/FotufilmCore/Stocks/agfachrome100.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Agfa F-PF-E4 density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer documents and developed-film photographs in edgePrinting.sources; see docs/print-frame-model.md.",
@@ -373,7 +373,7 @@
   },
   "Sources/FotufilmCore/Stocks/cinestill800t.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer documents and developed-film photographs in edgePrinting.sources; see docs/print-frame-model.md.",
-    "sha256": "c6ceeebc098eb3e68c73673b8d6ce02b7a90ee00170cf6bb8ad29e9daa1c4c1a"
+    "sha256": "2f998534ee8348c7b8ff8be16922ea9f6c2ebba4145aedcd9a58b5e815bac7fd"
   },
   "Sources/FotufilmCore/Stocks/delta3200.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves preserve digitized Ilford Delta 3200 TI (2002), DD-X 9-minute vector trace density records with C1 interpolation. The first and last 12 points of each record provide monotonic extrapolation outside the published range. Runtime rendering data only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer documents and developed-film photographs in edgePrinting.sources; see docs/print-frame-model.md. The DX edge barcode encodes the DX number cited in edgePrinting.dx.source.",
@@ -485,11 +485,11 @@
   },
   "Sources/FotufilmCore/Stocks/vision250d.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Sampled characteristic curves are dye-formation records solved to reproduce the digitized Kodak H-1-5207 Status M density records; push and pull conditions apply the ECN-2 push response to them. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer references in edgePrinting.sources; see docs/print-frame-model.md.",
-    "sha256": "a3040f1673d9013923c6ddcd6918069e090b98a1f00727b9224af20fdf1d9f6a"
+    "sha256": "c01e725e6a14710365f23e7f3e4d018a08bd80dd68e9769041c915586ce0628e"
   },
   "Sources/FotufilmCore/Stocks/vision500t.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt. Edge inscriptions and approximate physical placement follow the manufacturer references in edgePrinting.sources; see docs/print-frame-model.md.",
-    "sha256": "656f9ceb37a6ace1acfa1d72ff618b4384b04e9edf3b2c7f63fb17fb5517f1a7"
+    "sha256": "79b2615d78179de9fa9e6aa091de9bf2451ce867510072105583f175eec5d2f3"
   },
   "Sources/FotufilmCore/Stocks/aerochrome1443.json": {
     "provenance": "Fotufilm runtime film profile by MUAStudio Inc.; released under CC BY-SA 4.0. Contains rendering parameters and spectral samples only. See licenses/FILM-PROFILES.txt.",

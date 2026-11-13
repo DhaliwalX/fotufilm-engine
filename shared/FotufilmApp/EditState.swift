@@ -424,6 +424,7 @@ struct EditState: Equatable {
     var screenBlueBand = Double(ReceiverBands.paper.blue)
     var labScanDodging = Double(FotufilmEngine.Options().labScanDodging)
     var labScanLook = Double(FotufilmEngine.Options().labScanLook)
+    var printSurface = PrintSurface.default
     var enlarger = Enlarger.default
     /// Retain lamp settings when switched off; older edits keep the original print model.
     var printerEnabled = false
@@ -613,6 +614,7 @@ struct EditState: Equatable {
         PrintFrameConfiguration(frame: printFrame, formatID: formatID,
                                 stockID: stockID, paper: resolvedPaper,
                                 viewingKelvin: printFrame.viewsTransparency ? nil : printLightKelvin.map(Float.init),
+                                printSurface: printFrame.viewsTransparency ? .clean : printSurface,
                                 negativeViewing: .lightBox, margin: printFrameMargin,
                                 frameNumber: printFrameNumber,
                                 showsEdgePrinting: printFrameEdgePrinting,
@@ -702,6 +704,7 @@ struct EditState: Equatable {
         }
         o.shutterSeconds = shutterSeconds.map(Float.init)
         o.printViewingKelvin = printLightKelvin.map(Float.init)
+        o.printSurface = printSurface
         o.digitalReference = digitalReference
         o.enlarger = enlarger
         o.printer = printerEnabled ? printerProfile.normalized : nil

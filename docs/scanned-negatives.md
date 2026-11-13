@@ -136,10 +136,11 @@ in one place (`WebNativeEdit.Negative.balance`, `.plain` and `.strayLight`):
   (`crosstalk`) runs from one channel per record, scaled to hold the greys, to the full fit.
 - **What the model knows.** A measured camera, a film scanner's bands and LEDs that light one
   channel each say how much density a channel reads of a dye (`NegativeScanSetup.knowsScale`).
-  A camera nobody measured, under a lamp of unknown spectrum, is modelled as reading colour as
-  the eye does, which says which dyes a channel sees but not how strongly: a white lamp's red
-  end alone moves that by a third. Such a reading keeps the scan's own density of green as the
-  film's, as the first reading did, and the editor starts it with the dyes unseparated.
+  A camera nobody measured is modelled with the median spectral sensitivity of the bundled Bayer
+  CMOS cameras (`NegativeScanSetup.genericCMOSProfile`), balanced on the lamp and mapped to
+  Rec. 2020: that predicts dye cross-talk closely enough for full Colour Separation by default,
+  though an unmeasured lamp's red end still leaves overall channel scale uncertain, so the
+  reading keeps the scan's own density of green as the film's.
 - **Stray light.** `flare` is the scan's stray light as a share of the frame's average light, or
   is left to be measured from the holder (`ApproximateNegativeScan.strayLight`): the holder is
   taken to be in view only where the darkest twentieth of the scan lies around its edge, is even
@@ -150,12 +151,13 @@ in one place (`WebNativeEdit.Negative.balance`, `.plain` and `.strayLight`):
   (`neutral`) or else its densest end, or its roll's, is put on the film's own grey scale. Two
   things move a neutral off it: how steep each record reads, which the film's age and
   development and the scan's own light and camera set, and the scene's light, which is one
-  exposure at every tone. One neutral cannot tell them apart. Without a roll's contrast the
-  neutral scales red's and blue's densities, which holds the greys between the clear film and
-  the neutral however steep the records read. With it, the neutral adds an exposure to red and
-  blue, as a printer's filtration does, and each record moves along the film's own curve
-  (`ApproximateNegativeScan.balance`, `FOTUFILM_CONFIG_SCAN_BALANCE`): nothing at the clear
-  film, more through the toe, one density on the straight line.
+  exposure at every tone. One neutral cannot tell them apart. A roll's tonal steps, or a
+  regularized estimate from the frame's own tonal steps (`ApproximateNegativeScan.frameContrastRange`,
+  `0.75...1.35`) when no roll contrast is measured, first match red's and blue's steepness to
+  green's; the neutral then adds a log exposure to red and blue, as a printer's filtration does,
+  so each record moves along the film's own characteristic curve (`ApproximateNegativeScan.balance`,
+  `FOTUFILM_CONFIG_SCAN_BALANCE`): nothing at the clear film, more through the toe, one density
+  on the straight line.
 - **The clear film and the holder.** Until clear film is picked it is estimated: the brightest
   of the scan, or where the scan shows its bare light through sprocket holes or around a strip,
   the film's base under that light (`ApproximateNegativeScan.estimatedFilmBase`). A holder the
@@ -167,15 +169,16 @@ in one place (`WebNativeEdit.Negative.balance`, `.plain` and `.strayLight`):
   shadow lies on it, change every record's exposure alike, so the rises of red and blue per unit
   of green across them say how steep the roll's records read against each other
   (`ApproximateNegativeScan.tonalSlopes`). With six frames' steps or more a roll's records are
-  made as steep against green as the film's own, on every frame balanced on its frame or roll.
+  made as steep against green as the film's own across `0.7...1.5`, replacing the single-frame
+  regularized estimate on every frame balanced on its frame or roll.
 - **Without a film.** Normal's weights are fitted on an ordinary orange-masked colour negative
   through the same setup. Its light follows a negative's curve with a toe, density growing as
   gamma times the logarithm of one plus the exposure over the toe's, so the clear film is no
-  exposure and reads black. With no film to say how steep its records are, red's and blue's
-  densities are scaled onto green's at the frame's neutral, which holds the greys between the
-  clear film and the neutral; once a roll's contrast is measured the records are made as steep
-  as each other by it and the neutral is balanced by each channel's light. It takes the scan's
-  stray light off the same way (`PlainNegativeScan`).
+  exposure and reads black. Once a roll's contrast is measured (or from the frame's own
+  regularized tonal steps when readable), the records are made as steep as each other and the
+  neutral is balanced by each channel's light; where no tonal steps are readable, red's and
+  blue's densities are scaled onto green's at the frame's neutral (`PlainNegativeScan`). It takes
+  the scan's stray light off the same way.
 
 Three further steps were measured and left out. Reading a camera's own channels before its
 decoder's matrix read the model's colours worse, not better, and carries more of the scan's
@@ -217,12 +220,13 @@ the ignored build directory.
 ## Film suggestions
 
 `NegativeFilmSuggestions` ranks the installed negative films a scan could be, from the colour of
-its clear film base. Each film's base is predicted from its spectral model as a colorimetric scan
-white-balanced on its light source records it. `read(preview:)` finds the base in a linear
-Rec.2020 preview as the thinnest density plateau. When a neutral light shows past the film's edge
-with an orange base under it, the base is read against that light. `suggest(_:)` fits each scan's
-colour saturation, since cameras record the mask about 1.25 times as saturated as colorimetry
-predicts, and returns suggestions with a likelihood share.
+its clear film base. Each film's base is predicted from its spectral model through the scan's
+`NegativeScanSetup` — lamp spectrum, measured or median CMOS camera channels and RAW decoding
+matrix (`NegativeScanModel.clear`) — or as a lamp-balanced colorimetric scan when no setup is
+supplied. `read(preview:)` finds the base in a linear Rec.2020 preview as the thinnest density
+plateau. When a neutral light shows past the film's edge with an orange base under it, the base
+is read against that light. `suggest(_:)` fits each scan's residual colour saturation around the
+setup's prediction and returns suggestions with a likelihood share.
 
 A light frame of the bare light source, captured like the scan, also fixes the base's overall
 density. Only then can black-and-white films, whose bases differ only in density, be told apart.
@@ -332,11 +336,12 @@ negative existed and do not apply. Crop, rotation and straightening are the edit
 are saved with the edit; the scan itself is never changed.
 
 The light controls act on the print (`NegativeScanPrint.printing`). On an enlarged paper,
-exposure and white balance are the enlarger's: a stop of exposure takes a third of a stop of
-printing light away, since a colour paper's contrast at mid-grey is about three picture stops
-per stop of light (2.7 on Crystal Archive to 3.5 on Endura Premier), and warmth and tint move
-the yellow and magenta filtration by log10(2)/3 density per stop of balance, a warmer print
-taking yellow away. On Digital Reference and Lab Scan, exposure is the scan's exposure. Whatever
+exposure and white balance are the enlarger's (`PrinterMatching`): exposure scales printing light
+through the stock-and-paper sensitivity curve, and warmth and tint solve YMC filtration trims so
+mid-grey lands on the target warmth and tint through the paper's actual dyes. On a cinema release
+print film, exposure and white balance adjust additive `PrinterLights` before the print stock's
+characteristic curves. On Digital Reference and Lab Scan, exposure and white balance adjust
+pre-curve `screenExposureEV` and `screenCMY` density trims (`SpectralRuntime.screenCMY`). Whatever
 the receiver cannot carry, and highlights, shadows, saturation and vibrance, finish the printed
 picture before the grade (`PrintFinish`): gains, then the ends of its luminance moved by up to
 0.75 stops, easing in over three stops above mid-grey and four below, then chroma. A

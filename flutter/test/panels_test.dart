@@ -115,6 +115,13 @@ void main() {
     expect(frameRequest({...film, 'printFrameFraming': [0.5, -1]}, lights)['framing'], [0.5, -1]);
     expect(frameRequest({...film, 'printFrameCount': 3}, lights)['frames'], 3);
     expect(frameRequest({...film, 'printFrameCamera': 'mediumFormatBack'}, lights)['camera'], 'mediumFormatBack');
+    expect(
+      frameRequest({
+        ...edit,
+        'profile': {'printLight': 'tungsten', 'printSurface': 'lustre'},
+      }, lights)['printSurface'],
+      'lustre',
+    );
   });
 
   test('a drag moves a film border over the photograph with the pointer, as far as its edges', () {

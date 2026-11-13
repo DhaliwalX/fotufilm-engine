@@ -383,6 +383,7 @@ test("a request says of a reading what its edit keeps and its frame measures", (
   assert.deepEqual(current, {
     border,
     denseEnd: measured.dense,
+    slopes: measured.slopes,
     reading: NEGATIVE.currentReading,
     crosstalk: 1,
     scanLight: "screen",
@@ -391,6 +392,7 @@ test("a request says of a reading what its edit keeps and its frame measures", (
     roll,
     source,
   });
+  assert.equal("slopes" in readingRequest({ reading: 2 }, { ...measured, slopes: [0, 1] }), false);
   // Stray light the reading takes off goes with it, none where there is none, and never with
   // the first reading.
   const lit = { ...measured, flare: [0.002, 0.001, 0.0005] };

@@ -29,13 +29,11 @@ channel's fifth and ninety-fifth percentiles. Those values describe the **scene'
 usable transmission range**, not a recovered physical film base.
 
 `Stages/NegativeScan.h` owns the pixel operations. Colour-managed linear sRGB is
-encoded with the sRGB transfer before inversion and endpoint normalization. The
-normal range maps to 0.02…0.98, with continuous exponential tails outside it. The
-symmetric inverse sigmoid uses exponent 0.6, which is also its slope at mid-grey;
-These numerical defaults and the
-exponential shoulder are our choices; they have not been fitted to a scanner corpus.
-The result is decoded to linear RGB. No stock simulation, new grain or second
-film development is applied.
+converted to flare-regularized optical density (`-log10 T`) before endpoint normalization, so
+overall scan exposure cancels out rather than distorting contrast. The normal density range maps
+to 0.02…0.98, with continuous exponential tails outside it, and passes through a smooth
+sensitometric toe-and-shoulder curve (`p = 1 + contrast`, default `1.6`) before decoding to
+linear RGB. No stock simulation, new grain or second film development is applied.
 
 Flat channels (less than 2% relative transmission range) receive a neutral midtone
 instead of amplifying noise. The analysis reports limited range for review.

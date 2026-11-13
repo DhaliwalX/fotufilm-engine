@@ -50,6 +50,8 @@ export function profileControlAvailable(c, edit, stock) {
   switch (c.field) {
     case "printLight":
       return (medium?.viewingLights.length || 0) > 1;
+    case "printSurface":
+      return !!medium?.surface;
     case "screenExposure":
       return !!medium?.screenConversion;
     case "screenCyan":

@@ -55,7 +55,10 @@ enum HostFrames {
         var profile = params["profileRequest"] as? [String: Any] ?? [:]
         var controls = profile["controls"] as? [String: Any] ?? [:]
         if let medium = plan.renderMedium { profile["medium"] = medium }
-        if plan.configuration.frame.viewsTransparency { controls["printLight"] = "reference" }
+        if plan.configuration.frame.viewsTransparency {
+            controls["printLight"] = "reference"
+            controls["printSurface"] = PrintSurface.clean.rawValue
+        }
         if plan.renderMedium == PrintPaper.negative.id { controls["negativeViewing"] = "light-box" }
         profile["controls"] = controls
         params["profileRequest"] = profile

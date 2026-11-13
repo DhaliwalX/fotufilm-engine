@@ -20,6 +20,8 @@ extension EditorControlCatalogue {
         switch field {
         case .printLight:
             return stock != nil && viewingLights(for: paper).count > 1
+        case .printSurface:
+            return stock.map { PrintSurface.applies(stock: $0, paper: paper) } ?? false
         case .printCorrection:
             guard let stock else { return false }
             return !stock.isReversal && !stock.isMonochrome && paper.acceptsPrintCorrection

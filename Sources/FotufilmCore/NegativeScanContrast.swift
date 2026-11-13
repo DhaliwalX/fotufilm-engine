@@ -56,20 +56,26 @@ extension ApproximateNegativeScan {
 
     /// How far a roll's steepness moves a record's gain.
     public static let contrastRange: ClosedRange<Float> = 0.7...1.5
+    /// How far a single frame's own tonal steps may move a record's gain.
+    public static let frameContrastRange: ClosedRange<Float> = 0.75...1.35
 
     /// The gains that make red and blue as steep against green as `stock`'s own grey scale,
-    /// from how they rise across a roll's tonal steps (`slopes`, in the scan channels'
-    /// densities) and what each record reads from the channels (`weights`). Held inside
-    /// `contrastRange`; one for a black-and-white film, or rises that read no record.
+    /// from how they rise across tonal steps (`slopes`, in the scan channels' densities) and
+    /// what each record reads from the channels (`weights`), shrunk toward one in log space by
+    /// `weight` (`1` on a roll, smaller on a single frame). Held inside `range`; one for a
+    /// black-and-white film, or rises that read no record.
     static func contrast(stock: FilmStock, weights: [SIMD3<Float>],
-                         slopes: SIMD2<Float>) -> SIMD3<Float> {
-        guard !stock.isMonochrome, let film = greyRise(stock) else { return .one }
+                         slopes: SIMD2<Float>, weight: Float = 1,
+                         range: ClosedRange<Float> = contrastRange) -> SIMD3<Float> {
+        guard !stock.isMonochrome, weight > 0, let film = greyRise(stock) else { return .one }
         let read = NegativeScanCrosstalk.apply(weights, SIMD3(slopes.x, 1, slopes.y))
         var gains = SIMD3<Float>.one
         guard read.y.isFinite, read.y > 0 else { return gains }
+        let w = min(max(weight, 0), 1)
         for record in [0, 2] where read[record].isFinite && read[record] > 0 {
-            let gain = (film[record] / film.y) / (read[record] / read.y)
-            gains[record] = min(max(gain, contrastRange.lowerBound), contrastRange.upperBound)
+            let raw = (film[record] / film.y) / (read[record] / read.y)
+            let gain = w == 1 ? raw : pow(raw, w)
+            gains[record] = min(max(gain, range.lowerBound), range.upperBound)
         }
         return gains
     }

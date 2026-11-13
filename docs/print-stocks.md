@@ -11,7 +11,8 @@ how to add one.
 | `PrintPaper` | The output a user chooses. Its raw value is the CLI and preset ID, and hosts persist its case order. It also covers outputs with no print material: Lab Scan, Telecine, Cineon Log, Digital Reference and Negative. Cineon Log (`deliversCodeValues`) delivers printing density as Cineon code values (`CineonLog`), set up so the stock's normally exposed grey reads 445 in every record; hosts pass those out unconverted and write them to DPX with `CineonDPX`. |
 | `PrintStock` | One physical material, described in `PrintStockCatalogue.swift`: name, menu detail, process, three characteristic curves, spectra and, for release print film, its setup aims. |
 | `PrintStock.Process` | The material's family. It decides how the print is exposed, viewed and timed, and which films and gauges can use it. |
-| `PrintStock.Spectra` | Dye and layer-sensitivity spectra on the engine's 380–780 nm, 5 nm grid, derived from datasheet values by the family's rules. |
+| `PrintStock.Spectra` | Dye, layer-sensitivity and paper-base reflectance spectra (`baseReflectance`) on the engine's 380–780 nm, 5 nm grid, derived from datasheet values by the family's rules. |
+| `PrintSurface` | The viewing finish of a reflection sheet (`clean`, `glossy`, `lustre`, `matte`). `clean` preserves the 0/45° densitometric reference read (unit base white, zero glare); physical finishes apply `baseReflectance` and diffuse air–gelatin first-surface scatter (`surfaceReflectance`), bounding reflection black density (`D_max`). |
 
 `PrintPaper.route` is the only place a case is tied to its material. Everything else reads the
 stock or its process instead of switching on the case.
@@ -48,11 +49,16 @@ fit any of them, add a process instead of special-casing one stock.
        spectra: Spectra(dyeDensity: ExamplePaperSpectra.dyeDensity,
                         neutralAmounts: ExamplePaperSpectra.neutralAmounts,
                         layerSensitivity: ExamplePaperSpectra.layerSensitivity,
-                        process: .photoPaper))
+                        process: .photoPaper,
+                        baseReflectance: ExamplePaperSpectra.baseReflectance))
    ```
 
    - Pass `neutralAmounts` when the sheet plots each dye at its own peak. Pass nil when the
      sheet draws the dyes at the amounts that already form a neutral, as cine print sheets do.
+   - Reflection stocks (`photoPaper`, `positivePaper`) may pass `baseReflectance` on the 81-band
+     grid (or omit it to use the process family's default resin-coated paper base); `PrintSurface`
+     evaluates `baseReflectance` and diffuse surface glare when a physical finish (`glossy`,
+     `lustre`, `matte`) is chosen, while `clean` keeps unit base white and zero glare.
    - Release print film also needs `releaseSetup:` with its published LAD aims and the density
      at which its sensitivity was measured.
    - A sheet that publishes one curve repeats it for all three records. If a sheet publishes no

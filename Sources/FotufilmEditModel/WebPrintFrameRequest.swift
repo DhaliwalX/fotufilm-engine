@@ -11,6 +11,7 @@ public struct WebPrintFrameRequest: Decodable {
     public let format: String?
     public let medium: String?
     public let viewingKelvin: Float?
+    public let printSurface: PrintSurface?
     /// Border Width, as a multiple of the frame's preset margin; absent keeps the preset.
     public let margin: Double?
     /// The frame number a Film Border's edge printing and DX barcode show; absent is frame 1.
@@ -89,6 +90,7 @@ public struct WebPrintFrameRequest: Decodable {
             PrintFrameConfiguration(frame: choice == .emulsion ? .none : choice, formatID: format,
                 definition: definition,
                 paper: paper, viewingKelvin: choice.viewsTransparency ? nil : viewingKelvin,
+                printSurface: choice.viewsTransparency ? .clean : (printSurface ?? .clean),
                 negativeViewing: .lightBox, margin: margin ?? 1,
                 frameNumber: recorded ? FilmEdgePrinting.recordedFrameNumber
                     : frameNumber ?? FilmEdgePrinting.recordedFrameNumber,

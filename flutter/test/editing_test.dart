@@ -43,6 +43,8 @@ void main() {
       expect(historyTitle(crop, copyEdit(crop)), 'Edit');
       final profile = copyEdit(crop)..['profile'] = {'couplerReach': 1.5};
       expect(historyTitle(crop, profile), 'Couplers');
+      final surface = copyEdit(crop)..['profile'] = {'printSurface': 'matte'};
+      expect(historyTitle(crop, surface), 'Paper Surface');
     });
 
     test('Undo and Redo say what they change; the timeline marks the step standing', () {

@@ -12,7 +12,9 @@ import 'editor.dart';
 /// What the engine plans a frame from (print-frame.js `frameRequest`): `printLight`'s menu value
 /// is the light the print is viewed under.
 Json frameRequest(Json edit, List<Json> printLights, {int width = 1, int height = 1}) {
-  final light = ((edit['profile'] as Map?) ?? const {})['printLight'];
+  final profile = (edit['profile'] as Map?) ?? const {};
+  final light = profile['printLight'];
+  final surface = profile['printSurface'];
   return {
     'kind': 'print-frame',
     'stock': edit['stock'],
@@ -25,6 +27,7 @@ Json frameRequest(Json edit, List<Json> printLights, {int width = 1, int height 
     'frames': edit['printFrameCount'] ?? 1,
     'camera': edit['printFrameCamera'] ?? 'panoramic',
     'viewingKelvin': printLights.where((c) => c['id'] == light).firstOrNull?['value'],
+    if (surface is String) 'printSurface': surface,
     'width': width,
     'height': height,
   };

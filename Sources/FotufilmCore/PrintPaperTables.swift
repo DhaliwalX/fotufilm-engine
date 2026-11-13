@@ -18,6 +18,12 @@ extension PrintPaper {
         printStock?.spectra.analyticalDyes ?? SpectralGrid.paperDyeAmounts
     }
 
+    /// Unexposed support reflectance on `SpectralGrid`, or unit reflectance where nothing is
+    /// printed onto a reflection sheet.
+    var baseReflectance: [Float] {
+        printStock?.spectra.baseReflectance ?? PrintStock.unitBaseReflectance
+    }
+
     /// Layer sensitivities with publication tails extended. Release prints preserve the
     /// publication's inter-layer speed scale: it determines the additive printer's beam mix.
     /// Per-layer normalization is harmless only for paths without a spectral timing solve.

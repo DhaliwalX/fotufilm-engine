@@ -243,14 +243,16 @@ final class NegativeDocument: @unchecked Sendable {
         return try NegativeScanPrint.Reading(
             stock: NegativeScanPrint.film(stock), border: measure.border,
             balance: negative.balance(stock: stock, border: measure.border, denseEnd: measure.dense,
-                                      source: measure.capture, flare: measure.flare),
+                                      slopes: measure.slopes, source: measure.capture,
+                                      flare: measure.flare),
             flare: measure.flare, holder: measure.holder)
     }
 
     /// The scan read without a film, as Normal reads it (`WebNativeEdit.Negative.plain`).
     static func plain(_ measure: Measure, state: EditState) -> PlainNegativeScan {
         (state.negative ?? .init()).plain(border: measure.border, denseEnd: measure.dense,
-                                          source: measure.capture, flare: measure.flare)
+                                          slopes: measure.slopes, source: measure.capture,
+                                          flare: measure.flare)
     }
 
     // MARK: - Clear film
@@ -344,7 +346,8 @@ final class NegativeDocument: @unchecked Sendable {
         }
         guard let preview = try? Self.samples(FilmRender.downsample(image, longEdge: Self.readingEdge)),
               let reading = NegativeFilmSuggestions.read(preview: preview) else { return [] }
-        return NegativeFilmSuggestions(stocks: stocks).suggest(reading, limit: 3)
+        return NegativeFilmSuggestions(stocks: stocks, setup: capture.setup(light: .white))
+            .suggest(reading, limit: 3)
     }()
 
     // MARK: - Samples

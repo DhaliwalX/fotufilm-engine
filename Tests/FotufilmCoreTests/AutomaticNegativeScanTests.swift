@@ -92,4 +92,20 @@ final class AutomaticNegativeScanTests: XCTestCase {
         } }
     }
 
+    func testDensityNormalizationIsInvariantToOverallScanExposure() throws {
+        guard HalideBackend.isAvailable else { throw XCTSkip("Halide unavailable") }
+        let baseScan = ramp()
+        var dimmer = baseScan
+        for c in 0..<3 {
+            for i in 0..<dimmer.pixelCount { dimmer.planes[c][i] *= 0.35 }
+        }
+        let brightOut = try AutomaticNegativeScan(preview: baseScan).convert(baseScan, useMetal: false)
+        let dimOut = try AutomaticNegativeScan(preview: dimmer).convert(dimmer, useMetal: false)
+        for c in 0..<3 {
+            for i in 0..<baseScan.pixelCount {
+                XCTAssertEqual(brightOut.planes[c][i], dimOut.planes[c][i], accuracy: 1e-5)
+            }
+        }
+    }
+
 }

@@ -113,7 +113,8 @@ final class PlainNegativeScanTests: XCTestCase {
 
     func testAFrameIsBalancedOnItsPickedNeutralItsDensestEndOrItsRoll() {
         let setup = setups[0]
-        let weights = PlainNegativeScan.weights(setup: setup, separation: 1)
+        let weights = setup.weights(PlainNegativeScan.weights(setup: setup, separation: 1),
+                                    green: PlainNegativeScan.weights(setup: setup, separation: 0)[1].y)
         let dense = SIMD3<Float>(1.2, 1.1, 0.88), picked = SIMD3<Float>(0.5, 0.6, 0.62)
         func assertGrey(_ light: SIMD3<Float>, line: UInt = #line) {
             XCTAssertGreaterThan(light.y, 0, line: line)
@@ -188,6 +189,16 @@ final class PlainNegativeScanTests: XCTestCase {
         XCTAssertEqual(none.gains, .one)
         XCTAssertEqual(none.balance, .one)
         XCTAssertEqual(none.reference, own.reference)
+
+        // A single frame that measured its own tonal steps regularizes contrast and balances its
+        // neutral by scene exposure rather than scaling density.
+        let frameStepped = PlainNegativeScan(
+            border: border, setup: setup, separation: 1, mode: .frame,
+            tones: Tones(denseEnd: dense, slopes: SIMD2(0.95, 1.1)))
+        XCTAssertEqual(frameStepped.gains.x, pow(read.y / read.x, 0.8), accuracy: 1e-6)
+        XCTAssertEqual(frameStepped.gains.z, pow(read.y / read.z, 0.8), accuracy: 1e-6)
+        XCTAssertNotEqual(frameStepped.balance.x, 1, accuracy: 0.01)
+        assertGrey(frameStepped.light(of: sample(dense)))
     }
 
     func testAFrameWithNothingToReadIsUnbalancedThroughItsSetup() {

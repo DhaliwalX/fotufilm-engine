@@ -66,8 +66,7 @@ struct PrintDyeUnmix: Sendable {
     let dyes: [[Float]]
     private let dye: [SIMD3<Float>]
     private let band: [SIMD3<Float>]
-    private let matrix: [SIMD3<Float>]
-    private let inverse: [SIMD3<Float>]
+    private let solver: StatusADyeUnmix
 
     /// log2(10), for 10^-d as exp2 in the table-build inner loop.
     private static let log2Of10: Float = 3.321928
@@ -83,15 +82,7 @@ struct PrintDyeUnmix: Sendable {
                   Densitometry.statusA[1][i] / integrals[1],
                   Densitometry.statusA[2][i] / integrals[2])
         }
-        var columns = [SIMD3<Float>](repeating: .zero, count: 3)
-        for d in 0..<3 {
-            var amounts = SIMD3<Float>(repeating: 0)
-            amounts[d] = 1
-            columns[d] = Densitometry.statusADensity(amounts: amounts, dyes: dyes)
-        }
-        self.matrix = columns
-        self.inverse = PrintDyeUnmix.invert(columns)
-            ?? [SIMD3(1, 0, 0), SIMD3(0, 1, 0), SIMD3(0, 0, 1)]
+        self.solver = StatusADyeUnmix(dyes: dyes)
     }
 
     func read(_ amounts: SIMD3<Float>) -> SIMD3<Float> {
@@ -106,37 +97,9 @@ struct PrintDyeUnmix: Sendable {
     }
 
     func amounts(forStatusA target: SIMD3<Float>) -> SIMD3<Float> {
-        var amounts = apply(inverse, target)
-        for _ in 0..<16 {
-            let residual = read(amounts) - target
-            if max(abs(residual.x), max(abs(residual.y), abs(residual.z))) < 1e-6 {
-                break
-            }
-            amounts -= apply(inverse, residual)
-        }
-        // Clear paper is no dye at all: zero density above base unmixes to exactly zero, so paper
-        // white reaches display white. A softer floor has to lift zero to meet it, and every
-        // highlight with it; the output table's cells are wider than any useful blend anyway.
-        return SIMD3(max(amounts.x, 0), max(amounts.y, 0), max(amounts.z, 0))
-    }
-
-    private func apply(_ m: [SIMD3<Float>], _ v: SIMD3<Float>) -> SIMD3<Float> {
-        m[0] * v.x + m[1] * v.y + m[2] * v.z
-    }
-
-    private static func invert(_ columns: [SIMD3<Float>]) -> [SIMD3<Float>]? {
-        func cross(_ a: SIMD3<Float>, _ b: SIMD3<Float>) -> SIMD3<Float> {
-            SIMD3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x)
-        }
-        func dot(_ a: SIMD3<Float>, _ b: SIMD3<Float>) -> Float {
-            a.x * b.x + a.y * b.y + a.z * b.z
-        }
-        let determinant = dot(columns[0], cross(columns[1], columns[2]))
-        guard abs(determinant) > 1e-9 else { return nil }
-        let r0 = cross(columns[1], columns[2]) / determinant
-        let r1 = cross(columns[2], columns[0]) / determinant
-        let r2 = cross(columns[0], columns[1]) / determinant
-        return [SIMD3(r0.x, r1.x, r2.x), SIMD3(r0.y, r1.y, r2.y),
-                SIMD3(r0.z, r1.z, r2.z)]
+        // Active-set nonnegative Gauss-Newton (`StatusADyeUnmix`): zero density above base unmixes
+        // to exact zero so paper white reaches display white, while unreachable Status A triples
+        // project orthogonally onto the nonnegative dye gamut boundary without cross-band twist.
+        solver.amounts(forStatusA: target)
     }
 }

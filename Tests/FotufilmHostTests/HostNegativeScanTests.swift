@@ -284,11 +284,14 @@ final class HostNegativeScanTests: XCTestCase {
         let dense = try XCTUnwrap(measure["denseEnd"] as? [Double]).map(Float.init)
         let denseEnd = SIMD3<Float>(dense[0], dense[1], dense[2])
         // The rises across the frame's tonal steps are measured with it, or said to be none.
-        if let slopes = measure["slopes"] as? [Double] {
-            XCTAssertEqual(slopes.count, 2)
-            XCTAssertTrue(slopes.allSatisfy { $0 > 0 })
+        let slopes: SIMD2<Float>?
+        if let pair = measure["slopes"] as? [Double] {
+            XCTAssertEqual(pair.count, 2)
+            XCTAssertTrue(pair.allSatisfy { $0 > 0 })
+            slopes = SIMD2(Float(pair[0]), Float(pair[1]))
         } else {
             XCTAssertTrue(measure["slopes"] is NSNull)
+            slopes = nil
         }
 
         let stock = try NegativeScanPrint.film("gold200")
@@ -307,7 +310,8 @@ final class HostNegativeScanTests: XCTestCase {
             let read = try prepared(edit)
             let expected = try NegativeScanPrint.Reading(
                 stock: stock, border: border,
-                balance: negative.balance(stock: stock, border: border, denseEnd: denseEnd))
+                balance: negative.balance(stock: stock, border: border, denseEnd: denseEnd,
+                                          slopes: slopes))
             let calibration = try XCTUnwrap(read.edit.negativeReading?.calibration, "\(edit)")
             XCTAssertEqual(calibration, expected.calibration, "\(edit)")
             XCTAssertEqual(read.edit.negativeReading?.highlightStops, expected.highlightStops, "\(edit)")
@@ -385,8 +389,14 @@ final class HostNegativeScanTests: XCTestCase {
             return out
         }
         let gpu = try print(service.engine.developer), cpu = try print(HalideCPUDeveloper())
+        // Native Metal/CUDA float print delivery clamps negative out-of-gamut Display P3 channels,
+        // whereas PrintPipeline and Vulkan preserve them until display conversion.
+        let clampsNegative = service.engine.developer.kind != "vulkan"
         var worst: Float = 0
-        for i in gpu.indices where i % 4 != 3 { worst = max(worst, abs(gpu[i] - cpu[i])) }
+        for i in gpu.indices where i % 4 != 3 {
+            let expected = clampsNegative ? max(cpu[i], 0) : cpu[i]
+            worst = max(worst, abs(gpu[i] - expected))
+        }
         XCTAssertLessThan(worst, 0.01, name)
         }
     }

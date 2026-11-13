@@ -18,12 +18,18 @@ inline Halide::Expr negative_scan_valid(Halide::Expr r, Halide::Expr g, Halide::
 inline Halide::Expr negative_scan_channel(Halide::Expr sample, Halide::Expr low,
                                          Halide::Expr high, Halide::Expr contrast) {
     using namespace Halide;
-    Expr a = srgb_encode(max(low, 0.0f));
-    Expr b = srgb_encode(max(high, 0.0f));
-    Expr span = max(b - a, 1e-6f);
-    Expr inverted = (b - srgb_encode(max(sample, 0.0f))) / span;
+    // Flare-regularized optical density (-log T) relative to the thin-negative endpoint:
+    // invariant to overall scan exposure and smooth across clipped wide-gamut channels.
+    Expr base = max(high, 1e-4f);
+    Expr flare = 0.002f * base;
+    auto density = [&](Expr t) {
+        return log(base + flare) - log(max(t, 0.0f) + flare);
+    };
+    Expr d_low = density(high);
+    Expr d_high = density(low);
+    Expr span = max(d_high - d_low, 1e-6f);
+    Expr inverted = (density(sample) - d_low) / span;
     // A C1 continuous exponential extension reserves the outer 2% for outliers.
-    // This explicit shoulder is our implementation choice, not a formula in the paper.
     constexpr float room = 0.02f;
     constexpr float slope = 1.0f - 2.0f * room;
     Expr middle = room + slope * inverted;
@@ -32,10 +38,12 @@ inline Halide::Expr negative_scan_channel(Halide::Expr sample, Halide::Expr low,
         inverted > 1.0f,
         1.0f - room * exp(max(-80.0f, min(0.0f, (1.0f - inverted) * (slope / room)))),
         middle);
-    Expr x = clamp(soft, 0.0f, 1.0f);
-    // Published symmetric inverse-sigmoid. c is tunable; 0.6 is our initial default.
-    Expr y = select(x <= 0.5f, 0.5f * pow(max(2.0f*x, 0.0f), contrast),
-                    1.0f - 0.5f * pow(max(2.0f-2.0f*x, 0.0f), contrast));
+    Expr x = clamp(soft, 1e-6f, 1.0f - 1e-6f);
+    // Smooth sensitometric toe and shoulder in normalized density space (p > 1 gives zero
+    // derivative at clear base and dense highlights instead of amplifying toe grain).
+    Expr p = 1.0f + contrast;
+    Expr xp = pow(x, p);
+    Expr y = xp / (xp + pow(1.0f - x, p));
     // A flat channel has no identifiable range: do not turn grain into full contrast.
     y = select(high - low < max(high, 1e-6f) * 0.02f, 0.5f, y);
     return srgb_decode(y);

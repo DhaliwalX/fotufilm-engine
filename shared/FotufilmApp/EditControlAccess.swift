@@ -125,6 +125,8 @@ extension EditorControlField {
         case .printFrameCamera: return .bespoke { $0.printFrameCamera != .panoramic }
         case .printLight:
             return .bespoke { $0.printLightKelvin != nil }
+        case .printSurface:
+            return .bespoke { $0.printSurface != .default }
         case .digitalReference:
             return .bespoke { $0.digitalReference != EditState.defaultDigitalReference }
         case .screenGrade: return .number(\.screenGrade)
@@ -302,6 +304,7 @@ extension EditState {
 
     mutating func reset(_ field: EditorControlField) {
         if field == .digitalReference { digitalReference = EditState.defaultDigitalReference; return }
+        if field == .printSurface { printSurface = .default; return }
         if field == .printFrame { printFrame = .none; return }
         if field == .printFrameNumber { printFrameNumber = FilmEdgePrinting.recordedFrameNumber; return }
         if field == .printFrameCount { printFrameCount = 1; return }
