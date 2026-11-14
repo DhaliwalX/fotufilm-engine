@@ -34,6 +34,7 @@ import {
   average,
   tonalSlopes,
   rollClearFilm,
+  pictureAreaFrame,
   frameLight,
   holder,
   withoutHolder,
@@ -44,7 +45,7 @@ import {
   plainReading,
   positiveSource,
 } from './negative-reading.js'
-import { readingRequest, readsModel } from './negative-document.js'
+import { pictureArea, readingRequest, readsModel } from './negative-document.js'
 import { rampCurve, toneRamp } from './tone-curve.js'
 import {
   assetUrl,
@@ -421,12 +422,17 @@ export class RenderSession {
     // no colour of clear film to share (WebNativeEdit.Negative.sharesClearFilm).
     const shares = readsModel(edit.negative) && edit.negative.scanLight !== 'rgb'
     const border = edit.negative.border || !shares ? own : rollClearFilm(own, edit.negative.roll)
+    // A picture area picked on the scan is read instead of the crop, and read whole
+    // (WebNativeEdit.Negative.pictureArea).
+    const area = pictureArea(edit.negative)
+    const measured = area ? { ...edit, crop: area, cropShape: 'corners' } : edit
     const framingOf = JSON.stringify([
       border,
       edit.rotation,
       edit.flip,
       lensIsActive(edit.lens) ? edit.lens : null,
-      edit.crop,
+      measured.crop,
+      area != null,
       edit.straighten,
       edit.perspectiveV || 0,
       edit.perspectiveH || 0,
@@ -447,10 +453,11 @@ export class RenderSession {
     const framing = JSON.stringify([framingOf, shown?.limit ?? null])
     let framed = kept.framings.find((item) => item.key === framing)
     if (!framed) {
-      const preview = await read(edit)
+      let preview = await read(measured)
       if (!preview) return null
       if (shown)
         preview.pixels = withoutHolder(preview.pixels, preview.width, preview.height, border, shown.limit)
+      if (area) preview = pictureAreaFrame(preview.pixels, preview.width, preview.height)
       framed = {
         key: framing,
         border,

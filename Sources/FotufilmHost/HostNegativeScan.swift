@@ -133,7 +133,7 @@ final class HostNegativeScan {
         // A reading through the scan's light and camera leaves the scan's holder out of what
         // it measures of the frame; the first reading measures as it did.
         let holder = negative.readsModel ? try self.holder(border: border, light: id) : nil
-        let frameKey = "\(key)|\(holder.map { "\($0.limit)" } ?? "")"
+        let frameKey = "\(key)|\(holder.map { "\($0.limit)" } ?? "")|\(negative.pictureArea != nil)"
         let frame: (planes: ImageBuffer, light: SIMD3<Float>?)
         if let kept = lock.withLock({ frames.first { $0.key == frameKey } }) {
             frame = (kept.planes, kept.light)
@@ -143,6 +143,10 @@ final class HostNegativeScan {
             if let holder {
                 planes = ApproximateNegativeScan.withoutHolder(planes, border: border,
                                                                limit: holder.limit)
+            }
+            // A picked picture area is read whole (`ApproximateNegativeScan.pictureArea`).
+            if negative.pictureArea != nil {
+                planes = ApproximateNegativeScan.pictureArea(planes)
             }
             frame = (planes, ApproximateNegativeScan.frameLight(preview: planes))
             lock.withLock {

@@ -151,7 +151,7 @@ extension WebNativeEdit.Negative {
         return [
             "\(reading ?? 1)", camera ?? "", balance?.rawValue ?? "", "\(neutral ?? [])",
             roll ?? "", crosstalk.map { "\($0)" } ?? "", scanLight?.rawValue ?? "",
-            flare.map { "\($0)" } ?? "",
+            flare.map { "\($0)" } ?? "", "\(pictureArea ?? [])",
         ].joined(separator: "|")
     }
 }

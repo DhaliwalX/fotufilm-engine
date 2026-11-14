@@ -6,6 +6,7 @@ import { pixelSource } from "../../src/engine.js";
 import {
   areaPreview,
   average,
+  pictureAreaFrame,
   denseEnd,
   channelEnds,
   midtone,
@@ -28,6 +29,7 @@ import {
 import {
   newNegative,
   parseNegative,
+  pictureArea,
   readingRequest,
   readsModel,
   rollBalance,
@@ -152,6 +154,36 @@ test("a frame's average is the middle of its tones between the toe and its highl
   });
   assert.equal(average(border, night.read(0, 0, 100, 100), 100, 100), null);
   assert.equal(average(border, new Float32Array(4), 1, 1), null);
+});
+
+test("a picked picture area is measured whole", () => {
+  // A highlight along the area's top edge, which the central 80% of the area leaves out.
+  const pictured = scan(100, 100, (x, y) => {
+    const density = y < 8 ? [1.6, 1.7, 1.8] : [0.4, 0.5, 0.6];
+    return border.map((v, c) => v * 10 ** -density[c]);
+  });
+  const pixels = pictured.read(0, 0, 100, 100);
+  assert.ok(Math.abs(denseEnd(border, pixels, 100, 100)[1] - 0.5) < 1e-5);
+  const whole = pictureAreaFrame(pixels, 100, 100);
+  assert.equal(whole.width - 2 * Math.floor(whole.width / 10), 100);
+  assert.ok(Math.abs(denseEnd(border, whole.pixels, whole.width, whole.height)[1] - 1.7) < 1e-5);
+  const middle = midtone(border, whole.pixels, whole.width, whole.height);
+  assert.ok(Math.abs(middle[1] - (0.92 * 0.5 + 0.08 * 1.7)) < 1e-4, String(middle[1]));
+  // The area is four corners inside the frame that turn the same way round.
+  const corners = [
+    [0.1, 0.15],
+    [0.9, 0.12],
+    [0.88, 0.85],
+    [0.12, 0.9],
+  ];
+  assert.deepEqual(pictureArea({ area: corners }), corners);
+  assert.equal(pictureArea({ area: null }), null);
+  assert.equal(pictureArea({ area: corners.slice(0, 3) }), null);
+  assert.equal(pictureArea({ area: [...corners].reverse() }), null);
+  assert.equal(pictureArea({ area: [corners[0], [1.2, 0.1], corners[2], corners[3]] }), null);
+  const kept = { ...newNegative("white", 2), area: corners };
+  assert.deepEqual(parseNegative(kept).area, corners);
+  assert.throws(() => parseNegative({ ...kept, area: corners.slice(0, 3) }), /Invalid negative reading/);
 });
 
 test("a roll keeps the average its frames come to and the colour of its clear film", () => {

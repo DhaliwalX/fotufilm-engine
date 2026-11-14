@@ -131,6 +131,28 @@ export function midtone(border, pixels, width, height) {
   return [0, 1, 2].map((c) => densities.reduce((sum, density) => sum + density[c], 0) / densities.length);
 }
 
+// A picture area picked on the scan, for what a frame measures: `pixels`, the area drawn as a
+// picture of its own (RGBA), set in the middle of a frame a quarter larger with nothing around
+// it. The measures read a frame's central 80%, which of a picked area is then all of it; what
+// surrounds it is no number, which every measure passes over. Mirrors
+// ApproximateNegativeScan.pictureArea.
+export function pictureAreaFrame(pixels, width, height) {
+  if (!(width > 0 && height > 0)) return { pixels, width, height };
+  const padded = (size) => {
+    let whole = size;
+    while (whole - 2 * Math.floor(whole / 10) < size) whole++;
+    return whole;
+  };
+  const w = padded(width),
+    h = padded(height);
+  const frame = new Float32Array(w * h * 4).fill(NaN);
+  const left = Math.floor(w / 10),
+    top = Math.floor(h / 10);
+  for (let y = 0; y < height; y++)
+    frame.set(pixels.subarray(y * width * 4, (y + 1) * width * 4), ((y + top) * w + left) * 4);
+  return { pixels: frame, width: w, height: h };
+}
+
 // The green density over the clear film a pixel has to count toward a frame's average
 // (ApproximateNegativeScan.averageRange).
 const AVERAGE_RANGE = [0.1, 1.5];

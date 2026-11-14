@@ -79,11 +79,15 @@ class EditorShortcuts {
       LogicalKeyboardKey.space when active => handled(() => editor.setComparing(true), repeats: true),
       LogicalKeyboardKey.enter || LogicalKeyboardKey.numpadEnter when crop.showing =>
         handled(crop.done),
+      LogicalKeyboardKey.enter || LogicalKeyboardKey.numpadEnter
+          when editor.negatives.selectingArea =>
+        handled(editor.negatives.finishArea),
       LogicalKeyboardKey.escape => handled(() {
           editor.selection.clear();
           editor.setComparing(false);
           if (active) editor.setZoom(null);
           if (crop.showing) crop.leave();
+          editor.negatives.leaveArea();
         }),
       LogicalKeyboardKey.keyH when alone => handled(editor.toggleHistogram),
       LogicalKeyboardKey.keyC when alone && active => handled(() => editor.setPanel(Panel.crop)),

@@ -163,6 +163,31 @@ export function rolledDenseEnd(dense, roll) {
   return [roll.colour[0] * dense[1], dense[1], roll.colour[1] * dense[1]];
 }
 
+// The picture area picked on a negative where it is one a frame can be read on: four corners
+// inside the frame that turn the same way round, as a four-corner crop's do. Null otherwise.
+// Mirrors WebNativeEdit.Negative.pictureArea.
+export function pictureArea(negative) {
+  const area = negative?.area;
+  if (
+    !Array.isArray(area) ||
+    area.length !== 4 ||
+    !area.every(
+      (point) =>
+        Array.isArray(point) &&
+        point.length === 2 &&
+        point.every((v) => Number.isFinite(v) && v >= 0 && v <= 1),
+    )
+  )
+    return null;
+  for (let i = 0; i < 4; i++) {
+    const a = area[i],
+      b = area[(i + 1) % 4],
+      c = area[(i + 2) % 4];
+    if (!((b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]) > 0.0001)) return null;
+  }
+  return area;
+}
+
 // Whether an edit reads the film through the scan's light and camera and balances as it says,
 // or with the first reading, which an edit saved with it keeps (WebNativeEdit.Negative.readsModel).
 export const readsModel = (negative) => (negative?.reading ?? 1) >= 2;
@@ -239,6 +264,7 @@ export function parseNegative(value) {
     balance = null,
     neutral = null,
     flare = null,
+    area = null,
   } = value;
   const positives = (values, count) =>
     Array.isArray(values) &&
@@ -267,7 +293,8 @@ export function parseNegative(value) {
     (camera !== null && (typeof camera !== "string" || !camera)) ||
     (balance !== null && !BALANCES.includes(balance)) ||
     (neutral !== null && !positives(neutral, 3)) ||
-    (flare !== null && !(Number.isFinite(flare) && flare >= 0 && flare <= 0.02))
+    (flare !== null && !(Number.isFinite(flare) && flare >= 0 && flare <= 0.02)) ||
+    (area !== null && !pictureArea({ area }))
   )
     throw new Error("Invalid negative reading.");
   return {
@@ -288,5 +315,6 @@ export function parseNegative(value) {
     ...(balance !== null ? { balance } : {}),
     ...(neutral !== null ? { neutral: [...neutral] } : {}),
     ...(flare !== null ? { flare } : {}),
+    ...(area !== null ? { area: area.map((point) => [...point]) } : {}),
   };
 }

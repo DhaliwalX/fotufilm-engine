@@ -6,6 +6,7 @@ import 'dart:ui' show Offset;
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 import '../engine/engine.dart';
+import 'crop_geometry.dart';
 import 'editor.dart';
 import 'edit.dart';
 import 'file_types.dart';
@@ -31,6 +32,7 @@ class RollProgress {
 class NegativeScans {
   NegativeScans(this.editor) {
     editor.renderOptionSources.add(_viewOptions);
+    editor.renderOptionSources.add(_areaOptions);
     editor.addListener(_settlePanel);
   }
 
@@ -50,6 +52,11 @@ class NegativeScans {
 
   /// A panel the shown photograph does not offer gives way to its Film panel.
   void _settlePanel() {
+    // The picture area is picked on the shown negative, outside the crop tool.
+    if (selectingArea && (negative == null || editor.crop.showing || editor.active != _areaDoc)) {
+      selectingArea = false;
+      _areaDoc = null;
+    }
     final panel = editor.panel;
     if (offersPanel(_doc?.edit, panel.id)) return;
     editor.panel = Panel.film;
@@ -214,6 +221,12 @@ class NegativeScans {
 
   void setPicking(String? what) {
     if (picking == what) return;
+    // One tool has the photograph at a time.
+    if (what != null && selectingArea) {
+      selectingArea = false;
+      _areaDoc = null;
+      editor.renderer?.schedule();
+    }
     picking = what;
     editor.notify();
   }
@@ -266,6 +279,104 @@ class NegativeScans {
       }
     }
   }
+
+  // ── Picture area ────────────────────────────────────────────────────────────────────────
+
+  /// Whether the picture area is being picked: the viewer shows the whole frame with the
+  /// area's four corners over it, each dragged on its own, as the crop tool shows a crop.
+  bool selectingArea = false;
+  PhotoDocument? _areaDoc;
+
+  /// The picture area picked on the shown negative, where it is one its frame can be read on
+  /// (`WebNativeEdit.Negative.pictureArea`): four corners of the oriented frame, top left
+  /// first, turning the same way round.
+  List<Offset>? get pickedArea {
+    final area = negative?['area'];
+    if (area is! List || area.length != 4) return null;
+    final points = cropPoints(area);
+    return validCrop(points) ? points : null;
+  }
+
+  /// The area's corners as the overlay shows them: the picked ones, else where picking starts,
+  /// the crop where the frame is cropped and the frame less a tenth at each edge where it is
+  /// not, which is what a frame without an area measures.
+  List<Offset> get areaPoints {
+    final picked = pickedArea;
+    if (picked != null) return picked;
+    final crop = cropPoints(editor.edit['crop']);
+    return isFullCrop(crop) || !validCrop(crop) ? rectangleCrop(.1, .1, .9, .9) : crop;
+  }
+
+  /// Select Picture Area, and Done: leaving keeps the corners as they stand.
+  void toggleArea() {
+    if (negative == null) return;
+    if (selectingArea) return finishArea();
+    if (editor.crop.showing) editor.crop.leave();
+    picking = null;
+    selectingArea = true;
+    _areaDoc = editor.active;
+    if (editor.view.zoom != null) editor.setZoom(null);
+    editor.notify();
+    editor.renderer?.schedule();
+  }
+
+  /// Done, and Return: the corners on show are the picture area.
+  void finishArea() {
+    if (!selectingArea) return;
+    if (negative != null && pickedArea == null) setArea(areaPoints);
+    leaveArea();
+  }
+
+  /// Escape: the tool closes with the area as it was last set.
+  void leaveArea() {
+    if (!selectingArea) return;
+    selectingArea = false;
+    _areaDoc = null;
+    editor.notify();
+    editor.renderer?.schedule();
+  }
+
+  /// The corners the overlay was let go at, as one step.
+  void setArea(List<Offset> corners) {
+    if (validCrop(corners)) read({'area': cropJson(corners)});
+  }
+
+  /// Clear Picture Area: the frame measures the middle of its crop again.
+  void clearArea() {
+    if (negative?['area'] != null) read({'area': null});
+  }
+
+  /// Use on Every Frame of the Roll: the shown frame's picture area on each frame of its roll
+  /// that is turned as it is, a holder showing every frame of a roll in one place. The shown
+  /// frame is left as it is; the others take it in their histories.
+  void areaOnRoll() {
+    final area = pickedArea, shown = editor.active;
+    if (area == null || shown == null) return;
+    bool turnedAlike(Json a, Json b) =>
+        ((a['rotation'] as num?) ?? 0) == ((b['rotation'] as num?) ?? 0) &&
+        (a['flip'] == true) == (b['flip'] == true);
+    for (final doc in rollFrames) {
+      final before = doc.edit['negative'] as Json?;
+      if (doc == shown || before == null || !turnedAlike(doc.edit, shown.edit)) continue;
+      final h = doc.history;
+      h.past.add(h.present);
+      h.future.clear();
+      h.present = copyEdit(h.present)..['negative'] = {...before, 'area': cropJson(area)};
+      h.group = null;
+    }
+    editor.notify();
+  }
+
+  /// The develops of the shown picture while its area is picked: the whole frame, cropless, as
+  /// the crop tool shows it, so the corners lie where the scan shows them.
+  Json _areaOptions(PhotoDocument doc) => !selectingArea || doc != _areaDoc
+      ? const <String, dynamic>{}
+      : {
+          'cropMode': true,
+          'edit': copyEdit(doc.edit)
+            ..['crop'] = fullCrop()
+            ..['ratio'] = 'free',
+        };
 
   // ── Light frames ────────────────────────────────────────────────────────────────────────
 

@@ -91,7 +91,7 @@ class _WorkspaceState extends State<Workspace> {
     });
     FocusManager.instance.addListener(_keepKeys);
     // Return applies the crop whatever control the keyboard is at (editor_shortcuts.dart).
-    returnGoesPast = () => editor.crop.showing;
+    returnGoesPast = () => editor.framing;
   }
 
   /// Keys that would go nowhere (a dialog closed, a focused control gone) come back to the

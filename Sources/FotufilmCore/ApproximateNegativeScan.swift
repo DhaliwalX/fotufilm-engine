@@ -352,6 +352,30 @@ public struct ApproximateNegativeScan: Encodable, Equatable, Sendable {
                      green + median(counted.map { $0.z - $0.y }))
     }
 
+    /// A picture area picked on the scan, for what a frame measures: `preview`, the area drawn
+    /// as a picture of its own, set in the middle of a frame a quarter larger with nothing
+    /// around it. The measures read a frame's central 80%, a margin that keeps a holder and a
+    /// rebate out of a scan nobody framed; of a picked area that is then all of it, and no
+    /// more. What surrounds it is no number, which every measure passes over.
+    public static func pictureArea(_ preview: ImageBuffer) -> ImageBuffer {
+        guard preview.width > 0, preview.height > 0 else { return preview }
+        // The smallest frame whose central 80%, as the measures cut it, holds the area.
+        func padded(_ size: Int) -> Int {
+            var whole = size
+            while whole - 2 * (whole / 10) < size { whole += 1 }
+            return whole
+        }
+        let width = padded(preview.width), height = padded(preview.height)
+        var frame = ImageBuffer(width: width, height: height, fill: .nan)
+        let (left, top) = (width / 10, height / 10)
+        for c in 0..<3 { for y in 0..<preview.height {
+            let from = y * preview.width, to = (y + top) * width + left
+            frame.planes[c].replaceSubrange(
+                to..<(to + preview.width), with: preview.planes[c][from..<(from + preview.width)])
+        } }
+        return frame
+    }
+
     /// The scan channels' densities over `border` of the central 80% of `preview`, which keeps
     /// the holder out, at the pixels that pass light in every channel. Nil with fewer than
     /// sixteen of them.

@@ -300,6 +300,40 @@ final class HostNegativeScanTests: XCTestCase {
         XCTAssertEqual(sampled["border"] as? [Double], own)
     }
 
+    /// A picture area picked on the scan is what the frame measures, whatever it is cropped
+    /// to; without one the frame measures the middle of its crop.
+    func testAPickedPictureAreaIsWhatTheFrameMeasures() throws {
+        let (service, engine) = try service()
+        defer { fotufilm_engine_destroy(engine) }
+        let handle = open(service, width: 300, height: 200)
+        let border = self.border
+        let sampled: [String: Any] = ["reading": 2, "border": border.indices.map { Double(border[$0]) }]
+        func measure(_ negative: [String: Any], crop: [[Double]]? = nil) throws -> [String: Any] {
+            var body = request(handle, maxEdge: 150, negative: sampled.merging(negative) { $1 })
+            if let crop {
+                var edit = try XCTUnwrap(body["edit"] as? [String: Any])
+                edit["crop"] = crop
+                body["edit"] = edit
+            }
+            return try XCTUnwrap(try service.prepare(JSONSerialization.data(withJSONObject: body))
+                .negativeMeasure)
+        }
+        // The strip's picture, its density rising left to right: the left half of it is thin.
+        let left: [[Double]] = [[0.12, 0.2], [0.5, 0.2], [0.5, 0.8], [0.12, 0.8]]
+        let whole = try measure([:])
+        let picked = try measure(["area": left])
+        let tone = { (measure: [String: Any]) in try XCTUnwrap(measure["midtone"] as? [Double])[1] }
+        XCTAssertLessThan(try tone(picked), try tone(whole) - 0.05)
+        // The crop moves what prints, not what the area measures.
+        let right: [[Double]] = [[0.5, 0.2], [0.88, 0.2], [0.88, 0.8], [0.5, 0.8]]
+        let cropped = try measure(["area": left], crop: right)
+        XCTAssertEqual(try tone(cropped), try tone(picked), accuracy: 1e-6)
+        XCTAssertGreaterThan(try tone(try measure([:], crop: right)), try tone(whole))
+        // Corners that make no area leave the frame measuring its crop.
+        let folded: [[Double]] = [left[0], left[2], left[1], left[3]]
+        XCTAssertEqual(try tone(try measure(["area": folded])), try tone(whole), accuracy: 1e-6)
+    }
+
     /// An edit made with the current reading is read through the scan's light and camera and
     /// balanced as it says, from what its frame measures; one made before keeps its reading.
     func testAnEditMadeWithTheCurrentReadingIsReadAsItSays() throws {

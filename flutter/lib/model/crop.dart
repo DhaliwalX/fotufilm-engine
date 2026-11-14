@@ -79,6 +79,15 @@ class CropTool {
     leave();
   }
 
+  /// A scanned negative's reading with its picked picture area carried through a move of the
+  /// frame, which its corners turn with as a four-corner crop's do. Null without one.
+  Json? _areaThrough(List<Offset> Function(List<Offset> area) move) {
+    final negative = _edit['negative'] as Json?;
+    final area = negative?['area'];
+    if (negative == null || area == null) return null;
+    return {...negative, 'area': cropJson(move(cropPoints(area)))};
+  }
+
   /// A quarter turn left. A rectangle starts over on the turned frame; four corners turn with it.
   void rotateLeft() => editor.change({
         'rotation': (((_edit['rotation'] as num?) ?? 0).toInt() + 1) % 4,
@@ -86,11 +95,13 @@ class CropTool {
         'crop': shape == 'corners'
             ? cropJson(rotatedCrop(points, mirrored: _edit['flip'] == true))
             : fullCrop(),
+        'negative': ?_areaThrough((area) => rotatedCrop(area, mirrored: _edit['flip'] == true)),
       });
 
   void flip() => editor.change({
         'flip': _edit['flip'] != true,
         if (shape == 'corners') 'crop': cropJson(flippedCrop(points)),
+        'negative': ?_areaThrough(flippedCrop),
       });
 
   /// Four-Corner Crop: each corner moves on its own, to correct a keystoned frame.
@@ -116,6 +127,14 @@ class CropTool {
 
   /// Reset Crop: the whole frame, upright, unturned and unflipped.
   void reset() => editor.change({
+        // A picked picture area turns back with the frame.
+        'negative': ?_areaThrough((area) {
+          final flipped = _edit['flip'] == true;
+          for (var turn = ((_edit['rotation'] as num?) ?? 0).toInt() % 4; turn % 4 != 0; turn++) {
+            area = rotatedCrop(area, mirrored: flipped);
+          }
+          return flipped ? flippedCrop(area) : area;
+        }),
         'rotation': 0,
         'flip': false,
         'crop': fullCrop(),

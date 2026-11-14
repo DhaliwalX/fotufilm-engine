@@ -96,6 +96,30 @@ final class WebNativeEditNegativeReadingTests: XCTestCase {
                           Negative(roll: roll, reading: 2).readingKey)
     }
 
+    /// A picture area is kept with the reading as four corners of the frame, and read only
+    /// where they make a shape a frame can be read on.
+    func testAPickedPictureAreaIsKeptWithTheReading() throws {
+        let corners: [[Double]] = [[0.1, 0.15], [0.9, 0.12], [0.88, 0.85], [0.12, 0.9]]
+        let picked = Negative(reading: 2, area: corners)
+        XCTAssertEqual(picked.pictureArea, corners)
+        let kept = try JSONDecoder().decode(Negative.self, from: JSONEncoder().encode(picked))
+        XCTAssertEqual(kept, picked)
+        XCTAssertNotEqual(picked.readingKey, Negative(reading: 2).readingKey)
+        XCTAssertNil(Negative(reading: 2).pictureArea)
+        XCTAssertFalse(String(decoding: try JSONEncoder().encode(Negative(reading: 2)), as: UTF8.self)
+            .contains("area"))
+        // Three corners, one outside the frame, one that is no number, and a shape that folds
+        // over or turns the other way are no area.
+        for bad: [[Double]] in [
+            Array(corners.prefix(3)), [[0.1, 0.15], [1.2, 0.12], [0.88, 0.85], [0.12, 0.9]],
+            [[0.1, 0.15], [.nan, 0.12], [0.88, 0.85], [0.12, 0.9]],
+            [[0.1, 0.15], [0.88, 0.85], [0.9, 0.12], [0.12, 0.9]], Array(corners.reversed()),
+            [[0.1, 0.15, 0], [0.9, 0.12], [0.88, 0.85], [0.12, 0.9]],
+        ] {
+            XCTAssertNil(Negative(reading: 2, area: bad).pictureArea, "\(bad)")
+        }
+    }
+
     func testTheCurrentReadingIsTheScanModelsThroughTheEditsSetup() throws {
         let stock = try stock()
         let neutral: [Float] = [0.05, 0.06, 0.03]

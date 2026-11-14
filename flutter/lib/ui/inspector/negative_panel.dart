@@ -65,6 +65,7 @@ List<Widget> negativePanel(InspectorControls c) {
   return [
     negativeFilmSection(c),
     filmBaseSection(c),
+    pictureAreaSection(c),
     if (c.editor.negatives.readsCurrent) ...[
       scanSetupSection(c),
       scanCorrectionSection(c),
@@ -109,6 +110,30 @@ Section filmBaseSection(InspectorControls c) {
       'Estimate',
       onPressed: negative['border'] == null ? null : () => scans.read({'border': null}),
     ),
+  ]);
+}
+
+/// The part of the scan the frame's colour and exposure are measured on.
+Section pictureAreaSection(InspectorControls c) {
+  final scans = c.editor.negatives;
+  final picked = scans.pickedArea != null;
+  final selecting = scans.selectingArea;
+  return Section(title: 'Picture Area', children: [
+    InfoRow('Measured on', picked ? 'Picked area' : 'Middle of the frame'),
+    ScanButton(
+      selecting ? 'Done' : (picked ? 'Adjust Picture Area' : 'Select Picture Area'),
+      selected: selecting,
+      onPressed: scans.toggleArea,
+    ),
+    ScanButton('Clear Picture Area', onPressed: picked ? scans.clearArea : null),
+    ScanButton(
+      'Use on Every Frame of the Roll',
+      onPressed: picked && !selecting && scans.rollFrames.length >= 2 ? scans.areaOnRoll : null,
+    ),
+    const ScanHint('Drag the four corners to the picture\'s own corners, inside the film\'s '
+        'edge and the holder. The frame is then measured on all of that and nothing around it, '
+        'whatever it is cropped to. Without an area it is measured on the middle of the cropped '
+        'frame, a tenth left out at each edge. Measure the roll again after changing it.'),
   ]);
 }
 

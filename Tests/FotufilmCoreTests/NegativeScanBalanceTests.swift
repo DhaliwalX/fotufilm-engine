@@ -344,6 +344,35 @@ final class NegativeScanBalanceTests: XCTestCase {
                                                      preview: ImageBuffer(width: 1, height: 1)))
     }
 
+    /// A picture area picked on the scan is measured whole: set in a frame a quarter larger,
+    /// the central 80% the measures read is all of it, where a frame nobody picked loses a
+    /// tenth at every edge.
+    func testAPickedPictureAreaIsMeasuredWhole() throws {
+        let border = SIMD3<Float>(0.8, 0.5, 0.25)
+        // A highlight along the area's top edge, which the central 80% of the area leaves out.
+        let image = frame(border: border, [
+            (SIMD3(0.4, 0.5, 0.6), 0..<100, 0..<100), (SIMD3(1.6, 1.7, 1.8), 0..<100, 0..<8),
+        ])
+        let inset = try XCTUnwrap(ApproximateNegativeScan.denseEnd(border: border, preview: image))
+        XCTAssertEqual(inset.y, 0.5, accuracy: 1e-5)
+        let whole = ApproximateNegativeScan.pictureArea(image)
+        XCTAssertEqual(whole.width - 2 * (whole.width / 10), image.width)
+        XCTAssertEqual(whole.height - 2 * (whole.height / 10), image.height)
+        let picked = try XCTUnwrap(ApproximateNegativeScan.denseEnd(border: border, preview: whole))
+        XCTAssertEqual(picked.y, 1.7, accuracy: 1e-5)
+        // Its mid-tones are the mean of every pixel of the area, and of none around it.
+        let middle = try XCTUnwrap(ApproximateNegativeScan.midtone(border: border, preview: whole))
+        XCTAssertEqual(middle.y, 0.92 * 0.5 + 0.08 * 1.7, accuracy: 1e-4)
+        XCTAssertNotNil(ApproximateNegativeScan.average(border: border, preview: whole))
+        // Sizes the tenths do not divide still hold the area and at most a pixel more.
+        for size in [1, 7, 16, 33, 341, 512] {
+            let odd = ApproximateNegativeScan.pictureArea(ImageBuffer(width: size, height: 3, fill: 0.2))
+            XCTAssertGreaterThanOrEqual(odd.width - 2 * (odd.width / 10), size)
+            XCTAssertLessThanOrEqual(odd.width - 2 * (odd.width / 10), size + 1)
+            XCTAssertEqual(odd.planes[1].filter(\.isFinite).count, size * 3)
+        }
+    }
+
     /// A frame is balanced on its average before its densest end: the sun on a white wall at
     /// dusk is the frame's brightest thing and far from white.
     func testAFrameIsBalancedOnItsAverageBeforeItsDensestEnd() throws {

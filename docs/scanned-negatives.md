@@ -181,6 +181,14 @@ in one place (`WebNativeEdit.Negative.balance`, `.plain` and `.strayLight`):
   white prints as white (`ApproximateNegativeScan.timedHighlight`). An edit saved with the
   first reading keeps each channel's own densest half percent
   (`ApproximateNegativeScan.channelEnds`) and is timed on it alone.
+- **The picture area.** A frame's measures read the picture as it is framed, crop included,
+  less a tenth at each edge: a margin that keeps a holder and a rebate out of a scan nobody
+  framed. `area` is the picture's own area instead, picked by its four corners, each a unit
+  point of the oriented frame as a four-corner crop is kept
+  (`WebNativeEdit.Negative.pictureArea`). The frame is then measured on all of that area and
+  nothing around it, whatever it is cropped to, so a frame printed with its rebate showing is
+  still read on its picture (`ApproximateNegativeScan.pictureArea`). The clear film is still
+  taken from the whole scan.
 - **The clear film and the holder.** Until clear film is picked it is estimated: the brightest
   of the scan, or where the scan shows its bare light through sprocket holes or around a strip,
   the film's base under that light (`ApproximateNegativeScan.estimatedFilmBase`). A holder the
@@ -339,6 +347,15 @@ the library brings every picture of its roll into the strip below the photograph
 library's order; choosing several opens just those. A frame opened for the first time starts
 from the film, film settings, clear film, light frame and roll balance of its roll's frame
 edited last, as frames of one roll share them.
+
+In the Film panel, **Picture Area** says what part of the scan the frame is measured on.
+**Select Picture Area** shows the whole frame with four corners over it: drag each to the
+picture's own corner, inside the film's edge and the holder, and press Done or Return. The
+frame's colour and exposure are then measured on all of that area and nothing around it,
+whatever the frame is cropped to; rotating or flipping the frame turns the area with it.
+**Use on Every Frame of the Roll** gives the same area to every frame of the roll turned the
+same way, as a holder shows each frame in one place, and **Clear Picture Area** returns to the
+middle of the cropped frame. Measure the roll again after changing it.
 
 The **Roll** panel works on the whole roll. **Measure Roll** develops every frame of the roll in
 the strip and reads each one's clear film, its average, its densest end and the rises across

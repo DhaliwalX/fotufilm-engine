@@ -289,9 +289,11 @@ extension HostService {
             border = [film.x, film.y, film.z]
         }
         // The picture as framed, crop included even while the crop tool shows the whole frame:
-        // the reading follows what will print.
+        // the reading follows what will print. A picture area picked on the scan is read
+        // instead, whatever the frame is cropped to.
         let image = prepared.image
-        let framing = prepared.request.edit.snapped(width: image.width, height: image.height)
+        var framing = prepared.request.edit.snapped(width: image.width, height: image.height)
+        if let area = negative?.pictureArea { framing.crop = area }
         let key = "\(framing)|\(border)|\(light ?? "")"
         let preview = {
             let sizes = framing.sizes(width: image.width, height: image.height, maxEdge: nil)
