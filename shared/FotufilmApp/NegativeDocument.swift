@@ -149,6 +149,8 @@ final class NegativeDocument: @unchecked Sendable {
         var readsModel: Bool
         var flare: Float?
         var rollClear: [Float]?
+        /// The picture area the framing is measured on in place of its crop.
+        var area: [[Double]]?
     }
 
     /// The thinnest film of the whole scan, standing in for clear film until some is picked
@@ -192,7 +194,8 @@ final class NegativeDocument: @unchecked Sendable {
         let key = MeasureKey(source: sourceKey(state),
                              framing: FilmRender.SceneKey(state: state, longEdge: Self.readingEdge),
                              border: negative.border, readsModel: negative.readsModel,
-                             flare: negative.flare, rollClear: negative.roll?.clear)
+                             flare: negative.flare, rollClear: negative.roll?.clear,
+                             area: negative.pictureArea)
         if let kept = lock.withLock({ measures.first { $0.key == key } }) { return kept.measure }
         // The frame's own clear film, and the one it is read against: on a roll, its own in
         // the roll's colour of clear film (`WebNativeEdit.Negative.clearFilm`).
@@ -206,8 +209,25 @@ final class NegativeDocument: @unchecked Sendable {
             border = negative.sharesClearFilm ? negative.roll?.clearFilm(own) ?? own : own
         }
         guard let source = source(state) else { throw CancellationError() }
-        var preview = try Self.samples(FilmRender.downsample(framed(source),
-                                                             longEdge: Self.readingEdge))
+        // A picture area picked on the scan is measured in place of the crop, and whole
+        // (`WebNativeEdit.Negative.pictureArea`): its four corners frame the scan as a
+        // four-corner crop's do, whatever the edit is cropped to.
+        let area = negative.pictureArea
+        let picture: CIImage
+        if let area {
+            var corners = QuadrilateralCrop()
+            corners.topLeft = CGPoint(x: area[0][0], y: area[0][1])
+            corners.topRight = CGPoint(x: area[1][0], y: area[1][1])
+            corners.bottomRight = CGPoint(x: area[2][0], y: area[2][1])
+            corners.bottomLeft = CGPoint(x: area[3][0], y: area[3][1])
+            var framing = state
+            framing.crop = nil
+            framing.cornerCrop = corners
+            picture = FilmRender.geometry(source, state: framing)
+        } else {
+            picture = framed(source)
+        }
+        var preview = try Self.samples(FilmRender.downsample(picture, longEdge: Self.readingEdge))
         var measure = Measure(border: border, clear: negative.sharesClearFilm ? own : nil)
         if negative.readsModel {
             // As the desktop host measures a framing (`HostNegativeScan.measure`): the scan's
@@ -217,6 +237,7 @@ final class NegativeDocument: @unchecked Sendable {
                 preview = ApproximateNegativeScan.withoutHolder(preview, border: border,
                                                                 limit: holder.limit)
             }
+            if area != nil { preview = ApproximateNegativeScan.pictureArea(preview) }
             let flare = negative.strayLight(
                 border: border, frameLight: ApproximateNegativeScan.frameLight(preview: preview),
                 holder: negative.flare == nil ? holder?.stray : nil)
@@ -231,6 +252,7 @@ final class NegativeDocument: @unchecked Sendable {
             measure.holder = holder?.limit
             measure.capture = capture
         } else {
+            if area != nil { preview = ApproximateNegativeScan.pictureArea(preview) }
             measure.dense = ApproximateNegativeScan.denseEnd(border: border, preview: preview)
         }
         lock.withLock {

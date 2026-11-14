@@ -27,6 +27,7 @@ List<Widget> deckPage(DeckPage page, InspectorControls c) => switch (page) {
       DeckPage.format => [?filmFormatSection(c)],
       DeckPage.negative => [negativeFilmSection(c)],
       DeckPage.filmBase => [filmBaseSection(c)],
+      DeckPage.pictureArea => pictureAreaPage(c),
       DeckPage.scanColour => c.editor.negatives.readsCurrent
           ? [scanSetupSection(c, lightFrames: false), scanCorrectionSection(c)]
           : [scanColourSection(c), ?updateReadingSection(c)],
@@ -59,4 +60,5 @@ List<Widget> deckPage(DeckPage page, InspectorControls c) => switch (page) {
     };
 
 /// The tools' pages keep their sections' titles: a tool has many, on one page.
-bool flatPage(DeckPage page) => page != DeckPage.select && page != DeckPage.crop;
+bool flatPage(DeckPage page) =>
+    page != DeckPage.select && page != DeckPage.crop && page != DeckPage.pictureArea;

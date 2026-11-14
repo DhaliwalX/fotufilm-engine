@@ -153,6 +153,33 @@ Section pictureAreaSection(InspectorControls c) {
   ]);
 }
 
+/// The phone's Picture Area page, laid out as its Crop page is: the viewer shows the whole
+/// frame with the area's four corners over it while the page is open (model/phone_decks.dart),
+/// and the page says what they do, shares them with the roll, and finishes.
+List<Widget> pictureAreaPage(InspectorControls c) {
+  final scans = c.editor.negatives;
+  final picked = scans.pickedArea != null;
+  return [
+    Section(title: 'Picture Area', children: [
+      InfoRow('Measured on', picked ? 'Picked area' : 'Middle of the frame'),
+      const ScanHint('Drag the four corners to the picture\'s own corners, inside the film\'s '
+          'edge and the holder. The frame is then measured on all of that and nothing around '
+          'it, whatever it is cropped to.'),
+    ]),
+    Section(title: 'Roll', children: [
+      PillButton('Use on Every Frame of the Roll',
+          expand: true,
+          onPressed: picked && scans.rollFrames.length >= 2 ? scans.areaOnRoll : null),
+      const ScanHint('Measure the roll again after changing the area.'),
+    ]),
+    Section(title: 'Finish', children: [
+      PillButton('Clear Picture Area', expand: true, onPressed: picked ? scans.clearArea : null),
+      PillButton('Done',
+          expand: true, variant: ButtonVariant.accent, onPressed: scans.finishArea),
+    ]),
+  ];
+}
+
 /// What the scan was made with and under, and the light frame that evens its light out, which
 /// a layout with a page of its own for the light source leaves there.
 Section scanSetupSection(InspectorControls c, {bool lightFrames = true}) {

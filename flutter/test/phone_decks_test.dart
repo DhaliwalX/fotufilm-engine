@@ -91,6 +91,41 @@ void main() {
       expect(editor.panel.isTool, isFalse);
     });
 
+    test('a negative\'s Picture Area page is a tool as Crop is', () {
+      final editor = showing((e) => copyEdit(e)..['negative'] = {'border': null, 'reading': 2});
+      final decks = editor.layout.decks, scans = editor.negatives;
+      expect(decks.pages(PhoneDeck.negative).take(3),
+          [DeckPage.negative, DeckPage.filmBase, DeckPage.pictureArea]);
+      decks.show(PhoneDeck.negative);
+      expect(scans.selectingArea, isFalse);
+      // On the page the viewer shows the whole frame with the corners over it.
+      decks.choosePage(DeckPage.pictureArea);
+      expect(scans.selectingArea, isTrue);
+      expect(editor.framing, isTrue);
+      expect(editor.renderOptions(editor.active!)['cropMode'], isTrue);
+      // Another page leaves the tool, keeping nothing that was not let go.
+      decks.choosePage(DeckPage.filmBase);
+      expect(scans.selectingArea, isFalse);
+      expect(scans.pickedArea, isNull);
+      // The deck comes back to the page it was left on, and so to the tool.
+      decks.show(null);
+      decks.show(PhoneDeck.negative, page: DeckPage.pictureArea);
+      expect(scans.selectingArea, isTrue);
+      // Another deck closes it, as it closes Crop.
+      decks.show(PhoneDeck.light);
+      expect(scans.selectingArea, isFalse);
+      // Done keeps the corners on show and closes the sheet.
+      decks.show(PhoneDeck.negative, page: DeckPage.pictureArea);
+      decks.areaDone();
+      expect(decks.open, isNull);
+      expect(scans.selectingArea, isFalse);
+      expect(scans.pickedArea, isNotNull);
+      // So does the page's own Done, and Return.
+      decks.show(PhoneDeck.negative, page: DeckPage.pictureArea);
+      scans.finishArea();
+      expect(decks.open, isNull);
+    });
+
     test('a deck the photograph no longer offers closes', () {
       final editor = showing(onFilm);
       final decks = editor.layout.decks;

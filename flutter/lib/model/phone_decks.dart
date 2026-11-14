@@ -38,6 +38,7 @@ enum DeckPage {
   format('Format', 'fotu.ui.format'),
   negative('Film', 'fotu.tab.films'),
   filmBase('Film Base', 'fotu.tab.source'),
+  pictureArea('Picture Area', 'fotu.deck.frame'),
   scanColour('Colour', 'fotu.tab.color'),
   lightSource('Light Source', 'fotu.tab.lamp'),
   roll('Roll', 'fotu.deck.film'),
@@ -163,6 +164,7 @@ class PhoneDecks extends ChangeNotifier {
       PhoneDeck.negative => [
           DeckPage.negative,
           DeckPage.filmBase,
+          DeckPage.pictureArea,
           DeckPage.scanColour,
           if (editor.negatives.keepsLightFrames) DeckPage.lightSource,
           if (offersPanel(_edit, 'roll')) DeckPage.roll,
@@ -217,7 +219,32 @@ class PhoneDecks extends ChangeNotifier {
     } else if (leaving != null && editor.panel == leaving) {
       editor.toggleTool(leaving);
     }
+    _followArea();
     notifyListeners();
+  }
+
+  /// The photograph whose picture area the Picture Area page is picking.
+  PhotoDocument? _areaOf;
+
+  /// A scanned negative's Picture Area page is a tool as Crop is: while it is the open page the
+  /// viewer shows the whole frame with the area's four corners over it, and leaving the page
+  /// closes it with the corners as they were last let go.
+  void _followArea() {
+    final scans = editor.negatives;
+    final picking = open != null && page == DeckPage.pictureArea;
+    if (picking && !scans.selectingArea) {
+      _areaOf = editor.active;
+      scans.toggleArea();
+    } else if (!picking && scans.selectingArea) {
+      scans.leaveArea();
+    }
+    if (!picking) _areaOf = null;
+  }
+
+  /// Done on the Picture Area page: the corners on show are the area, and the sheet closes.
+  void areaDone() {
+    editor.negatives.finishArea();
+    if (open != null && page == DeckPage.pictureArea) show(null);
   }
 
   void choosePage(DeckPage page) {
@@ -225,12 +252,22 @@ class PhoneDecks extends ChangeNotifier {
     if (deck == null || page == this.page) return;
     editor.endEdit();
     _pages[deck] = page;
+    _followArea();
     notifyListeners();
   }
 
   /// The photograph changed what it offers: a deck it no longer has closes.
   void _settle() {
     final deck = open;
-    if (deck != null && !decks.contains(deck)) show(null);
+    if (deck != null && !decks.contains(deck)) return show(null);
+    // The area's tool closed under its page: for another photograph it opens again, and one
+    // finished with, by Done or Return, closes the sheet as Crop's Done does.
+    if (deck != null && page == DeckPage.pictureArea && !editor.negatives.selectingArea) {
+      if (editor.active != _areaOf) {
+        _followArea();
+      } else {
+        show(null);
+      }
+    }
   }
 }
