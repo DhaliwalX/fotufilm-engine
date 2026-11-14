@@ -195,7 +195,7 @@ export const readsModel = (negative) => (negative?.reading ?? 1) >= 2;
 // What a request says of a negative's reading (WebProfileRequest.Negative), from its edit, what
 // its framing measures (`border`, its own densest end `dense`, its `average`, its mid-tones `midtone`, the stray
 // light `flare` the reading takes off, which they are net of, and where the scan's `holder`
-// begins, a density over the clear film past which the scan prints black) and what the scan's file says of its camera
+// begins, a density over the clear film past which the scan is the holder's and prints white) and what the scan's file says of its camera
 // (`source`). The first reading takes the frame's densest end on its roll's colour; the current
 // one takes the frame's own and the roll beside it.
 export function readingRequest(

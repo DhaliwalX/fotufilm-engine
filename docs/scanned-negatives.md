@@ -199,7 +199,9 @@ in one place (`WebNativeEdit.Negative.balance`, `.plain` and `.strayLight`):
   of the scan, or where the scan shows its bare light through sprocket holes or around a strip,
   the film's base under that light (`ApproximateNegativeScan.estimatedFilmBase`). A holder the
   scan shows is left out of what the frame measures, so the print is timed on the picture's
-  highlights and not on the holder (`ApproximateNegativeScan.withoutHolder`), and prints black.
+  highlights and not on the holder (`ApproximateNegativeScan.withoutHolder`), and prints white:
+  a print gets no light through a holder, as the paper under a negative carrier gets none, and
+  the bare light past the film, brighter than its clear base, prints black.
   The holder ends where the fewest pixels lie between it and the densest film in the scan's
   middle (`ApproximateNegativeScan.holder`). A frame that shows no unexposed film has its
   estimate read off the thinnest of its picture, close in level and off in colour. A scan's
@@ -417,8 +419,8 @@ The conversion is approximate. RAW decoding disables tone boosts, highlight reco
 lens correction and noise reduction, but retains the decoder's colour processing. These
 are not sensor-channel measurements. No measured scanner profile is fitted or included.
 Flare and colour cross-talk remain uncorrected. Nonpositive, nonfinite and out-of-range
-pixels, commonly the holder, print black; they are not assigned invented densities. Crop
-away the holder.
+pixels print black, but for those too dark to be film, commonly the holder, which print
+white. Crop away the holder.
 
 In **Crop**, drag each of the four circular handles independently. The selection must
 remain convex and cannot cross itself. Leaving Crop (or pressing Return) straightens

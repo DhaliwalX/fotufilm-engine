@@ -54,8 +54,9 @@ public struct ApproximateNegativeScan: Encodable, Equatable, Sendable {
     /// added to each record in log exposure, crosstalk `weights` (`Balance.weights`), each
     /// record from its own channel alone when nil, and the scan's `flare`. `holder` is where
     /// the scan's holder begins, a density over the clear film (`holder(border:preview:)`): a
-    /// sample `holderMargin` past it in any channel is the holder's and prints black, where
-    /// otherwise the holder reads as the film's densest highlight.
+    /// sample `holderMargin` past it in any channel is the holder's, which a print gets no
+    /// light through and leaves white (`isOpaque`), as the paper under a negative carrier is;
+    /// without it the holder's edge reads as film of whatever density its blur gives it.
     public init(stock: FilmStock, border: SIMD3<Float>, gains: SIMD3<Float> = .one,
                 exposure: SIMD3<Float> = .zero, weights: [SIMD3<Float>]? = nil,
                 flare: SIMD3<Float> = .zero, holder: Float? = nil) throws {
@@ -133,6 +134,26 @@ public struct ApproximateNegativeScan: Encodable, Equatable, Sendable {
         let index = min(Int(position), Self.balanceSamples - 2)
         let between = position - Float(index)
         return table[index] * (1 - between) + table[index + 1] * between
+    }
+
+    /// How far over its base a record reads where the scan passes no light, the holder: past
+    /// any film's densest, so every output prints it as its whitest, and no further, so the
+    /// print's spatial steps meet no cliff at a holder's edge (kScanOpaqueDensity).
+    public static let opaqueDensity: Float = 4
+
+    /// Whether a sample the reading cannot place (`density(of:)` is nil) is too dark to be
+    /// film in some channel and too bright in none: the scan's holder, or whatever else passes
+    /// no light. The kernels print it white, `opaqueDensity` over each record's base, and
+    /// every other sample they cannot place black: the bare light past the film, brighter than
+    /// its clear base. Mirrors scan_film_opaque.
+    public func isOpaque(_ sample: SIMD3<Float>) -> Bool {
+        var dark = false
+        for channel in 0..<3 {
+            let value = sample[channel] - flare[channel]
+            if !(value < maximumSample[channel]) { return false }
+            if !(value > minimumSample[channel]) { dark = true }
+        }
+        return dark
     }
 
     /// One linear scan sample's record densities: the stray light taken off, the border's

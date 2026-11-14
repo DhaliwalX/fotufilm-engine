@@ -50,7 +50,8 @@ protocol HostDeveloper {
     /// Prints a scanned negative through the print stage: `readScan` fills rows of linear scan
     /// RGBA, which the kernels read as the film's record densities by the border calibration
     /// (`FotufilmEngine.Options.scanReading`), and `writeRows` receives display-linear Display P3.
-    /// Samples outside the film's densities print black.
+    /// Samples too dark to be film, the holder, print white, and brighter than its clear base
+    /// black.
     func printScan(width: Int, height: Int, stock: FilmStock, options: FotufilmEngine.Options,
                    calibration: ApproximateNegativeScan, shouldContinue: @escaping () -> Bool,
                    readScan: (Range<Int>, UnsafeMutableBufferPointer<Float>) -> Void,
@@ -71,6 +72,10 @@ extension HostDeveloper {
 
 /// The portable developer: the Halide CPU pipeline, whole frame at once.
 struct HalideCPUDeveloper: HostDeveloper {
+    /// What stands for a scan sample that is not a number: brighter than any clear film, so a
+    /// reading cannot place it and it prints black, where a dark one would be the holder.
+    static let unreadable: Float = 1e30
+
     var kind: String { "cpu" }
     var name: String { "Halide/CPU" }
 
@@ -118,10 +123,13 @@ struct HalideCPUDeveloper: HostDeveloper {
         let count = width * height
         var rgba = [Float](repeating: 0, count: count * 4)
         rgba.withUnsafeMutableBufferPointer { readScan(0..<height, $0) }
-        // A sample that is not a number reads as one the film cannot place, and prints black.
+        // A sample that is not a number reads as one the film cannot place, brighter than any
+        // clear film, and prints black: a dark one would be the holder, and print white.
         var scan = ImageBuffer(width: width, height: height)
         for i in 0..<count {
-            for c in 0..<3 { scan.planes[c][i] = rgba[i * 4 + c].isFinite ? rgba[i * 4 + c] : 0 }
+            for c in 0..<3 {
+                scan.planes[c][i] = rgba[i * 4 + c].isFinite ? rgba[i * 4 + c] : Self.unreadable
+            }
         }
         let positive = try FotufilmEngine(stock: film, options: options)
             .printPositiveChecked(negativeDensity: scan)

@@ -441,10 +441,12 @@ public:
         graph::PrintInputs inputs{configuration_, Expr(reversal ? 1 : 0), monochrome, true, true,
                                   "", suffix};
         Func read_print = graph::build_print(backend, inputs, developed, x, y, c);
-        // What the reading could not place, often the holder, prints black.
+        // What the reading could not place prints black, but for what is too dark to be film,
+        // the holder, which prints as the densest film does: white.
         Func printed("print_read" + suffix);
         printed(x, y, c) = Halide::select(
-            reads_scan && !scan_film_readable(configuration_, scan_r, scan_g, scan_b),
+            reads_scan && !scan_film_readable(configuration_, scan_r, scan_g, scan_b)
+                && !scan_film_opaque(configuration_, scan_r, scan_g, scan_b),
             0.0f, read_print(x, y, c));
 
         Func output("print_output" + suffix);

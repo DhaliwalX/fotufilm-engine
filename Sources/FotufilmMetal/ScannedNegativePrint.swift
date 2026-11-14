@@ -8,8 +8,8 @@ extension HalideMetalFilmRenderer {
     /// Prints a scanned negative a band at a time. `readScan` fills rows of linear scan RGBA,
     /// which the kernels read as the film's record densities by the border calibration
     /// (`FotufilmEngine.Options.scanReading`) and print, so neither the densities nor the print
-    /// is ever held whole. Samples outside the film's density range, commonly the holder, print
-    /// black.
+    /// is ever held whole. Samples too dark to be film, commonly the holder, print white, and
+    /// brighter than its clear base black.
     @discardableResult
     public func printScan(
         width: Int, height: Int, stock: FilmStock,

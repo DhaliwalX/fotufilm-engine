@@ -201,6 +201,9 @@ final class HostNegativeScanTests: XCTestCase {
         }
         XCTAssertGreaterThan(green(film, 120, 50), green(film, 30, 50))
         XCTAssertEqual(green(film, 149, 50), 0)
+        // The dense holder at the left passes no light, and prints as white as the picture's
+        // densest end or whiter.
+        XCTAssertGreaterThanOrEqual(green(film, 2, 50), green(film, 130, 50))
 
         // Until clear film is picked the base is estimated from the thinnest film of the scan
         // (here the open holder, which a pick then corrects).

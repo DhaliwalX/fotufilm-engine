@@ -103,7 +103,10 @@ final class NegativeImportTests: XCTestCase {
         let output = try NegativeScanImport.positive(image: image, border: border, stock: stock)
         let pixels = try NegativeScanImport.samples(output)
         XCTAssertTrue(pixels.planes.flatMap { $0 }.allSatisfy(\.isFinite))
-        XCTAssertEqual(pixels.planes[0][0], 0, accuracy: 0.00001)
+        // The holder passes no light and prints white, as paper under a carrier stays; the
+        // bare light, brighter than clear film, prints black.
+        for c in 0..<3 { XCTAssertGreaterThan(pixels.planes[c][0], pixels.planes[c][16]) }
+        XCTAssertGreaterThan(pixels.planes[1][0], 0.5)
         XCTAssertEqual(pixels.planes[0][31], 0, accuracy: 0.00001)
         let reference = try NegativeScanImport.samples(NegativeScanImport.positive(image: film, border: border, stock: stock))
         for c in 0..<3 { XCTAssertEqual(pixels.planes[c][16], reference.planes[c][16], accuracy: 0.00001) }

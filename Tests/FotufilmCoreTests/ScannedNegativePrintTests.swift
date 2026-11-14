@@ -20,6 +20,10 @@ final class ScannedNegativePrintTests: XCTestCase {
             if x == width - 1 && y.isMultiple(of: 3) {
                 for c in 0..<3 { image.planes[c][i] = 50 }
             }
+            // A holder: no light at all.
+            if x == 0 && y.isMultiple(of: 4) {
+                for c in 0..<3 { image.planes[c][i] = 0 }
+            }
         } }
         return image
     }
@@ -73,8 +77,9 @@ final class ScannedNegativePrintTests: XCTestCase {
         XCTAssertEqual(density.x, stock.curves[0].density(logExposure: exposure), accuracy: 0.02)
     }
 
-    /// Banded printing must match the one-shot print stage on the same densities, and paint the
-    /// holder black.
+    /// Banded printing must match the one-shot print stage on the same densities, and paint
+    /// what is too dark to be film, the holder, as the densest film prints, white, and what is
+    /// too bright black.
     func testBandedScanPrintMatchesThePrintStage() throws {
         try assertBandedScanPrintMatchesThePrintStage(crosstalk: 0)
     }
@@ -120,9 +125,18 @@ final class ScannedNegativePrintTests: XCTestCase {
         var film = stock
         film.layeredTransport = nil
         var densities = [Float](repeating: 1, count: width * height * 4)
+        let sample = { (i: Int) in SIMD3((0..<3).map { image.planes[$0][i] }) }
+        var opaque = 0
         for i in 0..<image.pixelCount { for c in 0..<3 {
             densities[i * 4 + c] = converted.density.planes[c][i]
+            // The holder reads past any film's densest, on every record.
+            if converted.invalid[i], calibration.isOpaque(sample(i)) {
+                densities[i * 4 + c] = min(calibration.baseDensity[c]
+                    + ApproximateNegativeScan.opaqueDensity, NegativeInterchange.range.upperBound)
+                opaque += c == 0 ? 1 : 0
+            }
         } }
+        XCTAssertEqual(opaque, (height + 3) / 4)
         let expected = try XCTUnwrap(gpu.processLinearFloat(
             densities, width: width, height: height, stock: film, options: options))
 
@@ -144,8 +158,8 @@ final class ScannedNegativePrintTests: XCTestCase {
             })
         XCTAssertTrue(ok)
         for i in 0..<image.pixelCount { for c in 0..<3 {
-            if converted.invalid[i] {
-                XCTAssertEqual(printed[i * 4 + c], 0, "holder pixel \(i)")
+            if converted.invalid[i], !calibration.isOpaque(sample(i)) {
+                XCTAssertEqual(printed[i * 4 + c], 0, "bare light at pixel \(i)")
             } else {
                 XCTAssertEqual(printed[i * 4 + c], expected[i * 4 + c], accuracy: 2e-4,
                                "pixel \(i) channel \(c)")

@@ -159,8 +159,8 @@ final class ApproximateNegativeScanTests: XCTestCase {
         XCTAssertNil(ApproximateNegativeScan.estimatedFilmBase(preview: ImageBuffer(width: 2, height: 2)))
     }
 
-    /// Past where a scan's holder begins, a sample is the holder's and prints black, where
-    /// otherwise it reads as the film's densest highlight.
+    /// Past where a scan's holder begins, a sample is the holder's, too dark to be film, which
+    /// prints white; one brighter than clear film can be is the bare light, which prints black.
     func testASamplePastTheHoldersLimitIsNotFilm() throws {
         let stock = TestStocks.negative
         let border = SIMD3<Float>(0.4, 0.6, 0.2)
@@ -174,6 +174,15 @@ final class ApproximateNegativeScanTests: XCTestCase {
         let holder = border * pow(10, -2.8), film = border * pow(10, -1.5)
         XCTAssertNotNil(plain.density(of: holder))
         XCTAssertNil(held.density(of: holder))
+        XCTAssertTrue(held.isOpaque(holder))
+        XCTAssertTrue(held.isOpaque(.zero))
+        XCTAssertTrue(held.isOpaque(SIMD3(film.x, holder.y, film.z)))
+        XCTAssertFalse(held.isOpaque(film))
+        // Brighter than the clear film can be in any channel is no holder, however dark the rest.
+        XCTAssertNil(held.density(of: border * 50))
+        XCTAssertFalse(held.isOpaque(border * 50))
+        XCTAssertFalse(held.isOpaque(SIMD3(border.x * 50, 0, 0)))
+        XCTAssertFalse(held.isOpaque(SIMD3(.nan, 0, 0)))
         XCTAssertEqual(held.density(of: film), plain.density(of: film))
         // The densest film's densest channel, a little past the limit, is still film.
         XCTAssertNotNil(held.density(of: border * SIMD3(pow(10, -1.3), pow(10, -1.5), pow(10, -1.8))))

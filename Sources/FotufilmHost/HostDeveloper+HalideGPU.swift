@@ -172,8 +172,11 @@ struct HalideGPUDeveloper: HostDeveloper {
         film.layeredTransport = nil
         var scan = [Float](repeating: 0, count: width * height * 4)
         scan.withUnsafeMutableBufferPointer { readScan(0..<height, $0) }
-        // A sample that is not a number reads as one the film cannot place, and prints black.
-        for index in scan.indices where !scan[index].isFinite { scan[index] = 0 }
+        // A sample that is not a number reads as one the film cannot place, brighter than any
+        // clear film, and prints black: a dark one would be the holder, and print white.
+        for index in scan.indices where !scan[index].isFinite {
+            scan[index] = HalideCPUDeveloper.unreadable
+        }
         try develop(scan, width: width, height: height, stock: film, noFilm: false,
                     options: options, pace: HostDevelopPace(), encode: false, knee: nil,
                     shouldContinue: shouldContinue,
