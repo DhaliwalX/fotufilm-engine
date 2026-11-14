@@ -37,6 +37,59 @@ final class WebNativeEditNegativeReadingTests: XCTestCase {
         }
     }
 
+    /// A frame whose roll measured the average its frames come to is balanced on the roll
+    /// unless its edit says otherwise; a roll kept before that leaves it on itself, as it was.
+    func testAFrameIsBalancedOnItsRollOnceTheRollKeepsItsAverage() throws {
+        let stock = try stock()
+        var measured = roll
+        measured.average = [0.52, 0.6, 0.71]
+        typealias Mode = ApproximateNegativeScan.BalanceMode
+        XCTAssertEqual(Negative(reading: 2).balanceMode, .frame)
+        XCTAssertEqual(Negative(roll: roll, reading: 2).balanceMode, .frame)
+        XCTAssertEqual(Negative(roll: measured, reading: 2).balanceMode, .roll)
+        XCTAssertEqual(Negative(roll: measured, reading: 2, balance: .frame).balanceMode, .frame)
+        XCTAssertEqual(Negative(roll: measured, reading: 2, balance: Mode.none).balanceMode, Mode.none)
+        // The frame's own average balances it off a roll, the roll's on one.
+        let average = SIMD3<Float>(0.9, 0.7, 0.5)
+        let setup = NegativeScanSetup(light: .white, camera: .generic)
+        XCTAssertEqual(
+            Negative(roll: measured, reading: 2)
+                .balance(stock: stock, border: border, denseEnd: dense, average: average),
+            ApproximateNegativeScan.balance(
+                stock: stock, setup: setup, separation: 1, mode: .roll,
+                tones: .init(denseEnd: dense, average: average), roll: measured))
+        XCTAssertEqual(
+            Negative(reading: 2).balance(stock: stock, border: border, denseEnd: dense, average: average),
+            ApproximateNegativeScan.balance(
+                stock: stock, setup: setup, separation: 1, mode: .frame,
+                tones: .init(denseEnd: dense, average: average)))
+        XCTAssertNotEqual(
+            Negative(reading: 2).balance(stock: stock, border: border, denseEnd: dense, average: average),
+            Negative(reading: 2).balance(stock: stock, border: border, denseEnd: dense))
+    }
+
+    /// A frame on a roll is read against its own clear film in the roll's colour of it; one
+    /// sampled on the frame stands, and the first reading takes the estimate as it is.
+    func testAFramesClearFilmTakesItsRollsColourUnlessItWasSampled() {
+        var measured = roll
+        measured.clear = [0.7, 0.3]
+        let estimated = SIMD3<Float>(0.4, 0.6, 0.2)
+        let taken = Negative(roll: measured, reading: 2).clearFilm(estimated: estimated)
+        XCTAssertEqual(taken.y, 0.6)
+        XCTAssertEqual(taken.x, 0.42, accuracy: 1e-6)
+        XCTAssertEqual(taken.z, 0.18, accuracy: 1e-6)
+        XCTAssertEqual(Negative(roll: measured, reading: 2, balance: .frame)
+            .clearFilm(estimated: estimated), taken)
+        XCTAssertEqual(Negative(border: [0.5, 0.5, 0.5], roll: measured, reading: 2)
+            .clearFilm(estimated: estimated), SIMD3(0.5, 0.5, 0.5))
+        XCTAssertEqual(Negative(roll: measured).clearFilm(estimated: estimated), estimated)
+        XCTAssertEqual(Negative(roll: roll, reading: 2).clearFilm(estimated: estimated), estimated)
+        XCTAssertEqual(Negative(reading: 2).clearFilm(estimated: estimated), estimated)
+        // Two edits whose rolls differ in either read differently.
+        XCTAssertNotEqual(Negative(roll: measured, reading: 2).readingKey,
+                          Negative(roll: roll, reading: 2).readingKey)
+    }
+
     func testTheCurrentReadingIsTheScanModelsThroughTheEditsSetup() throws {
         let stock = try stock()
         let neutral: [Float] = [0.05, 0.06, 0.03]

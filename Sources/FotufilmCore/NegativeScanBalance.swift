@@ -6,14 +6,14 @@ import Foundation
 /// model knows only as well as it knows them: a white lamp's red end alone moves red's by half.
 /// The other is the scene's light and the film's drift, which a printer takes out with
 /// filtration: the same exposure added to a record at every tone, moving it along the film's
-/// own curve. One neutral cannot tell the two apart. A roll that measured its tonal steps says
-/// the first (`contrast`), or a single frame's own tonal steps provide a regularized estimate
-/// (`frameContrastRange`), and the neutral then sets the exposure along each record's
-/// characteristic curve.
+/// own curve. One neutral cannot tell the two apart, and neither can one frame: its tonal steps
+/// follow its picture, a sunset's reading red twice as steep as a meadow's on the same roll. A
+/// roll that measured its tonal steps says the first (`contrast`); a frame without one keeps
+/// the model's. The neutral then sets the exposure along each record's characteristic curve.
 extension ApproximateNegativeScan {
     /// What a frame is balanced on.
     public enum BalanceMode: String, Codable, CaseIterable, Sendable {
-        /// The frame's own neutral: one picked on it, else its densest end.
+        /// The frame's own neutral: one picked on it, else its average, else its densest end.
         case frame
         /// The neutral the roll's frames share, the same for each of them.
         case roll
@@ -25,22 +25,21 @@ extension ApproximateNegativeScan {
     /// the clear film.
     public struct Tones: Equatable, Sendable {
         /// The densest end, the highlights (`denseEnd(border:preview:)`), which times the print
-        /// and stands for the frame's neutral.
+        /// and stands for the neutral of a frame that has no average.
         public var denseEnd: SIMD3<Float>?
-        /// A neutral picked on the frame, which takes the densest end's place.
+        /// A neutral picked on the frame, which takes the average's place.
         public var picked: SIMD3<Float>?
-        /// How red and blue rise per unit of green across this frame's own tonal steps
-        /// (`tonalSlopes(border:preview:)`), when the frame has enough steps to tell.
-        public var slopes: SIMD2<Float>?
+        /// The average (`average(border:preview:)`), which stands for the frame's neutral.
+        public var average: SIMD3<Float>?
         /// The mid-tones (`midtone(border:preview:)`), which keep a small highlight far over
         /// them from timing the print (`timedHighlight`). Nil times it on the densest end.
         public var midtone: SIMD3<Float>?
 
         public init(denseEnd: SIMD3<Float>? = nil, picked: SIMD3<Float>? = nil,
-                    slopes: SIMD2<Float>? = nil, midtone: SIMD3<Float>? = nil) {
+                    average: SIMD3<Float>? = nil, midtone: SIMD3<Float>? = nil) {
             self.denseEnd = denseEnd
             self.picked = picked
-            self.slopes = slopes
+            self.average = average
             self.midtone = midtone
         }
     }
@@ -48,9 +47,9 @@ extension ApproximateNegativeScan {
     /// The balance of a frame read by the scan model for `setup`, its weights across the
     /// channels at `separation` (`NegativeScanModel.weights`): a neutral moved onto the film's
     /// grey scale along each record's characteristic curve (`exposure`), and the print's timing
-    /// from the densest end and the mid-tones (`timedHighlight`). Tonal steps on a `roll` (or regularized steps on the
-    /// frame itself when no roll contrast is measured) calibrate red and blue steepness against
-    /// green (`gains`) before the neutral shifts each record's exposure.
+    /// from the densest end and the mid-tones (`timedHighlight`). A `roll` that measured its
+    /// tonal steps makes red and blue as steep against green as the film's (`gains`) before
+    /// the neutral shifts each record's exposure.
     public static func balance(stock: FilmStock, setup: NegativeScanSetup, separation: Float,
                                mode: BalanceMode, tones: Tones,
                                roll: RollBalance? = nil) -> Balance {
@@ -77,16 +76,11 @@ extension ApproximateNegativeScan {
         if let slopes = roll?.slopes, slopes.count == 2 {
             balance.gains = contrast(stock: stock, weights: weights,
                                      slopes: SIMD2(slopes[0], slopes[1]))
-        } else if let slopes = tones.slopes,
-                  slopes.x.isFinite, slopes.y.isFinite, slopes.x > 0, slopes.y > 0 {
-            balance.gains = contrast(stock: stock, weights: weights, slopes: slopes,
-                                     weight: setup.knowsScale ? 0.65 : 0.8,
-                                     range: frameContrastRange)
         }
         // The roll's neutral when the frame is on its roll; else one picked on the frame; else
-        // its densest end. One too thin to tell a colour from is passed over.
+        // its average; else its densest end. One too thin to tell a colour from is passed over.
         let neutrals = [mode == .roll ? roll?.neutral(green: dense?.y) : nil,
-                        readable(tones.picked), dense]
+                        readable(tones.picked), readable(tones.average), dense]
         if let neutral = neutrals.lazy.compactMap({ $0 }).first(
             where: { NegativeScanCrosstalk.apply(weights, $0).y > 0.05 }) {
             balance.exposure = exposure(stock: stock, weights: weights, gains: balance.gains,

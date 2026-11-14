@@ -267,6 +267,34 @@ final class HostNegativeScanTests: XCTestCase {
         XCTAssertEqual(onRoll.negativeMeasure?["denseEnd"] as? [Double], dense)
     }
 
+    /// A frame on a roll that measured its clear film's colour is read against its own clear
+    /// film in that colour, and still says its own for the roll to be measured again.
+    func testAFrameOnItsRollIsReadAgainstTheRollsColourOfClearFilm() throws {
+        let (service, engine) = try service()
+        defer { fotufilm_engine_destroy(engine) }
+        let handle = open(service, width: 300, height: 200)
+        func prepared(_ negative: [String: Any]) throws -> HostService.Prepared {
+            try service.prepare(JSONSerialization.data(withJSONObject: request(
+                handle, maxEdge: 150, negative: negative)))
+        }
+        let alone = try XCTUnwrap(try prepared(["reading": 2]).negativeMeasure)
+        let own = try XCTUnwrap(alone["clear"] as? [Double])
+        XCTAssertEqual(alone["border"] as? [Double], own)
+        // A roll whose clear film is a little redder than this frame read its own.
+        let colour = [own[0] / own[1] * 1.1, own[2] / own[1]]
+        let roll: [String: Any] = ["colour": [1, 1], "frames": 8, "clear": colour]
+        let rolled = try XCTUnwrap(try prepared(["reading": 2, "roll": roll]).negativeMeasure)
+        XCTAssertEqual(rolled["clear"] as? [Double], own)
+        let border = try XCTUnwrap(rolled["border"] as? [Double])
+        XCTAssertEqual(border[1], own[1], accuracy: 1e-6)
+        XCTAssertEqual(border[0], own[0] * 1.1, accuracy: 1e-5)
+        XCTAssertEqual(border[2], own[2], accuracy: 1e-6)
+        // Clear film sampled on the frame is the frame's, whatever its roll.
+        let sampled = try XCTUnwrap(try prepared(
+            ["reading": 2, "roll": roll, "border": own]).negativeMeasure)
+        XCTAssertEqual(sampled["border"] as? [Double], own)
+    }
+
     /// An edit made with the current reading is read through the scan's light and camera and
     /// balanced as it says, from what its frame measures; one made before keeps its reading.
     func testAnEditMadeWithTheCurrentReadingIsReadAsItSays() throws {
@@ -300,6 +328,12 @@ final class HostNegativeScanTests: XCTestCase {
             slopes = nil
         }
 
+        // Its average is measured with them, and its own clear film said beside the one it is
+        // read against.
+        let average = try vector(measure, "average")
+        XCTAssertLessThan(average.y, try vector(measure, "denseEnd").y)
+        XCTAssertEqual(measure["clear"] as? [Double], measure["border"] as? [Double])
+
         let stock = try NegativeScanPrint.film("gold200")
         let roll: [String: Any] = ["colour": [0.9, 1.1], "frames": 12, "level": 1.1, "slopes": [0.9, 1.1]]
         let neutral = [0.2, 0.05, 0.012]
@@ -319,7 +353,7 @@ final class HostNegativeScanTests: XCTestCase {
             let expected = try NegativeScanPrint.Reading(
                 stock: stock, border: border,
                 balance: negative.balance(stock: stock, border: border, denseEnd: denseEnd,
-                                          slopes: slopes, midtone: midtone))
+                                          average: average, midtone: midtone))
             let calibration = try XCTUnwrap(read.edit.negativeReading?.calibration, "\(edit)")
             XCTAssertEqual(calibration, expected.calibration, "\(edit)")
             XCTAssertEqual(read.edit.negativeReading?.highlightStops, expected.highlightStops, "\(edit)")

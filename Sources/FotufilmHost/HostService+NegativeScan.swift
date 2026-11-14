@@ -279,8 +279,15 @@ extension HostService {
             guard NegativeScanPrint.reads(stock) else { throw NegativeScanPrint.Failure.reversalFilm }
             return stock
         }
-        let border = try negative?.border
+        // The frame's own clear film, and the one it is read against: on a roll, its own in
+        // the roll's colour of clear film.
+        let own = try negative?.border
             ?? scan.estimatedBorder(light: light, filmBase: negative?.readsModel ?? false)
+        var border = own
+        if let negative, own.count == 3 {
+            let film = negative.clearFilm(estimated: SIMD3(own[0], own[1], own[2]))
+            border = [film.x, film.y, film.z]
+        }
         // The picture as framed, crop included even while the crop tool shows the whole frame:
         // the reading follows what will print.
         let image = prepared.image
@@ -305,12 +312,15 @@ extension HostService {
                                                       negative: reading, preview: preview)
         prepared.negativeMeasure = [
             "border": (0..<3).map { Double(read[$0]) },
+            "clear": own.map(Double.init),
             "flare": (0..<3).map { Double(flare[$0]) },
             "denseEnd": measure.denseEnd.map { dense in (0..<3).map { Double(dense[$0]) } as Any }
                 ?? NSNull(),
             "slopes": measure.slopes.map { slopes in (0..<2).map { Double(slopes[$0]) } as Any }
                 ?? NSNull(),
             "midtone": measure.midtone.map { tone in (0..<3).map { Double(tone[$0]) } as Any }
+                ?? NSNull(),
+            "average": measure.average.map { tone in (0..<3).map { Double(tone[$0]) } as Any }
                 ?? NSNull(),
         ]
     }

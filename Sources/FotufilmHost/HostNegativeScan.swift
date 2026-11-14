@@ -111,7 +111,7 @@ final class HostNegativeScan {
             stock: stock, border: read.border,
             balance: negative.balance(stock: stock, border: read.border,
                                       denseEnd: read.measure.denseEnd,
-                                      slopes: read.measure.slopes,
+                                      average: read.measure.average,
                                       midtone: read.measure.midtone, source: source,
                                       flare: read.flare),
             flare: read.flare, holder: read.holder)
@@ -119,8 +119,8 @@ final class HostNegativeScan {
 
     /// What a framing measures for its reading and its roll: the clear film it is read against,
     /// the stray light the reading takes off (`WebNativeEdit.Negative.strayLight`), and, net of
-    /// that, its own densest end, before any roll's colour, the rises across its tonal steps
-    /// and its mid-tones. Arguments as `reading`.
+    /// that, its own densest end, before any roll's colour, the rises across its tonal steps,
+    /// its mid-tones and its average. Arguments as `reading`.
     func measure(_ key: String, border: [Float], light id: String? = nil,
                  negative: WebNativeEdit.Negative = .init(),
                  preview: () throws -> (rgba: [Float], width: Int, height: Int)) throws
@@ -168,7 +168,8 @@ final class HostNegativeScan {
                 ? ApproximateNegativeScan.denseEnd(border: clear, preview: planes)
                 : ApproximateNegativeScan.channelEnds(border: clear, preview: planes),
             slopes: ApproximateNegativeScan.tonalSlopes(border: clear, preview: planes),
-            midtone: ApproximateNegativeScan.midtone(border: clear, preview: planes))
+            midtone: ApproximateNegativeScan.midtone(border: clear, preview: planes),
+            average: ApproximateNegativeScan.average(border: clear, preview: planes))
         lock.withLock {
             measures.removeAll { $0.key == measured }
             measures.append((measured, measure))
@@ -191,7 +192,8 @@ final class HostNegativeScan {
         let positive = try prepared(
             light: id.flatMap(lightFrame),
             plain: negative.plain(border: read.border, denseEnd: read.measure.denseEnd,
-                                  slopes: read.measure.slopes, source: source, flare: read.flare))
+                                  average: read.measure.average, source: source,
+                                  flare: read.flare))
         lock.withLock { plain = (plainKey, positive) }
         return positive
     }

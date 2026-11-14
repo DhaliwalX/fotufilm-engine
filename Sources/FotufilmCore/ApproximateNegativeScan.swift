@@ -330,6 +330,28 @@ public struct ApproximateNegativeScan: Encodable, Equatable, Sendable {
         return densities.reduce(SIMD3<Float>.zero, +) / Float(densities.count)
     }
 
+    /// The green density over the clear film a pixel has to count toward a frame's average:
+    /// past the toe, where the clear film's own error is most of what a pixel reads, and short
+    /// of the densest highlights, a lamp or the sun, whose colour is their own.
+    public static let averageRange: ClosedRange<Float> = 0.1...1.5
+
+    /// The framed picture's average in the scan channels' densities over `border`: over the
+    /// central 80%'s pixels whose green lies in `averageRange`, the median green, and red and
+    /// blue that far from it as the medians of their differences from green. A picture's tones
+    /// taken together lean to no colour far more often than its brightest thing is white, a
+    /// sunlit wall at dusk or a yellow flower, so the average stands for the frame's neutral
+    /// and, over a roll's frames, for the roll's (`RollBalance.average`). Nil where fewer than
+    /// one pixel in 128 counts, a night with a few lamps.
+    public static func average(border: SIMD3<Float>, preview: ImageBuffer) -> SIMD3<Float>? {
+        guard let densities = framedDensities(border: border, preview: preview) else { return nil }
+        let counted = densities.filter { averageRange.contains($0.y) }
+        guard counted.count >= max(16, densities.count / 128) else { return nil }
+        let median = { (values: [Float]) -> Float in values.sorted()[values.count / 2] }
+        let green = median(counted.map(\.y))
+        return SIMD3(green + median(counted.map { $0.x - $0.y }), green,
+                     green + median(counted.map { $0.z - $0.y }))
+    }
+
     /// The scan channels' densities over `border` of the central 80% of `preview`, which keeps
     /// the holder out, at the pixels that pass light in every channel. Nil with fewer than
     /// sixteen of them.
@@ -368,9 +390,13 @@ public struct ApproximateNegativeScan: Encodable, Equatable, Sendable {
         return min(highlight, max(diffuseWhiteStops, midtone + highlightSpan))
     }
 
-    /// What a roll's frames share: the colour of their densest ends and how steep their records
-    /// read against each other. The editor measures it over the roll's frames and keeps it with
-    /// each frame's edit (web/src/negative-document.js `rollBalance` mirrors `init(measures:)`).
+    /// What a roll's frames share: the colour of its clear film, the average its pictures
+    /// come to, which stands for its neutral, and how steep its records read against each
+    /// other. None of these changes along a roll, and one frame cannot tell any of them from
+    /// its own picture: the film's, its development's and the scan's are one for the roll,
+    /// where a frame's own densest end or tonal steps follow whatever it shows. The editor
+    /// measures it over the roll's frames and keeps it with each frame's edit
+    /// (web/src/negative-document.js `rollBalance` mirrors `init(measures:)`).
     public struct RollBalance: Codable, Equatable, Sendable {
         /// The densest end's red and blue over its green: the median over the frames whose
         /// densest ends can be read.
@@ -385,16 +411,33 @@ public struct ApproximateNegativeScan: Encodable, Equatable, Sendable {
         /// (`tonalSlopes(border:preview:)`), the median over the frames that have enough. Nil
         /// with fewer than `contrastFrames` of them.
         public var slopes: [Float]?
+        /// The roll's neutral in the scan channels' densities over the clear film: the median
+        /// over the frames' averages (`average(border:preview:)`) of their green, with red and
+        /// blue as far from it as the medians of theirs. A frame balanced on its roll is
+        /// balanced on this. Nil in a roll measured before it was kept, which is balanced on
+        /// the colour of its densest ends.
+        public var average: [Float]?
+        /// The clear film's red and blue over its green, linear scan RGB: the median over the
+        /// frames' own clear film. A scan's exposure moves its clear film up and down and not
+        /// its colour, and a frame that shows no unexposed film reads its own off its picture
+        /// (`clearFilm(_:)`). Nil in a roll measured before it was kept.
+        public var clear: [Float]?
 
         /// How many frames' tonal steps a roll's contrast takes: fewer leave it to one
         /// picture's colours.
         public static let contrastFrames = 6
+        /// How far a frame's own clear film may be off its roll's colour, in density, and
+        /// still take it: further is another film, or a scan under another light.
+        public static let clearReach: Float = 0.15
 
-        public init(colour: [Float], frames: Int, level: Float? = nil, slopes: [Float]? = nil) {
+        public init(colour: [Float], frames: Int, level: Float? = nil, slopes: [Float]? = nil,
+                    average: [Float]? = nil, clear: [Float]? = nil) {
             self.colour = colour
             self.frames = frames
             self.level = level
             self.slopes = slopes
+            self.average = average
+            self.clear = clear
         }
 
         public init(from decoder: Decoder) throws {
@@ -403,11 +446,15 @@ public struct ApproximateNegativeScan: Encodable, Equatable, Sendable {
             frames = try container.decode(Int.self, forKey: .frames)
             level = try container.decodeIfPresent(Float.self, forKey: .level)
             slopes = try container.decodeIfPresent([Float].self, forKey: .slopes)
+            average = try container.decodeIfPresent([Float].self, forKey: .average)
+            clear = try container.decodeIfPresent([Float].self, forKey: .clear)
             let pair = { (values: [Float]) in
                 values.count == 2 && values.allSatisfy { $0.isFinite && $0 > 0 }
             }
             guard pair(colour), frames >= 2, level.map({ $0.isFinite && $0 > 0 }) ?? true,
-                  slopes.map(pair) ?? true else {
+                  slopes.map(pair) ?? true, clear.map(pair) ?? true,
+                  average.map({ $0.count == 3 && $0.allSatisfy(\.isFinite) && $0[1] > 0 })
+                      ?? true else {
                 throw DecodingError.dataCorruptedError(
                     forKey: .colour, in: container, debugDescription: "Invalid roll balance.")
             }
@@ -422,12 +469,24 @@ public struct ApproximateNegativeScan: Encodable, Equatable, Sendable {
             /// Its mid-tones (`midtone(border:preview:)`), which its own print's timing takes;
             /// a roll takes nothing from them.
             public var midtone: SIMD3<Float>?
+            /// Its average (`average(border:preview:)`).
+            public var average: SIMD3<Float>?
+            /// Its own clear film, linear scan RGB: as sampled on it, else as estimated from
+            /// its scan, before any roll's colour.
+            public var clear: SIMD3<Float>?
+            /// The clear film its densities are over, where that is not its own: a frame
+            /// measured again on a roll is read against the roll's colour of it.
+            public var border: SIMD3<Float>?
 
             public init(denseEnd: SIMD3<Float>? = nil, slopes: SIMD2<Float>? = nil,
-                        midtone: SIMD3<Float>? = nil) {
+                        midtone: SIMD3<Float>? = nil, average: SIMD3<Float>? = nil,
+                        clear: SIMD3<Float>? = nil, border: SIMD3<Float>? = nil) {
                 self.denseEnd = denseEnd
                 self.slopes = slopes
                 self.midtone = midtone
+                self.average = average
+                self.clear = clear
+                self.border = border
             }
         }
 
@@ -451,13 +510,59 @@ public struct ApproximateNegativeScan: Encodable, Equatable, Sendable {
             }
             slopes = stepped.count >= Self.contrastFrames
                 ? [median(stepped.map(\.x)), median(stepped.map(\.y))] : nil
+            let positive = { (light: SIMD3<Float>) in
+                (0..<3).allSatisfy { light[$0].isFinite && light[$0] > 0 }
+            }
+            let films = measures.compactMap(\.clear).filter(positive)
+            if films.count >= 2 {
+                // Medians of the logarithms, so a frame twice too red counts as one half as red.
+                clear = [pow(10, median(films.map { log10($0.x / $0.y) })),
+                         pow(10, median(films.map { log10($0.z / $0.y) }))]
+            }
+            // Each frame's average over the clear film the roll gives it, whatever it was
+            // measured over.
+            let averages = measures.compactMap { measure -> SIMD3<Float>? in
+                guard var average = measure.average,
+                      (0..<3).allSatisfy({ average[$0].isFinite }), average.y > 0.05
+                else { return nil }
+                if let own = measure.clear, positive(own),
+                   case let over = measure.border ?? own, positive(over) {
+                    let film = clearFilm(own)
+                    for c in 0..<3 { average[c] += log10(film[c] / over[c]) }
+                }
+                return average
+            }
+            if averages.count >= 2 {
+                let green = median(averages.map(\.y))
+                average = [green + median(averages.map { $0.x - $0.y }), green,
+                           green + median(averages.map { $0.z - $0.y })]
+            }
         }
 
-        /// The roll's neutral in the scan channels' densities over the clear film: its colour
-        /// at the level of its densest ends, or at `green` for a roll kept without one.
+        /// The roll's neutral in the scan channels' densities over the clear film: the average
+        /// of its frames, or for a roll kept without one its densest ends' colour at their
+        /// level, or at `green` where it kept no level either.
         func neutral(green: Float?) -> SIMD3<Float>? {
+            if let average, average.count == 3, average[1] > 0.05 {
+                return SIMD3(average[0], average[1], average[2])
+            }
             guard let green = level ?? green, green.isFinite, green > 0.05 else { return nil }
             return SIMD3(colour[0] * green, green, colour[1] * green)
+        }
+
+        /// A frame's clear film on its roll: `own`, linear scan RGB as estimated from its scan,
+        /// at its own green with red and blue in the roll's proportion to it. A frame that
+        /// shows no unexposed film reads its clear film off the thinnest of its picture, close
+        /// in level and off in colour, which then tints every tone of it; the roll's colour is
+        /// the film's. `own` as it is for a roll kept without the colour, or one further from
+        /// it than `clearReach`.
+        public func clearFilm(_ own: SIMD3<Float>) -> SIMD3<Float> {
+            guard let clear, clear.count == 2, own.y.isFinite, own.y > 0,
+                  own.x.isFinite, own.x > 0, own.z.isFinite, own.z > 0,
+                  abs(log10(own.x / own.y / clear[0])) <= Self.clearReach,
+                  abs(log10(own.z / own.y / clear[1])) <= Self.clearReach
+            else { return own }
+            return SIMD3(clear[0] * own.y, own.y, clear[1] * own.y)
         }
     }
 

@@ -105,10 +105,9 @@ final class NegativeScanBalanceTests: XCTestCase {
 
     /// Even on a single frame without a roll, the neutral balances by shifting exposure along
     /// each record's characteristic curve rather than warping its gamma, holding greys down the
-    /// toe while keeping clear film at the stock's base. When the frame also measures its own
-    /// tonal steps, regularized contrast calibration brings drifted record steepness closer to
-    /// the film's grey scale.
-    func testASingleFrameBalancesByExposureAndRegularizesMeasuredSlopes() throws {
+    /// toe while keeping clear film at the stock's base. Its records keep the model's contrast:
+    /// one frame's tonal steps follow its picture, and only a roll's say how steep they read.
+    func testASingleFrameBalancesByExposureAndKeepsTheModelsContrast() throws {
         let stock = try stock("gold200")
         let model = NegativeScanModel(stock: stock, setup: setup)
         let highlight = NegativeScanModel.density(stock: stock, logExposure: 0.6, shift: cast)
@@ -139,43 +138,6 @@ final class NegativeScanBalanceTests: XCTestCase {
                                   "\(exposure) \(record)")
             }
         }
-
-        // Film whose records are steeper or flatter than the model has them, as age and
-        // development leave them, is brought back toward the grey scale when the frame measures
-        // its own tonal steps, regularized toward one so noisy single-frame steps cannot swing
-        // contrast wildly.
-        let steepness = SIMD3<Float>(0.75, 1, 1.25)
-        func developed(_ exposure: Float) -> [Float] {
-            let film = NegativeScanModel.density(stock: stock, logExposure: exposure)
-            return (0..<3).map {
-                stock.curves[$0].dMin + steepness[$0] * (film[$0] - stock.curves[$0].dMin)
-            }
-        }
-        let low = try XCTUnwrap(model.scannerDensity(density: developed(-0.6)))
-        let top = try XCTUnwrap(model.scannerDensity(density: developed(0.6)))
-        let rise = top - low
-        let frameSlopes = SIMD2(rise.x / rise.y, rise.z / rise.y)
-        let stepped = ApproximateNegativeScan.balance(
-            stock: stock, setup: setup, separation: 1, mode: .frame,
-            tones: .init(denseEnd: top, slopes: frameSlopes))
-        XCTAssertGreaterThan(stepped.gains.x, 1.05)
-        XCTAssertLessThan(stepped.gains.z, 0.95)
-        let held = try self.reading(stock, model, stepped)
-        let unstepped = try self.reading(stock, model, ApproximateNegativeScan.balance(
-            stock: stock, setup: setup, separation: 1, mode: .frame, tones: .init(denseEnd: top)))
-        var worst: Float = 0, left: Float = 0
-        for exposure in stride(from: Float(-0.9), through: 0.6, by: 0.3) {
-            let scan = model.sample(density: developed(exposure))
-            let read = try XCTUnwrap(held.density(of: scan))
-            let plain = try XCTUnwrap(unstepped.density(of: scan))
-            let expected = grey(stock, green: read.y), plainExpected = grey(stock, green: plain.y)
-            for record in [0, 2] {
-                worst = max(worst, abs(read[record] - expected[record]))
-                left = max(left, abs(plain[record] - plainExpected[record]))
-            }
-        }
-        XCTAssertLessThan(worst, 0.08)
-        XCTAssertGreaterThan(left, 1.8 * worst)
     }
 
     /// The film's grey of the exposure `green` density reads.
@@ -359,6 +321,75 @@ final class NegativeScanBalanceTests: XCTestCase {
         }
         XCTAssertNil(ApproximateNegativeScan.midtone(border: border,
                                                      preview: ImageBuffer(width: 1, height: 1)))
+    }
+
+    /// A frame's average is what its tones come to between the toe and its densest highlights:
+    /// a lamp, the clear film around a subject and a few pixels of a colour do not move it.
+    func testTheAverageIsTheMiddleOfTheFramesTones() throws {
+        let border = SIMD3<Float>(0.8, 0.5, 0.25)
+        let wall = SIMD3<Float>(0.52, 0.6, 0.71), lamp = SIMD3<Float>(2.4, 2.2, 1.9)
+        let image = frame(border: border, [
+            (wall, 0..<100, 0..<100), (SIMD3(0.03, 0.04, 0.02), 0..<100, 10..<30),
+            (lamp, 40..<60, 40..<50), (SIMD3(1.3, 0.9, 0.2), 60..<64, 60..<64),
+        ])
+        let average = try XCTUnwrap(ApproximateNegativeScan.average(border: border, preview: image))
+        for c in 0..<3 { XCTAssertEqual(average[c], wall[c], accuracy: 1e-5) }
+        // A night with a few lamps has too little between its shadows and its lamps to tell.
+        let night = frame(border: border, [
+            (SIMD3(0.03, 0.04, 0.02), 0..<100, 0..<100), (lamp, 40..<60, 40..<50),
+            (wall, 50..<55, 60..<65),
+        ])
+        XCTAssertNil(ApproximateNegativeScan.average(border: border, preview: night))
+        XCTAssertNil(ApproximateNegativeScan.average(border: border,
+                                                     preview: ImageBuffer(width: 1, height: 1)))
+    }
+
+    /// A frame is balanced on its average before its densest end: the sun on a white wall at
+    /// dusk is the frame's brightest thing and far from white.
+    func testAFrameIsBalancedOnItsAverageBeforeItsDensestEnd() throws {
+        let stock = try stock("gold200")
+        let model = NegativeScanModel(stock: stock, setup: setup)
+        let middle = try XCTUnwrap(model.scannerDensity(
+            density: NegativeScanModel.density(stock: stock, logExposure: -0.2, shift: cast)))
+        let sunlit = try XCTUnwrap(model.scannerDensity(density: NegativeScanModel.density(
+            stock: stock, logExposure: 0.7, shift: cast + SIMD3(0.3, 0, -0.4))))
+        let balance = ApproximateNegativeScan.balance(
+            stock: stock, setup: setup, separation: 1, mode: .frame,
+            tones: .init(denseEnd: sunlit, average: middle))
+        XCTAssertEqual(balance.gains, .one)
+        XCTAssertEqual(balance.exposure.x, -cast.x, accuracy: 0.05)
+        XCTAssertEqual(balance.exposure.z, -cast.z, accuracy: 0.05)
+        // The densest end still times the print, and stands in where a frame has no average.
+        let ends = ApproximateNegativeScan.balance(
+            stock: stock, setup: setup, separation: 1, mode: .frame, tones: .init(denseEnd: sunlit))
+        XCTAssertEqual(balance.highlightStops, ends.highlightStops)
+        XCTAssertEqual(ends.exposure.x, -(cast.x + 0.3), accuracy: 0.08)
+        // A neutral picked on the frame comes before either.
+        let picked = ApproximateNegativeScan.balance(
+            stock: stock, setup: setup, separation: 1, mode: .frame,
+            tones: .init(denseEnd: sunlit, picked: sunlit, average: middle))
+        XCTAssertEqual(picked.exposure, ends.exposure)
+    }
+
+    /// Every frame of a roll is balanced on the average the roll's frames come to, whatever
+    /// its own picture shows.
+    func testFramesOnTheirRollAreBalancedOnTheRollsAverage() throws {
+        let stock = try stock("gold200")
+        let model = NegativeScanModel(stock: stock, setup: setup)
+        let middle = try XCTUnwrap(model.scannerDensity(
+            density: NegativeScanModel.density(stock: stock, logExposure: -0.2, shift: cast)))
+        var roll = try measured(stock, model)
+        roll.average = [middle.x, middle.y, middle.z]
+        let own = ApproximateNegativeScan.balance(
+            stock: stock, setup: setup, separation: 1, mode: .frame,
+            tones: .init(average: middle), roll: roll)
+        for frame in [SIMD3<Float>(1.9, 1.2, 0.5), SIMD3(0.4, 0.9, 1.6)] {
+            let rolled = ApproximateNegativeScan.balance(
+                stock: stock, setup: setup, separation: 1, mode: .roll,
+                tones: .init(denseEnd: frame * 1.5, average: frame), roll: roll)
+            XCTAssertEqual(rolled.exposure, own.exposure)
+            XCTAssertEqual(rolled.gains, own.gains)
+        }
     }
 
     func testASmallHighlightFarOverTheMidTonesDoesNotTimeThePrint() throws {

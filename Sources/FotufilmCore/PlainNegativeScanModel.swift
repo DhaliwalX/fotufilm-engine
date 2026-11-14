@@ -67,7 +67,8 @@ extension PlainNegativeScan {
 
     /// Reads against `border` through `setup`, its weights across the channels at `separation`,
     /// along a negative's curve with its toe, balanced as `mode` says on the frame's neutral, one
-    /// picked on it or else its densest end, or on its roll's; or left as the film reads. With
+    /// picked on it or else its average or its densest end, or on its roll's; or left as the
+    /// film reads. With
     /// no film to say how steep its records are, red's and blue's densities are scaled onto
     /// green's at that neutral, which holds the greys between the clear film and the neutral
     /// whatever each record's contrast. A `roll` that measured its tonal steps says the
@@ -102,25 +103,14 @@ extension PlainNegativeScan {
                 }
                 steepened = true
             }
-        } else if mode != .none, let slopes = tones.slopes,
-                  slopes.x.isFinite, slopes.y.isFinite, slopes.x > 0, slopes.y > 0 {
-            let read = NegativeScanCrosstalk.apply(weights, SIMD3(slopes.x, 1, slopes.y))
-            if read.y.isFinite, read.y > 0 {
-                let weight: Float = setup.knowsScale ? 0.65 : 0.8
-                let range = ApproximateNegativeScan.frameContrastRange
-                for channel in [0, 2] where read[channel].isFinite && read[channel] > 0 {
-                    gains[channel] = min(max(pow(read.y / read[channel], weight),
-                                             range.lowerBound), range.upperBound)
-                }
-                steepened = true
-            }
         }
         var balance = SIMD3<Float>.one
         let toeLight = Self.modelToe * pow(10, -reference / Self.gamma)
         // As a known film's balance takes its neutral
         // (`ApproximateNegativeScan.balance(stock:setup:separation:mode:tones:roll:)`).
         let neutrals = mode == .none ? [] : [
-            mode == .roll ? roll?.neutral(green: dense?.y) : nil, readable(tones.picked), dense,
+            mode == .roll ? roll?.neutral(green: dense?.y) : nil, readable(tones.picked),
+            readable(tones.average), dense,
         ]
         if let neutral = neutrals.lazy.compactMap({ $0 }).map({
             NegativeScanCrosstalk.apply(weights, $0) }).first(where: { $0.y > 0.05 }) {
