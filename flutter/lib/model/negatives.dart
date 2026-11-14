@@ -252,7 +252,12 @@ class NegativeScans {
       // The photograph or its edit moved on while the engine looked.
       if (picking != what || editor.active != doc || !identical(doc.edit, edit)) return;
       picking = null;
-      read({what: sampled});
+      // A neutral picked on a frame is the frame's own: a frame balanced on its roll is
+      // balanced on itself from here, still with its roll's contrast.
+      read({
+        what: sampled,
+        if (what == 'neutral' && balanceOf(negative) == 'roll') 'balance': 'frame',
+      });
     } catch (e) {
       if (editor.active == doc) {
         editor
@@ -442,6 +447,10 @@ class NegativeScans {
     final docs = rollFrames;
     if (docs.isNotEmpty) _applyRoll(docs, null);
   }
+
+  /// Clear Picked Neutral: the frame back on what it is balanced on without one, its roll once
+  /// measured.
+  void clearNeutral() => read({'neutral': null, 'balance': null});
 
   /// Balance This Frame Alone.
   void unrollFrame() {

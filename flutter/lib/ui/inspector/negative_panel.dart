@@ -206,7 +206,7 @@ List<Widget> negativeBalanceControls(InspectorControls c) {
       ),
       ScanButton(
         'Clear Picked Neutral',
-        onPressed: picked ? () => scans.read({'neutral': null}) : null,
+        onPressed: picked ? scans.clearNeutral : null,
       ),
     ],
   ];

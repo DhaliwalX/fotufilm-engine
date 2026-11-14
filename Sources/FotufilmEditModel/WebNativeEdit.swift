@@ -61,10 +61,11 @@ public struct WebNativeEdit: Decodable {
         public var reading: Int?
         /// What took the scan (`NegativeScanSetup.Camera.name`); nil is the camera its file names.
         public var camera: String?
-        /// What the frame is balanced on; nil is its own tones.
+        /// What the frame is balanced on; nil is its roll once one is measured with the average
+        /// its frames come to, and its own tones until then (`balanceMode`).
         public var balance: ApproximateNegativeScan.BalanceMode?
         /// Something neutral picked on the scan, as linear Rec. 2020 scan RGB like `border`; nil
-        /// balances on the densest end.
+        /// balances a frame on its average, or else its densest end.
         public var neutral: [Float]?
         /// The scan's stray light as a share of the frame's average light
         /// (`ApproximateNegativeScan.flareShares`); nil measures it from the holder where the scan
