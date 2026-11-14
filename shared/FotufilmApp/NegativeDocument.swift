@@ -212,14 +212,9 @@ final class NegativeDocument: @unchecked Sendable {
         // A picture area picked on the scan is measured in place of the crop, and whole
         // (`WebNativeEdit.Negative.pictureArea`): its four corners frame the scan as a
         // four-corner crop's do, whatever the edit is cropped to.
-        let area = negative.pictureArea
+        let area = state.pictureAreaCorners
         let picture: CIImage
-        if let area {
-            var corners = QuadrilateralCrop()
-            corners.topLeft = CGPoint(x: area[0][0], y: area[0][1])
-            corners.topRight = CGPoint(x: area[1][0], y: area[1][1])
-            corners.bottomRight = CGPoint(x: area[2][0], y: area[2][1])
-            corners.bottomLeft = CGPoint(x: area[3][0], y: area[3][1])
+        if let corners = area {
             var framing = state
             framing.crop = nil
             framing.cornerCrop = corners
@@ -301,6 +296,29 @@ final class NegativeDocument: @unchecked Sendable {
         let border = try NegativeScanImport.sampleBorder(image: framed, rect: rect,
                                                          colorSpace: NegativeScanImport.filmSpace)
         return [border.x, border.y, border.z]
+    }
+
+    /// The clearest film inside `area`, a unit rectangle from the top left of `framed`, as the
+    /// desktop reads a rectangle drawn over clear film
+    /// (`ApproximateNegativeScan.clearestFilm`): the film's edge or the gap between two frames,
+    /// with whatever picture the rectangle takes in beside it left out.
+    static func sampleClearestFilm(in area: CGRect, of framed: CIImage) throws -> [Float] {
+        let unit = area.standardized.intersection(CGRect(x: 0, y: 0, width: 1, height: 1))
+        let extent = framed.extent
+        guard !unit.isNull else { throw NegativeScanImport.Failure.invalidBorder }
+        let drawn = CGRect(x: extent.minX + unit.minX * extent.width,
+                           y: extent.maxY - unit.maxY * extent.height,
+                           width: unit.width * extent.width, height: unit.height * extent.height)
+            .integral.intersection(extent)
+        guard drawn.width >= 2, drawn.height >= 2 else {
+            throw NegativeScanImport.Failure.invalidBorder
+        }
+        let preview = try samples(FilmRender.downsample(framed.cropped(to: drawn),
+                                                        longEdge: readingEdge))
+        guard let clear = ApproximateNegativeScan.clearestFilm(preview: preview) else {
+            throw NegativeScanImport.Failure.invalidBorder
+        }
+        return [clear.x, clear.y, clear.z]
     }
 
     // MARK: - Points on the scan
