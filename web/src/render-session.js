@@ -417,10 +417,10 @@ export class RenderSession {
     // The frame's own clear film, and the one it is read against: on a roll, its own in the
     // roll's colour of clear film (WebNativeEdit.Negative.clearFilm).
     const own = edit.negative.border ?? estimate
-    const border =
-      edit.negative.border || !readsModel(edit.negative)
-        ? own
-        : rollClearFilm(own, edit.negative.roll)
+    // A scan merged from an exposure under each LED has three exposures, each its own, and
+    // no colour of clear film to share (WebNativeEdit.Negative.sharesClearFilm).
+    const shares = readsModel(edit.negative) && edit.negative.scanLight !== 'rgb'
+    const border = edit.negative.border || !shares ? own : rollClearFilm(own, edit.negative.roll)
     const framingOf = JSON.stringify([
       border,
       edit.rotation,
@@ -482,7 +482,13 @@ export class RenderSession {
         slopes: tonalSlopes(clear, pixels, preview.width, preview.height),
       })
     }
-    return { border, clear: own, flare, holder: shown?.limit ?? null, ...framed.measures.get(measured) }
+    return {
+      border,
+      clear: shares ? own : null,
+      flare,
+      holder: shown?.limit ?? null,
+      ...framed.measures.get(measured),
+    }
   }
   async capturePack(pack, stock, kelvin, report) {
     if (!pack || !Number.isFinite(kelvin) || kelvin <= 0) return pack

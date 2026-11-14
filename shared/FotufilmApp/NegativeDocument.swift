@@ -203,12 +203,12 @@ final class NegativeDocument: @unchecked Sendable {
             border = own
         } else {
             own = try estimatedBorder(state)
-            border = negative.readsModel ? negative.roll?.clearFilm(own) ?? own : own
+            border = negative.sharesClearFilm ? negative.roll?.clearFilm(own) ?? own : own
         }
         guard let source = source(state) else { throw CancellationError() }
         var preview = try Self.samples(FilmRender.downsample(framed(source),
                                                              longEdge: Self.readingEdge))
-        var measure = Measure(border: border, clear: own)
+        var measure = Measure(border: border, clear: negative.sharesClearFilm ? own : nil)
         if negative.readsModel {
             // As the desktop host measures a framing (`HostNegativeScan.measure`): the scan's
             // holder left out, then the stray light taken off.

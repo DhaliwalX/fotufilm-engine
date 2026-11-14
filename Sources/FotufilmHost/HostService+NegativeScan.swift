@@ -312,7 +312,8 @@ extension HostService {
                                                       negative: reading, preview: preview)
         prepared.negativeMeasure = [
             "border": (0..<3).map { Double(read[$0]) },
-            "clear": own.map(Double.init),
+            // Its own clear film, for its roll's colour of it, where a roll shares one.
+            "clear": negative?.sharesClearFilm ?? false ? own.map(Double.init) as Any : NSNull(),
             "flare": (0..<3).map { Double(flare[$0]) },
             "denseEnd": measure.denseEnd.map { dense in (0..<3).map { Double(dense[$0]) } as Any }
                 ?? NSNull(),

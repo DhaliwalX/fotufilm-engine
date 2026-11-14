@@ -86,12 +86,17 @@ extension WebNativeEdit.Negative {
         balance ?? (roll?.average != nil ? .roll : .frame)
     }
 
+    /// Whether the frame's clear film has its roll's colour: a scan made in one exposure does,
+    /// which moves its clear film up and down and not its colour. One merged from an exposure
+    /// under each LED has three, each its own, and so does not; nor does the first reading.
+    public var sharesClearFilm: Bool { readsModel && (scanLight ?? .white) != .rgb }
+
     /// The clear film the frame is read against: as sampled on it, else `estimated` from its
-    /// scan in its roll's colour of clear film (`ApproximateNegativeScan.RollBalance.clearFilm`).
-    /// The first reading takes the estimate as it is. Linear scan RGB.
+    /// scan, in its roll's colour of clear film where the roll's frames share one
+    /// (`sharesClearFilm`, `ApproximateNegativeScan.RollBalance.clearFilm`). Linear scan RGB.
     public func clearFilm(estimated: SIMD3<Float>) -> SIMD3<Float> {
         if let border, border.count == 3 { return SIMD3(border[0], border[1], border[2]) }
-        guard readsModel, let roll else { return estimated }
+        guard sharesClearFilm, let roll else { return estimated }
         return roll.clearFilm(estimated)
     }
 

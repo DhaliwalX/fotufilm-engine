@@ -191,7 +191,8 @@ in one place (`WebNativeEdit.Negative.balance`, `.plain` and `.strayLight`):
   estimate read off the thinnest of its picture, close in level and off in colour. A scan's
   exposure moves its clear film up and down and not its colour, so on a measured roll each
   frame keeps its own level in the colour of the roll's clear film, the median over its frames
-  (`RollBalance.clearFilm`); clear film picked on a frame stands as picked.
+  (`RollBalance.clearFilm`); clear film picked on a frame stands as picked, and a scan merged
+  from an exposure under each LED, three exposures each its own, keeps its own.
 - **A roll's contrast.** A frame's tonal steps, where light falls off across a surface or a
   shadow lies on it, change every record's exposure alike, so the rises of red and blue per unit
   of green across them say how steep the roll's records read against each other

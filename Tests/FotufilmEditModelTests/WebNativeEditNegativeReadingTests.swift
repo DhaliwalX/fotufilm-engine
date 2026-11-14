@@ -83,6 +83,12 @@ final class WebNativeEditNegativeReadingTests: XCTestCase {
         XCTAssertEqual(Negative(border: [0.5, 0.5, 0.5], roll: measured, reading: 2)
             .clearFilm(estimated: estimated), SIMD3(0.5, 0.5, 0.5))
         XCTAssertEqual(Negative(roll: measured).clearFilm(estimated: estimated), estimated)
+        // A scan merged from an exposure under each LED has three exposures and keeps its own.
+        XCTAssertEqual(Negative(roll: measured, scanLight: .rgb, reading: 2)
+            .clearFilm(estimated: estimated), estimated)
+        XCTAssertFalse(Negative(scanLight: .rgb, reading: 2).sharesClearFilm)
+        XCTAssertTrue(Negative(scanLight: .screen, reading: 2).sharesClearFilm)
+        XCTAssertFalse(Negative().sharesClearFilm)
         XCTAssertEqual(Negative(roll: roll, reading: 2).clearFilm(estimated: estimated), estimated)
         XCTAssertEqual(Negative(reading: 2).clearFilm(estimated: estimated), estimated)
         // Two edits whose rolls differ in either read differently.

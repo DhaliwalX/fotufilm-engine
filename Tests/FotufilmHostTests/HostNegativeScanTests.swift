@@ -289,6 +289,11 @@ final class HostNegativeScanTests: XCTestCase {
         XCTAssertEqual(border[1], own[1], accuracy: 1e-6)
         XCTAssertEqual(border[0], own[0] * 1.1, accuracy: 1e-5)
         XCTAssertEqual(border[2], own[2], accuracy: 1e-6)
+        // A scan merged from an exposure under each LED keeps its own, and gives its roll none.
+        let merged = try XCTUnwrap(try prepared(
+            ["reading": 2, "roll": roll, "scanLight": "rgb"]).negativeMeasure)
+        XCTAssertEqual(merged["border"] as? [Double], own)
+        XCTAssertTrue(merged["clear"] is NSNull)
         // Clear film sampled on the frame is the frame's, whatever its roll.
         let sampled = try XCTUnwrap(try prepared(
             ["reading": 2, "roll": roll, "border": own]).negativeMeasure)
@@ -328,11 +333,11 @@ final class HostNegativeScanTests: XCTestCase {
             slopes = nil
         }
 
-        // Its average is measured with them, and its own clear film said beside the one it is
-        // read against.
+        // Its average is measured with them. The first reading has no roll's clear film to
+        // take, and says none of its own for one.
         let average = try vector(measure, "average")
         XCTAssertLessThan(average.y, try vector(measure, "denseEnd").y)
-        XCTAssertEqual(measure["clear"] as? [Double], measure["border"] as? [Double])
+        XCTAssertTrue(measure["clear"] is NSNull)
 
         let stock = try NegativeScanPrint.film("gold200")
         let roll: [String: Any] = ["colour": [0.9, 1.1], "frames": 12, "level": 1.1, "slopes": [0.9, 1.1]]
