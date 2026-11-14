@@ -211,7 +211,7 @@ export function readingRequest(
       scanLight: negative.scanLight ?? "white",
     };
   const kept = {};
-  for (const key of ["reading", "crosstalk", "scanLight", "camera", "balance", "neutral", "roll"])
+  for (const key of ["reading", "crosstalk", "scanLight", "camera", "balance", "neutral", "roll", "density"])
     if (negative[key] != null) kept[key] = negative[key];
   return {
     border,
@@ -265,6 +265,7 @@ export function parseNegative(value) {
     neutral = null,
     flare = null,
     area = null,
+    density = null,
   } = value;
   const positives = (values, count) =>
     Array.isArray(values) &&
@@ -294,7 +295,8 @@ export function parseNegative(value) {
     (balance !== null && !BALANCES.includes(balance)) ||
     (neutral !== null && !positives(neutral, 3)) ||
     (flare !== null && !(Number.isFinite(flare) && flare >= 0 && flare <= 0.02)) ||
-    (area !== null && !pictureArea({ area }))
+    (area !== null && !pictureArea({ area })) ||
+    (density !== null && !(Number.isFinite(density) && density >= 0.5 && density <= 1.5))
   )
     throw new Error("Invalid negative reading.");
   return {
@@ -316,5 +318,6 @@ export function parseNegative(value) {
     ...(neutral !== null ? { neutral: [...neutral] } : {}),
     ...(flare !== null ? { flare } : {}),
     ...(area !== null ? { area: area.map((point) => [...point]) } : {}),
+    ...(density !== null ? { density } : {}),
   };
 }

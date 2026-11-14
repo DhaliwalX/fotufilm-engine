@@ -71,6 +71,10 @@ public struct WebNativeEdit: Decodable {
         /// (`ApproximateNegativeScan.flareShares`); nil measures it from the holder where the scan
         /// shows one, and takes none off otherwise. The first reading takes none off.
         public var flare: Float?
+        /// How strong the scan's densities read (`ApproximateNegativeScan.strengthRange`):
+        /// what every density over the clear film is multiplied by before the film is read;
+        /// nil is one, the scan as it measures. The first reading takes none.
+        public var density: Float?
         /// The picture's area on the scan, picked by its four corners: top left, top right,
         /// bottom right and bottom left, each a unit point of the oriented frame, as a
         /// four-corner crop is kept. The frame's measures read all of it and nothing else,
@@ -89,7 +93,7 @@ public struct WebNativeEdit: Decodable {
                     scanLight: NegativeScanCrosstalk.Light? = nil,
                     reading: Int? = nil, camera: String? = nil,
                     balance: ApproximateNegativeScan.BalanceMode? = nil, neutral: [Float]? = nil,
-                    flare: Float? = nil, area: [[Double]]? = nil,
+                    flare: Float? = nil, area: [[Double]]? = nil, density: Float? = nil,
                     attachments: [String: Data] = [:]) {
             self.border = border
             self.lightFrame = lightFrame
@@ -102,6 +106,7 @@ public struct WebNativeEdit: Decodable {
             self.neutral = neutral
             self.flare = flare
             self.area = area
+            self.density = density
             self.attachments = attachments
         }
 
@@ -126,7 +131,7 @@ public struct WebNativeEdit: Decodable {
 
         private enum CodingKeys: String, CodingKey {
             case border, lightFrame, roll, crosstalk, scanLight, reading, camera, balance, neutral
-            case flare, area, attachments
+            case flare, area, density, attachments
         }
 
         public init(from decoder: Decoder) throws {
@@ -159,6 +164,11 @@ public struct WebNativeEdit: Decodable {
                     forKey: .flare, in: c, debugDescription: "Invalid flare.")
             }
             area = try c.decodeIfPresent([[Double]].self, forKey: .area)
+            density = try c.decodeIfPresent(Float.self, forKey: .density)
+            if let density, !ApproximateNegativeScan.strengthRange.contains(density) {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .density, in: c, debugDescription: "Invalid density strength.")
+            }
             attachments = try c.decodeIfPresent([String: Data].self, forKey: .attachments) ?? [:]
         }
 
@@ -175,6 +185,7 @@ public struct WebNativeEdit: Decodable {
             try c.encodeIfPresent(neutral, forKey: .neutral)
             try c.encodeIfPresent(flare, forKey: .flare)
             try c.encodeIfPresent(area, forKey: .area)
+            try c.encodeIfPresent(density, forKey: .density)
             if !attachments.isEmpty { try c.encode(attachments, forKey: .attachments) }
         }
     }

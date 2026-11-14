@@ -341,6 +341,23 @@ final class WebNegativeProfileRequestTests: XCTestCase {
         }
     }
 
+    /// A request's density strength reaches the current reading, and is refused out of range.
+    func testARequestsDensityStrengthReachesTheReading() throws {
+        let stock = try printed("gold200")
+        let border = SIMD3<Float>(0.4, 0.6, 0.2), dense = SIMD3<Float>(1.6, 1.5, 1.4)
+        let strong = WebNativeEdit.Negative(reading: 2, density: 1.2)
+            .balance(stock: stock, border: border, denseEnd: dense)
+        let (_, options) = try JSONDecoder().decode(WebProfileRequest.self, from: profile(
+            denseEnd: [1.6, 1.5, 1.4], reading: ["reading": 2, "density": 1.2])).configured()
+        XCTAssertEqual(options.scanReading, try NegativeScanPrint.Reading(
+            stock: stock, border: border, balance: strong).calibration)
+        let (_, plain) = try JSONDecoder().decode(WebProfileRequest.self, from: profile(
+            denseEnd: [1.6, 1.5, 1.4], reading: ["reading": 2])).configured()
+        XCTAssertNotEqual(options.scanReading, plain.scanReading)
+        XCTAssertThrowsError(try WebRenderRequest.prepare(
+            profile(reading: ["reading": 2, "density": 4])))
+    }
+
     func testRejectsAReadingTheEditCouldNotKeep() throws {
         let invalid: [[String: Any]] = [
             ["reading": 0], ["reading": 2, "neutral": [0.05, 0.06]],

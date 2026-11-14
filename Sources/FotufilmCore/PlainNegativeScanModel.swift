@@ -75,12 +75,17 @@ extension PlainNegativeScan {
     /// contrast itself: red and blue are then made as steep as green by it, and the neutral is
     /// balanced by each channel's light, as an exposure. The frame's own densest end prints as
     /// `highlight` whichever it is balanced on. `tones` are net of the scan's stray light,
-    /// `flare`, which `border` still carries.
+    /// `flare`, which `border` still carries. `strength` multiplies every density over the
+    /// clear film, as a film's reading takes it (`ApproximateNegativeScan.strengthRange`).
     public init(border: SIMD3<Float>, setup: NegativeScanSetup, separation: Float,
                 mode: ApproximateNegativeScan.BalanceMode, tones: ApproximateNegativeScan.Tones,
-                roll: ApproximateNegativeScan.RollBalance? = nil, flare: SIMD3<Float> = .zero) {
+                roll: ApproximateNegativeScan.RollBalance? = nil, flare: SIMD3<Float> = .zero,
+                strength: Float = 1) {
+        let range = ApproximateNegativeScan.strengthRange
+        let scale = strength.isFinite ? min(max(strength, range.lowerBound), range.upperBound) : 1
         let weights = setup.weights(Self.weights(setup: setup, separation: separation),
                                     green: Self.weights(setup: setup, separation: 0)[1].y)
+            .map { $0 * scale }
         let readable = { (density: SIMD3<Float>?) -> SIMD3<Float>? in
             density.flatMap { d in (0..<3).allSatisfy({ d[$0].isFinite }) ? d : nil }
         }

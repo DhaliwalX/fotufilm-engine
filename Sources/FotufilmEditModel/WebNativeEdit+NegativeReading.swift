@@ -121,7 +121,7 @@ extension WebNativeEdit.Negative {
             mode: balanceMode,
             tones: tones(border: border, denseEnd: denseEnd, average: average, midtone: midtone,
                          flare: flare),
-            roll: roll)
+            roll: roll, strength: density ?? 1)
     }
 
     /// The frame read without a film, as Normal reads a negative. Arguments as
@@ -138,7 +138,7 @@ extension WebNativeEdit.Negative {
             border: border, setup: setup(source: source), separation: separation,
             mode: balanceMode,
             tones: tones(border: border, denseEnd: denseEnd, average: average, flare: flare),
-            roll: roll, flare: flare)
+            roll: roll, flare: flare, strength: density ?? 1)
     }
 
     /// Everything of the edit a reading turns on, for keeping one made before: two edits with
@@ -151,7 +151,7 @@ extension WebNativeEdit.Negative {
         return [
             "\(reading ?? 1)", camera ?? "", balance?.rawValue ?? "", "\(neutral ?? [])",
             roll ?? "", crosstalk.map { "\($0)" } ?? "", scanLight?.rawValue ?? "",
-            flare.map { "\($0)" } ?? "", "\(pictureArea ?? [])",
+            flare.map { "\($0)" } ?? "", "\(pictureArea ?? [])", density.map { "\($0)" } ?? "",
         ].joined(separator: "|")
     }
 }

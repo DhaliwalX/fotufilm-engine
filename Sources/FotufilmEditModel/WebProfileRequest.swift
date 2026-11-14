@@ -58,6 +58,9 @@ public struct WebProfileRequest: Decodable {
         public let balance: ApproximateNegativeScan.BalanceMode?
         public let neutral: [Float]?
         public let roll: ApproximateNegativeScan.RollBalance?
+        /// How strong the scan's densities read, as the edit keeps it
+        /// (`WebNativeEdit.Negative.density`).
+        public let density: Float?
         /// What the scan's file says of its camera and decoder, which the current reading's
         /// setup is made of.
         public let source: NegativeScanCapture?
@@ -105,6 +108,9 @@ public struct WebProfileRequest: Decodable {
                 }
             }
             if let reading, reading < 1 { throw Failure(description: "Invalid negative reading.") }
+            if let density, !ApproximateNegativeScan.strengthRange.contains(density) {
+                throw Failure(description: "Invalid density strength.")
+            }
             if let neutral {
                 guard neutral.count == 3, neutral.allSatisfy({ $0.isFinite && $0 > 0 }) else {
                     throw Failure(description: "Invalid picked neutral.")
@@ -128,7 +134,7 @@ public struct WebProfileRequest: Decodable {
             }
             let edit = WebNativeEdit.Negative(
                 roll: roll, crosstalk: crosstalk, scanLight: scanLight, reading: reading,
-                camera: camera, balance: balance, neutral: neutral)
+                camera: camera, balance: balance, neutral: neutral, density: density)
             var flare = SIMD3<Float>.zero
             if let strayLight {
                 guard strayLight.count == 3, (0..<3).allSatisfy({

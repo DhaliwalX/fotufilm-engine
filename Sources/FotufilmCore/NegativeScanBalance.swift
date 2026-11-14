@@ -44,18 +44,29 @@ extension ApproximateNegativeScan {
         }
     }
 
+    /// How far a reading's density strength goes: half to half again of what the scan reads.
+    public static let strengthRange: ClosedRange<Float> = 0.5...1.5
+
     /// The balance of a frame read by the scan model for `setup`, its weights across the
     /// channels at `separation` (`NegativeScanModel.weights`): a neutral moved onto the film's
     /// grey scale along each record's characteristic curve (`exposure`), and the print's timing
     /// from the densest end and the mid-tones (`timedHighlight`). A `roll` that measured its
     /// tonal steps makes red and blue as steep against green as the film's (`gains`) before
     /// the neutral shifts each record's exposure.
+    ///
+    /// `strength` is how strong the scan's densities read: every density over the clear film is
+    /// multiplied by it before the film is read, the three records alike, so the picture has
+    /// that much more or less contrast and its colour balance and timing follow. A setup the
+    /// model knows only roughly, an unmeasured camera or a light of another spectrum, reads
+    /// the film a little flat or hard at one, and no frame says by how much.
     public static func balance(stock: FilmStock, setup: NegativeScanSetup, separation: Float,
                                mode: BalanceMode, tones: Tones,
-                               roll: RollBalance? = nil) -> Balance {
+                               roll: RollBalance? = nil, strength: Float = 1) -> Balance {
         let model = NegativeScanModel(stock: stock, setup: setup)
+        let scale = strength.isFinite
+            ? min(max(strength, strengthRange.lowerBound), strengthRange.upperBound) : 1
         let weights = setup.weights(model.weights(separation: separation),
-                                    green: model.weights(separation: 0)[1].y)
+                                    green: model.weights(separation: 0)[1].y).map { $0 * scale }
         var balance = Balance(gains: .one, highlightStops: nil, weights: weights)
         let dense = readable(tones.denseEnd)
         if let dense {

@@ -336,6 +336,21 @@ void main() {
       expect(drawnArea(const Offset(100, 50), const Offset(300, 150), Size.zero), isNull);
     });
 
+    test('density strength moves as one step and keeps the scan\'s own as none', () {
+      final scans = editor.negatives;
+      for (final v in [1.1, 1.2, 1.25]) {
+        scans.setDensity(v);
+      }
+      editor.endEdit();
+      expect(editor.edit['negative']['density'], 1.25);
+      expect(editor.active!.history.past.length, 1);
+      scans.setDensity(1);
+      editor.endEdit();
+      expect(editor.edit['negative']['density'], isNull);
+      editor.undo();
+      expect(editor.edit['negative']['density'], 1.25);
+    });
+
     test('a photograph that is no negative has no area to pick', () {
       editor.documents[0] = PhotoDocument(
         path: '/photo.png',

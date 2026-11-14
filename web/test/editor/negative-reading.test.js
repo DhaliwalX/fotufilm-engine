@@ -550,6 +550,11 @@ test("a request says of a reading what its edit keeps and its frame measures", (
     roll,
     source,
   });
+  // Density strength goes with the current reading, and never with the first.
+  assert.equal(readingRequest({ reading: 2, density: 1.2 }, measured).density, 1.2);
+  assert.equal("density" in readingRequest({ density: 1.2 }, measured), false);
+  assert.equal(parseNegative({ ...newNegative("white", 2), density: 1.2 }).density, 1.2);
+  assert.throws(() => parseNegative({ ...newNegative("white", 2), density: 3 }), /Invalid negative reading/);
   // The frame's tonal steps are its roll's to take, not its own reading's; its average goes
   // with the current reading, which balances the frame on it.
   assert.equal("slopes" in current, false);

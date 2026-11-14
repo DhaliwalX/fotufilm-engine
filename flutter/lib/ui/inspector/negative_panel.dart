@@ -46,6 +46,13 @@ const _flareDetail =
     'are. Left to measure, it is read from the holder where the scan shows one, and is none '
     'otherwise.';
 
+const _densityDetail =
+    'How strong the scan\'s densities read. Every density over the clear film is multiplied by '
+    'it before the film is read, so the picture gains or loses contrast in every colour alike '
+    'and its balance and exposure follow. Raise it where a scan prints flat, as a camera or a '
+    'light the reading only guesses at can; lower it where it prints hard. 100% is the scan '
+    'as it measures.';
+
 const _balanceDetail =
     'What the frame\'s colour is balanced on. Roll uses what the roll\'s frames come to taken '
     'together, measured in the Roll panel, so a frame filled by one colour keeps it and an '
@@ -187,6 +194,16 @@ Section scanCorrectionSection(InspectorControls c) {
       value: (negative['crosstalk'] as num? ?? 1).toDouble(),
       range: const SliderRange(min: 0, max: 1, step: .01, def: 1),
       onChanged: scans.setCrosstalk,
+      onEnd: c.editor.endEdit,
+    ),
+    AdjustmentRow(
+      label: 'Density Strength',
+      detail: _densityDetail,
+      value: (negative['density'] as num? ?? 1).toDouble(),
+      range: const SliderRange(min: .5, max: 1.5, step: .01, def: 1),
+      unit: '%',
+      readoutScale: 100,
+      onChanged: scans.setDensity,
       onEnd: c.editor.endEdit,
     ),
     SwitchRow(

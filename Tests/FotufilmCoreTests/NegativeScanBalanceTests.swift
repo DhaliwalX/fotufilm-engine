@@ -344,6 +344,43 @@ final class NegativeScanBalanceTests: XCTestCase {
                                                      preview: ImageBuffer(width: 1, height: 1)))
     }
 
+    /// Density strength multiplies every density over the clear film before the film is read,
+    /// the three records alike: more of it and the frame reads denser at every tone, its
+    /// highlights further up the film's curve, with the clear film where it was.
+    func testDensityStrengthScalesEveryDensityOverTheClearFilm() throws {
+        let stock = try stock("gold200")
+        let model = NegativeScanModel(stock: stock, setup: setup)
+        let grey = try XCTUnwrap(model.scannerDensity(
+            density: NegativeScanModel.density(stock: stock, logExposure: 0.3)))
+        func balance(_ strength: Float) -> ApproximateNegativeScan.Balance {
+            ApproximateNegativeScan.balance(
+                stock: stock, setup: setup, separation: 1, mode: ApproximateNegativeScan.BalanceMode.none,
+                tones: .init(denseEnd: grey), strength: strength)
+        }
+        let plain = balance(1), strong = balance(1.2), weak = balance(0.8)
+        let weights = try XCTUnwrap(plain.weights)
+        for (scaled, strength) in [(strong, Float(1.2)), (weak, 0.8)] {
+            for (row, own) in zip(try XCTUnwrap(scaled.weights), weights) {
+                for c in 0..<3 { XCTAssertEqual(row[c], own[c] * strength, accuracy: 1e-6) }
+            }
+        }
+        XCTAssertGreaterThan(try XCTUnwrap(strong.highlightStops), try XCTUnwrap(plain.highlightStops))
+        XCTAssertLessThan(try XCTUnwrap(weak.highlightStops), try XCTUnwrap(plain.highlightStops))
+        let sample = model.sample(density: NegativeScanModel.density(stock: stock, logExposure: 0.3))
+        let read = try XCTUnwrap(reading(stock, model, plain).density(of: sample))
+        let stronger = try XCTUnwrap(reading(stock, model, strong).density(of: sample))
+        for record in 0..<3 {
+            let base = stock.curves[record].dMin
+            XCTAssertEqual(stronger[record] - base, 1.2 * (read[record] - base), accuracy: 2e-3)
+        }
+        let clear = try XCTUnwrap(reading(stock, model, strong).density(of: model.clear))
+        for record in 0..<3 { XCTAssertEqual(clear[record], stock.curves[record].dMin, accuracy: 1e-5) }
+        // It is held to its range, and no number is one.
+        XCTAssertEqual(balance(9).weights, balance(1.5).weights)
+        XCTAssertEqual(balance(0).weights, balance(0.5).weights)
+        XCTAssertEqual(balance(.nan).weights, plain.weights)
+    }
+
     /// The clearest film of an area drawn for it is its clearest tenth: the rebate where the
     /// area takes in picture and a little dust with it, and not the few brightest pixels.
     func testTheClearestFilmOfADrawnAreaIsItsClearestTenth() throws {

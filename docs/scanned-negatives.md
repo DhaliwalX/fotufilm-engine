@@ -181,6 +181,12 @@ in one place (`WebNativeEdit.Negative.balance`, `.plain` and `.strayLight`):
   white prints as white (`ApproximateNegativeScan.timedHighlight`). An edit saved with the
   first reading keeps each channel's own densest half percent
   (`ApproximateNegativeScan.channelEnds`) and is timed on it alone.
+- **Density strength.** `density` is what every density over the clear film is multiplied by
+  before the film is read, the three records alike, between a half and one and a half; left
+  out it is one, the scan as it measures (`ApproximateNegativeScan.strengthRange`). A setup
+  the model knows only roughly reads the film a little flat or hard, and no frame says by how
+  much: more strength reads the negative denser at every tone, so the picture gains contrast
+  in every colour alike and its balance and timing follow. The clear film stays where it is.
 - **The picture area.** A frame's measures read the picture as it is framed, crop included,
   less a tenth at each edge: a margin that keeps a holder and a rebate out of a scan nobody
   framed. `area` is the picture's own area instead, picked by its four corners, each a unit

@@ -172,6 +172,15 @@ class NegativeScans {
     editor.patch({'negative': {...current, 'flare': value}}, group: 'negative-flare');
   }
 
+  /// Density Strength while its slider moves: what every density over the clear film is
+  /// multiplied by before the film is read. One, the scan as it measures, is kept as none.
+  void setDensity(double value) {
+    final current = negative;
+    if (current == null) return;
+    editor.patch({'negative': {...current, 'density': value == 1 ? null : value}},
+        group: 'negative-density');
+  }
+
   /// Whether the shown negative is read through its scan's light and camera (`readsModel`).
   bool get readsCurrent => readsModel(negative);
 

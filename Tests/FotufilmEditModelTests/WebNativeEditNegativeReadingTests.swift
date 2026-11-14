@@ -96,6 +96,30 @@ final class WebNativeEditNegativeReadingTests: XCTestCase {
                           Negative(roll: roll, reading: 2).readingKey)
     }
 
+    /// Density strength is kept with the reading and reaches a film's reading and Normal's;
+    /// the first reading takes none.
+    func testDensityStrengthIsKeptWithTheReading() throws {
+        let stock = try stock()
+        let strong = Negative(reading: 2, density: 1.25)
+        XCTAssertEqual(try JSONDecoder().decode(Negative.self, from: JSONEncoder().encode(strong)), strong)
+        XCTAssertNotEqual(strong.readingKey, Negative(reading: 2).readingKey)
+        let setup = NegativeScanSetup(light: .white, camera: .generic)
+        XCTAssertEqual(
+            strong.balance(stock: stock, border: border, denseEnd: dense),
+            ApproximateNegativeScan.balance(
+                stock: stock, setup: setup, separation: 1, mode: .frame,
+                tones: .init(denseEnd: dense), strength: 1.25))
+        XCTAssertNotEqual(strong.balance(stock: stock, border: border, denseEnd: dense),
+                          Negative(reading: 2).balance(stock: stock, border: border, denseEnd: dense))
+        XCTAssertNotEqual(strong.plain(border: border, denseEnd: dense),
+                          Negative(reading: 2).plain(border: border, denseEnd: dense))
+        XCTAssertEqual(Negative(density: 1.25).balance(stock: stock, border: border, denseEnd: dense),
+                       Negative().balance(stock: stock, border: border, denseEnd: dense))
+        for bad in [#"{"reading":2,"density":0.2}"#, #"{"reading":2,"density":3}"#] {
+            XCTAssertThrowsError(try JSONDecoder().decode(Negative.self, from: Data(bad.utf8)), bad)
+        }
+    }
+
     /// A picture area is kept with the reading as four corners of the frame, and read only
     /// where they make a shape a frame can be read on.
     func testAPickedPictureAreaIsKeptWithTheReading() throws {
