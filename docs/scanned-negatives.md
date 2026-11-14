@@ -151,14 +151,20 @@ in one place (`WebNativeEdit.Negative.balance`, `.plain` and `.strayLight`):
   to within a stop and is a stop darker than any film in the scan's middle. It is taken off each
   sample and the clear film before their densities (`FOTUFILM_CONFIG_SCAN_FLARE`), and the frame's
   tones are read net of it.
-- **Balance.** `balance` is `frame`, `roll` or `none`. The frame's neutral, one picked on it
-  (`neutral`) or else its densest end, or its roll's, is put on the film's own grey scale. Two
-  things move a neutral off it: how steep each record reads, which the film's age and
-  development and the scan's own light and camera set, and the scene's light, which is one
-  exposure at every tone. One neutral cannot tell them apart. A roll's tonal steps, or a
-  regularized estimate from the frame's own tonal steps (`ApproximateNegativeScan.frameContrastRange`,
-  `0.75...1.35`) when no roll contrast is measured, first match red's and blue's steepness to
-  green's; the neutral then adds a log exposure to red and blue, as a printer's filtration does,
+- **Balance.** `balance` is `frame`, `roll` or `none`; left out, it is the roll once one is
+  measured and the frame until then. The frame's neutral, or its roll's, is put on the film's
+  own grey scale. A frame's own neutral is one picked on it (`neutral`), else its average: the
+  median of its tones between the toe and its densest highlights
+  (`ApproximateNegativeScan.average`), which leans to no colour far more often than a frame's
+  brightest thing is white. A frame with too little between its shadows and its lamps to
+  average falls back on its densest end. A roll's neutral is the average its frames come to,
+  the median over them (`RollBalance.average`), so a frame filled by one colour keeps it and
+  an evening stays warmer than a noon. Two things move a neutral off the grey scale: how steep
+  each record reads, which the film's age and development and the scan's own light and camera
+  set, and the scene's light, which is one exposure at every tone. One neutral cannot tell them
+  apart, and neither can one frame, whose tonal steps follow its picture. A roll's tonal steps
+  first match red's and blue's steepness to green's; a frame without a measured roll keeps the
+  model's. The neutral then adds a log exposure to red and blue, as a printer's filtration does,
   so each record moves along the film's own characteristic curve (`ApproximateNegativeScan.balance`,
   `FOTUFILM_CONFIG_SCAN_BALANCE`): nothing at the clear film, more through the toe, one density
   on the straight line. That density is no more than the neutral itself is off: a neutral on the
@@ -181,19 +187,25 @@ in one place (`WebNativeEdit.Negative.balance`, `.plain` and `.strayLight`):
   scan shows is left out of what the frame measures, so the print is timed on the picture's
   highlights and not on the holder (`ApproximateNegativeScan.withoutHolder`), and prints black.
   The holder ends where the fewest pixels lie between it and the densest film in the scan's
-  middle (`ApproximateNegativeScan.holder`).
+  middle (`ApproximateNegativeScan.holder`). A frame that shows no unexposed film has its
+  estimate read off the thinnest of its picture, close in level and off in colour. A scan's
+  exposure moves its clear film up and down and not its colour, so on a measured roll each
+  frame keeps its own level in the colour of the roll's clear film, the median over its frames
+  (`RollBalance.clearFilm`); clear film picked on a frame stands as picked.
 - **A roll's contrast.** A frame's tonal steps, where light falls off across a surface or a
   shadow lies on it, change every record's exposure alike, so the rises of red and blue per unit
   of green across them say how steep the roll's records read against each other
-  (`ApproximateNegativeScan.tonalSlopes`). With six frames' steps or more a roll's records are
-  made as steep against green as the film's own across `0.7...1.5`, replacing the single-frame
-  regularized estimate on every frame balanced on its frame or roll.
+  (`ApproximateNegativeScan.tonalSlopes`). Steps are taken three tenths of a density or more
+  over the clear film: under that the film is on its toe, where each record rises by less than
+  its contrast. With six frames' steps or more a roll's records are made as steep against green
+  as the film's own across `0.7...1.5`, on every frame balanced on its frame or roll. One
+  frame's steps are not used alone: a sunset's read red twice as steep as a meadow's on the
+  same film.
 - **Without a film.** Normal's weights are fitted on an ordinary orange-masked colour negative
   through the same setup. Its light follows a negative's curve with a toe, density growing as
   gamma times the logarithm of one plus the exposure over the toe's, so the clear film is no
-  exposure and reads black. Once a roll's contrast is measured (or from the frame's own
-  regularized tonal steps when readable), the records are made as steep as each other and the
-  neutral is balanced by each channel's light; where no tonal steps are readable, red's and
+  exposure and reads black. Once a roll's contrast is measured, the records are made as steep
+  as each other and the neutral is balanced by each channel's light; without one, red's and
   blue's densities are scaled onto green's at the frame's neutral (`PlainNegativeScan`). It takes
   the scan's stray light off the same way.
 
@@ -205,7 +217,8 @@ percent on real camera scans, for a spatial filter in every kernel.
 
 The browser profile protocol's film request takes
 `negative: {border, denseEnd, light, crosstalk, scanLight}`, and for the current reading also
-`reading`, `camera`, `balance`, `neutral`, `roll`, `midtone` (the framed picture's mid-tones,
+`reading`, `camera`, `balance`, `neutral`, `roll`, `average` (the framed picture's average,
+`ApproximateNegativeScan.average`), `midtone` (its mid-tones,
 `ApproximateNegativeScan.midtone`), `strayLight` (the stray light the browser resolved, as
 linear scan RGB) and `source` (what the RAW decoder says of the scan's camera,
 white and matrix). The browser's builder carries no measured cameras, so the request brings the
@@ -327,17 +340,20 @@ from the film, film settings, clear film, light frame and roll balance of its ro
 edited last, as frames of one roll share them.
 
 The **Roll** panel works on the whole roll. **Measure Roll** develops every frame of the roll in
-the strip and reads each one's densest end, its highlights, and the rises across its tonal
-steps. The roll's colour is the median over its frames of each end's red and blue density per
-unit of its green; a frame filled by one colour, such as a sunset, moves a median little. What
-the roll measured is kept with each frame's edit and travels with Copy Settings; the shown
-frame's change can be undone. A frame whose **Balance** is **Roll** is balanced on the roll's
-colour instead of its own highlights, still timed on its own highlights so a darker frame does
-not print darker; **Frame** balances it on its own, and **None** leaves the film as it reads.
-With six frames' tonal steps or more, the roll's contrast is used on every frame balanced on
-its frame or its roll. Measure again after cropping frames or adding them to the roll. Fewer
-than two frames with readable highlights cannot be measured. A roll shot under several lights
-is better balanced frame by frame. On an edit saved with the first reading, measuring the roll
+the strip and reads each one's clear film, its average, its densest end and the rises across
+its tonal steps. The roll keeps the colour of its clear film, the average its frames come to
+and how steep its colours read against each other, each a median over its frames; a frame
+filled by one colour, such as a sunset, moves a median little. Scans imported together into one
+folder are measured as they open. What the roll measured is kept with each frame's edit and
+travels with Copy Settings; the shown frame's change can be undone. A frame of a measured roll
+is balanced on what the roll's frames come to instead of its own tones, unless its **Balance**
+says otherwise: it is still timed on its own highlights so a darker frame does not print
+darker, and a frame under warmer light than the rest stays warmer. **Frame** balances it on
+its own tones, and **None** leaves the film as it reads. With six frames' tonal steps or more,
+the roll's contrast is used on every frame balanced on its frame or its roll. Measure again
+after cropping frames or adding them to the roll. Fewer than two frames with readable
+highlights cannot be measured. A folder holding more than one film or light is better kept as
+a folder for each. On an edit saved with the first reading, measuring the roll
 balances every frame on it, and **Balance This Frame Alone** and **Balance Every Frame Alone**
 return one frame or the whole roll to their own colour.
 

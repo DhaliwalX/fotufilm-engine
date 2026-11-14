@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fotufilm_flutter/model/negative_document.dart';
 
@@ -91,6 +93,52 @@ void main() {
     expect(contrast['frames'], 7);
   });
 
+  test('a roll keeps the average its frames come to and the colour of its clear film', () {
+    const film = [0.44, 0.2, 0.1], tone = [0.52, 0.6, 0.71];
+    final measures = <Map?>[
+      for (final exposure in const [0.5, 0.8, 1.0, 1.3])
+        {
+          'denseEnd': [1.0, 1.0, 1.0],
+          'average': tone,
+          'clear': [for (final v in film) v * exposure],
+        },
+    ];
+    // A frame that read its clear film off its picture, red 0.07 short, and its red that thin.
+    final off = [0.44 * math.pow(10, -0.07), 0.2, 0.1];
+    measures.add({
+      'denseEnd': [1.0, 1.0, 1.0],
+      'average': [tone[0] - 0.07, tone[1], tone[2]],
+      'clear': off,
+    });
+    final roll = rollBalance(measures)!;
+    expect(roll['clear'][0], closeTo(2.2, 1e-9));
+    expect(roll['clear'][1], closeTo(0.5, 1e-9));
+    for (var c = 0; c < 3; c++) {
+      expect(roll['average'][c], closeTo(tone[c], 1e-9));
+    }
+    // The frame keeps its level and takes the roll's colour; another film keeps its own.
+    final taken = rollClearFilm([for (final v in off) v.toDouble()], (roll['clear'] as List).cast());
+    expect(taken[1], off[1]);
+    expect(taken[0] / taken[1], closeTo(2.2, 1e-9));
+    expect(rollClearFilm(const [0.2, 0.2, 0.2], (roll['clear'] as List).cast()), [0.2, 0.2, 0.2]);
+    expect(rollClearFilm(const [0.2, 0.2, 0.2], null), [0.2, 0.2, 0.2]);
+    // Measured again on the roll, that frame is read against the roll's clear film: the same roll.
+    final again = [...measures]
+      ..[4] = {'denseEnd': [1.0, 1.0, 1.0], 'average': tone, 'clear': off, 'border': taken};
+    for (var c = 0; c < 3; c++) {
+      expect(rollBalance(again)!['average'][c], closeTo(tone[c], 1e-9));
+    }
+    // One frame's says nothing of a roll's; a frame filled by a colour moves the middle little.
+    final few = rollBalance([measures[0], {'denseEnd': [1.0, 1.0, 1.0]}])!;
+    expect(few.containsKey('average'), isFalse);
+    expect(few.containsKey('clear'), isFalse);
+    final sunset = rollBalance([
+      ...measures,
+      {'denseEnd': [1.0, 1.0, 1.0], 'average': [1.3, 0.7, 0.3]},
+    ])!;
+    expect(sunset['average'][0] - sunset['average'][1], closeTo(tone[0] - tone[1], 1e-9));
+  });
+
   test('a new negative takes the reading its scan opens with, an older edit keeps its own', () {
     expect(newNegative(), {
       'border': null, 'lightFrame': null, 'roll': null, 'crosstalk': 0, 'scanLight': 'white',
@@ -110,6 +158,12 @@ void main() {
     expect(readsModel(null), isFalse);
     expect(balanceOf(fresh), 'frame');
     expect(balanceOf({...fresh, 'balance': 'none'}), 'none');
+    // A roll measured with the average its frames come to balances its frames unless their
+    // edits say otherwise; one kept before that leaves them on themselves.
+    final measured = {'colour': [0.9, 1.2], 'frames': 4, 'average': [0.52, 0.6, 0.71]};
+    expect(balanceOf({...fresh, 'roll': measured}), 'roll');
+    expect(balanceOf({...fresh, 'roll': measured, 'balance': 'frame'}), 'frame');
+    expect(balanceOf({...fresh, 'roll': {'colour': [0.9, 1.2], 'frames': 4}}), 'frame');
 
     // Update Reading: the dyes separated all the way unless the edit said how far, and a frame
     // on its roll stays on it.

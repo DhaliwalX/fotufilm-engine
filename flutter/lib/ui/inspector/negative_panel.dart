@@ -47,10 +47,10 @@ const _flareDetail =
     'otherwise.';
 
 const _balanceDetail =
-    'What the frame\'s colour is balanced on. Frame uses the frame\'s own highlights, or a '
-    'neutral picked on it. Roll uses what the roll\'s frames share, measured in the Roll panel, '
-    'so a frame filled by one colour keeps it. None leaves the film as it reads: a scene under '
-    'warm light stays warm.';
+    'What the frame\'s colour is balanced on. Roll uses what the roll\'s frames come to taken '
+    'together, measured in the Roll panel, so a frame filled by one colour keeps it and an '
+    'evening stays warmer than a noon. Frame uses the frame\'s own tones, or a neutral picked '
+    'on it. None leaves the film as it reads. A measured roll starts on Roll.';
 
 // How far a negative's reading undoes the crosstalk between the scan's channels and the film's
 // dyes (NegativeScanCrosstalk): 0 reads each dye from its own channel alone.

@@ -74,8 +74,21 @@ class NegativeScans {
     ]);
   }
 
-  Future<void> openNegatives(List<PhotoFile> scans, {String? scanLight}) =>
-      editor.openFiles(scans, negative: true, scanLight: scanLight);
+  Future<void> openNegatives(List<PhotoFile> scans, {String? scanLight}) async {
+    await editor.openFiles(scans, negative: true, scanLight: scanLight);
+    await _measureOpenedRoll();
+  }
+
+  /// Scans opened together are a roll: where the shown frame's roll has frames not yet measured
+  /// with it, the roll is measured as they open, so each is balanced on what the roll's frames
+  /// share and not on its own picture. A roll with a frame saved with an earlier reading is left
+  /// to Measure Roll, which would change how that frame prints.
+  Future<void> _measureOpenedRoll() async {
+    final edits = [for (final doc in rollFrames) doc.edit['negative'] as Json?];
+    if (edits.length < 2 || measuring != null) return;
+    if (edits.any((n) => !readsModel(n)) || edits.every((n) => n?['roll'] != null)) return;
+    await measureRoll(quiet: true);
+  }
 
   /// A new negative's edit: a new photograph's (`base`), on the film its base looks like, read
   /// against an estimated base with the reading its scan opens with.
@@ -336,8 +349,9 @@ class NegativeScans {
 
   /// Develops each frame small for what it measures, and keeps what the roll's frames share
   /// with every frame's edit: the shown one as an undoable change, the others in their
-  /// histories.
-  Future<void> measureRoll() async {
+  /// histories. `quiet` says nothing of a roll that could not be measured, which leaves each
+  /// frame on its own.
+  Future<void> measureRoll({bool quiet = false}) async {
     final docs = rollFrames;
     if (docs.length < 2 || measuring != null) return;
     _cancelMeasure = false;
@@ -362,6 +376,7 @@ class NegativeScans {
       if (_cancelMeasure) return;
       final roll = rollBalance(measures);
       if (roll == null) {
+        if (quiet) return;
         // A frame that could not be developed says why; otherwise the frames were too thin.
         editor.error = failure != null
             ? 'The roll could not be measured. $failure'
@@ -379,7 +394,7 @@ class NegativeScans {
   void cancelMeasure() => _cancelMeasure = true;
 
   /// What a frame measures for its roll, from a small develop of it (`negativeMeasure`): its
-  /// densest end and the rises across its tonal steps.
+  /// densest end, its average, its clear film and the rises across its tonal steps.
   Future<Map?> _measure(PhotoDocument doc) async {
     final edit = doc.edit;
     final request = {
