@@ -95,4 +95,99 @@ final class NegativeRollBalanceTests: XCTestCase {
                 ApproximateNegativeScan.RollBalance.self, from: Data(bad.utf8)), bad)
         }
     }
+
+    /// A roll's neutral is the average its frames come to, not the colour of their brightest
+    /// things: one frame filled by a colour moves it little, and a roll kept before it balanced
+    /// on its densest ends still does.
+    func testARollIsBalancedOnTheAverageItsFramesComeTo() throws {
+        typealias Measure = ApproximateNegativeScan.RollBalance.Measure
+        var measures = (0..<7).map { i in
+            Measure(denseEnd: SIMD3(1.4, 1.5, 1.7),
+                    average: SIMD3(0.52, 0.6, 0.71) + SIMD3(repeating: 0.05 * Float(i - 3)))
+        }
+        // A sunset: red through the roof, and a white wall lit by it as its densest end.
+        measures[2] = Measure(denseEnd: SIMD3(2.4, 1.5, 0.6), average: SIMD3(1.3, 0.7, 0.3))
+        let roll = try XCTUnwrap(ApproximateNegativeScan.RollBalance(measures: measures))
+        let average = try XCTUnwrap(roll.average)
+        XCTAssertEqual(average[1], 0.6, accuracy: 0.051)
+        XCTAssertEqual(average[0] - average[1], -0.08, accuracy: 1e-5)
+        XCTAssertEqual(average[2] - average[1], 0.11, accuracy: 1e-5)
+        XCTAssertEqual(roll.neutral(green: 2), SIMD3(average[0], average[1], average[2]))
+        // Fewer than two frames with an average keep the roll on its densest ends.
+        let ends = try XCTUnwrap(ApproximateNegativeScan.RollBalance(
+            measures: [measures[0], Measure(denseEnd: SIMD3(1.4, 1.5, 1.7))]))
+        XCTAssertNil(ends.average)
+        XCTAssertEqual(try XCTUnwrap(ends.neutral(green: 2)).y, 1.5, accuracy: 1e-6)
+        XCTAssertEqual(try XCTUnwrap(self.roll.neutral(green: 2)).x, 1.8, accuracy: 1e-6)
+    }
+
+    /// Exposure moves a scan's clear film up and down, not its colour. A frame that shows no
+    /// unexposed film reads its clear film off its picture, off colour, and takes the roll's.
+    func testAFramesClearFilmKeepsItsLevelAndTakesItsRollsColour() throws {
+        typealias Measure = ApproximateNegativeScan.RollBalance.Measure
+        let film = SIMD3<Float>(0.44, 0.2, 0.1)
+        var measures = [Float](arrayLiteral: 0.5, 0.8, 1, 1.3, 2).map { exposure in
+            Measure(denseEnd: SIMD3(1, 1, 1), clear: film * exposure)
+        }
+        // Read off a picture: red a sixth of a stop short.
+        let off = SIMD3<Float>(0.44 * pow(10, -0.07), 0.2, 0.1) * 1.1
+        measures.append(Measure(denseEnd: SIMD3(1, 1, 1), clear: off))
+        let roll = try XCTUnwrap(ApproximateNegativeScan.RollBalance(measures: measures))
+        let clear = try XCTUnwrap(roll.clear)
+        XCTAssertEqual(clear[0], 2.2, accuracy: 1e-4)
+        XCTAssertEqual(clear[1], 0.5, accuracy: 1e-4)
+        let taken = roll.clearFilm(off)
+        XCTAssertEqual(taken.y, off.y)
+        XCTAssertEqual(taken.x / taken.y, 2.2, accuracy: 1e-4)
+        XCTAssertEqual(taken.z / taken.y, 0.5, accuracy: 1e-4)
+        // Another film, or another light, keeps its own; so does a roll kept without a colour.
+        let other = SIMD3<Float>(0.2, 0.2, 0.2)
+        XCTAssertEqual(roll.clearFilm(other), other)
+        XCTAssertEqual(self.roll.clearFilm(off), off)
+        // One frame's clear film says nothing of a roll's.
+        XCTAssertNil(try XCTUnwrap(ApproximateNegativeScan.RollBalance(measures: [
+            Measure(denseEnd: SIMD3(1, 1, 1), clear: film), Measure(denseEnd: SIMD3(1, 1, 1)),
+        ])).clear)
+    }
+
+    /// Each frame's average is over the clear film it was measured against. The roll takes it
+    /// over the clear film it gives the frame, so measuring a roll again changes nothing.
+    func testARollTakesEachAverageOverTheClearFilmItGivesTheFrame() throws {
+        typealias Measure = ApproximateNegativeScan.RollBalance.Measure
+        let film = SIMD3<Float>(0.44, 0.2, 0.1)
+        let off = SIMD3<Float>(0.44 * pow(10, -0.07), 0.2, 0.1)
+        let average = SIMD3<Float>(0.52, 0.6, 0.71)
+        // The frame read off its picture measured red 0.07 thinner than the film's would.
+        var first = (0..<4).map { _ in Measure(denseEnd: SIMD3(1, 1, 1), average: average, clear: film) }
+        first.append(Measure(denseEnd: SIMD3(1, 1, 1), average: average - SIMD3(0.07, 0, 0), clear: off))
+        let roll = try XCTUnwrap(ApproximateNegativeScan.RollBalance(measures: first))
+        // Measured again on the roll, that frame is read against the roll's colour of it.
+        var again = first
+        again[4] = Measure(denseEnd: SIMD3(1, 1, 1), average: average, clear: off,
+                           border: roll.clearFilm(off))
+        let second = try XCTUnwrap(ApproximateNegativeScan.RollBalance(measures: again))
+        for c in 0..<3 {
+            XCTAssertEqual(try XCTUnwrap(roll.average)[c], average[c], accuracy: 1e-5)
+            XCTAssertEqual(try XCTUnwrap(second.average)[c], average[c], accuracy: 1e-5)
+        }
+        XCTAssertEqual(second.clear, roll.clear)
+    }
+
+    func testARollKeepsItsAverageAndClearFilm() throws {
+        let kept = ApproximateNegativeScan.RollBalance(
+            colour: [0.9, 1.2], frames: 8, level: 1.3, slopes: [0.62, 1.15],
+            average: [0.52, 0.6, 0.71], clear: [2.2, 0.5])
+        XCTAssertEqual(try JSONDecoder().decode(ApproximateNegativeScan.RollBalance.self,
+                                                from: JSONEncoder().encode(kept)), kept)
+        let json = String(decoding: try JSONEncoder().encode(roll), as: UTF8.self)
+        XCTAssertFalse(json.contains("average"))
+        XCTAssertFalse(json.contains("clear"))
+        for bad in [#"{"colour":[0.9,1.2],"frames":4,"average":[0.5,0.6]}"#,
+                    #"{"colour":[0.9,1.2],"frames":4,"average":[0.5,0,0.7]}"#,
+                    #"{"colour":[0.9,1.2],"frames":4,"clear":[2.2]}"#,
+                    #"{"colour":[0.9,1.2],"frames":4,"clear":[2.2,0]}"#] {
+            XCTAssertThrowsError(try JSONDecoder().decode(
+                ApproximateNegativeScan.RollBalance.self, from: Data(bad.utf8)), bad)
+        }
+    }
 }

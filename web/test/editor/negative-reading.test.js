@@ -5,15 +5,21 @@ import { readFile } from "node:fs/promises";
 import { pixelSource } from "../../src/engine.js";
 import {
   areaPreview,
+  average,
+  pictureAreaFrame,
   denseEnd,
+  channelEnds,
+  midtone,
   estimatedBorder,
   filmBase,
+  filmBaseArea,
   frameLight,
   holder,
   withoutHolder,
   netOfFlare,
   pickedNeutral,
   readingFlare,
+  rollClearFilm,
   strayLight,
   plainReading,
   plainCrosstalk,
@@ -24,6 +30,7 @@ import {
 import {
   newNegative,
   parseNegative,
+  pictureArea,
   readingRequest,
   readsModel,
   rollBalance,
@@ -59,6 +66,34 @@ test("the densest end reads the central frame's highlights over the base", () =>
   assert.equal(denseEnd(border, new Float32Array(4 * 4), 1, 1), null);
 });
 
+test("the densest end is one set of pixels, which a saturated colour cannot stand in for", () => {
+  // A grey wall, a small white, and a yellow flower as dense as nothing else to red and green
+  // and thin to blue.
+  const wall = [0.6, 0.6, 0.6],
+    white = [1, 1.05, 1.1],
+    flower = [1.6, 1.3, 0.3];
+  const source = scan(100, 100, (x, y) => {
+    const density = y >= 40 && y < 60 ? (x >= 20 && x < 40 ? flower : x >= 60 && x < 70 ? white : wall) : wall;
+    return border.map((v, c) => v * 10 ** -density[c]);
+  });
+  const pixels = source.read(0, 0, 100, 100);
+  const dense = denseEnd(border, pixels, 100, 100);
+  dense.forEach((v, c) => assert.ok(Math.abs(v - white[c]) < 1e-5, String(v)));
+  // Each channel's own densest pixels are the flower's red and green and the white's blue.
+  const ends = channelEnds(border, pixels, 100, 100);
+  [flower[0], flower[1], white[2]].forEach((v, c) => assert.ok(Math.abs(ends[c] - v) < 1e-5));
+  assert.equal(channelEnds(border, new Float32Array(4 * 4), 1, 1), null);
+});
+
+test("the mid-tones are the central frame's mean density over the base", () => {
+  const source = scan(50, 50, (x, y) =>
+    x < 5 || y < 5 || x >= 45 || y >= 45 ? film(3) : border.map((v, c) => v * 10 ** -((c + 1) * (x < 25 ? 0.2 : 0.6))),
+  );
+  const mean = midtone(border, source.read(0, 0, 50, 50), 50, 50);
+  mean.forEach((v, c) => assert.ok(Math.abs(v - (c + 1) * 0.4) < 1e-5, String(v)));
+  assert.equal(midtone(border, new Float32Array(4 * 4), 1, 1), null);
+});
+
 test("picked clear film is the patch's median, and must be film", () => {
   const source = scan(160, 100, (x) => (x < 80 ? border : [0, 0, 0]));
   filmBase(source, [0.1, 0.5]).forEach((v, c) => assert.ok(Math.abs(v - border[c]) < 1e-6));
@@ -84,6 +119,120 @@ test("a frame's tonal steps say how red and blue rise against green", () => {
   assert.equal(tonalSlopes(border, flat.read(0, 0, 200, 100), 200, 100), null);
   assert.equal(tonalSlopes(border, new Float32Array(4), 1, 1), null);
   assert.equal(tonalSlopes([0.8, 0, 0.25], stepped.read(0, 0, 200, 100), 200, 100), null);
+  // Steps on the toe, under three tenths over the clear film, are passed over: there red rises
+  // as fast as green here, and the steps above them still say 0.8.
+  const toed = scan(200, 100, (x, y) => {
+    if (x < 10 || y < 5 || x >= 190 || y >= 95) return film(3);
+    const green = 0.02 + Math.floor(x / 5) * 0.04;
+    if (x < 40) return border.map((v) => v * 10 ** -green);
+    const above = 0.3 + Math.floor((x - 40) / 5) * 0.15;
+    return border.map((v, c) => v * 10 ** -(above * [0.8, 1, 1.2][c]));
+  });
+  const clear = tonalSlopes(border, toed.read(0, 0, 200, 100), 200, 100);
+  assert.ok(Math.abs(clear[0] - 0.8) < 1e-3, String(clear[0]));
+});
+
+test("a frame's average is the middle of its tones between the toe and its highlights", () => {
+  // A wall, the clear film beside it, a lamp, and a few pixels of a colour.
+  const wall = [0.52, 0.6, 0.71];
+  const pictured = scan(100, 100, (x, y) => {
+    const density =
+      y >= 10 && y < 30
+        ? [0.03, 0.04, 0.02]
+        : x >= 40 && x < 60 && y >= 40 && y < 50
+          ? [2.4, 2.2, 1.9]
+          : x >= 60 && x < 64 && y >= 60 && y < 64
+            ? [1.3, 0.9, 0.2]
+            : wall;
+    return border.map((v, c) => v * 10 ** -density[c]);
+  });
+  const middle = average(border, pictured.read(0, 0, 100, 100), 100, 100);
+  middle.forEach((v, c) => assert.ok(Math.abs(v - wall[c]) < 1e-5, String(v)));
+  // A night with a few lamps has too little between its shadows and its lamps to tell.
+  const night = scan(100, 100, (x, y) => {
+    const density = x >= 50 && x < 55 && y >= 60 && y < 65 ? wall : [0.03, 0.04, 0.02];
+    return border.map((v, c) => v * 10 ** -density[c]);
+  });
+  assert.equal(average(border, night.read(0, 0, 100, 100), 100, 100), null);
+  assert.equal(average(border, new Float32Array(4), 1, 1), null);
+});
+
+test("the clearest film of a drawn rectangle is its clearest tenth", () => {
+  // Rebate over the top fifth, picture under it, and a pinhole in the rebate.
+  const strip = scan(100, 100, (x, y) => {
+    if (x === 50 && y === 5) return border.map((v) => v * 1.3);
+    const density = y < 20 ? 0.02 : 0.7;
+    return border.map((v) => v * 10 ** -density);
+  });
+  const clear = filmBaseArea(strip, [0.2, 0.02, 0.8, 0.5]);
+  clear.forEach((v, c) => assert.ok(Math.abs(v - border[c] * 10 ** -0.02) < 1e-5, String(v)));
+  // Inside the picture it is the thinnest of the picture, which is no clear film.
+  assert.ok(filmBaseArea(strip, [0.2, 0.4, 0.8, 0.9])[1] < border[1] * 0.5);
+  for (const bad of [[0.5, 0.2, 0.5, 0.6], [0.2, 0.6, 0.8, 0.3], [0.2, 0.1, 1.4, 0.3], [0.2, 0.1, 0.8], null])
+    assert.throws(() => filmBaseArea(strip, bad));
+});
+
+test("a picked picture area is measured whole", () => {
+  // A highlight along the area's top edge, which the central 80% of the area leaves out.
+  const pictured = scan(100, 100, (x, y) => {
+    const density = y < 8 ? [1.6, 1.7, 1.8] : [0.4, 0.5, 0.6];
+    return border.map((v, c) => v * 10 ** -density[c]);
+  });
+  const pixels = pictured.read(0, 0, 100, 100);
+  assert.ok(Math.abs(denseEnd(border, pixels, 100, 100)[1] - 0.5) < 1e-5);
+  const whole = pictureAreaFrame(pixels, 100, 100);
+  assert.equal(whole.width - 2 * Math.floor(whole.width / 10), 100);
+  assert.ok(Math.abs(denseEnd(border, whole.pixels, whole.width, whole.height)[1] - 1.7) < 1e-5);
+  const middle = midtone(border, whole.pixels, whole.width, whole.height);
+  assert.ok(Math.abs(middle[1] - (0.92 * 0.5 + 0.08 * 1.7)) < 1e-4, String(middle[1]));
+  // The area is four corners inside the frame that turn the same way round.
+  const corners = [
+    [0.1, 0.15],
+    [0.9, 0.12],
+    [0.88, 0.85],
+    [0.12, 0.9],
+  ];
+  assert.deepEqual(pictureArea({ area: corners }), corners);
+  assert.equal(pictureArea({ area: null }), null);
+  assert.equal(pictureArea({ area: corners.slice(0, 3) }), null);
+  assert.equal(pictureArea({ area: [...corners].reverse() }), null);
+  assert.equal(pictureArea({ area: [corners[0], [1.2, 0.1], corners[2], corners[3]] }), null);
+  const kept = { ...newNegative("white", 2), area: corners };
+  assert.deepEqual(parseNegative(kept).area, corners);
+  assert.throws(() => parseNegative({ ...kept, area: corners.slice(0, 3) }), /Invalid negative reading/);
+});
+
+test("a roll keeps the average its frames come to and the colour of its clear film", () => {
+  const film = [0.44, 0.2, 0.1];
+  const tone = [0.52, 0.6, 0.71];
+  const measures = [0.5, 0.8, 1, 1.3].map((exposure) => ({
+    denseEnd: [1, 1, 1],
+    average: tone,
+    clear: film.map((v) => v * exposure),
+  }));
+  // A frame that read its clear film off its picture, red 0.07 short, and so its red that thin.
+  const off = [0.44 * 10 ** -0.07, 0.2, 0.1];
+  measures.push({ denseEnd: [1, 1, 1], average: [tone[0] - 0.07, tone[1], tone[2]], clear: off });
+  const roll = rollBalance(measures);
+  assert.ok(Math.abs(roll.clear[0] - 2.2) < 1e-9 && Math.abs(roll.clear[1] - 0.5) < 1e-9);
+  roll.average.forEach((v, c) => assert.ok(Math.abs(v - tone[c]) < 1e-9, String(v)));
+  // The frame keeps its level and takes the roll's colour; another film keeps its own.
+  const taken = rollClearFilm(off, roll);
+  assert.equal(taken[1], off[1]);
+  assert.ok(Math.abs(taken[0] / taken[1] - 2.2) < 1e-9 && Math.abs(taken[2] / taken[1] - 0.5) < 1e-9);
+  assert.deepEqual(rollClearFilm([0.2, 0.2, 0.2], roll), [0.2, 0.2, 0.2]);
+  assert.deepEqual(rollClearFilm(off, { colour: [1, 1], frames: 4 }), off);
+  assert.deepEqual(rollClearFilm(off, null), off);
+  // Measured again on the roll, that frame is read against the roll's clear film: the same roll.
+  const again = [...measures];
+  again[4] = { denseEnd: [1, 1, 1], average: tone, clear: off, border: taken };
+  rollBalance(again).average.forEach((v, c) => assert.ok(Math.abs(v - tone[c]) < 1e-9, String(v)));
+  // One frame's says nothing of a roll's, and a frame filled by a colour moves the middle little.
+  const few = rollBalance([measures[0], { denseEnd: [1, 1, 1] }]);
+  assert.equal("average" in few, false);
+  assert.equal("clear" in few, false);
+  const sunset = rollBalance([...measures, { denseEnd: [1, 1, 1], average: [1.3, 0.7, 0.3] }]);
+  assert.ok(Math.abs(sunset.average[0] - sunset.average[1] - (tone[0] - tone[1])) < 1e-9);
 });
 
 test("readings draw a scan down by area, never past its own extremes", () => {
@@ -332,7 +481,14 @@ test("a new negative is read with the current reading, an older one as it was", 
   const kept = {
     ...fresh,
     border: [0.8, 0.5, 0.25],
-    roll: { colour: [0.9, 1.2], frames: 7, level: 1.25, slopes: [0.9, 1.2] },
+    roll: {
+      colour: [0.9, 1.2],
+      frames: 7,
+      level: 1.25,
+      slopes: [0.9, 1.2],
+      average: [0.52, 0.6, 0.71],
+      clear: [2.2, 0.5],
+    },
     camera: "scanner",
     balance: "roll",
     neutral: [0.2, 0.1, 0.05],
@@ -344,6 +500,8 @@ test("a new negative is read with the current reading, an older one as it was", 
     { camera: "" },
     { balance: "page" },
     { neutral: [0.2, 0.1] },
+    { roll: { colour: [0.9, 1.2], frames: 7, average: [0.5, 0, 0.7] } },
+    { roll: { colour: [0.9, 1.2], frames: 7, clear: [2.2] } },
     { neutral: [0.2, 0, 0.05] },
     { flare: 0.03 },
     { flare: -0.001 },
@@ -355,7 +513,7 @@ test("a new negative is read with the current reading, an older one as it was", 
 });
 
 test("a request says of a reading what its edit keeps and its frame measures", () => {
-  const measured = { border, dense: [1.5, 1.0, 0.6], slopes: [0.9, 1.2] };
+  const measured = { border, dense: [1.5, 1.0, 0.6], average: [0.5, 0.6, 0.7], slopes: [0.9, 1.2] };
   const roll = { colour: [0.9, 1.2], frames: 4, level: 1.25 };
   // The first reading: the frame's densest end on its roll's colour, as before.
   const first = readingRequest(
@@ -383,7 +541,7 @@ test("a request says of a reading what its edit keeps and its frame measures", (
   assert.deepEqual(current, {
     border,
     denseEnd: measured.dense,
-    slopes: measured.slopes,
+    average: measured.average,
     reading: NEGATIVE.currentReading,
     crosstalk: 1,
     scanLight: "screen",
@@ -392,7 +550,21 @@ test("a request says of a reading what its edit keeps and its frame measures", (
     roll,
     source,
   });
-  assert.equal("slopes" in readingRequest({ reading: 2 }, { ...measured, slopes: [0, 1] }), false);
+  // Density strength goes with the current reading, and never with the first.
+  assert.equal(readingRequest({ reading: 2, density: 1.2 }, measured).density, 1.2);
+  assert.equal("density" in readingRequest({ density: 1.2 }, measured), false);
+  assert.equal(parseNegative({ ...newNegative("white", 2), density: 1.2 }).density, 1.2);
+  assert.throws(() => parseNegative({ ...newNegative("white", 2), density: 3 }), /Invalid negative reading/);
+  // The frame's tonal steps are its roll's to take, not its own reading's; its average goes
+  // with the current reading, which balances the frame on it.
+  assert.equal("slopes" in current, false);
+  assert.equal("average" in readingRequest({ roll: null }, measured), false);
+  assert.equal("average" in readingRequest({ reading: 2 }, { ...measured, average: [NaN, 1, 1] }), false);
+  // The mid-tones go with the current reading, which times its print by them.
+  const toned = { ...measured, midtone: [0.5, 0.6, 0.7] };
+  assert.deepEqual(readingRequest({ reading: 2 }, toned).midtone, toned.midtone);
+  assert.equal("midtone" in readingRequest({ roll: null }, toned), false);
+  assert.equal("midtone" in readingRequest({ reading: 2 }, { ...measured, midtone: [NaN, 1, 1] }), false);
   // Stray light the reading takes off goes with it, none where there is none, and never with
   // the first reading.
   const lit = { ...measured, flare: [0.002, 0.001, 0.0005] };

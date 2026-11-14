@@ -670,10 +670,14 @@ class EditorModel extends ChangeNotifier implements RenderHost {
     _viewChanged();
   }
 
+  /// Whether a tool has the viewer showing the whole frame, fitted, with its handles over it:
+  /// the crop, or a scanned negative's picture area.
+  bool get framing => crop.showing || negatives.selectingArea;
+
   /// Magnifies to `value` around the viewer's centre, or fits the photograph when null.
   void setZoom(double? value) {
     // The crop tool shows the whole frame, fitted.
-    if (value != null && crop.showing) return;
+    if (value != null && framing) return;
     if (value == null) {
       view
         ..zoom = null
@@ -686,7 +690,7 @@ class EditorModel extends ChangeNotifier implements RenderHost {
 
   /// Magnifies to `value`, keeping the point under `focal` (viewer coordinates) still.
   void zoomAround(double value, ui.Offset focal) {
-    if (crop.showing) return;
+    if (framing) return;
     view.zoomAround(photoSize, value, focal);
     _viewChanged();
   }

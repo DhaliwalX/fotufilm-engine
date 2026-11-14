@@ -107,12 +107,15 @@ final class NegativeDocument: @unchecked Sendable {
 
     /// What a framing measures: the clear film it is read against, and its own densest end before
     /// any roll's colour (`ApproximateNegativeScan.denseEnd`). A reading through the scan's light
-    /// and camera also measures the rises across the framing's tonal steps, the stray light it
-    /// takes off, which the densest end and the rises are net of, and where the scan's holder
-    /// begins, which is left out of them; and carries what the scan's file says of its camera.
+    /// and camera also measures the framing's average and the rises across its tonal steps, the
+    /// stray light it takes off, which those are net of, and where the scan's holder begins,
+    /// which is left out of them; and carries what the scan's file says of its camera and the
+    /// frame's own clear film, before its roll's colour of it.
     struct Measure: Equatable, Sendable {
         var border: SIMD3<Float>
+        var clear: SIMD3<Float>?
         var dense: SIMD3<Float>?
+        var average: SIMD3<Float>?
         var slopes: SIMD2<Float>?
         var flare: SIMD3<Float> = .zero
         var holder: Float?
@@ -120,7 +123,8 @@ final class NegativeDocument: @unchecked Sendable {
 
         /// What the framing gives its roll (`ApproximateNegativeScan.RollBalance.Measure`).
         var forRoll: ApproximateNegativeScan.RollBalance.Measure {
-            .init(denseEnd: dense, slopes: slopes)
+            .init(denseEnd: dense, slopes: slopes, average: average, clear: clear,
+                  border: border)
         }
     }
 
@@ -140,9 +144,13 @@ final class NegativeDocument: @unchecked Sendable {
         var source: SourceKey
         var framing: FilmRender.SceneKey
         var border: [Float]?
-        /// What of the edit's reading a measure turns on: which reading, and its flare.
+        /// What of the edit's reading a measure turns on: which reading, its flare, and its
+        /// roll's colour of clear film.
         var readsModel: Bool
         var flare: Float?
+        var rollClear: [Float]?
+        /// The picture area the framing is measured on in place of its crop.
+        var area: [[Double]]?
     }
 
     /// The thinnest film of the whole scan, standing in for clear film until some is picked
@@ -186,19 +194,36 @@ final class NegativeDocument: @unchecked Sendable {
         let key = MeasureKey(source: sourceKey(state),
                              framing: FilmRender.SceneKey(state: state, longEdge: Self.readingEdge),
                              border: negative.border, readsModel: negative.readsModel,
-                             flare: negative.flare)
+                             flare: negative.flare, rollClear: negative.roll?.clear,
+                             area: negative.pictureArea)
         if let kept = lock.withLock({ measures.first { $0.key == key } }) { return kept.measure }
-        let border: SIMD3<Float>
+        // The frame's own clear film, and the one it is read against: on a roll, its own in
+        // the roll's colour of clear film (`WebNativeEdit.Negative.clearFilm`).
+        let own: SIMD3<Float>, border: SIMD3<Float>
         if let picked = negative.border, picked.count == 3,
            picked.allSatisfy({ $0.isFinite && $0 > 0 }) {
-            border = SIMD3(picked[0], picked[1], picked[2])
+            own = SIMD3(picked[0], picked[1], picked[2])
+            border = own
         } else {
-            border = try estimatedBorder(state)
+            own = try estimatedBorder(state)
+            border = negative.sharesClearFilm ? negative.roll?.clearFilm(own) ?? own : own
         }
         guard let source = source(state) else { throw CancellationError() }
-        var preview = try Self.samples(FilmRender.downsample(framed(source),
-                                                             longEdge: Self.readingEdge))
-        var measure = Measure(border: border)
+        // A picture area picked on the scan is measured in place of the crop, and whole
+        // (`WebNativeEdit.Negative.pictureArea`): its four corners frame the scan as a
+        // four-corner crop's do, whatever the edit is cropped to.
+        let area = state.pictureAreaCorners
+        let picture: CIImage
+        if let corners = area {
+            var framing = state
+            framing.crop = nil
+            framing.cornerCrop = corners
+            picture = FilmRender.geometry(source, state: framing)
+        } else {
+            picture = framed(source)
+        }
+        var preview = try Self.samples(FilmRender.downsample(picture, longEdge: Self.readingEdge))
+        var measure = Measure(border: border, clear: negative.sharesClearFilm ? own : nil)
         if negative.readsModel {
             // As the desktop host measures a framing (`HostNegativeScan.measure`): the scan's
             // holder left out, then the stray light taken off.
@@ -207,6 +232,7 @@ final class NegativeDocument: @unchecked Sendable {
                 preview = ApproximateNegativeScan.withoutHolder(preview, border: border,
                                                                 limit: holder.limit)
             }
+            if area != nil { preview = ApproximateNegativeScan.pictureArea(preview) }
             let flare = negative.strayLight(
                 border: border, frameLight: ApproximateNegativeScan.frameLight(preview: preview),
                 holder: negative.flare == nil ? holder?.stray : nil)
@@ -215,11 +241,13 @@ final class NegativeDocument: @unchecked Sendable {
             }
             let clear = border - flare
             measure.dense = ApproximateNegativeScan.denseEnd(border: clear, preview: preview)
+            measure.average = ApproximateNegativeScan.average(border: clear, preview: preview)
             measure.slopes = ApproximateNegativeScan.tonalSlopes(border: clear, preview: preview)
             measure.flare = flare
             measure.holder = holder?.limit
             measure.capture = capture
         } else {
+            if area != nil { preview = ApproximateNegativeScan.pictureArea(preview) }
             measure.dense = ApproximateNegativeScan.denseEnd(border: border, preview: preview)
         }
         lock.withLock {
@@ -243,7 +271,7 @@ final class NegativeDocument: @unchecked Sendable {
         return try NegativeScanPrint.Reading(
             stock: NegativeScanPrint.film(stock), border: measure.border,
             balance: negative.balance(stock: stock, border: measure.border, denseEnd: measure.dense,
-                                      slopes: measure.slopes, source: measure.capture,
+                                      average: measure.average, source: measure.capture,
                                       flare: measure.flare),
             flare: measure.flare, holder: measure.holder)
     }
@@ -251,7 +279,7 @@ final class NegativeDocument: @unchecked Sendable {
     /// The scan read without a film, as Normal reads it (`WebNativeEdit.Negative.plain`).
     static func plain(_ measure: Measure, state: EditState) -> PlainNegativeScan {
         (state.negative ?? .init()).plain(border: measure.border, denseEnd: measure.dense,
-                                          slopes: measure.slopes, source: measure.capture,
+                                          average: measure.average, source: measure.capture,
                                           flare: measure.flare)
     }
 
@@ -268,6 +296,29 @@ final class NegativeDocument: @unchecked Sendable {
         let border = try NegativeScanImport.sampleBorder(image: framed, rect: rect,
                                                          colorSpace: NegativeScanImport.filmSpace)
         return [border.x, border.y, border.z]
+    }
+
+    /// The clearest film inside `area`, a unit rectangle from the top left of `framed`, as the
+    /// desktop reads a rectangle drawn over clear film
+    /// (`ApproximateNegativeScan.clearestFilm`): the film's edge or the gap between two frames,
+    /// with whatever picture the rectangle takes in beside it left out.
+    static func sampleClearestFilm(in area: CGRect, of framed: CIImage) throws -> [Float] {
+        let unit = area.standardized.intersection(CGRect(x: 0, y: 0, width: 1, height: 1))
+        let extent = framed.extent
+        guard !unit.isNull else { throw NegativeScanImport.Failure.invalidBorder }
+        let drawn = CGRect(x: extent.minX + unit.minX * extent.width,
+                           y: extent.maxY - unit.maxY * extent.height,
+                           width: unit.width * extent.width, height: unit.height * extent.height)
+            .integral.intersection(extent)
+        guard drawn.width >= 2, drawn.height >= 2 else {
+            throw NegativeScanImport.Failure.invalidBorder
+        }
+        let preview = try samples(FilmRender.downsample(framed.cropped(to: drawn),
+                                                        longEdge: readingEdge))
+        guard let clear = ApproximateNegativeScan.clearestFilm(preview: preview) else {
+            throw NegativeScanImport.Failure.invalidBorder
+        }
+        return [clear.x, clear.y, clear.z]
     }
 
     // MARK: - Points on the scan
@@ -361,17 +412,19 @@ final class NegativeDocument: @unchecked Sendable {
     }
 }
 
-/// What the frames of a roll share: the colour their densest ends have in common, measured over
-/// every frame and kept with each frame's reading, as the desktop's Roll panel measures it
+/// What the frames of a roll share: the colour of its clear film, the average its pictures come
+/// to and how steep its records read, measured over every frame and kept with each frame's
+/// reading, as the desktop's Roll panel measures it
 /// (web/src/negative-document.js `rollBalance`).
 enum NegativeRollBalance {
     /// Densest ends too thin to tell a colour from.
     static let readable: Float = 0.05
 
-    /// What a roll's frames share, from what each measures (`measure(of:edit:)`): the colour and
-    /// level of their densest ends, and with six frames' tonal steps or more how steep their
-    /// records read against each other (`ApproximateNegativeScan.RollBalance(measures:)`). Nil
-    /// when fewer than two frames can be read.
+    /// What a roll's frames share, from what each measures (`measure(of:edit:)`): the colour of
+    /// their clear film, the average they come to, the colour and level of their densest ends,
+    /// and with six frames' tonal steps or more how steep their records read against each other
+    /// (`ApproximateNegativeScan.RollBalance(measures:)`). Nil when fewer than two frames can
+    /// be read.
     static func balance(
         of measures: [ApproximateNegativeScan.RollBalance.Measure?]
     ) -> ApproximateNegativeScan.RollBalance? {
@@ -385,8 +438,8 @@ enum NegativeRollBalance {
     }
 
     /// What a frame gives its roll under its edit's framing, light and clear film: its own
-    /// densest end, and for a reading through the scan's light and camera the rises across its
-    /// tonal steps. Nil for a frame that cannot be read.
+    /// densest end and clear film, and for a reading through the scan's light and camera its
+    /// average and the rises across its tonal steps. Nil for a frame that cannot be read.
     static func measure(of document: NegativeDocument,
                         edit: EditState) -> ApproximateNegativeScan.RollBalance.Measure? {
         try? document.measure(edit) { FilmRender.geometry($0, state: edit) }.forRoll

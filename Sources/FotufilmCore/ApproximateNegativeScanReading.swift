@@ -4,7 +4,8 @@ import FotufilmHalide
 extension ApproximateNegativeScan {
     /// FOTUFILM_CONFIG_SCAN_READING and FOTUFILM_CONFIG_SCAN_CROSSTALK, which follows it, for a
     /// print span handed `scan`'s linear scan RGB; all zero for one handed densities. The kernels
-    /// read the scan as `density(of:)` does, and a sample it cannot place prints black. The
+    /// read the scan as `density(of:)` does; a sample it cannot place prints white where it is
+    /// too dark to be film (`isOpaque`), the holder, and black otherwise. The
     /// clear film is net of the scan's stray light, which `packedBalance` carries.
     public static func packedReading(_ scan: ApproximateNegativeScan?) -> [Float] {
         var slots = [Float](repeating: 0, count: Int(FOTUFILM_CONFIG_SCAN_READING_COUNT

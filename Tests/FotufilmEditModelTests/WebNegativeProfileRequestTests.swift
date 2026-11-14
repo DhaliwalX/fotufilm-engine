@@ -78,17 +78,33 @@ final class WebNegativeProfileRequestTests: XCTestCase {
                 }
             }
             scan.planes[0][0] = 0
-            // The kernels read the scan as `ApproximateNegativeScan.density(of:)` does, and print
-            // what it cannot place black.
+            // The kernels read the scan as `ApproximateNegativeScan.density(of:)` does. What it
+            // cannot place for being too dark to be film is the holder, which passes no light and
+            // prints as the densest film does (`ApproximateNegativeScan.isOpaque`); the bare
+            // light past the film prints black.
             let positive = try FotufilmEngine(stock: stock, options: options)
                 .printPositiveChecked(negativeDensity: scan)
             let converted = try native.calibration.convert(scan)
+            var read = converted.density
+            let sample = { (i: Int) in SIMD3((0..<3).map { scan.planes[$0][i] }) }
+            var holder = 0
+            for i in 0..<scan.pixelCount where converted.invalid[i]
+                && native.calibration.isOpaque(sample(i)) {
+                holder += 1
+                for c in 0..<3 {
+                    read.planes[c][i] = min(
+                        native.calibration.baseDensity[c] + ApproximateNegativeScan.opaqueDensity,
+                        NegativeInterchange.range.upperBound)
+                }
+            }
+            XCTAssertEqual(holder, 1)
             var densities = options
             densities.scanReading = nil
             let reference = try FotufilmEngine(stock: stock, options: densities)
-                .printPositiveChecked(negativeDensity: converted.density)
+                .printPositiveChecked(negativeDensity: read)
             for i in 0..<scan.pixelCount { for c in 0..<3 {
-                XCTAssertEqual(positive.planes[c][i], converted.invalid[i] ? 0 : reference.planes[c][i],
+                let bare = converted.invalid[i] && !native.calibration.isOpaque(sample(i))
+                XCTAssertEqual(positive.planes[c][i], bare ? 0 : reference.planes[c][i],
                                accuracy: 2e-4, "\(id) pixel \(i) channel \(c)")
             } }
             if let path = ProcessInfo.processInfo.environment["FOTUFILM_SCAN_REFERENCE_DIRECTORY"] {
@@ -281,6 +297,81 @@ final class WebNegativeProfileRequestTests: XCTestCase {
             XCTAssertThrowsError(try WebRenderRequest.prepare(
                 profile(reading: ["reading": 2, "strayLight": invalid])), "\(invalid)")
         }
+    }
+
+    /// The frame's mid-tones time the current reading's print where a small highlight lies far
+    /// over them, and never the first reading's.
+    func testARequestsMidTonesTimeTheCurrentReadingsPrint() throws {
+        let stock = try printed("gold200")
+        let border = SIMD3<Float>(0.4, 0.6, 0.2), dense = SIMD3<Float>(1.6, 1.5, 1.4)
+        let midtone = SIMD3<Float>(0.1, 0.1, 0.1)
+        let edit = WebNativeEdit.Negative(reading: 2)
+        let timed = edit.balance(stock: stock, border: border, denseEnd: dense, midtone: midtone)
+        let alone = edit.balance(stock: stock, border: border, denseEnd: dense)
+        XCTAssertEqual(timed.highlightStops, ApproximateNegativeScan.diffuseWhiteStops)
+        XCTAssertGreaterThan(try XCTUnwrap(alone.highlightStops), try XCTUnwrap(timed.highlightStops))
+        XCTAssertEqual(timed.exposure, alone.exposure)
+
+        let (_, options) = try JSONDecoder().decode(WebProfileRequest.self, from: profile(
+            denseEnd: [1.6, 1.5, 1.4], reading: ["reading": 2, "midtone": [0.1, 0.1, 0.1]]))
+            .configured()
+        XCTAssertEqual(options.scanReading, try NegativeScanPrint.Reading(
+            stock: stock, border: border, balance: timed).calibration)
+
+        let (_, first) = try JSONDecoder().decode(WebProfileRequest.self, from: profile(
+            denseEnd: [1.6, 1.5, 1.4], reading: ["midtone": [0.1, 0.1, 0.1]])).configured()
+        let (_, plain) = try JSONDecoder().decode(
+            WebProfileRequest.self, from: profile(denseEnd: [1.6, 1.5, 1.4])).configured()
+        XCTAssertEqual(first.scanReading, plain.scanReading)
+        for invalid: [Double] in [[0.1, 0.1], [0.1, 0.1, 0.1, 0.1]] {
+            XCTAssertThrowsError(try WebRenderRequest.prepare(
+                profile(reading: ["reading": 2, "midtone": invalid])), "\(invalid)")
+        }
+    }
+
+    /// The frame's average balances the current reading, on the frame or beside its roll's,
+    /// and never the first reading.
+    func testARequestsAverageBalancesTheCurrentReading() throws {
+        let stock = try printed("gold200")
+        let border = SIMD3<Float>(0.4, 0.6, 0.2), dense = SIMD3<Float>(1.6, 1.5, 1.4)
+        let average = SIMD3<Float>(0.9, 0.7, 0.5)
+        let edit = WebNativeEdit.Negative(reading: 2)
+        let balanced = edit.balance(stock: stock, border: border, denseEnd: dense, average: average)
+        XCTAssertNotEqual(balanced.exposure,
+                          edit.balance(stock: stock, border: border, denseEnd: dense).exposure)
+
+        let (_, options) = try JSONDecoder().decode(WebProfileRequest.self, from: profile(
+            denseEnd: [1.6, 1.5, 1.4], reading: ["reading": 2, "average": [0.9, 0.7, 0.5]]))
+            .configured()
+        XCTAssertEqual(options.scanReading, try NegativeScanPrint.Reading(
+            stock: stock, border: border, balance: balanced).calibration)
+
+        let (_, first) = try JSONDecoder().decode(WebProfileRequest.self, from: profile(
+            denseEnd: [1.6, 1.5, 1.4], reading: ["average": [0.9, 0.7, 0.5]])).configured()
+        let (_, plain) = try JSONDecoder().decode(
+            WebProfileRequest.self, from: profile(denseEnd: [1.6, 1.5, 1.4])).configured()
+        XCTAssertEqual(first.scanReading, plain.scanReading)
+        for invalid: [Double] in [[0.9, 0.7], [0.9, 0.7, 0.5, 0.1]] {
+            XCTAssertThrowsError(try WebRenderRequest.prepare(
+                profile(reading: ["reading": 2, "average": invalid])), "\(invalid)")
+        }
+    }
+
+    /// A request's density strength reaches the current reading, and is refused out of range.
+    func testARequestsDensityStrengthReachesTheReading() throws {
+        let stock = try printed("gold200")
+        let border = SIMD3<Float>(0.4, 0.6, 0.2), dense = SIMD3<Float>(1.6, 1.5, 1.4)
+        let strong = WebNativeEdit.Negative(reading: 2, density: 1.2)
+            .balance(stock: stock, border: border, denseEnd: dense)
+        let (_, options) = try JSONDecoder().decode(WebProfileRequest.self, from: profile(
+            denseEnd: [1.6, 1.5, 1.4], reading: ["reading": 2, "density": 1.2])).configured()
+        XCTAssertEqual(options.scanReading, try NegativeScanPrint.Reading(
+            stock: stock, border: border, balance: strong).calibration)
+        let (_, plain) = try JSONDecoder().decode(WebProfileRequest.self, from: profile(
+            denseEnd: [1.6, 1.5, 1.4], reading: ["reading": 2])).configured()
+        XCTAssertNotEqual(options.scanReading, plain.scanReading)
+        XCTAssertThrowsError(try WebRenderRequest.prepare(
+            profile(reading: ["reading": 2, "density": 4])))
     }
 
     func testRejectsAReadingTheEditCouldNotKeep() throws {

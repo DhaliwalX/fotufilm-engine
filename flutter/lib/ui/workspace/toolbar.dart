@@ -135,7 +135,7 @@ class _ViewGroup extends StatelessWidget {
     // Where the view stands between fit and the largest zoom.
     final fit = !editor.zoomed;
     final max = editor.zoomed && editor.scale >= ViewState.maxZoom * .999;
-    final cropMode = editor.crop.showing;
+    final cropMode = editor.framing;
     // Each tool opens in the inspector.
     void open(Panel panel) => editor.layout.choosePanel(panel);
     return Row(mainAxisAlignment: MainAxisAlignment.center, children: [

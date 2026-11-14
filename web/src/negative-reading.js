@@ -59,7 +59,7 @@ const positive = (pixels, i) =>
 
 // A stand-in for the film border until one is sampled: the median of the percent of the scan
 // that passes the most light across all three channels. Null when no pixel passes light.
-export function estimatedBorder(pixels) {
+export function estimatedBorder(pixels, share = 100) {
   const film = [];
   for (let i = 0; i < pixels.length; i += 4)
     if (positive(pixels, i))
@@ -69,31 +69,134 @@ export function estimatedBorder(pixels) {
       });
   if (!film.length) return null;
   film.sort((a, b) => b.transmission - a.transmission);
-  const brightest = film.slice(0, Math.max(1, Math.floor(film.length / 100)));
+  const brightest = film.slice(0, Math.max(1, Math.floor(film.length / share)));
   return [0, 1, 2].map((c) => {
     const values = brightest.map(({ i }) => pixels[i + c]).sort((a, b) => a - b);
     return values[Math.floor(values.length / 2)];
   });
 }
 
-// The framed picture's densest end, its highlights: each channel's scanner density over `border`
-// at the 99.5th percentile of the central 80%. Null for a frame too small to read.
-export function denseEnd(border, pixels, width, height) {
+// The scan channels' densities over `border` of the central 80% of the frame, at the pixels that
+// pass light in every channel. Null with fewer than sixteen of them.
+function framedDensities(border, pixels, width, height) {
   if (width < 2 || height < 2) return null;
-  const channels = [[], [], []];
+  const densities = [];
   const mx = Math.floor(width / 10),
     my = Math.floor(height / 10);
   for (let y = my; y < height - my; y++)
     for (let x = mx; x < width - mx; x++) {
       const i = (y * width + x) * 4;
       if (!positive(pixels, i)) continue;
-      for (let c = 0; c < 3; c++) channels[c].push(-Math.log10(pixels[i + c] / border[c]));
+      densities.push([0, 1, 2].map((c) => -Math.log10(pixels[i + c] / border[c])));
     }
-  if (channels[0].length < 16) return null;
-  return channels.map((values) => {
-    values.sort((a, b) => a - b);
+  return densities.length >= 16 ? densities : null;
+}
+
+// The framed picture's densest end, its highlights, in the scan channels' densities over
+// `border`: the densest hundredth of the central 80%, judged by each pixel's thinnest channel,
+// and each channel's median over those pixels. One set of pixels gives all three channels, so a
+// saturated colour, dense to one channel or two, cannot stand in for a white. Null for a frame
+// too small to read. Mirrors ApproximateNegativeScan.denseEnd(border:preview:).
+export function denseEnd(border, pixels, width, height) {
+  const densities = framedDensities(border, pixels, width, height);
+  if (!densities) return null;
+  const thinnest = densities.map((density) => Math.min(...density));
+  const level = [...thinnest].sort((a, b) => a - b)[Math.trunc((thinnest.length - 1) * 0.99)];
+  const densest = densities.filter((_, i) => thinnest[i] >= level);
+  return [0, 1, 2].map((c) => {
+    const values = densest.map((density) => density[c]).sort((a, b) => a - b);
+    return values[Math.floor(values.length / 2)];
+  });
+}
+
+// The densest end as the first reading takes it, which an edit made with it keeps: each
+// channel's own density over `border` at the 99.5th percentile of the central 80%. Mirrors
+// ApproximateNegativeScan.channelEnds.
+export function channelEnds(border, pixels, width, height) {
+  const densities = framedDensities(border, pixels, width, height);
+  if (!densities) return null;
+  return [0, 1, 2].map((c) => {
+    const values = densities.map((density) => density[c]).sort((a, b) => a - b);
     return values[Math.trunc((values.length - 1) * 0.995)];
   });
+}
+
+// The framed picture's mid-tones in the scan channels' densities over `border`: each channel's
+// mean over the central 80%. They keep a small highlight far over them from timing the print
+// (ApproximateNegativeScan.timedHighlight). Null for a frame too small to read. Mirrors
+// ApproximateNegativeScan.midtone.
+export function midtone(border, pixels, width, height) {
+  const densities = framedDensities(border, pixels, width, height);
+  if (!densities) return null;
+  return [0, 1, 2].map((c) => densities.reduce((sum, density) => sum + density[c], 0) / densities.length);
+}
+
+// A picture area picked on the scan, for what a frame measures: `pixels`, the area drawn as a
+// picture of its own (RGBA), set in the middle of a frame a quarter larger with nothing around
+// it. The measures read a frame's central 80%, which of a picked area is then all of it; what
+// surrounds it is no number, which every measure passes over. Mirrors
+// ApproximateNegativeScan.pictureArea.
+export function pictureAreaFrame(pixels, width, height) {
+  if (!(width > 0 && height > 0)) return { pixels, width, height };
+  const padded = (size) => {
+    let whole = size;
+    while (whole - 2 * Math.floor(whole / 10) < size) whole++;
+    return whole;
+  };
+  const w = padded(width),
+    h = padded(height);
+  const frame = new Float32Array(w * h * 4).fill(NaN);
+  const left = Math.floor(w / 10),
+    top = Math.floor(h / 10);
+  for (let y = 0; y < height; y++)
+    frame.set(pixels.subarray(y * width * 4, (y + 1) * width * 4), ((y + top) * w + left) * 4);
+  return { pixels: frame, width: w, height: h };
+}
+
+// The green density over the clear film a pixel has to count toward a frame's average
+// (ApproximateNegativeScan.averageRange).
+const AVERAGE_RANGE = [0.1, 1.5];
+
+// The framed picture's average in the scan channels' densities over `border`: over the central
+// 80%'s pixels whose green lies in AVERAGE_RANGE, the median green, and red and blue that far
+// from it as the medians of their differences from green. It stands for the frame's neutral, and
+// over a roll's frames for the roll's. Null where fewer than one pixel in 128 counts. Mirrors
+// ApproximateNegativeScan.average(border:preview:).
+export function average(border, pixels, width, height) {
+  const densities = framedDensities(border, pixels, width, height);
+  if (!densities) return null;
+  const counted = densities.filter(
+    (density) => density[1] >= AVERAGE_RANGE[0] && density[1] <= AVERAGE_RANGE[1],
+  );
+  if (counted.length < Math.max(16, Math.floor(densities.length / 128))) return null;
+  const median = (values) => values.sort((a, b) => a - b)[Math.floor(values.length / 2)];
+  const green = median(counted.map((density) => density[1]));
+  return [
+    green + median(counted.map((density) => density[0] - density[1])),
+    green,
+    green + median(counted.map((density) => density[2] - density[1])),
+  ];
+}
+
+// How far a frame's own clear film may be off its roll's colour, in density, and still take it
+// (ApproximateNegativeScan.RollBalance.clearReach).
+const CLEAR_REACH = 0.15;
+
+// A frame's clear film on its roll: `own`, linear scan RGB as estimated from its scan, at its own
+// green with red and blue in the roll's proportion to it (`roll.clear`). `own` as it is without a
+// roll, for one kept without the colour, or one further from it than CLEAR_REACH. Mirrors
+// ApproximateNegativeScan.RollBalance.clearFilm.
+export function rollClearFilm(own, roll) {
+  const clear = roll?.clear;
+  if (
+    !Array.isArray(clear) ||
+    clear.length !== 2 ||
+    !own.every((v) => Number.isFinite(v) && v > 0) ||
+    Math.abs(Math.log10(own[0] / own[1] / clear[0])) > CLEAR_REACH ||
+    Math.abs(Math.log10(own[2] / own[1] / clear[1])) > CLEAR_REACH
+  )
+    return own;
+  return [clear[0] * own[1], own[1], clear[1] * own[1]];
 }
 
 // A scan's stray light: what the lens and the room add to every sample alike, which a reading
@@ -296,9 +399,12 @@ export function netOfFlare(pixels, flare) {
 
 // How red and blue rise per unit of green across the framed picture's tonal steps, in the scan
 // channels' densities over `border`: the medians over pairs of pixels a little apart in the
-// central 80% whose green differs by a tenth of a density or more. A roll's frames give it how
-// steep its records read against each other. Null for a frame with too few steps to tell.
+// central 80% whose green differs by a tenth of a density or more, both three tenths or more over
+// the clear film: under that the film is on its toe, where a record rises by less than its
+// contrast. A roll's frames give it how steep its records read against each other. Null for a
+// frame with too few steps to tell.
 // Mirrors ApproximateNegativeScan.tonalSlopes in Sources/FotufilmCore/NegativeScanContrast.swift.
+const TONAL_FLOOR = 0.3;
 export function tonalSlopes(border, pixels, width, height) {
   if (width < 2 || height < 2 || !border.every((v) => Number.isFinite(v) && v > 0)) return null;
   const mx = Math.floor(width / 10),
@@ -318,7 +424,8 @@ export function tonalSlopes(border, pixels, width, height) {
     blue = [];
   const step = (from, to) => {
     const green = density[1][to] - density[1][from];
-    if (!(Math.abs(green) >= 0.1)) return;
+    if (!(Math.abs(green) >= 0.1) || !(Math.min(density[1][to], density[1][from]) >= TONAL_FLOOR))
+      return;
     const rises = [0, 2].map((c) => (density[c][to] - density[c][from]) / green);
     if (!rises.every(Number.isFinite)) return;
     red.push(rises[0]);
@@ -401,6 +508,29 @@ export function plainReading(border, raw, crosstalk = 0, scanLight = "white") {
 // clear film to read the scan against, or something neutral in the picture to balance it on.
 export const filmBase = (source, point) => scanPatch(source, point, INVALID_BORDER);
 export const pickedNeutral = (source, point) => scanPatch(source, point, INVALID_NEUTRAL);
+
+// The clearest film in a rectangle drawn on the framed scan, `area` its left, top, right and
+// bottom as shares of the frame: the median of the tenth of it that passes the most light,
+// which leaves out the picture, edge print and dust an area over a rebate takes in. Mirrors
+// ApproximateNegativeScan.clearestFilm and the host's negativeSampleFilmBase.
+export function filmBaseArea(source, area) {
+  const { width, height } = source;
+  if (
+    !Array.isArray(area) ||
+    area.length !== 4 ||
+    !area.every((v) => Number.isFinite(v) && v >= 0 && v <= 1) ||
+    !(area[0] < area[2] && area[1] < area[3])
+  )
+    throw new Error(INVALID_BORDER);
+  const x0 = Math.min(width - 1, Math.floor(area[0] * width)),
+    y0 = Math.min(height - 1, Math.floor(area[1] * height));
+  const x1 = Math.min(width, Math.max(x0 + 1, Math.ceil(area[2] * width))),
+    y1 = Math.min(height, Math.max(y0 + 1, Math.ceil(area[3] * height)));
+  if (x1 - x0 < 2 || y1 - y0 < 2) throw new Error(INVALID_BORDER);
+  const clear = estimatedBorder(decodeRGBA(source.read(x0, y0, x1 - x0, y1 - y0)), 10);
+  if (!clear) throw new Error(INVALID_BORDER);
+  return clear;
+}
 
 function scanPatch(source, point, unreadable) {
   const { width, height } = source;

@@ -46,11 +46,18 @@ const _flareDetail =
     'are. Left to measure, it is read from the holder where the scan shows one, and is none '
     'otherwise.';
 
+const _densityDetail =
+    'How strong the scan\'s densities read. Every density over the clear film is multiplied by '
+    'it before the film is read, so the picture gains or loses contrast in every colour alike '
+    'and its balance and exposure follow. Raise it where a scan prints flat, as a camera or a '
+    'light the reading only guesses at can; lower it where it prints hard. 100% is the scan '
+    'as it measures.';
+
 const _balanceDetail =
-    'What the frame\'s colour is balanced on. Frame uses the frame\'s own highlights, or a '
-    'neutral picked on it. Roll uses what the roll\'s frames share, measured in the Roll panel, '
-    'so a frame filled by one colour keeps it. None leaves the film as it reads: a scene under '
-    'warm light stays warm.';
+    'What the frame\'s colour is balanced on. Roll uses what the roll\'s frames come to taken '
+    'together, measured in the Roll panel, so a frame filled by one colour keeps it and an '
+    'evening stays warmer than a noon. Frame uses the frame\'s own tones, or a neutral picked '
+    'on it. None leaves the film as it reads. A measured roll starts on Roll.';
 
 // How far a negative's reading undoes the crosstalk between the scan's channels and the film's
 // dyes (NegativeScanCrosstalk): 0 reads each dye from its own channel alone.
@@ -65,6 +72,7 @@ List<Widget> negativePanel(InspectorControls c) {
   return [
     negativeFilmSection(c),
     filmBaseSection(c),
+    pictureAreaSection(c),
     if (c.editor.negatives.readsCurrent) ...[
       scanSetupSection(c),
       scanCorrectionSection(c),
@@ -106,10 +114,70 @@ Section filmBaseSection(InspectorControls c) {
       onPressed: () => scans.setSampling(scans.picking != 'border'),
     ),
     ScanButton(
+      'Pick Clear Film Area',
+      selected: scans.pickingArea,
+      onPressed: () => scans.setPicking(scans.pickingArea ? null : 'borderArea'),
+    ),
+    ScanButton(
       'Estimate',
       onPressed: negative['border'] == null ? null : () => scans.read({'border': null}),
     ),
+    if (scans.pickingArea)
+      const ScanHint('Draw a rectangle over clear film: the film\'s edge, or the gap between two '
+          'frames. The clearest film in it is taken, so it need not keep the picture or the '
+          'edge print out. Keep sprocket holes and the bare light past the film outside it.'),
   ]);
+}
+
+/// The part of the scan the frame's colour and exposure are measured on.
+Section pictureAreaSection(InspectorControls c) {
+  final scans = c.editor.negatives;
+  final picked = scans.pickedArea != null;
+  final selecting = scans.selectingArea;
+  return Section(title: 'Picture Area', children: [
+    InfoRow('Measured on', picked ? 'Picked area' : 'Middle of the frame'),
+    ScanButton(
+      selecting ? 'Done' : (picked ? 'Adjust Picture Area' : 'Select Picture Area'),
+      selected: selecting,
+      onPressed: scans.toggleArea,
+    ),
+    ScanButton('Clear Picture Area', onPressed: picked ? scans.clearArea : null),
+    ScanButton(
+      'Use on Every Frame of the Roll',
+      onPressed: picked && !selecting && scans.rollFrames.length >= 2 ? scans.areaOnRoll : null,
+    ),
+    const ScanHint('Drag the four corners to the picture\'s own corners, inside the film\'s '
+        'edge and the holder. The frame is then measured on all of that and nothing around it, '
+        'whatever it is cropped to. Without an area it is measured on the middle of the cropped '
+        'frame, a tenth left out at each edge. Measure the roll again after changing it.'),
+  ]);
+}
+
+/// The phone's Picture Area page, laid out as its Crop page is: the viewer shows the whole
+/// frame with the area's four corners over it while the page is open (model/phone_decks.dart),
+/// and the page says what they do, shares them with the roll, and finishes.
+List<Widget> pictureAreaPage(InspectorControls c) {
+  final scans = c.editor.negatives;
+  final picked = scans.pickedArea != null;
+  return [
+    Section(title: 'Picture Area', children: [
+      InfoRow('Measured on', picked ? 'Picked area' : 'Middle of the frame'),
+      const ScanHint('Drag the four corners to the picture\'s own corners, inside the film\'s '
+          'edge and the holder. The frame is then measured on all of that and nothing around '
+          'it, whatever it is cropped to.'),
+    ]),
+    Section(title: 'Roll', children: [
+      PillButton('Use on Every Frame of the Roll',
+          expand: true,
+          onPressed: picked && scans.rollFrames.length >= 2 ? scans.areaOnRoll : null),
+      const ScanHint('Measure the roll again after changing the area.'),
+    ]),
+    Section(title: 'Finish', children: [
+      PillButton('Clear Picture Area', expand: true, onPressed: picked ? scans.clearArea : null),
+      PillButton('Done',
+          expand: true, variant: ButtonVariant.accent, onPressed: scans.finishArea),
+    ]),
+  ];
 }
 
 /// What the scan was made with and under, and the light frame that evens its light out, which
@@ -153,6 +221,16 @@ Section scanCorrectionSection(InspectorControls c) {
       value: (negative['crosstalk'] as num? ?? 1).toDouble(),
       range: const SliderRange(min: 0, max: 1, step: .01, def: 1),
       onChanged: scans.setCrosstalk,
+      onEnd: c.editor.endEdit,
+    ),
+    AdjustmentRow(
+      label: 'Density Strength',
+      detail: _densityDetail,
+      value: (negative['density'] as num? ?? 1).toDouble(),
+      range: const SliderRange(min: .5, max: 1.5, step: .01, def: 1),
+      unit: '%',
+      readoutScale: 100,
+      onChanged: scans.setDensity,
       onEnd: c.editor.endEdit,
     ),
     SwitchRow(
@@ -206,7 +284,7 @@ List<Widget> negativeBalanceControls(InspectorControls c) {
       ),
       ScanButton(
         'Clear Picked Neutral',
-        onPressed: picked ? () => scans.read({'neutral': null}) : null,
+        onPressed: picked ? scans.clearNeutral : null,
       ),
     ],
   ];

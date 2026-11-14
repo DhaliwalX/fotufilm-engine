@@ -164,7 +164,7 @@ public struct NegativeScanRecipe: Codable, Equatable, Sendable {
     }
 
     /// Diffuse white over mid-grey, in stops: 90% reflectance against 18%.
-    static let diffuseWhiteStops: Float = log2(0.9 / 0.18)
+    static let diffuseWhiteStops = ApproximateNegativeScan.diffuseWhiteStops
 
     /// Printer stops that print the frame's highlights where a diffuse white on a normally
     /// exposed negative would print. A thinner negative takes less light, a denser one more.

@@ -1,3 +1,6 @@
+// A scanned negative's picture area is picked with the same overlay, its four corners each moving
+// on their own (model/negatives.dart).
+//
 // The crop over the whole frame while the Crop tool is open: the frame outside the crop darkened,
 // the crop's outline, its corner and edge handles, and the rule of thirds while it moves. Dragging
 // a handle resizes the crop, held to its ratio when one is chosen; dragging inside moves it. A drag
@@ -17,18 +20,24 @@ import '../theme/theme.dart';
 /// the tool's uncropped one.
 List<Widget> cropOverlays(EditorModel editor, Rect photo) {
   final doc = editor.active;
-  if (doc == null || !editor.crop.showing || !doc.shownUncropped) return const [];
+  final area = editor.negatives.selectingArea;
+  if (doc == null || !(editor.crop.showing || area) || !doc.shownUncropped) return const [];
   return [
     Positioned.fromRect(
       rect: photo.inflate(CropOverlay.margin),
-      child: CropOverlay(key: CropOverlay.surface, editor: editor, photo: photo.size),
+      child: CropOverlay(
+          key: CropOverlay.surface, editor: editor, photo: photo.size, area: area),
     ),
   ];
 }
 
 class CropOverlay extends StatefulWidget {
-  const CropOverlay({super.key, required this.editor, required this.photo});
+  const CropOverlay(
+      {super.key, required this.editor, required this.photo, this.area = false});
   final EditorModel editor;
+
+  /// Whether the overlay moves a scanned negative's picture area, not the crop.
+  final bool area;
 
   /// The frame's size in the viewer.
   final Size photo;
@@ -55,16 +64,25 @@ class CropOverlayState extends State<CropOverlay> {
 
   EditorModel get editor => widget.editor;
 
+  // What the overlay moves: the crop, or a negative's picture area, four free corners.
+  List<Offset> get _kept =>
+      widget.area ? editor.negatives.areaPoints : editor.crop.points;
+  String get _shape => widget.area ? 'corners' : editor.crop.shape;
+  bool get _locked => !widget.area && editor.crop.ratio != 'free';
+  void _set(List<Offset> next) =>
+      widget.area ? editor.negatives.setArea(next) : editor.crop.setCrop(next);
+
   /// What the crop is drawn on: a drag on another photograph or geometry is let go.
   String get _key {
     final e = editor.edit;
     return jsonEncode([
       editor.active?.handle, e['crop'], e['cropShape'], e['ratio'], e['rotation'], e['flip'],
       e['straighten'], e['perspectiveV'], e['perspectiveH'],
+      if (widget.area) (e['negative'] as Map?)?['area'],
     ]);
   }
 
-  List<Offset> get _points => _draft ?? editor.crop.points;
+  List<Offset> get _points => _draft ?? _kept;
 
   Offset _toView(Offset p) => Offset(CropOverlay.margin + p.dx * widget.photo.width,
       CropOverlay.margin + p.dy * widget.photo.height);
@@ -75,7 +93,7 @@ class CropOverlayState extends State<CropOverlay> {
   /// The handles' centres in the overlay, corners first, then the rectangle's edges.
   List<(CropGrip, Offset)> _handles(List<Offset> p) => [
         for (var i = 0; i < 4; i++) (CropGrip.values[i], _toView(p[i])),
-        if (editor.crop.shape == 'rectangle') ...[
+        if (_shape == 'rectangle') ...[
           (CropGrip.top, _toView(Offset.lerp(p[0], p[1], .5)!)),
           (CropGrip.right, _toView(Offset.lerp(p[1], p[2], .5)!)),
           (CropGrip.bottom, _toView(Offset.lerp(p[3], p[2], .5)!)),
@@ -115,7 +133,7 @@ class CropOverlayState extends State<CropOverlay> {
     if (event.buttons != kPrimaryMouseButton || _drag != null) return;
     final grip = _gripAt(event.localPosition);
     if (grip == null) return;
-    final points = editor.crop.points;
+    final points = _kept;
     _drag = _Drag(grip, event.pointer, _key, _toCrop(event.localPosition), points);
     setState(() => _draft = points);
   }
@@ -125,12 +143,11 @@ class CropOverlayState extends State<CropOverlay> {
     if (drag == null || drag.pointer != event.pointer) return;
     if (drag.key != _key) return _cancel();
     final point = _toCrop(event.localPosition);
-    final crop = editor.crop;
     final next = drag.grip == CropGrip.move
         ? moveCrop(drag.points, point.dx - drag.start.dx, point.dy - drag.start.dy)
         : resizeCrop(drag.points, drag.grip, point,
-            shape: crop.shape,
-            locked: crop.ratio != 'free',
+            shape: _shape,
+            locked: _locked,
             minimum: Size((44 / widget.photo.width).clamp(0, .25),
                 (44 / widget.photo.height).clamp(0, .25)));
     drag.latest = next;
@@ -143,7 +160,7 @@ class CropOverlayState extends State<CropOverlay> {
     _drag = null;
     final latest = drag.latest;
     setState(() => _draft = null);
-    if (latest != null && drag.key == _key) editor.crop.setCrop(latest);
+    if (latest != null && drag.key == _key) _set(latest);
   }
 
   void _cancel([PointerCancelEvent? _]) => setState(() {
@@ -155,24 +172,26 @@ class CropOverlayState extends State<CropOverlay> {
   /// the history.
   void _nudge(CropGrip grip, Offset direction, bool shift) {
     final delta = direction * (shift ? .05 : .005);
-    final points = editor.crop.points;
-    final crop = editor.crop;
+    final points = _kept;
     final at = {for (final (g, centre) in _handles(points)) g: _toCrop(centre)};
-    editor.crop.setCrop(grip == CropGrip.move
+    _set(grip == CropGrip.move
         ? moveCrop(points, delta.dx, delta.dy)
         : resizeCrop(points, grip, at[grip]! + delta,
-            shape: crop.shape,
-            locked: crop.ratio != 'free',
+            shape: _shape,
+            locked: _locked,
             minimum: Size((44 / widget.photo.width).clamp(0, .25),
                 (44 / widget.photo.height).clamp(0, .25))));
   }
 
-  static String _gripName(CropGrip grip) => switch (grip) {
-        CropGrip.move => 'Move crop',
-        CropGrip.top || CropGrip.right || CropGrip.bottom || CropGrip.left =>
-          '${grip.name[0].toUpperCase()}${grip.name.substring(1)} crop edge',
-        _ => '${const ['Top left', 'Top right', 'Bottom right', 'Bottom left'][grip.index]} crop corner',
-      };
+  String _gripName(CropGrip grip) {
+    final what = widget.area ? 'picture area' : 'crop';
+    return switch (grip) {
+      CropGrip.move => 'Move $what',
+      CropGrip.top || CropGrip.right || CropGrip.bottom || CropGrip.left =>
+        '${grip.name[0].toUpperCase()}${grip.name.substring(1)} $what edge',
+      _ => '${const ['Top left', 'Top right', 'Bottom right', 'Bottom left'][grip.index]} $what corner',
+    };
+  }
 
   /// The keyboard's stops on the crop, which the pointer passes through: the crop, then its
   /// corners clockwise from the top left, then its edges.
@@ -243,7 +262,7 @@ class CropOverlayState extends State<CropOverlay> {
                       width: _handleSize(grip).width,
                       height: _handleSize(grip).height),
               ],
-              rectangle: editor.crop.shape == 'rectangle',
+              rectangle: _shape == 'rectangle',
               thirds: thirds,
               accent: palette.accent,
             ),

@@ -50,6 +50,29 @@ final class NegativeScanContrastTests: XCTestCase {
         XCTAssertEqual(cast.y, slopes.y, accuracy: 1e-4)
     }
 
+    /// Under the toe floor a record rises by less than its contrast: steps down there are
+    /// passed over, so a frame's shadows do not move what its tones above them say.
+    func testStepsOnTheToeArePassedOver() throws {
+        let slopes = SIMD2<Float>(0.62, 1.15)
+        // The left half sits on the toe, where red rises as fast as green and blue half as fast.
+        var image = preview(slopes: slopes, tone: tone)
+        for y in 0..<image.height { for x in 0..<(image.width / 2) {
+            let green = 0.02 + 0.045 * Float(((x / 6) * 7 + (y / 6) * 13) % 6)
+            let density = SIMD3(green, green, 0.5 * green)
+            for c in 0..<3 { image.planes[c][y * image.width + x] = border[c] * pow(10, -density[c]) }
+        } }
+        let found = try XCTUnwrap(ApproximateNegativeScan.tonalSlopes(border: border, preview: image))
+        XCTAssertEqual(found.x, slopes.x, accuracy: 1e-3)
+        XCTAssertEqual(found.y, slopes.y, accuracy: 1e-3)
+        // A frame of nothing but toe has no steps to tell from.
+        var toe = image
+        for y in 0..<toe.height { for x in 0..<toe.width {
+            let green = 0.02 + 0.045 * Float(((x / 6) * 7 + (y / 6) * 13) % 6)
+            for c in 0..<3 { toe.planes[c][y * toe.width + x] = border[c] * pow(10, -green) }
+        } }
+        XCTAssertNil(ApproximateNegativeScan.tonalSlopes(border: border, preview: toe))
+    }
+
     func testAFrameWithoutStepsTellsNothing() {
         let slopes = SIMD2<Float>(0.62, 1.15)
         let flat = preview(slopes: slopes, tone: { x, _ in 0.8 + 0.01 * Float(x % 3) })
@@ -109,7 +132,9 @@ final class NegativeScanContrastTests: XCTestCase {
         let slopes = try XCTUnwrap(roll.slopes)
         let gains = ApproximateNegativeScan.contrast(
             stock: stock, weights: model.weights(separation: 1), slopes: SIMD2(slopes[0], slopes[1]))
-        XCTAssertEqual(gains.x, 1 / steepness.x, accuracy: 0.04)
+        // As near as weights fitted on the film's own greys read records off them, over the
+        // steps clear of the toe.
+        XCTAssertEqual(gains.x, 1 / steepness.x, accuracy: 0.07)
         XCTAssertEqual(gains.y, 1)
         XCTAssertEqual(gains.z, 1 / steepness.z, accuracy: 0.04)
 
@@ -122,11 +147,10 @@ final class NegativeScanContrastTests: XCTestCase {
             }
         }
         let highlight = try XCTUnwrap(model.scannerDensity(density: developed(0.6)))
-        func worst(_ roll: ApproximateNegativeScan.RollBalance?,
-                   slopes: SIMD2<Float>? = nil) throws -> Float {
+        func worst(_ roll: ApproximateNegativeScan.RollBalance?) throws -> Float {
             let balance = ApproximateNegativeScan.balance(
                 stock: stock, setup: setup, separation: 1, mode: .frame,
-                tones: .init(denseEnd: highlight, slopes: slopes), roll: roll)
+                tones: .init(denseEnd: highlight), roll: roll)
             let reading = try ApproximateNegativeScan(
                 stock: stock, border: model.clear, gains: balance.gains, exposure: balance.exposure,
                 weights: balance.weights)
@@ -140,9 +164,6 @@ final class NegativeScanContrastTests: XCTestCase {
             return worst
         }
         XCTAssertLessThan(try worst(roll), 0.04)
-        // Regularized single-frame slopes bring the greys close on their own, whereas with no
-        // measured slopes at all the drifted records drift off colour down the scale.
-        XCTAssertLessThan(try worst(nil, slopes: measures[0].slopes), 0.06)
         XCTAssertGreaterThan(try worst(nil), 2 * (try worst(roll)))
     }
 

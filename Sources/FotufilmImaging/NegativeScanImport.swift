@@ -263,7 +263,8 @@ public enum NegativeScanImport {
     }
 
     /// The kernels read the scan as the film (`FotufilmEngine.Options.scanReading`). Samples
-    /// outside the model's usable density range (commonly the film holder) print black. No
+    /// too dark to be film (commonly the film holder) print white, and brighter than its clear
+    /// base black. No
     /// artificial density floor enters the measurement API.
     public static func positive(image: CIImage, border: SIMD3<Float>, stock: FilmStock) throws -> CIImage {
         let scan = try samples(image)

@@ -38,7 +38,7 @@ public struct WebNegativePlainRequest: Decodable {
     public func prepare() throws -> Data {
         let measured = try negative.measured()
         let plain = measured.edit.plain(
-            border: measured.border, denseEnd: measured.denseEnd, slopes: measured.slopes,
+            border: measured.border, denseEnd: measured.denseEnd, average: measured.average,
             source: negative.source, flare: measured.flare)
         return try JSONEncoder().encode(Result(plain))
     }

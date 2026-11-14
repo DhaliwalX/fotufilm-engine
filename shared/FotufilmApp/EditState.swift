@@ -726,7 +726,39 @@ struct EditState: Equatable {
             || perspectiveV != 0 || perspectiveH != 0 || crop != nil || cornerCrop != nil
     }
 
+    /// A scanned negative's picked picture area as the four-corner crop that frames it for
+    /// measuring (`WebNativeEdit.Negative.pictureArea`); nil without one.
+    var pictureAreaCorners: QuadrilateralCrop? {
+        get {
+            guard let area = negative?.pictureArea else { return nil }
+            var corners = QuadrilateralCrop()
+            corners.topLeft = CGPoint(x: area[0][0], y: area[0][1])
+            corners.topRight = CGPoint(x: area[1][0], y: area[1][1])
+            corners.bottomRight = CGPoint(x: area[2][0], y: area[2][1])
+            corners.bottomLeft = CGPoint(x: area[3][0], y: area[3][1])
+            return corners
+        }
+        set {
+            negative?.area = newValue.map { $0.points.map { [Double($0.x), Double($0.y)] } }
+        }
+    }
+
+    /// Carries a picked picture area through a move of the frame, which its corners turn with
+    /// as a four-corner crop's do: a quarter turn (`QuadrilateralCrop.rotatedLeft`) or a flip.
+    mutating func movePictureArea(_ move: (QuadrilateralCrop) -> QuadrilateralCrop) {
+        guard let corners = pictureAreaCorners else { return }
+        pictureAreaCorners = move(corners)
+    }
+
     mutating func resetGeometry() {
+        // A picked picture area turns back with the frame: quarter turns left until it stands
+        // upright, then unflipped.
+        let turns = ((rotation % 4) + 4) % 4, flipped = flipH
+        movePictureArea { area in
+            var area = area
+            for _ in 0..<turns { area = area.rotatedLeft(mirrored: flipped) }
+            return flipped ? area.flippedHorizontally() : area
+        }
         rotation = 0
         flipH = false
         straighten = 0

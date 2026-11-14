@@ -117,7 +117,8 @@ extension HostService {
             switch method {
             case "negativeSampleFilmBase":
                 return try answer(value: sampleScan(parameters, pointing: Self.pointAtFilmBase,
-                                                    unreadable: HostNegativeScan.invalidBorder))
+                                                    unreadable: HostNegativeScan.invalidBorder,
+                                                    areas: true))
             case "negativeSampleNeutral":
                 return try answer(value: sampleScan(parameters, pointing: Self.pointAtNeutral,
                                                     unreadable: Self.pointAtNeutral))
@@ -279,12 +280,21 @@ extension HostService {
             guard NegativeScanPrint.reads(stock) else { throw NegativeScanPrint.Failure.reversalFilm }
             return stock
         }
-        let border = try negative?.border
+        // The frame's own clear film, and the one it is read against: on a roll, its own in
+        // the roll's colour of clear film.
+        let own = try negative?.border
             ?? scan.estimatedBorder(light: light, filmBase: negative?.readsModel ?? false)
+        var border = own
+        if let negative, own.count == 3 {
+            let film = negative.clearFilm(estimated: SIMD3(own[0], own[1], own[2]))
+            border = [film.x, film.y, film.z]
+        }
         // The picture as framed, crop included even while the crop tool shows the whole frame:
-        // the reading follows what will print.
+        // the reading follows what will print. A picture area picked on the scan is read
+        // instead, whatever the frame is cropped to.
         let image = prepared.image
-        let framing = prepared.request.edit.snapped(width: image.width, height: image.height)
+        var framing = prepared.request.edit.snapped(width: image.width, height: image.height)
+        if let area = negative?.pictureArea { framing.crop = area }
         let key = "\(framing)|\(border)|\(light ?? "")"
         let preview = {
             let sizes = framing.sizes(width: image.width, height: image.height, maxEdge: nil)
@@ -305,10 +315,16 @@ extension HostService {
                                                       negative: reading, preview: preview)
         prepared.negativeMeasure = [
             "border": (0..<3).map { Double(read[$0]) },
+            // Its own clear film, for its roll's colour of it, where a roll shares one.
+            "clear": negative?.sharesClearFilm ?? false ? own.map(Double.init) as Any : NSNull(),
             "flare": (0..<3).map { Double(flare[$0]) },
             "denseEnd": measure.denseEnd.map { dense in (0..<3).map { Double(dense[$0]) } as Any }
                 ?? NSNull(),
             "slopes": measure.slopes.map { slopes in (0..<2).map { Double(slopes[$0]) } as Any }
+                ?? NSNull(),
+            "midtone": measure.midtone.map { tone in (0..<3).map { Double(tone[$0]) } as Any }
+                ?? NSNull(),
+            "average": measure.average.map { tone in (0..<3).map { Double(tone[$0]) } as Any }
                 ?? NSNull(),
         ]
     }
@@ -322,18 +338,38 @@ extension HostService {
     /// the median over a patch a fortieth of the picture's long edge across. Clear film to read
     /// the scan against (`border`), or something neutral in the picture to balance it on
     /// (`neutral`). Fails as `pointing` for a call that points nowhere, and as `unreadable`
-    /// where the patch shows too little film.
+    /// where the patch shows too little film. With `areas`, a call may give an `area` in place
+    /// of the point, a rectangle drawn on the framed scan as its left, top, right and bottom:
+    /// the sample is then the clearest film in it (`ApproximateNegativeScan.clearestFilm`).
     private func sampleScan(_ parameters: [String: Any], pointing: HostEngine.Failure,
-                            unreadable: HostEngine.Failure) throws -> [Double] {
-        guard var render = parameters["render"] as? [String: Any],
-              let point = parameters["point"] as? [Double], point.count == 2,
-              (0...1).contains(point[0]), (0...1).contains(point[1]) else {
+                            unreadable: HostEngine.Failure, areas: Bool = false) throws -> [Double] {
+        let area = areas ? parameters["area"] as? [Double] : nil
+        let point = parameters["point"] as? [Double] ?? (area == nil ? [] : [0, 0])
+        guard var render = parameters["render"] as? [String: Any], point.count == 2,
+              (0...1).contains(point[0]), (0...1).contains(point[1]),
+              area.map({ $0.count == 4 && $0.allSatisfy((0...1).contains)
+                  && $0[0] < $0[2] && $0[1] < $0[3] }) ?? true else {
             throw pointing
         }
         render["viewport"] = nil
         let prepared = try prepare(JSONSerialization.data(withJSONObject: render), readsNegative: false)
         let scene = try sceneFor(prepared.image, geometry: prepared.geometry, sizes: prepared.sizes)
         let (width, height) = prepared.sizes.output
+        if let area {
+            let x0 = min(width - 1, Int(area[0] * Double(width)))
+            let y0 = min(height - 1, Int(area[1] * Double(height)))
+            let x1 = min(width, max(x0 + 1, Int((area[2] * Double(width)).rounded(.up))))
+            let y1 = min(height, max(y0 + 1, Int((area[3] * Double(height)).rounded(.up))))
+            guard x1 - x0 >= 2, y1 - y0 >= 2 else { throw unreadable }
+            var drawn = ImageBuffer(width: x1 - x0, height: y1 - y0)
+            for y in y0..<y1 { for x in x0..<x1 { for c in 0..<3 {
+                drawn.planes[c][(y - y0) * drawn.width + x - x0] = scene[(y * width + x) * 4 + c]
+            } } }
+            guard let clear = ApproximateNegativeScan.clearestFilm(preview: drawn) else {
+                throw unreadable
+            }
+            return (0..<3).map { Double(clear[$0]) }
+        }
         let radius = max(2, max(width, height) / 80)
         let x = Int(point[0] * Double(width)), y = Int(point[1] * Double(height))
         guard let sampled = try? HostNegativeScan.border(

@@ -320,10 +320,10 @@ class _Tabs extends StatelessWidget {
             ],
           ),
         ),
-        if (deck.tool != null)
+        if (deck.tool != null || page == DeckPage.pictureArea)
           GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: () => decks.show(null),
+            onTap: () => page == DeckPage.pictureArea ? decks.areaDone() : decks.show(null),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14),
               child: Center(

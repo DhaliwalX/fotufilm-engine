@@ -58,10 +58,10 @@ extension WebNativeEdit.Negative {
     }
 
     /// The frame's tones over `border` net of the scan's stray light, `flare`: its densest end
-    /// as measured, the neutral picked on it, and the rises across its tonal steps, each in the
-    /// scan channels' densities over the clear film.
+    /// as measured, the neutral picked on it, its average and its mid-tones, each in the scan
+    /// channels' densities over the clear film.
     public func tones(border: SIMD3<Float>, denseEnd: SIMD3<Float>?,
-                      slopes: SIMD2<Float>? = nil,
+                      average: SIMD3<Float>? = nil, midtone: SIMD3<Float>? = nil,
                       flare: SIMD3<Float> = .zero) -> ApproximateNegativeScan.Tones {
         let picked = neutral.flatMap { neutral -> SIMD3<Float>? in
             guard neutral.count == 3,
@@ -76,15 +76,40 @@ extension WebNativeEdit.Negative {
             }
             return density
         }
-        return .init(denseEnd: denseEnd, picked: picked, slopes: slopes)
+        return .init(denseEnd: denseEnd, picked: picked, average: average, midtone: midtone)
+    }
+
+    /// What the frame is balanced on where its edit does not say: its roll, once one is
+    /// measured with the average its frames come to, else the frame itself. A roll measured
+    /// before it kept that average leaves a frame on itself, as it was.
+    public var balanceMode: ApproximateNegativeScan.BalanceMode {
+        balance ?? (roll?.average != nil ? .roll : .frame)
+    }
+
+    /// Whether the frame's clear film has its roll's colour: a scan made in one exposure does,
+    /// which moves its clear film up and down and not its colour. One merged from an exposure
+    /// under each LED has three, each its own, and so does not; nor does the first reading.
+    public var sharesClearFilm: Bool { readsModel && (scanLight ?? .white) != .rgb }
+
+    /// The clear film the frame is read against: as sampled on it, else `estimated` from its
+    /// scan, in its roll's colour of clear film where the roll's frames share one
+    /// (`sharesClearFilm`, `ApproximateNegativeScan.RollBalance.clearFilm`). Linear scan RGB.
+    public func clearFilm(estimated: SIMD3<Float>) -> SIMD3<Float> {
+        if let border, border.count == 3 { return SIMD3(border[0], border[1], border[2]) }
+        guard sharesClearFilm, let roll else { return estimated }
+        return roll.clearFilm(estimated)
     }
 
     /// The frame's balance read as `stock`: `denseEnd` is its own densest end over `border`
-    /// (`ApproximateNegativeScan.denseEnd(border:preview:)`), before any roll's colour, and
-    /// `slopes` the rises across its tonal steps, both net of the scan's stray light, `flare`,
-    /// which `border` here still carries; `source` is what the scan's file says of its camera.
+    /// (`ApproximateNegativeScan.denseEnd(border:preview:)`), before any roll's colour,
+    /// `average` its average (`ApproximateNegativeScan.average(border:preview:)`) and
+    /// `midtone` its mid-tones
+    /// (`ApproximateNegativeScan.midtone(border:preview:)`), all net of the scan's stray light,
+    /// `flare`, which `border` here still carries; `source` is what the scan's file says of its
+    /// camera. The first reading times its print on the densest end alone.
     public func balance(stock: FilmStock, border: SIMD3<Float>, denseEnd: SIMD3<Float>?,
-                        slopes: SIMD2<Float>? = nil, source: NegativeScanCapture? = nil,
+                        average: SIMD3<Float>? = nil, midtone: SIMD3<Float>? = nil,
+                        source: NegativeScanCapture? = nil,
                         flare: SIMD3<Float> = .zero) -> ApproximateNegativeScan.Balance {
         guard readsModel else {
             return ApproximateNegativeScan.balance(
@@ -93,15 +118,16 @@ extension WebNativeEdit.Negative {
         }
         return ApproximateNegativeScan.balance(
             stock: stock, setup: setup(source: source), separation: separation,
-            mode: balance ?? .frame,
-            tones: tones(border: border, denseEnd: denseEnd, slopes: slopes, flare: flare),
-            roll: roll)
+            mode: balanceMode,
+            tones: tones(border: border, denseEnd: denseEnd, average: average, midtone: midtone,
+                         flare: flare),
+            roll: roll, strength: density ?? 1)
     }
 
     /// The frame read without a film, as Normal reads a negative. Arguments as
-    /// `balance(stock:border:denseEnd:slopes:source:flare:)`.
+    /// `balance(stock:border:denseEnd:average:midtone:source:flare:)`.
     public func plain(border: SIMD3<Float>, denseEnd: SIMD3<Float>?,
-                      slopes: SIMD2<Float>? = nil, source: NegativeScanCapture? = nil,
+                      average: SIMD3<Float>? = nil, source: NegativeScanCapture? = nil,
                       flare: SIMD3<Float> = .zero) -> PlainNegativeScan {
         guard readsModel else {
             return PlainNegativeScan(
@@ -110,19 +136,22 @@ extension WebNativeEdit.Negative {
         }
         return PlainNegativeScan(
             border: border, setup: setup(source: source), separation: separation,
-            mode: balance ?? .frame,
-            tones: tones(border: border, denseEnd: denseEnd, slopes: slopes, flare: flare),
-            roll: roll, flare: flare)
+            mode: balanceMode,
+            tones: tones(border: border, denseEnd: denseEnd, average: average, flare: flare),
+            roll: roll, flare: flare, strength: density ?? 1)
     }
 
     /// Everything of the edit a reading turns on, for keeping one made before: two edits with
     /// the same key read the same frame of the same scan alike.
     public var readingKey: String {
-        let roll = roll.map { "\($0.colour),\($0.level.map { "\($0)" } ?? ""),\($0.slopes ?? [])" }
+        let roll = roll.map {
+            "\($0.colour),\($0.level.map { "\($0)" } ?? ""),\($0.slopes ?? []),"
+                + "\($0.average ?? []),\($0.clear ?? [])"
+        }
         return [
             "\(reading ?? 1)", camera ?? "", balance?.rawValue ?? "", "\(neutral ?? [])",
             roll ?? "", crosstalk.map { "\($0)" } ?? "", scanLight?.rawValue ?? "",
-            flare.map { "\($0)" } ?? "",
+            flare.map { "\($0)" } ?? "", "\(pictureArea ?? [])", density.map { "\($0)" } ?? "",
         ].joined(separator: "|")
     }
 }

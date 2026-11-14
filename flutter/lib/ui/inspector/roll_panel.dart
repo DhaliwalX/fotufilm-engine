@@ -1,8 +1,8 @@
 // A scanned negative's Roll panel: what the frames of its roll share. The roll is the strip's
 // negatives from the frame's folder; what they share is measured on all of them and kept with
-// each, every frame still timed on its own highlights. Whether a frame is balanced on its roll
-// is its Balance, with the light's white balance; an edit saved with an earlier reading is
-// balanced on its roll while it keeps one.
+// each, every frame still timed on its own highlights. A frame is balanced on its measured roll
+// unless its Balance, with the light's white balance, says otherwise; an edit saved with an
+// earlier reading is balanced on its roll while it keeps one.
 import 'package:flutter/widgets.dart';
 
 import '../kit/kit.dart';
@@ -51,11 +51,11 @@ List<Widget> rollPanel(InspectorControls c) {
           ? 'Open a frame from a library folder of negatives: its roll is every negative in that '
               'folder.'
           : current
-              ? 'Frames shot on one roll share the colour of its highlights and how steep its '
-                  'colours read against each other. The steepness is used on every frame once '
-                  'six frames show it. Set Balance to Roll, with the white balance, to balance a '
-                  'frame on the roll\'s colour too. Each frame keeps its own exposure. Measure '
-                  'again after cropping or adding frames.'
+              ? 'Frames shot on one roll share its clear film, what its pictures come to '
+                  'taken together, and how steep its colours read against each other. Each '
+                  'frame is balanced on those unless its Balance, with the white balance, says '
+                  'Frame or None. The steepness is used once six frames show it. Each frame '
+                  'keeps its own exposure. Measure again after cropping or adding frames.'
               : 'Frames shot on one roll under one light share the colour of the roll\'s '
                   'highlights. Each frame keeps its own exposure. Measure again after cropping '
                   'or adding frames.'),

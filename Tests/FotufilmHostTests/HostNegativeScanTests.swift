@@ -142,6 +142,36 @@ final class HostNegativeScanTests: XCTestCase {
             XCTAssertEqual(Float(measured[c]), border[c] * pow(10, -0.02), accuracy: 1e-3)
         }
 
+        // A rectangle drawn across the rebate and into the picture gives the clearest film in
+        // it, the rebate's, where its middle is picture.
+        func clearest(_ area: [Double]) throws -> [Double]? {
+            try JSONSerialization.jsonObject(with: service.call(
+                "negativeSampleFilmBase",
+                params: JSONSerialization.data(withJSONObject: [
+                    "render": request(handle, maxEdge: 150), "area": area]),
+                payload: nil).json) as? [Double]
+        }
+        let drawn = try XCTUnwrap(try clearest([0.2, 0.02, 0.8, 0.5]))
+        for c in 0..<3 {
+            XCTAssertEqual(Float(drawn[c]), border[c] * pow(10, -0.02), accuracy: 1e-3)
+        }
+        // Inside the picture it is the thinnest of the picture, which is no clear film.
+        let pictured = try XCTUnwrap(try clearest([0.5, 0.3, 0.8, 0.7]))
+        XCTAssertLessThan(Float(pictured[1]), border.y * 0.5)
+        // A rectangle with no size, or one past the frame, points nowhere; and a neutral is
+        // picked at a point, never over an area.
+        for bad in [[0.5, 0.2, 0.5, 0.6], [0.2, 0.6, 0.8, 0.3], [0.2, 0.1, 1.4, 0.3], [0.2, 0.1, 0.8]] {
+            XCTAssertThrowsError(try clearest(bad), "\(bad)") { error in
+                XCTAssertEqual((error as? HostEngine.Failure)?.description,
+                               HostService.pointAtFilmBase.description)
+            }
+        }
+        XCTAssertThrowsError(try service.call(
+            "negativeSampleNeutral",
+            params: JSONSerialization.data(withJSONObject: [
+                "render": request(handle, maxEdge: 150), "area": [0.2, 0.02, 0.8, 0.5]]),
+            payload: nil))
+
         // Something in the picture picked as neutral reads the same way: the scan's own samples
         // there, which the edit keeps beside the clear film.
         let picked = try XCTUnwrap(JSONSerialization.jsonObject(with: service.call(
@@ -171,6 +201,9 @@ final class HostNegativeScanTests: XCTestCase {
         }
         XCTAssertGreaterThan(green(film, 120, 50), green(film, 30, 50))
         XCTAssertEqual(green(film, 149, 50), 0)
+        // The dense holder at the left passes no light, and prints as white as the picture's
+        // densest end or whiter.
+        XCTAssertGreaterThanOrEqual(green(film, 2, 50), green(film, 130, 50))
 
         // Until clear film is picked the base is estimated from the thinnest film of the scan
         // (here the open holder, which a pick then corrects).
@@ -267,6 +300,73 @@ final class HostNegativeScanTests: XCTestCase {
         XCTAssertEqual(onRoll.negativeMeasure?["denseEnd"] as? [Double], dense)
     }
 
+    /// A frame on a roll that measured its clear film's colour is read against its own clear
+    /// film in that colour, and still says its own for the roll to be measured again.
+    func testAFrameOnItsRollIsReadAgainstTheRollsColourOfClearFilm() throws {
+        let (service, engine) = try service()
+        defer { fotufilm_engine_destroy(engine) }
+        let handle = open(service, width: 300, height: 200)
+        func prepared(_ negative: [String: Any]) throws -> HostService.Prepared {
+            try service.prepare(JSONSerialization.data(withJSONObject: request(
+                handle, maxEdge: 150, negative: negative)))
+        }
+        let alone = try XCTUnwrap(try prepared(["reading": 2]).negativeMeasure)
+        let own = try XCTUnwrap(alone["clear"] as? [Double])
+        XCTAssertEqual(alone["border"] as? [Double], own)
+        // A roll whose clear film is a little redder than this frame read its own.
+        let colour = [own[0] / own[1] * 1.1, own[2] / own[1]]
+        let roll: [String: Any] = ["colour": [1, 1], "frames": 8, "clear": colour]
+        let rolled = try XCTUnwrap(try prepared(["reading": 2, "roll": roll]).negativeMeasure)
+        XCTAssertEqual(rolled["clear"] as? [Double], own)
+        let border = try XCTUnwrap(rolled["border"] as? [Double])
+        XCTAssertEqual(border[1], own[1], accuracy: 1e-6)
+        XCTAssertEqual(border[0], own[0] * 1.1, accuracy: 1e-5)
+        XCTAssertEqual(border[2], own[2], accuracy: 1e-6)
+        // A scan merged from an exposure under each LED keeps its own, and gives its roll none.
+        let merged = try XCTUnwrap(try prepared(
+            ["reading": 2, "roll": roll, "scanLight": "rgb"]).negativeMeasure)
+        XCTAssertEqual(merged["border"] as? [Double], own)
+        XCTAssertTrue(merged["clear"] is NSNull)
+        // Clear film sampled on the frame is the frame's, whatever its roll.
+        let sampled = try XCTUnwrap(try prepared(
+            ["reading": 2, "roll": roll, "border": own]).negativeMeasure)
+        XCTAssertEqual(sampled["border"] as? [Double], own)
+    }
+
+    /// A picture area picked on the scan is what the frame measures, whatever it is cropped
+    /// to; without one the frame measures the middle of its crop.
+    func testAPickedPictureAreaIsWhatTheFrameMeasures() throws {
+        let (service, engine) = try service()
+        defer { fotufilm_engine_destroy(engine) }
+        let handle = open(service, width: 300, height: 200)
+        let border = self.border
+        let sampled: [String: Any] = ["reading": 2, "border": border.indices.map { Double(border[$0]) }]
+        func measure(_ negative: [String: Any], crop: [[Double]]? = nil) throws -> [String: Any] {
+            var body = request(handle, maxEdge: 150, negative: sampled.merging(negative) { $1 })
+            if let crop {
+                var edit = try XCTUnwrap(body["edit"] as? [String: Any])
+                edit["crop"] = crop
+                body["edit"] = edit
+            }
+            return try XCTUnwrap(try service.prepare(JSONSerialization.data(withJSONObject: body))
+                .negativeMeasure)
+        }
+        // The strip's picture, its density rising left to right: the left half of it is thin.
+        let left: [[Double]] = [[0.12, 0.2], [0.5, 0.2], [0.5, 0.8], [0.12, 0.8]]
+        let whole = try measure([:])
+        let picked = try measure(["area": left])
+        let tone = { (measure: [String: Any]) in try XCTUnwrap(measure["midtone"] as? [Double])[1] }
+        XCTAssertLessThan(try tone(picked), try tone(whole) - 0.05)
+        // The crop moves what prints, not what the area measures.
+        let right: [[Double]] = [[0.5, 0.2], [0.88, 0.2], [0.88, 0.8], [0.5, 0.8]]
+        let cropped = try measure(["area": left], crop: right)
+        XCTAssertEqual(try tone(cropped), try tone(picked), accuracy: 1e-6)
+        XCTAssertGreaterThan(try tone(try measure([:], crop: right)), try tone(whole))
+        // Corners that make no area leave the frame measuring its crop.
+        let folded: [[Double]] = [left[0], left[2], left[1], left[3]]
+        XCTAssertEqual(try tone(try measure(["area": folded])), try tone(whole), accuracy: 1e-6)
+    }
+
     /// An edit made with the current reading is read through the scan's light and camera and
     /// balanced as it says, from what its frame measures; one made before keeps its reading.
     func testAnEditMadeWithTheCurrentReadingIsReadAsItSays() throws {
@@ -281,8 +381,14 @@ final class HostNegativeScanTests: XCTestCase {
         }
         let first = try prepared([:])
         let measure = try XCTUnwrap(first.negativeMeasure)
-        let dense = try XCTUnwrap(measure["denseEnd"] as? [Double]).map(Float.init)
-        let denseEnd = SIMD3<Float>(dense[0], dense[1], dense[2])
+        let vector = { (measure: [String: Any], key: String) throws -> SIMD3<Float> in
+            let values = try XCTUnwrap(measure[key] as? [Double]).map(Float.init)
+            XCTAssertEqual(values.count, 3)
+            return SIMD3(values[0], values[1], values[2])
+        }
+        // The frame's mid-tones are measured with its densest end, and lie under it.
+        let midtone = try vector(measure, "midtone")
+        XCTAssertLessThan(midtone.y, try vector(measure, "denseEnd").y)
         // The rises across the frame's tonal steps are measured with it, or said to be none.
         let slopes: SIMD2<Float>?
         if let pair = measure["slopes"] as? [Double] {
@@ -293,6 +399,12 @@ final class HostNegativeScanTests: XCTestCase {
             XCTAssertTrue(measure["slopes"] is NSNull)
             slopes = nil
         }
+
+        // Its average is measured with them. The first reading has no roll's clear film to
+        // take, and says none of its own for one.
+        let average = try vector(measure, "average")
+        XCTAssertLessThan(average.y, try vector(measure, "denseEnd").y)
+        XCTAssertTrue(measure["clear"] is NSNull)
 
         let stock = try NegativeScanPrint.film("gold200")
         let roll: [String: Any] = ["colour": [0.9, 1.1], "frames": 12, "level": 1.1, "slopes": [0.9, 1.1]]
@@ -308,16 +420,20 @@ final class HostNegativeScanTests: XCTestCase {
             let negative = try JSONDecoder().decode(
                 WebNativeEdit.Negative.self, from: JSONSerialization.data(withJSONObject: edit))
             let read = try prepared(edit)
+            // The first reading keeps its own densest end; each reading says the one it took.
+            let denseEnd = try vector(try XCTUnwrap(read.negativeMeasure), "denseEnd")
             let expected = try NegativeScanPrint.Reading(
                 stock: stock, border: border,
                 balance: negative.balance(stock: stock, border: border, denseEnd: denseEnd,
-                                          slopes: slopes))
+                                          average: average, midtone: midtone))
             let calibration = try XCTUnwrap(read.edit.negativeReading?.calibration, "\(edit)")
             XCTAssertEqual(calibration, expected.calibration, "\(edit)")
             XCTAssertEqual(read.edit.negativeReading?.highlightStops, expected.highlightStops, "\(edit)")
-            // The frame measures the same whichever way it is read.
-            XCTAssertEqual(read.negativeMeasure?["denseEnd"] as? [Double],
-                           measure["denseEnd"] as? [Double], "\(edit)")
+            // The frame's mid-tones and tonal steps measure the same whichever way it is read.
+            XCTAssertEqual(read.negativeMeasure?["midtone"] as? [Double],
+                           measure["midtone"] as? [Double], "\(edit)")
+            XCTAssertEqual(read.negativeMeasure?["slopes"] as? [Double],
+                           measure["slopes"] as? [Double], "\(edit)")
             XCTAssertFalse(calibrations.contains(calibration), "\(edit)")
             calibrations.append(calibration)
         }

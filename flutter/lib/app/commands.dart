@@ -393,7 +393,7 @@ class EditorCommands {
     final photo = free && e.active != null;
     final still = photo && e.active?.isMovie != true;
     final reach = _reach;
-    final cropMode = e.crop.showing;
+    final cropMode = e.framing;
     final history = e.active?.history;
     final suggestion = e.filmSuggestion;
     final enabled = <String, bool>{

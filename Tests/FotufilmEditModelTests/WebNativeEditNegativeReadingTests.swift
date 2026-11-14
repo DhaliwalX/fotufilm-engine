@@ -37,6 +37,113 @@ final class WebNativeEditNegativeReadingTests: XCTestCase {
         }
     }
 
+    /// A frame whose roll measured the average its frames come to is balanced on the roll
+    /// unless its edit says otherwise; a roll kept before that leaves it on itself, as it was.
+    func testAFrameIsBalancedOnItsRollOnceTheRollKeepsItsAverage() throws {
+        let stock = try stock()
+        var measured = roll
+        measured.average = [0.52, 0.6, 0.71]
+        typealias Mode = ApproximateNegativeScan.BalanceMode
+        XCTAssertEqual(Negative(reading: 2).balanceMode, .frame)
+        XCTAssertEqual(Negative(roll: roll, reading: 2).balanceMode, .frame)
+        XCTAssertEqual(Negative(roll: measured, reading: 2).balanceMode, .roll)
+        XCTAssertEqual(Negative(roll: measured, reading: 2, balance: .frame).balanceMode, .frame)
+        XCTAssertEqual(Negative(roll: measured, reading: 2, balance: Mode.none).balanceMode, Mode.none)
+        // The frame's own average balances it off a roll, the roll's on one.
+        let average = SIMD3<Float>(0.9, 0.7, 0.5)
+        let setup = NegativeScanSetup(light: .white, camera: .generic)
+        XCTAssertEqual(
+            Negative(roll: measured, reading: 2)
+                .balance(stock: stock, border: border, denseEnd: dense, average: average),
+            ApproximateNegativeScan.balance(
+                stock: stock, setup: setup, separation: 1, mode: .roll,
+                tones: .init(denseEnd: dense, average: average), roll: measured))
+        XCTAssertEqual(
+            Negative(reading: 2).balance(stock: stock, border: border, denseEnd: dense, average: average),
+            ApproximateNegativeScan.balance(
+                stock: stock, setup: setup, separation: 1, mode: .frame,
+                tones: .init(denseEnd: dense, average: average)))
+        XCTAssertNotEqual(
+            Negative(reading: 2).balance(stock: stock, border: border, denseEnd: dense, average: average),
+            Negative(reading: 2).balance(stock: stock, border: border, denseEnd: dense))
+    }
+
+    /// A frame on a roll is read against its own clear film in the roll's colour of it; one
+    /// sampled on the frame stands, and the first reading takes the estimate as it is.
+    func testAFramesClearFilmTakesItsRollsColourUnlessItWasSampled() {
+        var measured = roll
+        measured.clear = [0.7, 0.3]
+        let estimated = SIMD3<Float>(0.4, 0.6, 0.2)
+        let taken = Negative(roll: measured, reading: 2).clearFilm(estimated: estimated)
+        XCTAssertEqual(taken.y, 0.6)
+        XCTAssertEqual(taken.x, 0.42, accuracy: 1e-6)
+        XCTAssertEqual(taken.z, 0.18, accuracy: 1e-6)
+        XCTAssertEqual(Negative(roll: measured, reading: 2, balance: .frame)
+            .clearFilm(estimated: estimated), taken)
+        XCTAssertEqual(Negative(border: [0.5, 0.5, 0.5], roll: measured, reading: 2)
+            .clearFilm(estimated: estimated), SIMD3(0.5, 0.5, 0.5))
+        XCTAssertEqual(Negative(roll: measured).clearFilm(estimated: estimated), estimated)
+        // A scan merged from an exposure under each LED has three exposures and keeps its own.
+        XCTAssertEqual(Negative(roll: measured, scanLight: .rgb, reading: 2)
+            .clearFilm(estimated: estimated), estimated)
+        XCTAssertFalse(Negative(scanLight: .rgb, reading: 2).sharesClearFilm)
+        XCTAssertTrue(Negative(scanLight: .screen, reading: 2).sharesClearFilm)
+        XCTAssertFalse(Negative().sharesClearFilm)
+        XCTAssertEqual(Negative(roll: roll, reading: 2).clearFilm(estimated: estimated), estimated)
+        XCTAssertEqual(Negative(reading: 2).clearFilm(estimated: estimated), estimated)
+        // Two edits whose rolls differ in either read differently.
+        XCTAssertNotEqual(Negative(roll: measured, reading: 2).readingKey,
+                          Negative(roll: roll, reading: 2).readingKey)
+    }
+
+    /// Density strength is kept with the reading and reaches a film's reading and Normal's;
+    /// the first reading takes none.
+    func testDensityStrengthIsKeptWithTheReading() throws {
+        let stock = try stock()
+        let strong = Negative(reading: 2, density: 1.25)
+        XCTAssertEqual(try JSONDecoder().decode(Negative.self, from: JSONEncoder().encode(strong)), strong)
+        XCTAssertNotEqual(strong.readingKey, Negative(reading: 2).readingKey)
+        let setup = NegativeScanSetup(light: .white, camera: .generic)
+        XCTAssertEqual(
+            strong.balance(stock: stock, border: border, denseEnd: dense),
+            ApproximateNegativeScan.balance(
+                stock: stock, setup: setup, separation: 1, mode: .frame,
+                tones: .init(denseEnd: dense), strength: 1.25))
+        XCTAssertNotEqual(strong.balance(stock: stock, border: border, denseEnd: dense),
+                          Negative(reading: 2).balance(stock: stock, border: border, denseEnd: dense))
+        XCTAssertNotEqual(strong.plain(border: border, denseEnd: dense),
+                          Negative(reading: 2).plain(border: border, denseEnd: dense))
+        XCTAssertEqual(Negative(density: 1.25).balance(stock: stock, border: border, denseEnd: dense),
+                       Negative().balance(stock: stock, border: border, denseEnd: dense))
+        for bad in [#"{"reading":2,"density":0.2}"#, #"{"reading":2,"density":3}"#] {
+            XCTAssertThrowsError(try JSONDecoder().decode(Negative.self, from: Data(bad.utf8)), bad)
+        }
+    }
+
+    /// A picture area is kept with the reading as four corners of the frame, and read only
+    /// where they make a shape a frame can be read on.
+    func testAPickedPictureAreaIsKeptWithTheReading() throws {
+        let corners: [[Double]] = [[0.1, 0.15], [0.9, 0.12], [0.88, 0.85], [0.12, 0.9]]
+        let picked = Negative(reading: 2, area: corners)
+        XCTAssertEqual(picked.pictureArea, corners)
+        let kept = try JSONDecoder().decode(Negative.self, from: JSONEncoder().encode(picked))
+        XCTAssertEqual(kept, picked)
+        XCTAssertNotEqual(picked.readingKey, Negative(reading: 2).readingKey)
+        XCTAssertNil(Negative(reading: 2).pictureArea)
+        XCTAssertFalse(String(decoding: try JSONEncoder().encode(Negative(reading: 2)), as: UTF8.self)
+            .contains("area"))
+        // Three corners, one outside the frame, one that is no number, and a shape that folds
+        // over or turns the other way are no area.
+        for bad: [[Double]] in [
+            Array(corners.prefix(3)), [[0.1, 0.15], [1.2, 0.12], [0.88, 0.85], [0.12, 0.9]],
+            [[0.1, 0.15], [.nan, 0.12], [0.88, 0.85], [0.12, 0.9]],
+            [[0.1, 0.15], [0.88, 0.85], [0.9, 0.12], [0.12, 0.9]], Array(corners.reversed()),
+            [[0.1, 0.15, 0], [0.9, 0.12], [0.88, 0.85], [0.12, 0.9]],
+        ] {
+            XCTAssertNil(Negative(reading: 2, area: bad).pictureArea, "\(bad)")
+        }
+    }
+
     func testTheCurrentReadingIsTheScanModelsThroughTheEditsSetup() throws {
         let stock = try stock()
         let neutral: [Float] = [0.05, 0.06, 0.03]

@@ -199,8 +199,13 @@ async function toneCurve({ render: request }) {
   return { json: result.toneCurve };
 }
 
-async function negativeSampleFilmBase({ render: request, point }) {
-  return { json: await backend.negativeScans.sampleFilmBase(await sampled(request), point) };
+async function negativeSampleFilmBase({ render: request, point, area }) {
+  const scans = backend.negativeScans;
+  return {
+    json: area
+      ? await scans.sampleFilmBaseArea(await sampled(request), area)
+      : await scans.sampleFilmBase(await sampled(request), point),
+  };
 }
 
 async function negativeSampleNeutral({ render: request, point }) {

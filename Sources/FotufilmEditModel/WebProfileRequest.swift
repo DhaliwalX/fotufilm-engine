@@ -33,9 +33,14 @@ public struct WebProfileRequest: Decodable {
         /// too small to read: the reading is then unbalanced. With `roll` it is the frame's own,
         /// before the roll's colour.
         public let denseEnd: [Float]?
-        /// How red and blue rise per unit of green across this frame's own tonal steps
-        /// (`ApproximateNegativeScan.tonalSlopes`), nil when the frame has too few steps to tell.
-        public let slopes: [Float]?
+        /// The framed picture's average (`ApproximateNegativeScan.average`), net of the stray
+        /// light like `denseEnd`, which stands for the frame's neutral. Nil balances it on its
+        /// densest end, as the first reading always does.
+        public let average: [Float]?
+        /// The framed picture's mid-tones (`ApproximateNegativeScan.midtone`), net of the stray
+        /// light like `denseEnd`: they keep a small highlight far over them from timing the
+        /// print. Nil times it on the densest end, as the first reading always does.
+        public let midtone: [Float]?
         /// The edit's `ev`, `temperature` and `tint`, in the web's units: the light controls an
         /// enlarger or a scan carries into the print. The rest finish the print at render time.
         public let light: [String: Double]?
@@ -53,6 +58,9 @@ public struct WebProfileRequest: Decodable {
         public let balance: ApproximateNegativeScan.BalanceMode?
         public let neutral: [Float]?
         public let roll: ApproximateNegativeScan.RollBalance?
+        /// How strong the scan's densities read, as the edit keeps it
+        /// (`WebNativeEdit.Negative.density`).
+        public let density: Float?
         /// What the scan's file says of its camera and decoder, which the current reading's
         /// setup is made of.
         public let source: NegativeScanCapture?
@@ -78,7 +86,8 @@ public struct WebProfileRequest: Decodable {
             var edit: WebNativeEdit.Negative
             var border: SIMD3<Float>
             var denseEnd: SIMD3<Float>?
-            var slopes: SIMD2<Float>? = nil
+            var average: SIMD3<Float>? = nil
+            var midtone: SIMD3<Float>? = nil
             /// The scan's stray light, none on the first reading.
             var flare: SIMD3<Float> = .zero
         }
@@ -99,6 +108,9 @@ public struct WebProfileRequest: Decodable {
                 }
             }
             if let reading, reading < 1 { throw Failure(description: "Invalid negative reading.") }
+            if let density, !ApproximateNegativeScan.strengthRange.contains(density) {
+                throw Failure(description: "Invalid density strength.")
+            }
             if let neutral {
                 guard neutral.count == 3, neutral.allSatisfy({ $0.isFinite && $0 > 0 }) else {
                     throw Failure(description: "Invalid picked neutral.")
@@ -108,15 +120,21 @@ public struct WebProfileRequest: Decodable {
                 guard dense.count == 3 else { throw Failure(description: "Invalid scene measurement.") }
                 return SIMD3(dense[0], dense[1], dense[2])
             }
-            let frameSlopes = try slopes.map { slopes -> SIMD2<Float> in
-                guard slopes.count == 2, slopes.allSatisfy({ $0.isFinite && $0 > 0 }) else {
+            let frameAverage = try average.map { average -> SIMD3<Float> in
+                guard average.count == 3, average.allSatisfy(\.isFinite) else {
                     throw Failure(description: "Invalid scene measurement.")
                 }
-                return SIMD2(slopes[0], slopes[1])
+                return SIMD3(average[0], average[1], average[2])
+            }
+            let middle = try midtone.map { midtone -> SIMD3<Float> in
+                guard midtone.count == 3, midtone.allSatisfy(\.isFinite) else {
+                    throw Failure(description: "Invalid scene measurement.")
+                }
+                return SIMD3(midtone[0], midtone[1], midtone[2])
             }
             let edit = WebNativeEdit.Negative(
                 roll: roll, crosstalk: crosstalk, scanLight: scanLight, reading: reading,
-                camera: camera, balance: balance, neutral: neutral)
+                camera: camera, balance: balance, neutral: neutral, density: density)
             var flare = SIMD3<Float>.zero
             if let strayLight {
                 guard strayLight.count == 3, (0..<3).allSatisfy({
@@ -126,8 +144,8 @@ public struct WebProfileRequest: Decodable {
                 if edit.readsModel { flare = SIMD3(strayLight[0], strayLight[1], strayLight[2]) }
             }
             return Measured(edit: edit, border: SIMD3(border[0], border[1], border[2]),
-                            denseEnd: dense, slopes: edit.readsModel ? frameSlopes : nil,
-                            flare: flare)
+                            denseEnd: dense, average: edit.readsModel ? frameAverage : nil,
+                            midtone: edit.readsModel ? middle : nil, flare: flare)
         }
     }
 
@@ -215,7 +233,8 @@ public struct WebProfileRequest: Decodable {
             let measured = try negative.measured()
             let balance = measured.edit.balance(
                 stock: stock, border: measured.border, denseEnd: measured.denseEnd,
-                slopes: measured.slopes, source: negative.source, flare: measured.flare)
+                average: measured.average, midtone: measured.midtone, source: negative.source,
+                flare: measured.flare)
             // Exposure and development, which transport belongs to, already happened to the film.
             stock.layeredTransport = nil
             options = try NegativeScanPrint.Reading(

@@ -5,6 +5,8 @@ import 'package:fotufilm_flutter/model/catalogue.dart';
 import 'package:fotufilm_flutter/model/crop_geometry.dart';
 import 'package:fotufilm_flutter/model/edit.dart';
 import 'package:fotufilm_flutter/model/editor.dart';
+import 'package:fotufilm_flutter/model/negative_document.dart';
+import 'package:fotufilm_flutter/ui/workspace/film_base_sampler.dart';
 
 void expectPoints(List<Offset> actual, List<Offset> expected) {
   expect(actual.length, expected.length);
@@ -213,6 +215,154 @@ void main() {
       editor.crop.done();
       expect(editor.panel, Panel.film);
       expect(editor.crop.showing, isFalse);
+    });
+  });
+
+  group('a scanned negative\'s picture area', () {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    late EditorModel editor;
+    final quad = [const Offset(.1, .2), const Offset(.9, .1), const Offset(.8, .9), const Offset(.2, .8)];
+
+    setUp(() async {
+      editor = EditorModel(await Catalogue.load());
+      editor.documents.add(PhotoDocument(
+        path: '/roll/frame.dng',
+        handle: 1,
+        width: 6000,
+        height: 4000,
+        history: History({...defaultEdit(editor.catalogue), 'negative': newNegative('white', 2)}),
+      ));
+      editor.activeIndex = 0;
+    });
+
+    test('picking shows the whole frame, with the corners where an unpicked frame measures', () {
+      final scans = editor.negatives;
+      expect(scans.pickedArea, isNull);
+      editor.setZoom(2);
+      scans.toggleArea();
+      expect(scans.selectingArea, isTrue);
+      expect(editor.framing, isTrue);
+      expect(editor.zoomed, isFalse);
+      editor.setZoom(2);
+      expect(editor.zoomed, isFalse);
+      final options = editor.renderOptions(editor.active!);
+      expect(options['cropMode'], isTrue);
+      expect((options['edit'] as Json)['crop'], fullCrop());
+      expectPoints(scans.areaPoints, rectangleCrop(.1, .1, .9, .9));
+      // Nothing is kept until a corner moves or the tool is done with.
+      expect(editor.active!.history.past, isEmpty);
+      expect(scans.pickedArea, isNull);
+      scans.toggleArea();
+      expect(scans.selectingArea, isFalse);
+      expectPoints(scans.pickedArea!, rectangleCrop(.1, .1, .9, .9));
+      expect(editor.renderOptions(editor.active!), isEmpty);
+    });
+
+    test('a cropped frame starts on its crop, and Escape keeps nothing', () {
+      final scans = editor.negatives;
+      editor.crop.setCrop(rectangleCrop(.2, .1, .7, .8));
+      scans.toggleArea();
+      expectPoints(scans.areaPoints, rectangleCrop(.2, .1, .7, .8));
+      scans.leaveArea();
+      expect(scans.selectingArea, isFalse);
+      expect(scans.pickedArea, isNull);
+    });
+
+    test('each corner let go is one step, and a shape that folds is refused', () {
+      final scans = editor.negatives;
+      scans.toggleArea();
+      scans.setArea(quad);
+      expectPoints(scans.pickedArea!, quad);
+      expect(editor.edit['negative']['area'], cropJson(quad));
+      scans.setArea([quad[0], quad[2], quad[1], quad[3]]);
+      expectPoints(scans.pickedArea!, quad);
+      editor.undo();
+      expect(scans.pickedArea, isNull);
+      editor.redo();
+      scans.clearArea();
+      expect(scans.pickedArea, isNull);
+      expect(editor.edit['negative']['area'], isNull);
+    });
+
+    test('the area turns with the frame, and Reset Crop turns it back', () {
+      final scans = editor.negatives;
+      scans.setArea(quad);
+      editor.crop.rotateLeft();
+      expectPoints(scans.pickedArea!, rotatedCrop(quad));
+      editor.crop.flip();
+      expectPoints(scans.pickedArea!, flippedCrop(rotatedCrop(quad)));
+      editor.crop.rotateLeft();
+      expect(validCrop(scans.pickedArea!), isTrue);
+      editor.crop.reset();
+      expect(editor.edit['rotation'], 0);
+      expect(editor.edit['flip'], isFalse);
+      expectPoints(scans.pickedArea!, quad);
+    });
+
+    test('the crop tool and the samplers take the photograph from it', () {
+      final scans = editor.negatives;
+      scans.toggleArea();
+      editor.toggleTool(Panel.crop);
+      expect(scans.selectingArea, isFalse);
+      editor.crop.leave();
+      scans.toggleArea();
+      scans.setSampling(true);
+      expect(scans.selectingArea, isFalse);
+      expect(scans.picking, 'border');
+    });
+
+    test('clear film is picked with a click or a drawn rectangle, one at a time', () {
+      final scans = editor.negatives;
+      scans.setPicking('borderArea');
+      expect(scans.pickingArea, isTrue);
+      expect(scans.sampling, isTrue);
+      scans.setSampling(true);
+      expect(scans.picking, 'border');
+      expect(scans.pickingArea, isFalse);
+      scans.setPicking('borderArea');
+      scans.toggleArea();
+      expect(scans.picking, isNull);
+      expect(scans.selectingArea, isTrue);
+      scans.setPicking('borderArea');
+      expect(scans.selectingArea, isFalse);
+      // A drag is the rectangle between its ends as shares of the picture, held inside it;
+      // one too small to be meant is none.
+      const size = Size(400, 200);
+      expect(drawnArea(const Offset(300, 150), const Offset(100, 50), size),
+          const Rect.fromLTRB(.25, .25, .75, .75));
+      expect(drawnArea(const Offset(-40, 20), const Offset(100, 500), size),
+          const Rect.fromLTRB(0, .1, .25, 1));
+      expect(drawnArea(const Offset(100, 50), const Offset(102, 150), size), isNull);
+      expect(drawnArea(const Offset(100, 50), const Offset(300, 150), Size.zero), isNull);
+    });
+
+    test('density strength moves as one step and keeps the scan\'s own as none', () {
+      final scans = editor.negatives;
+      for (final v in [1.1, 1.2, 1.25]) {
+        scans.setDensity(v);
+      }
+      editor.endEdit();
+      expect(editor.edit['negative']['density'], 1.25);
+      expect(editor.active!.history.past.length, 1);
+      scans.setDensity(1);
+      editor.endEdit();
+      expect(editor.edit['negative']['density'], isNull);
+      editor.undo();
+      expect(editor.edit['negative']['density'], 1.25);
+    });
+
+    test('a photograph that is no negative has no area to pick', () {
+      editor.documents[0] = PhotoDocument(
+        path: '/photo.png',
+        handle: 2,
+        width: 6000,
+        height: 4000,
+        history: History(defaultEdit(editor.catalogue)),
+      );
+      editor.negatives.toggleArea();
+      expect(editor.negatives.selectingArea, isFalse);
+      editor.crop.rotateLeft();
+      expect(editor.edit.containsKey('negative') && editor.edit['negative'] != null, isFalse);
     });
   });
 }
