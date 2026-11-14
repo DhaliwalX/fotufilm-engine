@@ -2,14 +2,14 @@
 
 Fotufilm is an open-source film simulation engine for photos and video. It models
 how light exposes photographic film, how the image develops into dye or silver,
-and how that film becomes a print, scan, or viewed transparency. Colour, contrast,
+and how that film becomes a print, scan, or viewed transparency. Color, contrast,
 grain, and halation follow the selected film's properties and the process used
 to render it.
 
-This repository includes the shared engine, a command-line tool, a Mac app,
-plugins for DaVinci Resolve and Final Cut Pro, and a browser photo and video editor.
+This repository includes the shared engine, command-line tool, cross-platform desktop and mobile editor,
+plug-ins for DaVinci Resolve and Final Cut Pro, and browser photo and video editor.
 
-[Download for Mac](https://github.com/DhaliwalX/fotufilm-engine/releases/latest/download/Fotufilm-macOS.pkg) · [User guide](docs/documentation.html) · [![Download on the App Store](docs/assets/download-on-the-app-store.svg)](https://apps.apple.com/app/id6792911908)
+[Download for Mac](https://github.com/DhaliwalX/fotufilm-engine/releases/latest/download/Fotufilm-macOS.pkg) · [How to use](docs/how-to-use.html) · [Documentation](docs/documentation.html) · [![Download on the App Store](docs/assets/download-on-the-app-store.svg)](https://apps.apple.com/app/id6792911908)
 
 ## How the film model works
 
@@ -349,12 +349,13 @@ the approximate conversion’s limits.
 
 ## More information
 
-- [User guide](docs/documentation.html)
+- [How to use](docs/how-to-use.html)
+- [Documentation & control reference](docs/documentation.html)
 - [Film grain](docs/film-grain.md)
 - [Renderer integration, buffer storage, and grain assets](docs/rendering-integration.md)
-- [Build support](docs/support.html)
+- [Build & web support](docs/support.html)
 - [Licensing](LICENSING.md)
 - [Third-party notices](THIRD_PARTY_NOTICES.md)
 
-The engine, Mac app, and plugins use [Apache-2.0](LICENSE). Film profiles and the
-editor glyphs have [separate licences](LICENSING.md).
+The engine, desktop app, and plug-ins use [Apache-2.0](LICENSE). Film profiles and the
+editor glyphs have [separate licenses](LICENSING.md).
