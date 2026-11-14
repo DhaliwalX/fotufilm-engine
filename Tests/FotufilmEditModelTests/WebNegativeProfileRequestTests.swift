@@ -78,17 +78,33 @@ final class WebNegativeProfileRequestTests: XCTestCase {
                 }
             }
             scan.planes[0][0] = 0
-            // The kernels read the scan as `ApproximateNegativeScan.density(of:)` does, and print
-            // what it cannot place black.
+            // The kernels read the scan as `ApproximateNegativeScan.density(of:)` does. What it
+            // cannot place for being too dark to be film is the holder, which passes no light and
+            // prints as the densest film does (`ApproximateNegativeScan.isOpaque`); the bare
+            // light past the film prints black.
             let positive = try FotufilmEngine(stock: stock, options: options)
                 .printPositiveChecked(negativeDensity: scan)
             let converted = try native.calibration.convert(scan)
+            var read = converted.density
+            let sample = { (i: Int) in SIMD3((0..<3).map { scan.planes[$0][i] }) }
+            var holder = 0
+            for i in 0..<scan.pixelCount where converted.invalid[i]
+                && native.calibration.isOpaque(sample(i)) {
+                holder += 1
+                for c in 0..<3 {
+                    read.planes[c][i] = min(
+                        native.calibration.baseDensity[c] + ApproximateNegativeScan.opaqueDensity,
+                        NegativeInterchange.range.upperBound)
+                }
+            }
+            XCTAssertEqual(holder, 1)
             var densities = options
             densities.scanReading = nil
             let reference = try FotufilmEngine(stock: stock, options: densities)
-                .printPositiveChecked(negativeDensity: converted.density)
+                .printPositiveChecked(negativeDensity: read)
             for i in 0..<scan.pixelCount { for c in 0..<3 {
-                XCTAssertEqual(positive.planes[c][i], converted.invalid[i] ? 0 : reference.planes[c][i],
+                let bare = converted.invalid[i] && !native.calibration.isOpaque(sample(i))
+                XCTAssertEqual(positive.planes[c][i], bare ? 0 : reference.planes[c][i],
                                accuracy: 2e-4, "\(id) pixel \(i) channel \(c)")
             } }
             if let path = ProcessInfo.processInfo.environment["FOTUFILM_SCAN_REFERENCE_DIRECTORY"] {
