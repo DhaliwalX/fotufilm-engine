@@ -31,7 +31,9 @@ import {
   denseEnd,
   channelEnds,
   midtone,
+  average,
   tonalSlopes,
+  rollClearFilm,
   frameLight,
   holder,
   withoutHolder,
@@ -412,7 +414,13 @@ export class RenderSession {
     // The current reading takes the film's base where the scan shows its bare light past the
     // film (ApproximateNegativeScan.estimatedFilmBase), which the import read.
     const estimate = (readsModel(edit.negative) && image.negative?.base) || kept.border
-    const border = edit.negative.border ?? estimate
+    // The frame's own clear film, and the one it is read against: on a roll, its own in the
+    // roll's colour of clear film (WebNativeEdit.Negative.clearFilm).
+    const own = edit.negative.border ?? estimate
+    const border =
+      edit.negative.border || !readsModel(edit.negative)
+        ? own
+        : rollClearFilm(own, edit.negative.roll)
     const framingOf = JSON.stringify([
       border,
       edit.rotation,
@@ -470,10 +478,11 @@ export class RenderSession {
         // The first reading keeps its own densest end, and times its print on that alone.
         dense: (model ? denseEnd : channelEnds)(clear, pixels, preview.width, preview.height),
         midtone: midtone(clear, pixels, preview.width, preview.height),
+        average: average(clear, pixels, preview.width, preview.height),
         slopes: tonalSlopes(clear, pixels, preview.width, preview.height),
       })
     }
-    return { border, flare, holder: shown?.limit ?? null, ...framed.measures.get(measured) }
+    return { border, clear: own, flare, holder: shown?.limit ?? null, ...framed.measures.get(measured) }
   }
   async capturePack(pack, stock, kelvin, report) {
     if (!pack || !Number.isFinite(kelvin) || kelvin <= 0) return pack
@@ -637,10 +646,12 @@ export class RenderSession {
         const negativeMeasure = reading
           ? {
               border: reading.border,
+              clear: reading.clear,
               flare: reading.flare,
               denseEnd: reading.dense,
               slopes: reading.slopes,
               midtone: reading.midtone,
+              average: reading.average,
             }
           : undefined
         // What a request says of the reading: the edit's, what the frame measures, and what the

@@ -131,6 +131,52 @@ export function midtone(border, pixels, width, height) {
   return [0, 1, 2].map((c) => densities.reduce((sum, density) => sum + density[c], 0) / densities.length);
 }
 
+// The green density over the clear film a pixel has to count toward a frame's average
+// (ApproximateNegativeScan.averageRange).
+const AVERAGE_RANGE = [0.1, 1.5];
+
+// The framed picture's average in the scan channels' densities over `border`: over the central
+// 80%'s pixels whose green lies in AVERAGE_RANGE, the median green, and red and blue that far
+// from it as the medians of their differences from green. It stands for the frame's neutral, and
+// over a roll's frames for the roll's. Null where fewer than one pixel in 128 counts. Mirrors
+// ApproximateNegativeScan.average(border:preview:).
+export function average(border, pixels, width, height) {
+  const densities = framedDensities(border, pixels, width, height);
+  if (!densities) return null;
+  const counted = densities.filter(
+    (density) => density[1] >= AVERAGE_RANGE[0] && density[1] <= AVERAGE_RANGE[1],
+  );
+  if (counted.length < Math.max(16, Math.floor(densities.length / 128))) return null;
+  const median = (values) => values.sort((a, b) => a - b)[Math.floor(values.length / 2)];
+  const green = median(counted.map((density) => density[1]));
+  return [
+    green + median(counted.map((density) => density[0] - density[1])),
+    green,
+    green + median(counted.map((density) => density[2] - density[1])),
+  ];
+}
+
+// How far a frame's own clear film may be off its roll's colour, in density, and still take it
+// (ApproximateNegativeScan.RollBalance.clearReach).
+const CLEAR_REACH = 0.15;
+
+// A frame's clear film on its roll: `own`, linear scan RGB as estimated from its scan, at its own
+// green with red and blue in the roll's proportion to it (`roll.clear`). `own` as it is without a
+// roll, for one kept without the colour, or one further from it than CLEAR_REACH. Mirrors
+// ApproximateNegativeScan.RollBalance.clearFilm.
+export function rollClearFilm(own, roll) {
+  const clear = roll?.clear;
+  if (
+    !Array.isArray(clear) ||
+    clear.length !== 2 ||
+    !own.every((v) => Number.isFinite(v) && v > 0) ||
+    Math.abs(Math.log10(own[0] / own[1] / clear[0])) > CLEAR_REACH ||
+    Math.abs(Math.log10(own[2] / own[1] / clear[1])) > CLEAR_REACH
+  )
+    return own;
+  return [clear[0] * own[1], own[1], clear[1] * own[1]];
+}
+
 // A scan's stray light: what the lens and the room add to every sample alike, which a reading
 // takes off before a density is read. Mirrors Sources/FotufilmCore/NegativeScanFlare.swift and
 // WebNativeEdit.Negative.strayLight (Sources/FotufilmEditModel/WebNativeEdit+NegativeReading.swift).
@@ -331,9 +377,12 @@ export function netOfFlare(pixels, flare) {
 
 // How red and blue rise per unit of green across the framed picture's tonal steps, in the scan
 // channels' densities over `border`: the medians over pairs of pixels a little apart in the
-// central 80% whose green differs by a tenth of a density or more. A roll's frames give it how
-// steep its records read against each other. Null for a frame with too few steps to tell.
+// central 80% whose green differs by a tenth of a density or more, both three tenths or more over
+// the clear film: under that the film is on its toe, where a record rises by less than its
+// contrast. A roll's frames give it how steep its records read against each other. Null for a
+// frame with too few steps to tell.
 // Mirrors ApproximateNegativeScan.tonalSlopes in Sources/FotufilmCore/NegativeScanContrast.swift.
+const TONAL_FLOOR = 0.3;
 export function tonalSlopes(border, pixels, width, height) {
   if (width < 2 || height < 2 || !border.every((v) => Number.isFinite(v) && v > 0)) return null;
   const mx = Math.floor(width / 10),
@@ -353,7 +402,8 @@ export function tonalSlopes(border, pixels, width, height) {
     blue = [];
   const step = (from, to) => {
     const green = density[1][to] - density[1][from];
-    if (!(Math.abs(green) >= 0.1)) return;
+    if (!(Math.abs(green) >= 0.1) || !(Math.min(density[1][to], density[1][from]) >= TONAL_FLOOR))
+      return;
     const rises = [0, 2].map((c) => (density[c][to] - density[c][from]) / green);
     if (!rises.every(Number.isFinite)) return;
     red.push(rises[0]);

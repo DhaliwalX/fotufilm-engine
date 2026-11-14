@@ -313,6 +313,34 @@ final class WebNegativeProfileRequestTests: XCTestCase {
         }
     }
 
+    /// The frame's average balances the current reading, on the frame or beside its roll's,
+    /// and never the first reading.
+    func testARequestsAverageBalancesTheCurrentReading() throws {
+        let stock = try printed("gold200")
+        let border = SIMD3<Float>(0.4, 0.6, 0.2), dense = SIMD3<Float>(1.6, 1.5, 1.4)
+        let average = SIMD3<Float>(0.9, 0.7, 0.5)
+        let edit = WebNativeEdit.Negative(reading: 2)
+        let balanced = edit.balance(stock: stock, border: border, denseEnd: dense, average: average)
+        XCTAssertNotEqual(balanced.exposure,
+                          edit.balance(stock: stock, border: border, denseEnd: dense).exposure)
+
+        let (_, options) = try JSONDecoder().decode(WebProfileRequest.self, from: profile(
+            denseEnd: [1.6, 1.5, 1.4], reading: ["reading": 2, "average": [0.9, 0.7, 0.5]]))
+            .configured()
+        XCTAssertEqual(options.scanReading, try NegativeScanPrint.Reading(
+            stock: stock, border: border, balance: balanced).calibration)
+
+        let (_, first) = try JSONDecoder().decode(WebProfileRequest.self, from: profile(
+            denseEnd: [1.6, 1.5, 1.4], reading: ["average": [0.9, 0.7, 0.5]])).configured()
+        let (_, plain) = try JSONDecoder().decode(
+            WebProfileRequest.self, from: profile(denseEnd: [1.6, 1.5, 1.4])).configured()
+        XCTAssertEqual(first.scanReading, plain.scanReading)
+        for invalid: [Double] in [[0.9, 0.7], [0.9, 0.7, 0.5, 0.1]] {
+            XCTAssertThrowsError(try WebRenderRequest.prepare(
+                profile(reading: ["reading": 2, "average": invalid])), "\(invalid)")
+        }
+    }
+
     func testRejectsAReadingTheEditCouldNotKeep() throws {
         let invalid: [[String: Any]] = [
             ["reading": 0], ["reading": 2, "neutral": [0.05, 0.06]],

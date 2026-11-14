@@ -1,4 +1,5 @@
 import { NEGATIVE } from "./engine-constants.js";
+import { rollClearFilm } from "./negative-reading.js";
 
 // A scanned negative opened as a document. The scan is the film after development, so its edit
 // is any photograph's with `negative` set: the film is the one the scan is read as, the print is
@@ -87,12 +88,16 @@ const readable = (dense) =>
 const CONTRAST_FRAMES = 6;
 
 // What a roll's frames share (ApproximateNegativeScan.RollBalance(measures:)), from what each
-// frame measures: its densest end (`denseEnd`) and the rises across its tonal steps (`slopes`).
+// frame measures: its densest end (`denseEnd`), the rises across its tonal steps (`slopes`), its
+// average (`average`), its own clear film (`clear`) and the clear film those are over (`border`).
 // Over the frames whose densest ends can be read, `colour` is the median of each end's red and
 // blue density per unit of its green and `level` the median green; `slopes` is the median rise
-// over the frames that have one, left out with fewer than six. Frames shot on one roll under one
-// light share these; a frame filled by one colour moves a median little. Null when fewer than two
-// frames' densest ends can be read.
+// over the frames that have one, left out with fewer than six. `clear` is the clear film's red
+// and blue over its green, the median over the frames' own, and `average` the roll's neutral:
+// the median green of the frames' averages, each taken over the clear film the roll gives its
+// frame, with red and blue as far from it as the medians of theirs; both left out with fewer than
+// two frames. Frames shot on one roll share these; a frame filled by one colour moves a median
+// little. Null when fewer than two frames' densest ends can be read.
 export function rollBalance(measures) {
   const frames = measures.map((measure) => measure?.denseEnd).filter(readable);
   if (frames.length < 2) return null;
@@ -109,6 +114,28 @@ export function rollBalance(measures) {
         slopes.length === 2 &&
         slopes.every((v) => Number.isFinite(v) && v > 0),
     );
+  const light = (values) =>
+    Array.isArray(values) && values.length === 3 && values.every((v) => Number.isFinite(v) && v > 0);
+  const films = measures.map((measure) => measure?.clear).filter(light);
+  const clear =
+    films.length >= 2
+      ? [0, 2].map((c) => 10 ** median(films.map((film) => Math.log10(film[c] / film[1]))))
+      : null;
+  const averages = measures
+    .filter(
+      (measure) =>
+        Array.isArray(measure?.average) &&
+        measure.average.length === 3 &&
+        measure.average.every(Number.isFinite) &&
+        measure.average[1] > READABLE,
+    )
+    .map(({ average, clear: own, border }) => {
+      const over = border ?? own;
+      if (!light(own) || !light(over)) return average;
+      const film = rollClearFilm(own, { clear });
+      return average.map((v, c) => v + Math.log10(film[c] / over[c]));
+    });
+  const green = averages.length >= 2 ? median(averages.map((tone) => tone[1])) : null;
   return {
     colour: [0, 2].map((c) => median(frames.map((dense) => dense[c] / dense[1]))),
     frames: frames.length,
@@ -116,6 +143,16 @@ export function rollBalance(measures) {
     ...(stepped.length >= CONTRAST_FRAMES
       ? { slopes: [0, 1].map((c) => median(stepped.map((slopes) => slopes[c]))) }
       : {}),
+    ...(green !== null
+      ? {
+          average: [
+            green + median(averages.map((tone) => tone[0] - tone[1])),
+            green,
+            green + median(averages.map((tone) => tone[2] - tone[1])),
+          ],
+        }
+      : {}),
+    ...(clear ? { clear } : {}),
   };
 }
 
@@ -131,14 +168,14 @@ export function rolledDenseEnd(dense, roll) {
 export const readsModel = (negative) => (negative?.reading ?? 1) >= 2;
 
 // What a request says of a negative's reading (WebProfileRequest.Negative), from its edit, what
-// its framing measures (`border`, its own densest end `dense`, its mid-tones `midtone`, the stray
+// its framing measures (`border`, its own densest end `dense`, its `average`, its mid-tones `midtone`, the stray
 // light `flare` the reading takes off, which they are net of, and where the scan's `holder`
 // begins, a density over the clear film past which the scan prints black) and what the scan's file says of its camera
 // (`source`). The first reading takes the frame's densest end on its roll's colour; the current
 // one takes the frame's own and the roll beside it.
 export function readingRequest(
   negative,
-  { border, dense, slopes = null, midtone = null, flare = null, holder = null },
+  { border, dense, average = null, midtone = null, flare = null, holder = null },
   source = null,
 ) {
   if (!readsModel(negative))
@@ -154,10 +191,8 @@ export function readingRequest(
   return {
     border,
     denseEnd: dense,
-    ...(Array.isArray(slopes) &&
-    slopes.length === 2 &&
-    slopes.every((v) => Number.isFinite(v) && v > 0)
-      ? { slopes }
+    ...(Array.isArray(average) && average.length === 3 && average.every(Number.isFinite)
+      ? { average }
       : {}),
     ...(Array.isArray(midtone) && midtone.length === 3 && midtone.every(Number.isFinite)
       ? { midtone }
@@ -220,7 +255,13 @@ export function parseNegative(value) {
         Number.isInteger(roll.frames) &&
         roll.frames >= 2 &&
         (roll.level == null || (Number.isFinite(roll.level) && roll.level > 0)) &&
-        (roll.slopes == null || positives(roll.slopes, 2))
+        (roll.slopes == null || positives(roll.slopes, 2)) &&
+        (roll.clear == null || positives(roll.clear, 2)) &&
+        (roll.average == null ||
+          (Array.isArray(roll.average) &&
+            roll.average.length === 3 &&
+            roll.average.every(Number.isFinite) &&
+            roll.average[1] > 0))
       )) ||
     (reading !== null && !(Number.isInteger(reading) && reading >= 1)) ||
     (camera !== null && (typeof camera !== "string" || !camera)) ||
@@ -237,6 +278,8 @@ export function parseNegative(value) {
       frames: roll.frames,
       ...(roll.level != null ? { level: roll.level } : {}),
       ...(roll.slopes != null ? { slopes: [...roll.slopes] } : {}),
+      ...(roll.average != null ? { average: [...roll.average] } : {}),
+      ...(roll.clear != null ? { clear: [...roll.clear] } : {}),
     },
     crosstalk,
     scanLight,
