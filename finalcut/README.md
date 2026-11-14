@@ -132,7 +132,7 @@ Look for `com.fotufilm.fxplug`. The plugin and its Motion template must both be
 installed. The template controls which parameters appear in Final Cut's inspector;
 `tools/validate-fcp-template.py` checks its structure during the build.
 
-See [Build support](../docs/support.html), the [Resolve guide](../resolve/README.md),
+See [How to use](../docs/how-to-use.html), [Build support](../docs/support.html), the [Resolve guide](../resolve/README.md),
 and [Licensing](../LICENSING.md) for more information.
 
 The **Halation Model** menu selects **Legacy** (the default for older projects) or
