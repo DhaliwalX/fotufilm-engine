@@ -59,7 +59,7 @@ const positive = (pixels, i) =>
 
 // A stand-in for the film border until one is sampled: the median of the percent of the scan
 // that passes the most light across all three channels. Null when no pixel passes light.
-export function estimatedBorder(pixels) {
+export function estimatedBorder(pixels, share = 100) {
   const film = [];
   for (let i = 0; i < pixels.length; i += 4)
     if (positive(pixels, i))
@@ -69,7 +69,7 @@ export function estimatedBorder(pixels) {
       });
   if (!film.length) return null;
   film.sort((a, b) => b.transmission - a.transmission);
-  const brightest = film.slice(0, Math.max(1, Math.floor(film.length / 100)));
+  const brightest = film.slice(0, Math.max(1, Math.floor(film.length / share)));
   return [0, 1, 2].map((c) => {
     const values = brightest.map(({ i }) => pixels[i + c]).sort((a, b) => a - b);
     return values[Math.floor(values.length / 2)];
@@ -508,6 +508,29 @@ export function plainReading(border, raw, crosstalk = 0, scanLight = "white") {
 // clear film to read the scan against, or something neutral in the picture to balance it on.
 export const filmBase = (source, point) => scanPatch(source, point, INVALID_BORDER);
 export const pickedNeutral = (source, point) => scanPatch(source, point, INVALID_NEUTRAL);
+
+// The clearest film in a rectangle drawn on the framed scan, `area` its left, top, right and
+// bottom as shares of the frame: the median of the tenth of it that passes the most light,
+// which leaves out the picture, edge print and dust an area over a rebate takes in. Mirrors
+// ApproximateNegativeScan.clearestFilm and the host's negativeSampleFilmBase.
+export function filmBaseArea(source, area) {
+  const { width, height } = source;
+  if (
+    !Array.isArray(area) ||
+    area.length !== 4 ||
+    !area.every((v) => Number.isFinite(v) && v >= 0 && v <= 1) ||
+    !(area[0] < area[2] && area[1] < area[3])
+  )
+    throw new Error(INVALID_BORDER);
+  const x0 = Math.min(width - 1, Math.floor(area[0] * width)),
+    y0 = Math.min(height - 1, Math.floor(area[1] * height));
+  const x1 = Math.min(width, Math.max(x0 + 1, Math.ceil(area[2] * width))),
+    y1 = Math.min(height, Math.max(y0 + 1, Math.ceil(area[3] * height)));
+  if (x1 - x0 < 2 || y1 - y0 < 2) throw new Error(INVALID_BORDER);
+  const clear = estimatedBorder(decodeRGBA(source.read(x0, y0, x1 - x0, y1 - y0)), 10);
+  if (!clear) throw new Error(INVALID_BORDER);
+  return clear;
+}
 
 function scanPatch(source, point, unreadable) {
   const { width, height } = source;

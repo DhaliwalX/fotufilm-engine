@@ -344,6 +344,26 @@ final class NegativeScanBalanceTests: XCTestCase {
                                                      preview: ImageBuffer(width: 1, height: 1)))
     }
 
+    /// The clearest film of an area drawn for it is its clearest tenth: the rebate where the
+    /// area takes in picture and a little dust with it, and not the few brightest pixels.
+    func testTheClearestFilmOfADrawnAreaIsItsClearestTenth() throws {
+        let border = SIMD3<Float>(0.8, 0.5, 0.25)
+        // A fifth of the area is rebate, the rest picture; one pixel in two hundred of the
+        // rebate is a pinhole that passes a little more.
+        var image = frame(border: border, [
+            (SIMD3(0.6, 0.7, 0.8), 0..<100, 0..<100), (SIMD3(0.02, 0.02, 0.02), 0..<100, 0..<20),
+        ])
+        for i in stride(from: 0, to: 2000, by: 200) {
+            for c in 0..<3 { image.planes[c][i] = border[c] * 1.3 }
+        }
+        let clear = try XCTUnwrap(ApproximateNegativeScan.clearestFilm(preview: image))
+        for c in 0..<3 { XCTAssertEqual(clear[c], border[c] * pow(10, -0.02), accuracy: 1e-5) }
+        // A whole scan's estimate, its clearest hundredth, reads the same film here.
+        let estimated = try XCTUnwrap(ApproximateNegativeScan.estimatedBorder(preview: image))
+        XCTAssertEqual(estimated.y, border.y * pow(10, -0.02), accuracy: 1e-5)
+        XCTAssertNil(ApproximateNegativeScan.clearestFilm(preview: ImageBuffer(width: 4, height: 4)))
+    }
+
     /// A picture area picked on the scan is measured whole: set in a frame a quarter larger,
     /// the central 80% the measures read is all of it, where a frame nobody picked loses a
     /// tenth at every edge.

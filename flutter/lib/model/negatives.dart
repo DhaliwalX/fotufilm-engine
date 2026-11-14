@@ -1,7 +1,7 @@
 // Scanned negatives in the editor: importing scans and trichromatic exposures, a negative's
 // reading, clear-film sampling, its roll and View › Show Negative. The rules are in
 // negative_document.dart; the host's side is Sources/FotufilmHost/HostService+NegativeScan.swift.
-import 'dart:ui' show Offset;
+import 'dart:ui' show Offset, Rect;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 
@@ -212,8 +212,10 @@ class NegativeScans {
 
   // ── Clear film ──────────────────────────────────────────────────────────────────────────
 
-  /// What a click on the photograph picks for the reading: the clear film it is measured
-  /// against ('border'), something neutral its frame is balanced on ('neutral'), or nothing.
+  /// What the pointer picks on the photograph for the reading: with a click, the clear film it
+  /// is measured against ('border') or something neutral its frame is balanced on ('neutral');
+  /// with a rectangle drawn over some of it, the clearest film in the rectangle
+  /// ('borderArea'); or nothing.
   String? picking;
 
   /// Whether a click on the photograph picks something for the reading.
@@ -234,12 +236,31 @@ class NegativeScans {
   /// Pick Clear Film.
   void setSampling(bool on) => setPicking(on ? 'border' : null);
 
+  /// Whether the clear film is picked by drawing a rectangle over it (Pick Clear Film Area).
+  bool get pickingArea => picking == 'borderArea';
+
   /// Samples the scan where `point` (0–1 across the shown picture) falls, and keeps it with the
   /// reading as what is being picked: the clear film, or the frame's neutral.
   Future<void> sample(Offset point) async {
+    if (pickingArea) return;
+    if (point.dx < 0 || point.dx > 1 || point.dy < 0 || point.dy > 1) return;
+    await _sample({'point': [point.dx, point.dy]});
+  }
+
+  /// Pick Clear Film Area: the clearest film in `area`, a rectangle drawn on the shown picture
+  /// (0–1 across it), kept as the clear film the scan is measured against. A rectangle over a
+  /// rebate or the gap between frames need not keep the picture, edge print or dust out; a
+  /// sprocket hole or the bare light past the film is clearer than film and must stay outside.
+  Future<void> sampleArea(Rect area) async {
+    if (!pickingArea || area.width <= 0 || area.height <= 0) return;
+    final within = area.intersect(const Rect.fromLTWH(0, 0, 1, 1));
+    if (within.width <= 0 || within.height <= 0) return;
+    await _sample({'area': [within.left, within.top, within.right, within.bottom]});
+  }
+
+  Future<void> _sample(Json where) async {
     final doc = _doc, engine = _engine, what = picking;
     if (doc == null || engine == null || what == null) return;
-    if (point.dx < 0 || point.dx > 1 || point.dy < 0 || point.dy > 1) return;
     final edit = doc.edit;
     final preview = doc.preview;
     final edge = preview != null
@@ -260,7 +281,7 @@ class NegativeScans {
     try {
       final answer = await engine.call(
           what == 'neutral' ? 'negativeSampleNeutral' : 'negativeSampleFilmBase',
-          {'render': request, 'point': [point.dx, point.dy]});
+          {'render': request, ...where});
       final sampled = [for (final v in answer.value as List) (v as num).toDouble()];
       // The photograph or its edit moved on while the engine looked.
       if (picking != what || editor.active != doc || !identical(doc.edit, edit)) return;
@@ -268,7 +289,7 @@ class NegativeScans {
       // A neutral picked on a frame is the frame's own: a frame balanced on its roll is
       // balanced on itself from here, still with its roll's contrast.
       read({
-        what: sampled,
+        what == 'borderArea' ? 'border' : what: sampled,
         if (what == 'neutral' && balanceOf(negative) == 'roll') 'balance': 'frame',
       });
     } catch (e) {

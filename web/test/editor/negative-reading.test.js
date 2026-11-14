@@ -12,6 +12,7 @@ import {
   midtone,
   estimatedBorder,
   filmBase,
+  filmBaseArea,
   frameLight,
   holder,
   withoutHolder,
@@ -154,6 +155,21 @@ test("a frame's average is the middle of its tones between the toe and its highl
   });
   assert.equal(average(border, night.read(0, 0, 100, 100), 100, 100), null);
   assert.equal(average(border, new Float32Array(4), 1, 1), null);
+});
+
+test("the clearest film of a drawn rectangle is its clearest tenth", () => {
+  // Rebate over the top fifth, picture under it, and a pinhole in the rebate.
+  const strip = scan(100, 100, (x, y) => {
+    if (x === 50 && y === 5) return border.map((v) => v * 1.3);
+    const density = y < 20 ? 0.02 : 0.7;
+    return border.map((v) => v * 10 ** -density);
+  });
+  const clear = filmBaseArea(strip, [0.2, 0.02, 0.8, 0.5]);
+  clear.forEach((v, c) => assert.ok(Math.abs(v - border[c] * 10 ** -0.02) < 1e-5, String(v)));
+  // Inside the picture it is the thinnest of the picture, which is no clear film.
+  assert.ok(filmBaseArea(strip, [0.2, 0.4, 0.8, 0.9])[1] < border[1] * 0.5);
+  for (const bad of [[0.5, 0.2, 0.5, 0.6], [0.2, 0.6, 0.8, 0.3], [0.2, 0.1, 1.4, 0.3], [0.2, 0.1, 0.8], null])
+    assert.throws(() => filmBaseArea(strip, bad));
 });
 
 test("a picked picture area is measured whole", () => {

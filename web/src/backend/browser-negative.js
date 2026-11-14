@@ -2,7 +2,7 @@ import { defaultEdit } from "../editor-state.js";
 import { loadFilmProfile } from "../film-profile.js";
 import { decodeRGBA } from "../engine.js";
 import { NEGATIVE } from "../engine-constants.js";
-import { areaPreview, filmBase, pickedNeutral } from "../negative-reading.js";
+import { areaPreview, filmBase, filmBaseArea, pickedNeutral } from "../negative-reading.js";
 import { rawSource, scaledLinearImage } from "../raw-source.js";
 import { loadStockIndex } from "../stock-index.js";
 import { importMedia } from "./browser-import.js";
@@ -48,6 +48,8 @@ async function readCamera(image) {
 export const negativeScans = Object.freeze({
   // Clear film where `point` falls on a shown render: linear Rec. 2020 scan RGB.
   sampleFilmBase: async (result, point) => filmBase(result.scanSource, point),
+  // The clearest film in a rectangle drawn on it.
+  sampleFilmBaseArea: async (result, area) => filmBaseArea(result.scanSource, area),
   // Something neutral in the picture there, read the same way.
   sampleNeutral: async (result, point) => pickedNeutral(result.scanSource, point),
   // Exposures under red, green and blue light merged into scans, each offered as a download.

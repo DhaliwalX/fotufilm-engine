@@ -117,7 +117,8 @@ extension HostService {
             switch method {
             case "negativeSampleFilmBase":
                 return try answer(value: sampleScan(parameters, pointing: Self.pointAtFilmBase,
-                                                    unreadable: HostNegativeScan.invalidBorder))
+                                                    unreadable: HostNegativeScan.invalidBorder,
+                                                    areas: true))
             case "negativeSampleNeutral":
                 return try answer(value: sampleScan(parameters, pointing: Self.pointAtNeutral,
                                                     unreadable: Self.pointAtNeutral))
@@ -337,18 +338,38 @@ extension HostService {
     /// the median over a patch a fortieth of the picture's long edge across. Clear film to read
     /// the scan against (`border`), or something neutral in the picture to balance it on
     /// (`neutral`). Fails as `pointing` for a call that points nowhere, and as `unreadable`
-    /// where the patch shows too little film.
+    /// where the patch shows too little film. With `areas`, a call may give an `area` in place
+    /// of the point, a rectangle drawn on the framed scan as its left, top, right and bottom:
+    /// the sample is then the clearest film in it (`ApproximateNegativeScan.clearestFilm`).
     private func sampleScan(_ parameters: [String: Any], pointing: HostEngine.Failure,
-                            unreadable: HostEngine.Failure) throws -> [Double] {
-        guard var render = parameters["render"] as? [String: Any],
-              let point = parameters["point"] as? [Double], point.count == 2,
-              (0...1).contains(point[0]), (0...1).contains(point[1]) else {
+                            unreadable: HostEngine.Failure, areas: Bool = false) throws -> [Double] {
+        let area = areas ? parameters["area"] as? [Double] : nil
+        let point = parameters["point"] as? [Double] ?? (area == nil ? [] : [0, 0])
+        guard var render = parameters["render"] as? [String: Any], point.count == 2,
+              (0...1).contains(point[0]), (0...1).contains(point[1]),
+              area.map({ $0.count == 4 && $0.allSatisfy((0...1).contains)
+                  && $0[0] < $0[2] && $0[1] < $0[3] }) ?? true else {
             throw pointing
         }
         render["viewport"] = nil
         let prepared = try prepare(JSONSerialization.data(withJSONObject: render), readsNegative: false)
         let scene = try sceneFor(prepared.image, geometry: prepared.geometry, sizes: prepared.sizes)
         let (width, height) = prepared.sizes.output
+        if let area {
+            let x0 = min(width - 1, Int(area[0] * Double(width)))
+            let y0 = min(height - 1, Int(area[1] * Double(height)))
+            let x1 = min(width, max(x0 + 1, Int((area[2] * Double(width)).rounded(.up))))
+            let y1 = min(height, max(y0 + 1, Int((area[3] * Double(height)).rounded(.up))))
+            guard x1 - x0 >= 2, y1 - y0 >= 2 else { throw unreadable }
+            var drawn = ImageBuffer(width: x1 - x0, height: y1 - y0)
+            for y in y0..<y1 { for x in x0..<x1 { for c in 0..<3 {
+                drawn.planes[c][(y - y0) * drawn.width + x - x0] = scene[(y * width + x) * 4 + c]
+            } } }
+            guard let clear = ApproximateNegativeScan.clearestFilm(preview: drawn) else {
+                throw unreadable
+            }
+            return (0..<3).map { Double(clear[$0]) }
+        }
         let radius = max(2, max(width, height) / 80)
         let x = Int(point[0] * Double(width)), y = Int(point[1] * Double(height))
         guard let sampled = try? HostNegativeScan.border(

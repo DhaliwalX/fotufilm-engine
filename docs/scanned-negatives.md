@@ -200,7 +200,12 @@ in one place (`WebNativeEdit.Negative.balance`, `.plain` and `.strayLight`):
   exposure moves its clear film up and down and not its colour, so on a measured roll each
   frame keeps its own level in the colour of the roll's clear film, the median over its frames
   (`RollBalance.clearFilm`); clear film picked on a frame stands as picked, and a scan merged
-  from an exposure under each LED, three exposures each its own, keeps its own.
+  from an exposure under each LED, three exposures each its own, keeps its own. Clear film is
+  picked at a point, the median of a small patch there, or over a rectangle drawn on the scan:
+  the clearest film in it, the median of the tenth of it that passes the most light
+  (`ApproximateNegativeScan.clearestFilm`), so a rectangle over a rebate or the gap between
+  two frames need not keep the picture, the edge print or dust out. A sprocket hole or the
+  bare light past the film is clearer than film and has to stay outside it.
 - **A roll's contrast.** A frame's tonal steps, where light falls off across a surface or a
   shadow lies on it, change every record's exposure alike, so the rises of red and blue per unit
   of green across them say how steep the roll's records read against each other

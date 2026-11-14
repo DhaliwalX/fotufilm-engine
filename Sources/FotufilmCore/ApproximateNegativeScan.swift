@@ -190,6 +190,23 @@ public struct ApproximateNegativeScan: Encodable, Equatable, Sendable {
     /// three channels. An open holder in the frame passes more, which is why a sampled border
     /// replaces this. Nil when no pixel passes light in every channel.
     public static func estimatedBorder(preview: ImageBuffer) -> SIMD3<Float>? {
+        clearest(preview: preview, share: 100)
+    }
+
+    /// The clearest film of an area picked for it, `preview`, linear scan RGB: the median of
+    /// the tenth of it that passes the most light across all three channels. An area drawn
+    /// over a rebate or the gap between two frames takes in some picture, edge print and
+    /// dust with the clear film, which a tenth leaves out; a hundredth, as a whole scan's
+    /// estimate takes, is the few pixels the light is brightest behind, a little over the
+    /// film. A sprocket hole or the light past the film's edge is clearer than any film and
+    /// has to stay outside the area. Nil when no pixel passes light in every channel.
+    public static func clearestFilm(preview: ImageBuffer) -> SIMD3<Float>? {
+        clearest(preview: preview, share: 10)
+    }
+
+    /// The median, channel by channel, of the one in `share` pixels of `preview` that pass the
+    /// most light across all three channels.
+    private static func clearest(preview: ImageBuffer, share: Int) -> SIMD3<Float>? {
         let film = (0..<preview.pixelCount).filter { i in
             (0..<3).allSatisfy { c in preview.planes[c][i].isFinite && preview.planes[c][i] > 0 }
         }
@@ -198,7 +215,7 @@ public struct ApproximateNegativeScan: Encodable, Equatable, Sendable {
             (0..<3).reduce(0) { $0 + log10(preview.planes[$1][i]) }
         }
         let brightest = film.sorted { transmission($0) > transmission($1) }
-            .prefix(max(1, film.count / 100))
+            .prefix(max(1, film.count / share))
         var border = SIMD3<Float>()
         for c in 0..<3 {
             let values = brightest.map { preview.planes[c][$0] }.sorted()

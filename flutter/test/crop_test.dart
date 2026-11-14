@@ -6,6 +6,7 @@ import 'package:fotufilm_flutter/model/crop_geometry.dart';
 import 'package:fotufilm_flutter/model/edit.dart';
 import 'package:fotufilm_flutter/model/editor.dart';
 import 'package:fotufilm_flutter/model/negative_document.dart';
+import 'package:fotufilm_flutter/ui/workspace/film_base_sampler.dart';
 
 void expectPoints(List<Offset> actual, List<Offset> expected) {
   expect(actual.length, expected.length);
@@ -308,6 +309,31 @@ void main() {
       scans.setSampling(true);
       expect(scans.selectingArea, isFalse);
       expect(scans.picking, 'border');
+    });
+
+    test('clear film is picked with a click or a drawn rectangle, one at a time', () {
+      final scans = editor.negatives;
+      scans.setPicking('borderArea');
+      expect(scans.pickingArea, isTrue);
+      expect(scans.sampling, isTrue);
+      scans.setSampling(true);
+      expect(scans.picking, 'border');
+      expect(scans.pickingArea, isFalse);
+      scans.setPicking('borderArea');
+      scans.toggleArea();
+      expect(scans.picking, isNull);
+      expect(scans.selectingArea, isTrue);
+      scans.setPicking('borderArea');
+      expect(scans.selectingArea, isFalse);
+      // A drag is the rectangle between its ends as shares of the picture, held inside it;
+      // one too small to be meant is none.
+      const size = Size(400, 200);
+      expect(drawnArea(const Offset(300, 150), const Offset(100, 50), size),
+          const Rect.fromLTRB(.25, .25, .75, .75));
+      expect(drawnArea(const Offset(-40, 20), const Offset(100, 500), size),
+          const Rect.fromLTRB(0, .1, .25, 1));
+      expect(drawnArea(const Offset(100, 50), const Offset(102, 150), size), isNull);
+      expect(drawnArea(const Offset(100, 50), const Offset(300, 150), Size.zero), isNull);
     });
 
     test('a photograph that is no negative has no area to pick', () {

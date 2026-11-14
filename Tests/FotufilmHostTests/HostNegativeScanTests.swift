@@ -142,6 +142,36 @@ final class HostNegativeScanTests: XCTestCase {
             XCTAssertEqual(Float(measured[c]), border[c] * pow(10, -0.02), accuracy: 1e-3)
         }
 
+        // A rectangle drawn across the rebate and into the picture gives the clearest film in
+        // it, the rebate's, where its middle is picture.
+        func clearest(_ area: [Double]) throws -> [Double]? {
+            try JSONSerialization.jsonObject(with: service.call(
+                "negativeSampleFilmBase",
+                params: JSONSerialization.data(withJSONObject: [
+                    "render": request(handle, maxEdge: 150), "area": area]),
+                payload: nil).json) as? [Double]
+        }
+        let drawn = try XCTUnwrap(try clearest([0.2, 0.02, 0.8, 0.5]))
+        for c in 0..<3 {
+            XCTAssertEqual(Float(drawn[c]), border[c] * pow(10, -0.02), accuracy: 1e-3)
+        }
+        // Inside the picture it is the thinnest of the picture, which is no clear film.
+        let pictured = try XCTUnwrap(try clearest([0.5, 0.3, 0.8, 0.7]))
+        XCTAssertLessThan(Float(pictured[1]), border.y * 0.5)
+        // A rectangle with no size, or one past the frame, points nowhere; and a neutral is
+        // picked at a point, never over an area.
+        for bad in [[0.5, 0.2, 0.5, 0.6], [0.2, 0.6, 0.8, 0.3], [0.2, 0.1, 1.4, 0.3], [0.2, 0.1, 0.8]] {
+            XCTAssertThrowsError(try clearest(bad), "\(bad)") { error in
+                XCTAssertEqual((error as? HostEngine.Failure)?.description,
+                               HostService.pointAtFilmBase.description)
+            }
+        }
+        XCTAssertThrowsError(try service.call(
+            "negativeSampleNeutral",
+            params: JSONSerialization.data(withJSONObject: [
+                "render": request(handle, maxEdge: 150), "area": [0.2, 0.02, 0.8, 0.5]]),
+            payload: nil))
+
         // Something in the picture picked as neutral reads the same way: the scan's own samples
         // there, which the edit keeps beside the clear film.
         let picked = try XCTUnwrap(JSONSerialization.jsonObject(with: service.call(

@@ -107,9 +107,18 @@ Section filmBaseSection(InspectorControls c) {
       onPressed: () => scans.setSampling(scans.picking != 'border'),
     ),
     ScanButton(
+      'Pick Clear Film Area',
+      selected: scans.pickingArea,
+      onPressed: () => scans.setPicking(scans.pickingArea ? null : 'borderArea'),
+    ),
+    ScanButton(
       'Estimate',
       onPressed: negative['border'] == null ? null : () => scans.read({'border': null}),
     ),
+    if (scans.pickingArea)
+      const ScanHint('Draw a rectangle over clear film: the film\'s edge, or the gap between two '
+          'frames. The clearest film in it is taken, so it need not keep the picture or the '
+          'edge print out. Keep sprocket holes and the bare light past the film outside it.'),
   ]);
 }
 
