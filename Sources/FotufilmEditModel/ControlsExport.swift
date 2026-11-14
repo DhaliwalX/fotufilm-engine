@@ -55,17 +55,20 @@ public struct ControlsExport {
                    content: .regions(["resolve-controls": resolveReadmeTable()])),
         ]
         if let consumerRoot {
-            let kotlin = consumerRoot.appendingPathComponent(
-                "android/app/src/main/kotlin/com/muastudio/fotufilm/engine")
-            outputs += [
-                Output(path: kotlin.appendingPathComponent("EditState.kt"), content: .whole(kotlinEditState())),
-                Output(path: kotlin.appendingPathComponent("EditorControls.kt"), content: .whole(kotlinControls())),
-                Output(path: kotlin.appendingPathComponent("EditStateJson.kt"), content: .whole(kotlinJson())),
-                Output(path: kotlin.appendingPathComponent("ControlTransforms.kt"),
-                       content: .whole(kotlinTransforms())),
-                Output(path: consumerRoot.appendingPathComponent("docs/documentation.html"),
-                       content: .regions(documentationRegions())),
-            ]
+            if FileManager.default.fileExists(
+                atPath: consumerRoot.appendingPathComponent("android/app").path) {
+                let kotlin = consumerRoot.appendingPathComponent(
+                    "android/app/src/main/kotlin/com/muastudio/fotufilm/engine")
+                outputs += [
+                    Output(path: kotlin.appendingPathComponent("EditState.kt"), content: .whole(kotlinEditState())),
+                    Output(path: kotlin.appendingPathComponent("EditorControls.kt"), content: .whole(kotlinControls())),
+                    Output(path: kotlin.appendingPathComponent("EditStateJson.kt"), content: .whole(kotlinJson())),
+                    Output(path: kotlin.appendingPathComponent("ControlTransforms.kt"),
+                           content: .whole(kotlinTransforms())),
+                ]
+            }
+            outputs.append(Output(path: consumerRoot.appendingPathComponent("docs/documentation.html"),
+                                  content: .regions(documentationRegions())))
         }
         return outputs
     }

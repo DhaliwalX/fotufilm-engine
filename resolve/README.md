@@ -282,8 +282,8 @@ conversions and is shared with the Final Cut plugin.
 
 Set `FOTUFILM_STOCKS` to a folder of stock JSON files to load custom films. A
 custom film with the same ID as a bundled one replaces it.
-See [Build support](../docs/support.html) for custom builds and
-[Licensing](../LICENSING.md) for applicable terms.
+See [How to use](../docs/how-to-use.html), [Build support](../docs/support.html), and
+[Licensing](../LICENSING.md) for more information.
 
 The **Halation Model** menu selects **Legacy** (the default for older projects) or
 **Layered Transport**. Layered Transport uses an illustrative construction when the

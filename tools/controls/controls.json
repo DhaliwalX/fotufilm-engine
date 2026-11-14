@@ -408,7 +408,7 @@
     {
       "availability" : "always",
       "binding" : "frameCoverage",
-      "detail" : "Short edge of the film frame retained after the host's crop",
+      "detail" : "Short edge of the film frame retained after the host's crop.",
       "drives" : [
 
       ],
@@ -3191,7 +3191,7 @@
     {
       "availability" : "always",
       "detail" : "Apply the camera's lens and sensor-edge corrections to a RAW photograph.",
-      "documentation" : "On, a camera RAW decodes as the camera's maker intends: Apple's decoder corrects the lens's distortion and vignetting where it knows the lens, and the picture is the camera's default crop. Off shows the capture as the sensor recorded it — the lens's own distortion and dark corners, and on Linux the whole sensor area with its edges — so the true flaws of the capture print. Choosing Film Border or Film Border Positive turns it off. On the Mac and iPhone Core Image always delivers the camera's crop. Lens Correction's own correction still applies when it is on. Included in saved edits and exports.",
+      "documentation" : "When on, camera RAW files decode with manufacturer lens corrections where supported, using the camera's default crop. Turning it off shows the uncorrected sensor capture — including native lens distortion, corner falloff, and on Linux the full uncropped sensor edges — so those optical characteristics carry into the print. Choosing Film Border or Film Border Positive turns this off automatically. On Mac and iPhone, Core Image always delivers the camera's default crop. Manual Lens Correction settings still apply when enabled. Included in saved edits and exports.",
       "drives" : [
 
       ],
@@ -4312,7 +4312,7 @@
     {
       "availability" : "always",
       "binding" : "grade(FotufilmEditModel.GradeBand.shadows, FotufilmEditModel.GradeAxis.warmth)",
-      "detail" : "Cool to warm, in the shadows",
+      "detail" : "Cool to warm, in the shadows.",
       "drives" : [
 
       ],
@@ -4348,7 +4348,7 @@
     {
       "availability" : "always",
       "binding" : "grade(FotufilmEditModel.GradeBand.shadows, FotufilmEditModel.GradeAxis.tint)",
-      "detail" : "Magenta to green, in the shadows",
+      "detail" : "Magenta to green, in the shadows.",
       "drives" : [
 
       ],
@@ -4420,7 +4420,7 @@
     {
       "availability" : "always",
       "binding" : "grade(FotufilmEditModel.GradeBand.midtones, FotufilmEditModel.GradeAxis.warmth)",
-      "detail" : "Cool to warm, in the midtones",
+      "detail" : "Cool to warm, in the midtones.",
       "drives" : [
 
       ],
@@ -4456,7 +4456,7 @@
     {
       "availability" : "always",
       "binding" : "grade(FotufilmEditModel.GradeBand.midtones, FotufilmEditModel.GradeAxis.tint)",
-      "detail" : "Magenta to green, in the midtones",
+      "detail" : "Magenta to green, in the midtones.",
       "drives" : [
 
       ],
@@ -4528,7 +4528,7 @@
     {
       "availability" : "always",
       "binding" : "grade(FotufilmEditModel.GradeBand.highlights, FotufilmEditModel.GradeAxis.warmth)",
-      "detail" : "Cool to warm, in the highlights",
+      "detail" : "Cool to warm, in the highlights.",
       "drives" : [
 
       ],
@@ -4564,7 +4564,7 @@
     {
       "availability" : "always",
       "binding" : "grade(FotufilmEditModel.GradeBand.highlights, FotufilmEditModel.GradeAxis.tint)",
-      "detail" : "Magenta to green, in the highlights",
+      "detail" : "Magenta to green, in the highlights.",
       "drives" : [
 
       ],
@@ -6815,7 +6815,7 @@
       "commandLineGeneric" : false,
       "commandLineHelp" : "Opt-in optical printer: simulated-tungsten (synthetic, not measured hardware). Reflection paper only",
       "commandLinePlaceholder" : "<id>",
-      "detail" : "Print through a tungsten lamp and colour filters",
+      "detail" : "Print through a tungsten lamp and color filters.",
       "documentation" : "Enables a synthetic tungsten printer with fixed reference calibration.",
       "drives" : [
         "printer"
@@ -6848,7 +6848,7 @@
       "commandLineGeneric" : false,
       "commandLineHelp" : "Printer lamp spectrum, 2800...3600 K (default: 3200); requires --printer simulated-tungsten",
       "commandLinePlaceholder" : "<k>",
-      "detail" : "Change the spectrum of the enlarger's lamp",
+      "detail" : "Change the spectrum of the enlarger's lamp.",
       "documentation" : "Changes the spectrum illuminating the negative.",
       "drives" : [
         "printer"
@@ -6889,7 +6889,7 @@
       "commandLineGeneric" : false,
       "commandLineHelp" : "Paper exposure, -6...6 stops (default: 0); +1 doubles light. Requires --printer simulated-tungsten",
       "commandLinePlaceholder" : "<ev>",
-      "detail" : "More light darkens negative paper and lightens positive paper",
+      "detail" : "More light darkens negative paper and lightens positive paper.",
       "documentation" : "One stop doubles the light exposing the paper: negative paper darkens and positive paper lightens.",
       "drives" : [
         "printer"
@@ -6930,7 +6930,7 @@
       "commandLineGeneric" : false,
       "commandLineHelp" : "Synthetic magenta filter density, 0...1.2 (default: 0.40); requires --printer simulated-tungsten",
       "commandLinePlaceholder" : "<d>",
-      "detail" : "Reduce the green light reaching the paper",
+      "detail" : "Reduce the green light reaching the paper.",
       "documentation" : "Synthetic magenta filtration in optical density, not manufacturer dial units.",
       "drives" : [
         "printer"
@@ -6971,7 +6971,7 @@
       "commandLineGeneric" : false,
       "commandLineHelp" : "Synthetic yellow filter density, 0...1.2 (default: 0.50); requires --printer simulated-tungsten",
       "commandLinePlaceholder" : "<d>",
-      "detail" : "Reduce the blue light reaching the paper",
+      "detail" : "Reduce the blue light reaching the paper.",
       "documentation" : "Synthetic yellow filtration in optical density, not manufacturer dial units.",
       "drives" : [
         "printer"
@@ -7798,7 +7798,7 @@
     },
     {
       "availability" : "always",
-      "detail" : "What this node is being handed",
+      "detail" : "The color space of the image handed to this node.",
       "drives" : [
 
       ],
@@ -7842,7 +7842,7 @@
     {
       "availability" : "always",
       "binding" : "stageIndex",
-      "detail" : "Which span of the pipeline this node performs",
+      "detail" : "Which span of the pipeline this node performs.",
       "drives" : [
 
       ],
@@ -7888,7 +7888,7 @@
     {
       "availability" : "always",
       "binding" : "textureStagesMask",
-      "detail" : "Which spatial stages the texture span lays over the frame",
+      "detail" : "Which spatial stages the texture span lays over the frame.",
       "drives" : [
 
       ],
@@ -7952,7 +7952,7 @@
           "value" : 2
         }
       ],
-      "detail" : "Default preserves the launch-time renderer setting",
+      "detail" : "Default preserves the launch-time renderer setting.",
       "drives" : [
 
       ],

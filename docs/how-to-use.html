@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>How to Use Fotufilm — Desktop, Mobile, CLI &amp; Video Plug-in Guide</title>
+  <meta name="description" content="Step-by-step workflows for developing photos, camera RAWs, videos, and scanned negatives with Fotufilm Desktop, the browser editor, the CLI, DaVinci Resolve, and Final Cut Pro.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="masthead">
+  <div class="masthead-inner">
+    <a class="brand" href="how-to-use.html" aria-label="Fotufilm engine docs">fotu<em>film</em></a>
+    <nav aria-label="Primary">
+      <a href="how-to-use.html" aria-current="page">How to use</a>
+      <a href="documentation.html">Documentation</a>
+      <a href="support.html">Build &amp; web support</a>
+      <a href="https://fotufilm.com/demo/">Browser demo</a>
+      <a href="https://github.com/DhaliwalX/fotufilm-engine">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="content" class="doc-page">
+  <header class="doc-hero">
+    <p class="kicker">User &amp; workflow guide</p>
+    <h1>How to use Fotufilm</h1>
+    <p>Fotufilm models the physical chain of analog photography—scene light, camera lens filters, emulsion layers, development, grain, and optical printing onto photographic paper or cinema release film.</p>
+    <div class="hero-actions">
+      <a class="btn primary" href="https://github.com/DhaliwalX/fotufilm-engine/releases/latest/download/Fotufilm-macOS.pkg">Download for Mac</a>
+      <a class="btn" href="https://fotufilm.com/demo/">Open browser editor</a>
+      <a class="btn" href="https://fotufilm.com/how-to-use.html">Visual guide with screenshots</a>
+    </div>
+    <div class="platform-grid">
+      <a class="platform-card" href="#desktop-editor">
+        <span class="card-kicker">Mac · Linux · Web</span>
+        <strong>Desktop &amp; browser editor</strong>
+        <span>Three-column darkroom with live film library, roll strip, and batch export.</span>
+      </a>
+      <a class="platform-card" href="#compact-mobile">
+        <span class="card-kicker">Mobile · Narrow windows</span>
+        <strong>Compact &amp; Android UI</strong>
+        <span>Touch-first bottom tool rail with Film Strip, Grain, Lens, Print, and Light &amp; Color.</span>
+      </a>
+      <a class="platform-card" href="#scanned-negatives">
+        <span class="card-kicker">C-41 &amp; B&amp;W scans</span>
+        <strong>Scanned negatives</strong>
+        <span>Invert camera or scanner captures, sample clear film base, and balance whole rolls.</span>
+      </a>
+      <a class="platform-card" href="#cli-workflows">
+        <span class="card-kicker">Command line &amp; NLEs</span>
+        <strong>CLI &amp; video plug-ins</strong>
+        <span>Scriptable renders with fotufilm and color-managed grading in Resolve &amp; Final Cut Pro.</span>
+      </a>
+    </div>
+  </header>
+
+  <div class="doc-layout">
+    <aside class="doc-nav" aria-label="On this page">
+      <details class="toc-details" open>
+        <summary>On this page</summary>
+        <nav aria-label="On this page">
+          <a href="#quick-start">Quick start: four stages</a>
+          <a href="#desktop-editor">Desktop &amp; browser editor</a>
+          <a href="#compact-mobile">Compact &amp; Android UI</a>
+          <a href="#scanned-negatives">Scanned negatives</a>
+          <a href="#cli-workflows">Command-line tool (CLI)</a>
+          <a href="#video-plugins">DaVinci Resolve &amp; Final Cut</a>
+          <a href="#shortcuts">Keyboard shortcuts</a>
+        </nav>
+      </details>
+    </aside>
+
+    <div class="doc-content">
+      <section id="quick-start" tabindex="-1">
+        <h2>Quick start: the four darkroom stages</h2>
+        <p>Every Fotufilm host—desktop, browser, mobile, CLI, and video plug-in—runs your image through the same four physical stages:</p>
+        <ol class="workflow-steps">
+          <li><strong>Film:</strong> Pick one of the 47 bundled film stocks (color negative, slide, black-and-white, instant, or motion picture), choose a physical film gauge (<code>Super 8</code> through <code>4&times;5</code>), and set film age or halation.</li>
+          <li><strong>Expose:</strong> Control the light entering the camera before the emulsion responds—adjust Exposure in stops, Highlights, Shadows, Camera Preflash, Source Illuminant, White Balance, optical Lens Filters, and the three-way Grade.</li>
+          <li><strong>Develop:</strong> Push or pull development using measured process curves, blend metallic silver with Bleach Bypass, and dial in calibrated Standard or crystal-level Film grain, mottle, and interlayer couplers.</li>
+          <li><strong>Print:</strong> Choose how the developed film is viewed or printed—<strong>Match Film</strong> selects RA-4 paper for still negatives, cinema print film for motion-picture stocks, or direct positive viewing for slide films—then add optional film or paper borders and export.</li>
+        </ol>
+        <div class="callout">
+          <p><strong>Tip: Instant before/after check.</strong> Hold <kbd>Space</kbd> on a keyboard, or press and hold the photograph on any touch screen, to compare your developed print with the original image.</p>
+        </div>
+      </section>
+
+      <section id="desktop-editor" tabindex="-1">
+        <h2>Desktop &amp; browser editor (Mac, Linux, Web)</h2>
+        <p>Install the signed macOS package, run the Linux x86-64 AppImage, build from source with <code>./flutter/build.sh</code>, or open <a href="https://fotufilm.com/demo/">fotufilm.com/demo</a> in a WebGPU-capable browser. All four share the same three-column darkroom.</p>
+
+        <h3>1. Open photos, RAW files, videos, or folders</h3>
+        <ul>
+          <li>Click <strong>+</strong> in the top-left toolbar (or press <kbd>⌘O</kbd> / <kbd>Ctrl+O</kbd>, or drag files onto the window) to open camera RAWs, JPEGs, HEICs, 16-bit PNGs, 16/32-bit TIFFs, linear OpenEXR scenes, or video clips.</li>
+          <li>On desktop, opening a single file from Finder or <strong>File &rarr; Open…</strong> automatically populates the bottom filmstrip with neighboring photos and videos in the same folder so you can step through a shoot without leaving the canvas.</li>
+          <li>Click the <strong>Library</strong> button next to the wordmark (or press <kbd>L</kbd>) to link folders on disk, rate frames from 1 to 5 stars, filter by edited photos, and search across tens of thousands of files without copying or uploading anything.</li>
+        </ul>
+
+        <h3>2. Choose a stock and inspect the live tone curve</h3>
+        <ul>
+          <li>Filter the left sidebar by <strong>All</strong>, <strong>Color Negative</strong>, <strong>Slide</strong>, <strong>B&amp;W</strong>, or <strong>Motion Picture</strong>, or type in the search box. Visible tiles render live thumbnails of your open photo.</li>
+          <li>Watch the RGB tone curve and histogram at the top of the right-hand <strong>Darkroom</strong> panel: it plots how input values from 0 to 255 travel through the film, output paper, and grade in real time.</li>
+          <li>Switch to the <strong>Presets</strong> tab at the top of the left sidebar to save your current darkroom recipe or apply a saved preset to new frames.</li>
+        </ul>
+
+        <h3>3. Selective adjustments, crop, and batch export</h3>
+        <ul>
+          <li><strong>Auto Adjust (<kbd>⌘⇧A</kbd> / <kbd>Ctrl+Shift+A</kbd>):</strong> Solves Exposure, Highlights, and Shadows from regional scene brightness and the active film’s latitude.</li>
+          <li><strong>Selective (<kbd>⌘5</kbd>) &amp; Crop (<kbd>⌘6</kbd> or <kbd>C</kbd>):</strong> Use toolbar canvas tools above the image to make targeted Color, Light, or Subject (macOS) adjustments, or straighten perspective with independent four-corner cropping.</li>
+          <li><strong>Copy, Paste &amp; Export All:</strong> Copy settings from one frame and paste them onto others, then export a single frame (<kbd>⌘S</kbd> / <kbd>Ctrl+S</kbd>) or batch-export every open photo into a folder as JPEG, PNG, WebP, HEIC, 16-bit Display P3 TIFF, or 10-bit Cineon Log DPX.</li>
+        </ul>
+      </section>
+
+      <section id="compact-mobile" tabindex="-1">
+        <h2>Compact &amp; Android editor</h2>
+        <p>On Android phones and narrow browser windows, the editor switches to a dark, thumb-friendly layout that keeps your photograph unobstructed in the center.</p>
+        <ol class="workflow-steps">
+          <li><strong>Import into Photos or Negatives:</strong> Tap <strong>+</strong> in the top-right corner of the home gallery to import photos, RAWs, or scanned negatives.</li>
+          <li><strong>Pick a tool from the bottom rail:</strong> Tap <strong>Film Strip</strong>, <strong>Grain</strong>, <strong>Lens</strong>, <strong>Print</strong>, <strong>Light &amp; Color</strong>, <strong>Select</strong>, or <strong>Crop</strong> to open its sheet beneath the canvas, and drag the sheet handle to resize or dismiss it.</li>
+          <li><strong>Fine-tune sliders anywhere on the track:</strong> Drag horizontally anywhere along a slider row—the value moves smoothly from your finger’s starting point and pauses gently on its default value as you pass it. Double-tap any slider to reset it.</li>
+        </ol>
+        <p>Using Fotufilm on iPhone or iPad? See the <a href="https://fotufilm.com/how-to-use.html#iphone-app">illustrated iPhone &amp; iPad guide</a> for the live Apple Log / ProRAW film camera, shelf albums, and split iPad workspace.</p>
+      </section>
+
+      <section id="scanned-negatives" tabindex="-1">
+        <h2>Converting scanned negatives</h2>
+        <p>Already shoot 35mm, 120, or 4&times;5 film? Fotufilm can invert linear or camera-RAW scans of developed C-41 and black-and-white negatives and print them through its optical paper and minilab models:</p>
+        <ol class="workflow-steps">
+          <li><strong>Import as a negative:</strong> Choose <strong>File &rarr; Import Scanned Negative…</strong> on desktop, or click <strong>+ &rarr; Negative</strong> in the browser and mobile editors.</li>
+          <li><strong>Set film base and scan hardware:</strong> Fotufilm estimates the orange mask automatically and suggests matching negative stocks. Click <strong>Pick Clear Film</strong> on an unexposed border or sprocket strip for an exact base reading, then set <strong>Scanned With</strong> (camera RAW or dedicated scanner) and <strong>Scanned Under</strong> (White LED, Phone/Tablet Screen, Halogen, or RGB LEDs).</li>
+          <li><strong>Balance a whole roll:</strong> Link a folder of negative scans in the Library and click <strong>Measure Roll</strong> in the <strong>Roll</strong> tab so every frame shares consistent roll-wide highlight balance and channel contrast.</li>
+          <li><strong>Straighten borders &amp; print:</strong> Drag the four independent corners in <strong>Crop</strong> to trim the film holder, then choose an RA-4 paper, <strong>Lab Scan</strong>, or <strong>Digital Reference</strong> in <strong>Print</strong>.</li>
+        </ol>
+      </section>
+
+      <section id="cli-workflows" tabindex="-1">
+        <h2>Command-line tool (<code>fotufilm</code>)</h2>
+        <p>Build and run the Swift CLI directly from the repository root to batch-develop images, test optical printer setups, or benchmark GPU vs. CPU throughput.</p>
+        <pre><code># Build the release CLI
+swift build -c release --product fotufilm
+
+# Develop a photograph on Portra 400 printed onto Kodak Endura Premier paper
+.build/release/fotufilm input.dng output.tiff --stock portra400 --paper endura-premier
+
+# Develop a motion-picture stock onto Kodak Vision 2383 with custom printer lights
+.build/release/fotufilm frame.exr print.png --stock vision500t --paper vision-2383 \
+  --printer-red 28 --printer-green 25 --printer-blue 23
+
+# Print a slide onto Ilfochrome/Cibachrome positive paper
+.build/release/fotufilm slide-scene.jpg print.jpg --stock velvia50 --paper cibachrome
+
+# Benchmark 30 warm renders on Metal vs CPU
+.build/release/fotufilm input.jpg output.jpg --stock cinestill800t --iterations 31</code></pre>
+      </section>
+
+      <section id="video-plugins" tabindex="-1">
+        <h2>DaVinci Resolve &amp; Final Cut Pro plug-ins</h2>
+        <p>The macOS installer (and <code>./resolve/build.sh</code> / <code>./finalcut/build.sh</code>) installs native Metal-accelerated plug-ins that run the exact same scene-linear Rec.2020 film pipeline inside your NLE.</p>
+        <h3>DaVinci Resolve (OpenFX)</h3>
+        <ol class="workflow-steps">
+          <li><strong>Drop Fotufilm onto a clip or timeline node</strong> in the Color page.</li>
+          <li><strong>Choose your color-management mode:</strong>
+            <ul>
+              <li><strong>Fotufilm mode (fastest for camera log in unmanaged DaVinci YRGB):</strong> Set <strong>Color Management</strong> to <code>Fotufilm</code>, pick your camera’s recording log under <strong>Input Color Space</strong> (such as <code>Apple Log / Rec.2020</code>, <code>S-Log3 / S-Gamut3.Cine</code>, <code>F-Log2</code>, or <code>V-Log</code>), and set <strong>Output Color Space</strong> to match your display/delivery target (such as <code>Rec.709 / Gamma 2.4</code>). No surrounding CST nodes are required.</li>
+              <li><strong>Timeline mode (for DaVinci Wide Gamut or ACES pipelines):</strong> Keep <strong>Color Management</strong> on <code>Timeline</code> and match <strong>Timeline Color Space</strong> to the working space entering the node (for example, <code>DaVinci Wide Gamut / Intermediate</code> or <code>ACEScct</code>).</li>
+            </ul>
+          </li>
+          <li><strong>Avoid double tone-mapping:</strong> A finished Fotufilm paper or cinema print is already display-referred—do not place an additional output tone map after a finished print node unless you intentionally set <strong>Stage</strong> to <code>Negative Only</code> or <code>Texture Only</code>.</li>
+        </ol>
+
+        <h3>Final Cut Pro &amp; Motion (FxPlug)</h3>
+        <ol class="workflow-steps">
+          <li>Use a <strong>Wide Gamut HDR</strong> library whenever grading Apple Log or HDR clips so highlight headroom above diffuse white reaches the emulsion intact for halation and shoulder roll-off.</li>
+          <li>Apply <strong>Fotufilm</strong> from the Effects browser, and place any basic clip exposure or white-balance trim <em>above</em> Fotufilm in the Video inspector so adjustments happen before film exposure.</li>
+        </ol>
+      </section>
+
+      <section id="shortcuts" tabindex="-1">
+        <h2>Keyboard shortcuts (Desktop &amp; Web)</h2>
+        <div class="table-wrap" tabindex="0" role="region" aria-label="Desktop and browser keyboard shortcuts">
+          <table>
+            <thead>
+              <tr><th>Action</th><th>macOS</th><th>Linux / Windows / Web</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Open photo, RAW, or video</td><td><kbd>⌘O</kbd></td><td><kbd>Ctrl+O</kbd></td></tr>
+              <tr><td>Export current print</td><td><kbd>⌘S</kbd></td><td><kbd>Ctrl+S</kbd></td></tr>
+              <tr><td>Undo / Redo</td><td><kbd>⌘Z</kbd> / <kbd>⇧⌘Z</kbd></td><td><kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Shift+Z</kbd></td></tr>
+              <tr><td>Auto Adjust exposure &amp; latitude</td><td><kbd>⌘⇧A</kbd></td><td><kbd>Ctrl+Shift+A</kbd></td></tr>
+              <tr><td>Switch Darkroom stages (Film, Expose, Develop, Print)</td><td><kbd>⌘1</kbd> – <kbd>⌘4</kbd></td><td><kbd>Ctrl+1</kbd> – <kbd>Ctrl+4</kbd></td></tr>
+              <tr><td>Open Selective / Crop tool</td><td><kbd>⌘5</kbd> / <kbd>⌘6</kbd> (or <kbd>C</kbd>)</td><td><kbd>Ctrl+5</kbd> / <kbd>Ctrl+6</kbd> (or <kbd>C</kbd>)</td></tr>
+              <tr><td>Toggle Library / Histogram</td><td><kbd>L</kbd> / <kbd>H</kbd></td><td><kbd>L</kbd> / <kbd>H</kbd></td></tr>
+              <tr><td>Zoom in, zoom out, fit to canvas</td><td><kbd>+</kbd>, <kbd>-</kbd>, <kbd>0</kbd></td><td><kbd>+</kbd>, <kbd>-</kbd>, <kbd>0</kbd></td></tr>
+              <tr><td>Compare with unedited original</td><td>Hold <kbd>Space</kbd></td><td>Hold <kbd>Space</kbd></td></tr>
+              <tr><td>Video play/pause, skip &plusmn;5s, mute</td><td><kbd>Space</kbd> / <kbd>K</kbd>, <kbd>J</kbd> / <kbd>L</kbd>, <kbd>M</kbd></td><td><kbd>Space</kbd> / <kbd>K</kbd>, <kbd>J</kbd> / <kbd>L</kbd>, <kbd>M</kbd></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="footer-inner">
+    <div>
+      <strong>Fotufilm Engine</strong> · Apache-2.0 code · CC BY-SA 4.0 film profiles
+    </div>
+    <nav aria-label="Footer">
+      <a href="how-to-use.html">How to use</a>
+      <a href="documentation.html">Documentation</a>
+      <a href="support.html">Build &amp; web support</a>
+      <a href="https://fotufilm.com/how-to-use.html">Visual guide with screenshots</a>
+      <a href="https://fotufilm.com/demo/">Browser demo</a>
+      <a href="https://github.com/DhaliwalX/fotufilm-engine/releases">Releases</a>
+    </nav>
+  </div>
+</footer>
+<script>
+(function () {
+  var details = document.querySelector('.toc-details');
+  if (details && window.matchMedia('(max-width: 900px)').matches) {
+    details.open = false;
+  }
+  var links = Array.prototype.slice.call(document.querySelectorAll('.doc-nav nav a[href^="#"]'));
+  if (!links.length) return;
+  if (typeof CSS !== 'undefined' && CSS.supports && CSS.supports('scroll-target-group: auto')) {
+    var syncAriaCurrent = function () {
+      var currentLink = document.querySelector('.doc-nav nav a:target-current');
+      links.forEach(function (link) {
+        link.setAttribute('aria-current', link === currentLink ? 'true' : 'false');
+      });
+    };
+    syncAriaCurrent();
+    document.addEventListener('scrollend', syncAriaCurrent);
+    return;
+  }
+  if (!('IntersectionObserver' in window)) return;
+  var map = new Map();
+  links.forEach(function (link) {
+    var sec = document.getElementById(link.getAttribute('href').slice(1));
+    if (sec) map.set(sec, link);
+  });
+  var observer = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting) {
+        var active = map.get(entry.target);
+        links.forEach(function (l) {
+          var on = l === active;
+          l.classList.toggle('target-current', on);
+          l.setAttribute('aria-current', on ? 'true' : 'false');
+        });
+      }
+    });
+  }, { rootMargin: '-96px 0px -68% 0px', threshold: 0 });
+  map.forEach(function (_, sec) { observer.observe(sec); });
+})();
+</script>
+
+</body>
+</html>
