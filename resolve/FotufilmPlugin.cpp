@@ -2802,8 +2802,8 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs) {
     std::atomic<bool> repairedInput{false};
     // A deferred frame has no host to post to: what it has to say goes to stderr. Every format
     // passed here is a literal at its call; forwarding it is what the compiler cannot see.
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wformat-security"
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-security"
     const auto tell = [&](const char *type, const char *format, auto... arguments) {
         if (deferred) {
             report(format, arguments...);
@@ -2811,7 +2811,7 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs) {
             post(type, effect, format, arguments...);
         }
     };
-#pragma clang diagnostic pop
+#pragma GCC diagnostic pop
     // Copies inside the open host Metal scope, in pixels; see `fotufilm_bridge_host_metal_copy`.
     auto hostCopy = [&](void *from, long long fromBase, long long fromStep, void *to,
                         long long toBase, long long toStep, int across, int rows) {

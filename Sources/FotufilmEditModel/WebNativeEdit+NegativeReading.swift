@@ -144,14 +144,26 @@ extension WebNativeEdit.Negative {
     /// Everything of the edit a reading turns on, for keeping one made before: two edits with
     /// the same key read the same frame of the same scan alike.
     public var readingKey: String {
-        let roll = roll.map {
-            "\($0.colour),\($0.level.map { "\($0)" } ?? ""),\($0.slopes ?? []),"
-                + "\($0.average ?? []),\($0.clear ?? [])"
+        // Taken apart: Swift 6.2 on Linux gives up type-checking these as one interpolation.
+        let roll = roll.map { roll -> String in
+            let level = roll.level.map { "\($0)" } ?? ""
+            let slopes = roll.slopes ?? []
+            let average = roll.average ?? []
+            let clear = roll.clear ?? []
+            return "\(roll.colour),\(level),\(slopes),\(average),\(clear)"
         }
-        return [
-            "\(reading ?? 1)", camera ?? "", balance?.rawValue ?? "", "\(neutral ?? [])",
-            roll ?? "", crosstalk.map { "\($0)" } ?? "", scanLight?.rawValue ?? "",
-            flare.map { "\($0)" } ?? "", "\(pictureArea ?? [])", density.map { "\($0)" } ?? "",
-        ].joined(separator: "|")
+        let readingPart = "\(reading ?? 1)"
+        let balancePart: String = balance?.rawValue ?? ""
+        let neutralPart = "\(neutral ?? [])"
+        let crosstalkPart: String = crosstalk.map { "\($0)" } ?? ""
+        let lightPart: String = scanLight?.rawValue ?? ""
+        let flarePart: String = flare.map { "\($0)" } ?? ""
+        let areaPart = "\(pictureArea ?? [])"
+        let densityPart: String = density.map { "\($0)" } ?? ""
+        let parts: [String] = [
+            readingPart, camera ?? "", balancePart, neutralPart, roll ?? "", crosstalkPart,
+            lightPart, flarePart, areaPart, densityPart,
+        ]
+        return parts.joined(separator: "|")
     }
 }
