@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <set>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace fotufilm {
@@ -28,6 +29,15 @@ using Halide::Var;
 
 inline Expr typed_zero(const Func &function) {
     return Halide::cast(function.value().type(), 0);
+}
+
+/// Blocks cross-stage fast-math FMA/reassociation/reciprocal folding across fused float stages
+/// while compiling to a single uniform integer predicate on GPU registers.
+inline Expr fp_store_barrier(Expr value, Expr runtime_true) {
+    return Halide::reinterpret<float>(
+        Halide::select(std::move(runtime_true),
+                       Halide::reinterpret<uint32_t>(std::move(value)),
+                       Halide::Expr(uint32_t(1))));
 }
 
 /// Scheduling state belongs to one graph; row-window stores never leak into another build.
@@ -61,7 +71,11 @@ public:
     /// the consumer recomputes all of its channels — the print's cube lookups nine times a
     /// pixel — and stored, it costs a frame of memory traffic. Where one kernel is its only
     /// reader, `place_register_stages` computes it there once per pixel, in registers.
-    void register_stage(Func stage) { register_stages_.push_back(stage); }
+    void register_stage(Func stage, int channels = 0, std::vector<Func> helpers = {},
+                        Expr specialize_home = Expr()) {
+        register_stages_.push_back(
+            {std::move(stage), channels, std::move(helpers), std::move(specialize_home)});
+    }
 
     /// Records a kernel the graph stores and the thread loop a register stage would join.
     void note_root(Func function, Var thread) { root_kernels_.push_back({function, thread}); }
@@ -70,21 +84,45 @@ public:
     /// itself, rather than through a function it inlines, takes a copy of its own; the stage is
     /// then computed in the one kernel left, and stays inline where more than one is.
     void place_register_stages() {
-        for (Func stage : register_stages_) {
-            const RootKernel *home = nullptr;
+        std::unordered_map<std::string, std::vector<Halide::Stage>> home_specs;
+        for (RegisterStage &entry : register_stages_) {
+            Func &stage = entry.stage;
+            RootKernel *home = nullptr;
             int readers = 0;
-            for (const RootKernel &root : root_kernels_) {
+            for (RootKernel &root : root_kernels_) {
                 if (!reaches_inline(root.function, stage.name())) continue;
-                if (reads_only_directly(root.function, stage.name())) {
+                if (entry.helpers.empty() && reads_only_directly(root.function, stage.name())) {
                     Func copy = stage.clone_in(root.function);
-                    copy.compute_at(root.function, root.thread).unroll(copy.args()[2]);
+                    Var copy_c = copy.args()[2];
+                    if (entry.channels > 0) {
+                        copy.compute_at(root.function, root.thread)
+                            .bound(copy_c, 0, entry.channels).unroll(copy_c);
+                    } else {
+                        copy.compute_at(root.function, root.thread).unroll(copy_c);
+                    }
                 } else {
                     home = &root;
                     ++readers;
                 }
             }
             if (readers != 1) continue;
-            stage.compute_at(home->function, home->thread).unroll(stage.args()[2]);
+            Var c = stage.args()[2];
+            if (entry.channels > 0) {
+                stage.compute_at(home->function, home->thread).bound(c, 0, entry.channels).unroll(c);
+            } else {
+                stage.compute_at(home->function, home->thread).unroll(c);
+            }
+            for (Func &helper : entry.helpers) {
+                helper.compute_at(stage, c);
+            }
+            if (entry.specialize_home.defined()) {
+                auto &specs = home_specs[home->function.name()];
+                const size_t prior = specs.size();
+                for (size_t i = 0; i < prior; ++i) {
+                    specs.push_back(specs[i].specialize(entry.specialize_home));
+                }
+                specs.push_back(home->function.specialize(entry.specialize_home));
+            }
         }
         register_stages_.clear();
     }
@@ -98,8 +136,15 @@ private:
         Func function;
         Var thread;
     };
+    struct RegisterStage {
+        Func stage;
+        int channels = 0;
+        std::vector<Func> helpers;
+        Expr specialize_home;
+    };
     std::vector<RootKernel> root_kernels_;
-    std::vector<Func> register_stages_;
+    std::vector<RegisterStage> register_stages_;
+    Expr last_decimated_stride_one_;
 
     /// Whether `from` calls `target` itself and through none of the functions it inlines.
     bool reads_only_directly(const Func &from, const std::string &target) const {
@@ -218,6 +263,38 @@ public:
         note_root(function, thread_x);
     }
 
+    /// Materializes a two-output Tuple pass in full float, evaluating `helper0` and `helper1`
+    /// once per pixel inside the thread loop.
+    void store_frame_pair(Func pair, Func helper0, Func helper1, Expr branch = Expr()) {
+        Var x = pair.args()[0], y = pair.args()[1], channel = pair.args()[2];
+        gpu_pointwise(pair, x, y, channel, 3, branch);
+        Var tx = thread_var(pair);
+        Var c0 = helper0.args()[2];
+        helper0.compute_at(pair, tx).bound(c0, 0, 3).unroll(c0);
+        Var c1 = helper1.args()[2];
+        helper1.compute_at(pair, tx).bound(c1, 0, 3).unroll(c1);
+    }
+
+    /// Materializes `values` as one full-frame GPU pass with an explicit threadgroup tile.
+    Func store_frame_tiled(Func values, int channels, int tile_x, int tile_y,
+                           Expr branch = Expr()) {
+        Var x = values.args()[0], y = values.args()[1], channel = values.args()[2];
+        Var block_x, block_y, thread_y;
+        Var thread_x = gpu_device_api() == DeviceAPI::WebGPU || gpu_device_api() == DeviceAPI::Metal
+            ? thread_var(values) : Var();
+        if (windowed_) window_stores_.push_back(values);
+        values.compute_root()
+            .bound(channel, 0, channels)
+            .reorder(channel, x, y)
+            .unroll(channel)
+            .gpu_tile(x, y, block_x, block_y, thread_x, thread_y, tile_x, tile_y,
+                      Halide::TailStrategy::GuardWithIf, gpu_device_api());
+        if (gpu_device_api() == DeviceAPI::Metal) values.never_partition_all();
+        if (branch.defined()) values.specialize(branch);
+        note_root(values, thread_x);
+        return values;
+    }
+
     /// Materializes `values` as one full-frame GPU pass and returns the view its consumers read.
     Func store_frame(Func values, bool half, int channels = 3, Expr branch = Expr()) {
         Var x("x"), y("y"), channel("channel");
@@ -279,7 +356,9 @@ public:
                       Expr radius, Expr width, Expr height, bool half,
                       const std::string &name, int channels = 3,
                       bool store_result = true,
-                      Expr sigma3 = Expr(), Expr radius3 = Expr()) {
+                      Expr sigma3 = Expr(), Expr radius3 = Expr(),
+                      Expr source_specialize = Expr(),
+                      std::vector<Func> *deferred_helpers_out = nullptr) {
         Var x("x"), y("y"), channel("channel"), k("k");
         const bool merged = sigma3.defined();
         const bool taps16 = half && f16_blur_compute();
@@ -335,7 +414,12 @@ public:
                                && x + horizontal_taps.x < width,
                            Halide::cast<float>(kernel(horizontal_taps.x, channel)), 0.0f),
             !half, name + "_horizontal");
-        Func horizontal_view = store_frame(horizontal, half, channels);
+        Func horizontal_view = (!half && windowed_ && gpu_device_api() == DeviceAPI::Metal)
+            ? store_frame_tiled(horizontal, channels, 128, 1)
+            : store_frame(horizontal, half, channels);
+        if (source_specialize.defined()) {
+            horizontal.specialize(source_specialize);
+        }
         RDom vertical_taps(-extent, extent * 2 + 1, name + "_vertical_taps");
         Expr vertical_data = tap(horizontal_view(x, y + vertical_taps.x, channel))
             * kernel(vertical_taps.x, channel);
@@ -343,10 +427,23 @@ public:
                                                   && y + vertical_taps.x < height,
                                               Halide::cast<float>(kernel(vertical_taps.x, channel)),
                                               0.0f);
-        if (windowed_ && gpu_device_api() == DeviceAPI::Metal && store_result && !half
-            && !merged) {
+        if (windowed_ && gpu_device_api() == DeviceAPI::Metal
+            && (store_result || deferred_helpers_out) && !half && !merged) {
             return gpu_gaussian_three(bounded, kernel, vertical_data, vertical_weight, extent,
-                                      width, height, channels, name);
+                                      width, height, channels, name, source_specialize,
+                                      deferred_helpers_out);
+        }
+        if (deferred_helpers_out) {
+            Func sums(name + "_vertical_sums");
+            sums(x, y, channel) = {Halide::cast(vertical_data.type(), 0),
+                                   Halide::cast(vertical_weight.type(), 0)};
+            sums(x, y, channel) = {sums(x, y, channel)[0] + vertical_data,
+                                   sums(x, y, channel)[1] + vertical_weight};
+            Func vertical(name);
+            vertical(x, y, channel) = sums(x, y, channel)[0]
+                / Halide::max(sums(x, y, channel)[1], 1.0e-12f);
+            *deferred_helpers_out = {sums};
+            return vertical;
         }
         Func vertical(name);
         normalized_taps(vertical, x, y, channel, vertical_data, vertical_weight,
@@ -360,12 +457,12 @@ public:
     }
 
     /// The separable blur's second pass in a kernel that, at a one-pixel radius, runs the first
-    /// pass too: three taps of three taps, written out in the order and with the arithmetic of
-    /// the two passes' sums, read from the source instead of a frame-sized store of the first
-    /// pass. Every other radius reads the stored first pass, which then runs only for it.
+    /// pass in registers and reads the stored first pass for wider radii (or defers helper
+    /// scheduling to a consumer stage when `deferred_helpers_out` is supplied).
     Func gpu_gaussian_three(Func bounded, Func kernel, Expr vertical_data, Expr vertical_weight,
                             Expr extent, Expr width, Expr height, int channels,
-                            const std::string &name) {
+                            const std::string &name, Expr source_specialize = Expr(),
+                            std::vector<Func> *deferred_helpers_out = nullptr) {
         Var x("x"), y("y"), channel("channel");
         auto sum_taps = [](const std::vector<std::pair<Expr, Expr>> &taps) {
             Expr data = taps[0].first, weight = taps[0].second;
@@ -396,13 +493,34 @@ public:
                                Halide::cast(vertical_weight.type(), 0)};
         sums(x, y, channel) = {sums(x, y, channel)[0] + vertical_data,
                                sums(x, y, channel)[1] + vertical_weight};
+        if (deferred_helpers_out) {
+            Func blurred(name);
+            blurred(x, y, channel) = Halide::select(
+                extent == 1, sum_taps(taps),
+                sums(x, y, channel)[0] / Halide::max(sums(x, y, channel)[1], 1.0e-12f));
+            *deferred_helpers_out = {sums};
+            return blurred;
+        }
         Func blurred(name);
         blurred(x, y, channel) = Halide::select(
             extent == 1, sum_taps(taps),
             sums(x, y, channel)[0] / Halide::max(sums(x, y, channel)[1], 1.0e-12f));
-        store_frame(blurred, false, channels);
-        sums.compute_at(blurred, thread_var(blurred));
-        blurred.specialize(extent == 1);
+        Var bx(name + "_bx"), by(name + "_by"), ty(name + "_ty");
+        Var tx = thread_var(blurred);
+        if (windowed_) window_stores_.push_back(blurred);
+        blurred.compute_root()
+            .bound(channel, 0, channels)
+            .reorder(channel, x, y)
+            .unroll(channel)
+            .gpu_tile(x, y, bx, by, tx, ty, 32, 8,
+                      Halide::TailStrategy::GuardWithIf, gpu_device_api());
+        blurred.never_partition_all();
+        note_root(blurred, tx);
+        sums.compute_at(blurred, tx);
+        auto one_tap = blurred.specialize(extent == 1);
+        if (source_specialize.defined()) {
+            one_tap.specialize(source_specialize);
+        }
         return blurred;
     }
 
@@ -495,6 +613,7 @@ public:
     /// (see the halation pyramid's note).
     struct DecimatedGrid {
         Func view;
+        Func raw_source;
         Expr stride, phase_x, phase_y, width, height;
     };
 
@@ -546,7 +665,7 @@ public:
                                y * stride - phase_y + cell.y, channel),
                 name + "_down_sum") / Halide::max(count, 1.0f);
         }
-        return {store_frame(down, half), stride, phase_x, phase_y,
+        return {store_frame(down, half), source, stride, phase_x, phase_y,
                 down_width, down_height};
     }
 
@@ -564,6 +683,8 @@ public:
         return decimated_stride_is_fixed() ? Expr(configuration_.fixed_stride) : gaussian_stride(sigma);
     }
 
+    Expr last_decimated_stride_one() const { return last_decimated_stride_one_; }
+
     /// Applies Gaussian blur and resampling to an existing decimated grid.
     Func gpu_gaussian_on_grid(const DecimatedGrid &grid, Expr sigma, Expr radius,
                               bool half, const std::string &name) {
@@ -576,9 +697,22 @@ public:
         Expr down_height = grid.height;
         Expr decimated_sigma = decimated_gaussian_sigma(sigma, stride);
         Expr decimated_radius = decimated_gaussian_radius(radius, stride);
+        Func grid_input = grid.view;
+        Expr stride_one;
+        if (windowed_ && gpu_device_api() == DeviceAPI::Metal && !half
+            && grid.raw_source.defined() && name.find("coupler_diffused") != std::string::npos) {
+            stride_one = (stride == 1);
+            Func muxed(name + "_grid_in");
+            muxed(x, y, channel) = Halide::select(
+                stride_one, fp_store_barrier(grid.raw_source(x, y, channel), down_width > 0),
+                grid.view(x, y, channel));
+            grid_input = muxed;
+        }
+        last_decimated_stride_one_ = stride_one;
         Func blurred = gpu_gaussian(
-            grid.view, decimated_sigma, decimated_sigma, decimated_sigma,
-            decimated_radius, down_width, down_height, half, name + "_spread");
+            grid_input, decimated_sigma, decimated_sigma, decimated_sigma,
+            decimated_radius, down_width, down_height, half, name + "_spread",
+            3, true, Expr(), Expr(), stride_one);
         Func bounded_blur = constant_exterior(
             blurred, typed_zero(blurred),
             {{0, down_width}, {0, down_height}, {0, 3}});
@@ -599,11 +733,14 @@ public:
         };
         Expr sample_weight = w00 * valid_sample(x0, y0) + w01 * valid_sample(x0, y0 + 1)
             + w10 * valid_sample(x0 + 1, y0) + w11 * valid_sample(x0 + 1, y0 + 1);
-        up(x, y, channel) = (w00 * bounded_blur(x0, y0, channel)
-                                 + w01 * bounded_blur(x0, y0 + 1, channel)
-                                 + w10 * bounded_blur(x0 + 1, y0, channel)
-                                 + w11 * bounded_blur(x0 + 1, y0 + 1, channel))
+        Expr bilinear = (w00 * bounded_blur(x0, y0, channel)
+                             + w01 * bounded_blur(x0, y0 + 1, channel)
+                             + w10 * bounded_blur(x0 + 1, y0, channel)
+                             + w11 * bounded_blur(x0 + 1, y0 + 1, channel))
             / Halide::max(sample_weight, 1.0e-12f);
+        up(x, y, channel) = stride_one.defined()
+            ? Halide::select(stride_one, bounded_blur(x, y, channel), bilinear)
+            : bilinear;
         return up;
     }
 
@@ -617,6 +754,300 @@ public:
             source, decimated_gaussian_stride(sigma), origin_x, origin_y,
             width, height, half, name);
         return gpu_gaussian_on_grid(grid, sigma, radius, half, name);
+    }
+
+    struct FusedMtfGaussians {
+        Func per_layer;
+        std::vector<Func> per_helpers;
+        Func secondary;
+        std::vector<Func> sec_helpers;
+        Expr one_tap_sec;
+    };
+
+    /// Builds primary (4ch) and secondary (3ch) MTF Gaussians for `fused_mtf_luma`.
+    /// When `luma_radius > 1` and `extent <= 8`, the combined 7-channel horizontal pass stages
+    /// `raw_pre_mtf` directly in 1D `128 x 1` `GPUShared` SRAM (`2.25 KB`), skipping the
+    /// standalone `light_gate` DRAM pass completely.
+    FusedMtfGaussians gpu_fused_mtf_gaussians(
+        Func pre_mtf, Func raw_pre_mtf,
+        Expr sigma0, Expr sigma1, Expr sigma2, Expr radius,
+        Expr luma_sigma, Expr luma_radius,
+        Expr sec_sigma0, Expr sec_sigma1, Expr sec_sigma2,
+        Expr width, Expr height, const std::string &prefix, const std::string &suffix) {
+        Var x("x"), y("y"), channel("channel"), k("k");
+        const std::string pri_name = prefix + "mtf" + suffix;
+        const std::string sec_name = prefix + "mtf_secondary" + suffix;
+
+        Expr pri_sigma = Halide::select(
+            channel == 0, sigma0, channel == 1, sigma1, channel == 2, sigma2, luma_sigma);
+        Expr extent = Halide::max(radius, luma_radius);
+        Expr pri_denom = 2.0f * pri_sigma * pri_sigma;
+        RDom pri_norm(-extent, extent * 2 + 1, pri_name + "_norm_taps");
+        Expr pri_window = Halide::select(channel == 3, luma_radius, radius);
+        Expr pri_total = Halide::sum(
+            Halide::select(
+                Halide::abs(pri_norm.x) <= pri_window,
+                Halide::exp(-Halide::cast<float>(pri_norm.x * pri_norm.x) / pri_denom),
+                0.0f),
+            pri_name + "_norm_sum");
+        Expr pri_weight = Halide::exp(-Halide::cast<float>(k * k) / pri_denom);
+        Func pri_kernel(pri_name + "_kernel");
+        pri_kernel(k, channel) = Halide::select(
+            Halide::abs(k) <= pri_window,
+            reference_sampling() ? pri_weight : pri_weight / pri_total, 0.0f);
+        gpu_table(pri_kernel, k, channel, 4, pri_name);
+
+        Expr sec_sigma = Halide::select(
+            channel == 0, sec_sigma0, channel == 1, sec_sigma1, sec_sigma2);
+        Expr sec_denom = 2.0f * sec_sigma * sec_sigma;
+        RDom sec_norm(-luma_radius, luma_radius * 2 + 1, sec_name + "_norm_taps");
+        Expr sec_total = Halide::sum(
+            Halide::exp(-Halide::cast<float>(sec_norm.x * sec_norm.x) / sec_denom),
+            sec_name + "_norm_sum");
+        Expr sec_weight = Halide::exp(-Halide::cast<float>(k * k) / sec_denom);
+        Func sec_kernel(sec_name + "_kernel");
+        sec_kernel(k, channel) = reference_sampling() ? sec_weight : sec_weight / sec_total;
+        gpu_table(sec_kernel, k, channel, 3, sec_name);
+
+        Func bounded4 = constant_exterior(pre_mtf, 0.0f, {{0, width}, {0, height}, {0, 4}});
+        Func bounded3 = constant_exterior(pre_mtf, 0.0f, {{0, width}, {0, height}, {0, 3}});
+
+        // 4-channel primary horizontal pass (used when `one_tap_sec` runs secondary inline).
+        RDom pri_htaps(-extent, extent * 2 + 1, pri_name + "_horizontal_taps");
+        Func pri_horiz(pri_name + "_horizontal");
+        normalized_taps(
+            pri_horiz, x, y, channel,
+            bounded4(x + pri_htaps.x, y, channel) * pri_kernel(pri_htaps.x, channel),
+            Halide::select(x + pri_htaps.x >= 0 && x + pri_htaps.x < width,
+                           Halide::cast<float>(pri_kernel(pri_htaps.x, channel)), 0.0f),
+            true, pri_name + "_horizontal");
+        Func pri_horiz_view = (windowed_ && gpu_device_api() == DeviceAPI::Metal)
+            ? store_frame_tiled(pri_horiz, 4, 128, 1)
+            : store_frame(pri_horiz, false, 4);
+
+        // 7-channel combined horizontal pass (used when `luma_radius > 1`).
+        RDom both_pri_htaps(-extent, extent * 2 + 1, pri_name + "_both_htaps");
+        Func pri_hsums(pri_name + "_both_hsums");
+        pri_hsums(x, y, channel) = {0.0f, 0.0f};
+        pri_hsums(x, y, channel) = {
+            pri_hsums(x, y, channel)[0]
+                + bounded4(x + both_pri_htaps.x, y, channel)
+                      * pri_kernel(both_pri_htaps.x, channel),
+            pri_hsums(x, y, channel)[1]
+                + Halide::select(x + both_pri_htaps.x >= 0 && x + both_pri_htaps.x < width,
+                                 Halide::cast<float>(pri_kernel(both_pri_htaps.x, channel)),
+                                 0.0f)};
+
+        RDom both_sec_htaps(-luma_radius, luma_radius * 2 + 1, sec_name + "_both_htaps");
+        Func sec_hsums(sec_name + "_both_hsums");
+        sec_hsums(x, y, channel) = {0.0f, 0.0f};
+        sec_hsums(x, y, channel) = {
+            sec_hsums(x, y, channel)[0]
+                + bounded3(x + both_sec_htaps.x, y, channel)
+                      * sec_kernel(both_sec_htaps.x, channel),
+            sec_hsums(x, y, channel)[1]
+                + Halide::select(x + both_sec_htaps.x >= 0 && x + both_sec_htaps.x < width,
+                                 Halide::cast<float>(sec_kernel(both_sec_htaps.x, channel)),
+                                 0.0f)};
+
+        auto pri_h = [&](int ch) {
+            return pri_hsums(x, y, ch)[0] / Halide::max(pri_hsums(x, y, ch)[1], 1.0e-12f);
+        };
+        auto sec_h = [&](int ch) {
+            return sec_hsums(x, y, ch)[0] / Halide::max(sec_hsums(x, y, ch)[1], 1.0e-12f);
+        };
+        Expr dram_mux = Halide::mux(
+            channel, {pri_h(0), pri_h(1), pri_h(2), pri_h(3), sec_h(0), sec_h(1), sec_h(2)});
+
+        Func both_horiz(pri_name + "_both_horizontal");
+        if (windowed_ && gpu_device_api() == DeviceAPI::Metal && raw_pre_mtf.defined()) {
+            // 240 output pixels + up to 2*8 = 16 halo pixels <= 256 threads: `pre_sh` computes
+            // `scene_exposure` in ONE single wave across 8 SIMD32 warps without a second tail wave.
+            constexpr int kHorizOutX = 240;
+            constexpr int kHorizThreads = 256;
+            constexpr int kMaxPreShExtent = 8;
+            Expr sh_ext = Halide::clamp(extent, 1, kMaxPreShExtent);
+            Expr sh_sec = Halide::clamp(luma_radius, 1, kMaxPreShExtent);
+            Expr use_pre_sh = extent <= kMaxPreShExtent;
+
+            Func pre_sh(pri_name + "_pre_sh");
+            Expr sh_inside = x >= 0 && x < width && y >= 0 && y < height;
+            pre_sh(x, y, channel) = Halide::select(
+                sh_inside,
+                raw_pre_mtf(Halide::clamp(x, 0, width - 1), Halide::clamp(y, 0, height - 1),
+                            channel),
+                0.0f);
+
+            RDom htaps_sh(-sh_ext, sh_ext * 2 + 1, pri_name + "_htaps_sh");
+            Expr tx_coord = x + htaps_sh.x;
+            Expr tap_in_bounds = tx_coord >= 0 && tx_coord < width;
+            Expr tap_in_sec = Halide::abs(htaps_sh.x) <= sh_sec;
+            Expr s_in0 = pre_sh(tx_coord, y, 0);
+            Expr s_in1 = pre_sh(tx_coord, y, 1);
+            Expr s_in2 = pre_sh(tx_coord, y, 2);
+            Expr s_in3 = pre_sh(tx_coord, y, 3);
+            Expr pk0 = pri_kernel(htaps_sh.x, 0);
+            Expr pk1 = pri_kernel(htaps_sh.x, 1);
+            Expr pk2 = pri_kernel(htaps_sh.x, 2);
+            Expr pk3 = pri_kernel(htaps_sh.x, 3);
+            Expr sk0 = Halide::select(tap_in_sec, sec_kernel(htaps_sh.x, 0), 0.0f);
+            Expr sk1 = Halide::select(tap_in_sec, sec_kernel(htaps_sh.x, 1), 0.0f);
+            Expr sk2 = Halide::select(tap_in_sec, sec_kernel(htaps_sh.x, 2), 0.0f);
+
+            Func hsums_sh(pri_name + "_all_hsums_sh");
+            hsums_sh(x, y) = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                              0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+            hsums_sh(x, y) = {
+                hsums_sh(x, y)[0] + s_in0 * pk0,
+                hsums_sh(x, y)[1] + Halide::select(tap_in_bounds, pk0, 0.0f),
+                hsums_sh(x, y)[2] + s_in1 * pk1,
+                hsums_sh(x, y)[3] + Halide::select(tap_in_bounds, pk1, 0.0f),
+                hsums_sh(x, y)[4] + s_in2 * pk2,
+                hsums_sh(x, y)[5] + Halide::select(tap_in_bounds, pk2, 0.0f),
+                hsums_sh(x, y)[6] + s_in3 * pk3,
+                hsums_sh(x, y)[7] + Halide::select(tap_in_bounds, pk3, 0.0f),
+                hsums_sh(x, y)[8] + s_in0 * sk0,
+                hsums_sh(x, y)[9] + Halide::select(tap_in_bounds, sk0, 0.0f),
+                hsums_sh(x, y)[10] + s_in1 * sk1,
+                hsums_sh(x, y)[11] + Halide::select(tap_in_bounds, sk1, 0.0f),
+                hsums_sh(x, y)[12] + s_in2 * sk2,
+                hsums_sh(x, y)[13] + Halide::select(tap_in_bounds, sk2, 0.0f)};
+
+            auto norm_sh = [&](int idx) {
+                return hsums_sh(x, y)[idx * 2]
+                    / Halide::max(hsums_sh(x, y)[idx * 2 + 1], 1.0e-12f);
+            };
+            Expr sh_mux = Halide::mux(
+                channel, {norm_sh(0), norm_sh(1), norm_sh(2), norm_sh(3),
+                          norm_sh(4), norm_sh(5), norm_sh(6)});
+
+            both_horiz(x, y, channel) = Halide::select(use_pre_sh, sh_mux, dram_mux);
+            Var bbx(both_horiz.name() + "_bx"), bby(both_horiz.name() + "_by"),
+                bty(both_horiz.name() + "_ty");
+            Var btx = thread_var(both_horiz);
+            window_stores_.push_back(both_horiz);
+            both_horiz.compute_root()
+                .bound(channel, 0, 7)
+                .unroll(channel)
+                .split(y, bby, bty, 1, Halide::TailStrategy::GuardWithIf)
+                .split(x, bbx, btx, kHorizOutX, Halide::TailStrategy::GuardWithIf)
+                .reorder(channel, btx, bty, bbx, bby)
+                .gpu_blocks(bbx, bby, gpu_device_api())
+                .gpu_threads(btx, bty, gpu_device_api());
+            both_horiz.never_partition_all();
+            note_root(both_horiz, btx);
+
+            Var px = pre_sh.args()[0], py = pre_sh.args()[1], pc = pre_sh.args()[2];
+            Var pxo(pre_sh.name() + "_pxo"), pyo(pre_sh.name() + "_pyo"),
+                ptx(pre_sh.name() + "_ptx"), pty(pre_sh.name() + "_pty");
+            pre_sh.store_in(Halide::MemoryType::GPUShared)
+                .compute_at(both_horiz, bbx)
+                .bound(pc, 0, 4)
+                .split(py, pyo, pty, 1, Halide::TailStrategy::GuardWithIf)
+                .split(px, pxo, ptx, kHorizThreads, Halide::TailStrategy::GuardWithIf)
+                .reorder(pc, pxo, pyo, ptx, pty)
+                .unroll(pc)
+                .gpu_threads(ptx, pty, gpu_device_api());
+
+            hsums_sh.compute_at(both_horiz, btx);
+            pri_hsums.compute_at(both_horiz, btx).bound(channel, 0, 4).unroll(channel);
+            pri_hsums.update(0).unroll(channel);
+            sec_hsums.compute_at(both_horiz, btx).bound(channel, 0, 3).unroll(channel);
+            sec_hsums.update(0).unroll(channel);
+            both_horiz.specialize(use_pre_sh);
+        } else {
+            both_horiz(x, y, channel) = dram_mux;
+            if (windowed_ && gpu_device_api() == DeviceAPI::Metal) {
+                store_frame_tiled(both_horiz, 7, 128, 1);
+            } else {
+                store_frame(both_horiz, false, 7);
+            }
+            Var btx = thread_var(both_horiz);
+            pri_hsums.compute_at(both_horiz, btx).bound(channel, 0, 4).unroll(channel);
+            pri_hsums.update(0).unroll(channel);
+            sec_hsums.compute_at(both_horiz, btx).bound(channel, 0, 3).unroll(channel);
+            sec_hsums.update(0).unroll(channel);
+        }
+
+        Expr one_tap_sec = (windowed_ && gpu_device_api() == DeviceAPI::Metal)
+            ? Expr(luma_radius == 1)
+            : Expr(Halide::Internal::const_false());
+
+        RDom pri_vtaps(-extent, extent * 2 + 1, pri_name + "_vertical_taps");
+        Expr pri_h_sample = Halide::select(
+            one_tap_sec, pri_horiz_view(x, y + pri_vtaps.x, channel),
+            both_horiz(x, y + pri_vtaps.x, channel));
+        Expr pri_vdata = pri_h_sample * pri_kernel(pri_vtaps.x, channel);
+        Expr pri_vweight = Halide::select(
+            y + pri_vtaps.x >= 0 && y + pri_vtaps.x < height,
+            Halide::cast<float>(pri_kernel(pri_vtaps.x, channel)), 0.0f);
+        Func pri_vsums(pri_name + "_vertical_sums");
+        pri_vsums(x, y, channel) = {0.0f, 0.0f};
+        pri_vsums(x, y, channel) = {pri_vsums(x, y, channel)[0] + pri_vdata,
+                                    pri_vsums(x, y, channel)[1] + pri_vweight};
+        Func per_layer(pri_name);
+        per_layer(x, y, channel) =
+            pri_vsums(x, y, channel)[0] / Halide::max(pri_vsums(x, y, channel)[1], 1.0e-12f);
+        std::vector<Func> per_helpers{pri_vsums};
+
+        RDom sec_vtaps(-luma_radius, luma_radius * 2 + 1, sec_name + "_vertical_taps");
+        Expr sec_vdata = both_horiz(x, y + sec_vtaps.x, channel + 4)
+            * sec_kernel(sec_vtaps.x, channel);
+        Expr sec_vweight = Halide::select(
+            y + sec_vtaps.x >= 0 && y + sec_vtaps.x < height,
+            Halide::cast<float>(sec_kernel(sec_vtaps.x, channel)), 0.0f);
+        std::vector<Func> sec_helpers;
+        Func secondary(sec_name);
+        if (windowed_ && gpu_device_api() == DeviceAPI::Metal) {
+            secondary = gpu_gaussian_three(
+                bounded3, sec_kernel, sec_vdata, sec_vweight, luma_radius, width, height, 3,
+                sec_name, Expr(), &sec_helpers);
+        } else {
+            Func sec_vsums(sec_name + "_vertical_sums");
+            sec_vsums(x, y, channel) = {0.0f, 0.0f};
+            sec_vsums(x, y, channel) = {sec_vsums(x, y, channel)[0] + sec_vdata,
+                                        sec_vsums(x, y, channel)[1] + sec_vweight};
+            secondary(x, y, channel) =
+                sec_vsums(x, y, channel)[0] / Halide::max(sec_vsums(x, y, channel)[1], 1.0e-12f);
+            sec_helpers = {sec_vsums};
+        }
+
+        return {per_layer, std::move(per_helpers), secondary, std::move(sec_helpers), one_tap_sec};
+    }
+
+    void schedule_fused_mtf_separated(Func separated, FusedMtfGaussians &mtf, Func mixed) {
+        Var x = separated.args()[0], y = separated.args()[1], c = separated.args()[2];
+        Var bx(separated.name() + "_bx"), by(separated.name() + "_by"),
+            ty(separated.name() + "_ty");
+        Var tx = thread_var(separated);
+        if (windowed_) window_stores_.push_back(separated);
+        const int tile_x = (gpu_device_api() == DeviceAPI::Metal) ? 32 : gpu_tile_x();
+        const int tile_y = (gpu_device_api() == DeviceAPI::Metal) ? 8 : gpu_tile_y();
+        separated.compute_root()
+            .bound(c, 0, 3)
+            .reorder(c, x, y)
+            .unroll(c)
+            .gpu_tile(x, y, bx, by, tx, ty, tile_x, tile_y,
+                      Halide::TailStrategy::GuardWithIf, gpu_device_api());
+        if (gpu_device_api() == DeviceAPI::Metal) separated.never_partition_all();
+        note_root(separated, tx);
+
+        Var per_c = mtf.per_layer.args()[2];
+        mtf.per_layer.compute_at(separated, tx).bound(per_c, 0, 4).unroll(per_c);
+        for (Func &h : mtf.per_helpers) {
+            h.compute_at(mtf.per_layer, per_c);
+        }
+        Var sec_c = mtf.secondary.args()[2];
+        mtf.secondary.compute_at(separated, tx).bound(sec_c, 0, 3).unroll(sec_c);
+        for (Func &h : mtf.sec_helpers) {
+            h.compute_at(mtf.secondary, sec_c);
+        }
+        Var mix_c = mixed.args()[2];
+        mixed.compute_at(separated, tx).bound(mix_c, 0, 3).unroll(mix_c);
+
+        if (windowed_ && gpu_device_api() == DeviceAPI::Metal) {
+            separated.specialize(mtf.one_tap_sec);
+        }
     }
 }; // GpuSchedule
 }

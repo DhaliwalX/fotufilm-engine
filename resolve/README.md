@@ -230,8 +230,11 @@ choices are saved per node and cannot be animated. Switching modes retains each 
 
 In Timeline Auto, unknown named spaces produce an error and hosts without color tags use
 Rec.709 Gamma 2.4. Fotufilm mode requires explicit supported choices; it never guesses
-a camera format from file metadata. Camera decoding uses the shared core curves on CPU
-in both preview and delivery; the film renderer still follows Render Mode.
+a camera format from file metadata. On Apple silicon Macs, the plugin accepts Resolve's
+Metal frames directly by default (set `FOTUFILM_HOST_METAL=0` to use host-memory frames
+instead; on Intel Macs, set `FOTUFILM_HOST_METAL=1` to opt in); camera log curves decode
+on Metal when rendering at full resolution without resampling, falling back to the shared
+core curves on CPU otherwise, while the film renderer follows Render Mode.
 
 ## Pipeline stages
 

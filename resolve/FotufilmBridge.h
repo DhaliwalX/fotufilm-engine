@@ -327,6 +327,14 @@ int32_t fotufilm_bridge_frame_staging(FotufilmBridgeContext context,
                                      int32_t width, int32_t height,
                                      float **input, float **output);
 
+/// Queue-aware variant of `fotufilm_bridge_frame_staging`: pass the host's `MTLCommandQueue*`
+/// when borrowing staging for a GPU Metal frame (or NULL for CPU frames) so the 2-slot pool can
+/// reuse an in-flight slot on the same serial queue without stalling the CPU.
+int32_t fotufilm_bridge_frame_staging_for_queue(FotufilmBridgeContext context,
+                                               int32_t width, int32_t height,
+                                               void *queue,
+                                               float **input, float **output);
+
 /// Returns the context's borrowed staging after the host has copied the developed output. Safe to
 /// call when no staging was borrowed. A render that aborts after decode must still call this.
 void fotufilm_bridge_release_staging(FotufilmBridgeContext context);
@@ -387,13 +395,28 @@ int32_t fotufilm_bridge_camera_input_transform(int32_t index,
 
 /// Decodes tightly packed host pixels from staging output into scene-linear staging input.
 /// `peak` receives the largest finite pre-repair RGB value; `repaired` reports any non-finite
-/// replacement. Either may be NULL. Returns 1 on success and 0 when staging, Metal, or the kernel
-/// is unavailable. `realtime` must use the same effective policy as the following render.
-/// Arithmetic order matches `fotufilm::decodePixels` but GPU transcendentals may differ.
+/// replacement. Either may be NULL. When an async host Metal compute encoder is open, non-finite
+/// pixels are still clamped in the kernel while host readback of `peak` and `repaired` is skipped
+/// (writing 0) so the command buffer is not stalled on the CPU. Returns 1 on success and 0 when
+/// staging, Metal, or the kernel is unavailable. `realtime` must use the same effective policy as
+/// the following render. Arithmetic order matches `fotufilm::decodePixels` but GPU transcendentals
+/// may differ.
 int32_t fotufilm_bridge_decode_staged(FotufilmBridgeContext context,
                                      int32_t width, int32_t height,
                                      const struct FotufilmInputTransform *transform,
                                      float *peak, int32_t *repaired, int32_t realtime);
+
+/// Decodes tightly packed bottom-up RGBA float rows directly from `source_buffer` (`id<MTLBuffer>`)
+/// at offset 0 into top-down scene-linear `staging.sceneBuffer`, flipping Y inside the decode
+/// kernel to eliminate `copyFrameIn` on full-frame Metal renders. Non-finite pixels are clamped in
+/// the kernel; host readback of `peak` and `repaired` is skipped (writing 0) so the async command
+/// buffer is not stalled on the CPU. Returns 1 on success and 0 when unavailable (the caller falls
+/// back to `copyFrameIn` + `fotufilm_bridge_decode_staged`).
+int32_t fotufilm_bridge_decode_staged_from_metal(FotufilmBridgeContext context,
+                                                void *source_buffer,
+                                                int32_t width, int32_t height,
+                                                const struct FotufilmInputTransform *transform,
+                                                float *peak, int32_t *repaired, int32_t realtime);
 
 /// Decodes a non-overlapping band of tightly packed, top-first RGBA host rows with the staged
 /// decode kernel. Results are independent of band size. Combine per-band `peak` by maximum and
@@ -416,9 +439,73 @@ int32_t fotufilm_bridge_render_staged(FotufilmBridgeContext context,
                                      fotufilm_bridge_should_continue should_continue,
                                      void *abort_context);
 
+/// Develops borrowed staging input, optionally writing finished bottom-up RGBA float rows directly
+/// into `direct_output_buffer` (`id<MTLBuffer>`, or NULL) at offset 0 to eliminate `copyFrameOut`
+/// on full-frame Metal renders. Sets `*wrote_direct_output` (when non-NULL) to 1 if the kernel
+/// wrote `direct_output_buffer` directly, or 0 if the result landed in `staging.developedBuffer`
+/// (so the caller must still copy it out). Same return status codes as `fotufilm_bridge_render`.
+int32_t fotufilm_bridge_render_staged_to_metal(FotufilmBridgeContext context,
+                                              int32_t stock, int32_t format, int32_t paper,
+                                              const float *parameters, uint32_t seed,
+                                              int32_t width, int32_t height, uint64_t frame,
+                                              int32_t interactive,
+                                              struct FotufilmOutputTransform *output_transform,
+                                              void *direct_output_buffer,
+                                              int32_t *wrote_direct_output,
+                                              fotufilm_bridge_should_continue should_continue,
+                                              void *abort_context);
+
 /// Copies the most recent failure into `out`.
 int32_t fotufilm_bridge_last_error(FotufilmBridgeContext context,
                                   char *out, int32_t capacity);
+
+
+/// Begins a single-command-buffer host Metal scope on `queue` (a `MTLCommandQueue*`).
+/// Calls `fotufilm_halide_metal_host_queue_begin(queue)` and records the queue identity so the
+/// staging pool can avoid unnecessary waits between consecutive GPU frames on the same queue.
+/// Must be paired with `fotufilm_bridge_host_metal_end` even on early exit.
+void fotufilm_bridge_host_metal_begin(FotufilmBridgeContext context, void *queue);
+
+/// Ends the host Metal scope opened by `fotufilm_bridge_host_metal_begin`.
+/// Calls `fotufilm_halide_metal_host_queue_end()` to retrieve the +1-retained command buffer
+/// that was committed asynchronously on the host queue, then attaches it as a fence on the
+/// borrowed staging so recycling can avoid stalling the GPU unnecessarily.
+void fotufilm_bridge_host_metal_end(FotufilmBridgeContext context);
+
+/// Returns 1 on arm64 macOS when the bridge has a Metal device and `cameraIndex` names a camera
+/// log format that the 0-ULP GPU Apple Log kernel supports (Apple Log or Apple Log 2), 0 otherwise.
+int32_t fotufilm_bridge_camera_gpu_decode_supported(int32_t cameraIndex);
+
+/// GPU Apple Log / Apple Log 2 decode using the context's current frame staging buffers.
+/// Reads from staging.developedBuffer (which must be filled by the caller via copyRows into
+/// stagedOutput before this call) and writes the decoded scene-linear result to staging.sceneBuffer.
+/// For CPU OFX host paths (no open host Metal encoder required; uses its own cached queue + CB).
+/// Returns 1 on success, 0 on failure.
+int32_t fotufilm_bridge_camera_gpu_decode_staged(
+    FotufilmBridgeContext context,
+    int32_t width, int32_t height,
+    int32_t premultiplied, int32_t cameraIndex,
+    uint32_t *repairedOut);
+
+/// Dispatches the fused 0-ULP GPU Apple Log / Apple Log 2 decode kernel between `MTLBuffer*`s.
+/// `sourceBuffer` and `destinationBuffer` are unretained `MTLBuffer*` pointers of float4 RGBA.
+/// `sourceBase + sourceStep * row + x` addresses source pixel (x, row) -- use a negative
+/// `sourceStep` with `sourceBase = (height - 1) * |step|` to flip bottom-up rows top-down.
+/// `destinationBase + destinationStep * row + x` addresses the output (top-down, step >= 0).
+/// Non-zero `premultiplied` un-premultiplies alpha before decode. `cameraIndex` selects the gamut
+/// matrix (`encoding.gamut.toRec2020` cast to Float).
+/// When an async host Metal compute encoder is open (`fotufilm_halide_metal_host_compute_encoder`),
+/// encodes directly onto it without `endEncoding` / `commit` / wait (`repairedOut` is ignored and
+/// `fotufilm_bridge_host_metal_end` commits the CB); otherwise executes synchronously on a cached
+/// command queue and writes 1 to `*repairedOut` (when non-NULL) if any non-finite pixel was clamped.
+/// Returns 1 on success, 0 on failure.
+int32_t fotufilm_bridge_camera_gpu_decode(
+    FotufilmBridgeContext context,
+    void *sourceBuffer, int64_t sourceBase, int64_t sourceStep,
+    void *destinationBuffer, int64_t destinationBase, int64_t destinationStep,
+    int32_t width, int32_t rows,
+    int32_t premultiplied, int32_t cameraIndex,
+    uint32_t *repairedOut);
 
 #ifdef __cplusplus
 }

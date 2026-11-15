@@ -63,6 +63,8 @@ struct GpuPolicy {
     bool half_tetra = false;
     int film_lut_base = 0;
     int paper_lut_base = 0;
+    bool exact_stages = false;
+    bool gated_parity = false;
 };
 
 class GpuBackend : public graph::Backend {
@@ -130,24 +132,29 @@ public:
             }
             return remember(values, schedule_.store_frame(values, half, channels, branch));
         case Store::MtfMixed:
+            if (register_stages()) {
+                schedule_.register_stage(values);
+                return remember(values, values);
+            }
+            return remember(values, schedule_.store_frame(values, half, channels, branch));
+        case Store::Released:
         case Store::MtfSeparated:
         case Store::LogExposure:
-        case Store::Released:
         case Store::FlatLog:
         case Store::FlatReleased:
             return remember(values, schedule_.store_frame(values, half, channels, branch));
         case Store::FilmDensity:
             if (register_stages()) {
-                schedule_.register_stage(values);
+                schedule_.register_stage(values, 0, {}, coupler_stride_one_);
                 return remember(values, values);
             }
             return remember(values, schedule_.store_frame(values, false, channels, branch));
         case Store::FilmGrain:
             // Density to the grain's thousandths: never half.
             return remember(values, schedule_.store_frame(values, false, channels, branch));
+        case Store::Transmittance:
         case Store::Noise:
         case Store::MottleNoise:
-        case Store::Transmittance:
         case Store::FlatTransmittance:
             return remember(values, schedule_.store_frame(values, half, channels));
         case Store::PrintActivation:
@@ -181,6 +188,16 @@ public:
     Func gaussian(Func source, Expr sigma0, Expr sigma1, Expr sigma2, Expr radius,
                   Expr width, Expr height, const std::string &name, int channels,
                   Expr luma_sigma, Expr luma_radius) override {
+        if (policy_.exact_stages && register_stages() && !policy_.half_store
+            && !luma_sigma.defined() && name.find("print_mtf") != std::string::npos) {
+            std::vector<Func> helpers;
+            Func blurred = schedule_.gpu_gaussian(
+                source, sigma0, sigma1, sigma2, radius, width, height, false, name, channels,
+                false, Expr(), Expr(), Expr(), &helpers);
+            schedule_.register_stage(blurred, channels, std::move(helpers),
+                                     Expr(p_.print_mtf_radius_ == 1));
+            return remember(blurred, blurred);
+        }
         Func blurred = schedule_.gpu_gaussian(source, sigma0, sigma1, sigma2, radius, width, height,
                                     policy_.half_store, name, channels, true, luma_sigma,
                                     luma_radius);
@@ -188,11 +205,58 @@ public:
         return blurred;
     }
 
+    Func fused_mtf_luma(Func pre_mtf, Func raw_pre_mtf, ImageParam &configuration,
+                        FrameParams &p, Expr mtf_radius, const std::string &prefix,
+                        const std::string &suffix) override {
+        if (!policy_.exact_stages || !policy_.gated_parity || !register_stages()
+            || policy_.half_store) {
+            return Func();
+        }
+        auto mtf_pair = schedule_.gpu_fused_mtf_gaussians(
+            pre_mtf, raw_pre_mtf, p.mtf_sigma_0_, p.mtf_sigma_1_, p.mtf_sigma_2_, mtf_radius,
+            p.mtf_luma_sigma_, p.mtf_luma_radius_,
+            Halide::max(configuration(FOTUFILM_CONFIG_MTF_SECONDARY_SIGMA), 0.151f),
+            Halide::max(configuration(FOTUFILM_CONFIG_MTF_SECONDARY_SIGMA + 1), 0.151f),
+            Halide::max(configuration(FOTUFILM_CONFIG_MTF_SECONDARY_SIGMA + 2), 0.151f),
+            p.width_, p.height_, prefix, suffix);
+        Func &per_layer = mtf_pair.per_layer;
+        Func &secondary = mtf_pair.secondary;
+        Var x("x"), y("y"), c("channel");
+        Expr keep_fp = p.width_ > 0;
+        Expr per_c_val = fp_store_barrier(per_layer(x, y, c), keep_fp);
+        Expr per_luma_val = fp_store_barrier(per_layer(x, y, 3), keep_fp);
+        Expr sec_c_val = fp_store_barrier(secondary(x, y, c), keep_fp);
+        Func mixed(prefix + "mtf_mixed" + suffix);
+        Expr primary_share = configuration(FOTUFILM_CONFIG_MTF_PRIMARY_SHARE + c);
+        mixed(x, y, c) = (per_c_val - sec_c_val) * primary_share + sec_c_val;
+        Func separated(prefix + "mtf_separated" + suffix);
+        separated(x, y, c) = mtf_luma_mix(
+            configuration, mixed(x, y, c), record_neutral(mixed, x, y), per_luma_val);
+        schedule_.schedule_fused_mtf_separated(separated, mtf_pair, mixed);
+        return remember(separated, separated);
+    }
+
     Func gaussian_decimated(Func source, Expr sigma, Expr radius, Expr origin_x,
                             Expr origin_y, Expr width, Expr height,
                             const std::string &name, int) override {
-        return schedule_.gpu_gaussian_decimated(source, sigma, radius, origin_x, origin_y, width,
-                                      height, policy_.half_store, name);
+        Func res = schedule_.gpu_gaussian_decimated(source, sigma, radius, origin_x, origin_y,
+                                                    width, height, policy_.half_store, name);
+        if (name.find("coupler_diffused") != std::string::npos
+            && !coupler_stride_one_.defined()) {
+            coupler_stride_one_ = schedule_.last_decimated_stride_one();
+        }
+        return res;
+    }
+
+    bool can_fuse_log_and_released() const override {
+        return policy_.exact_stages && policy_.gated_parity && register_stages()
+            && !policy_.half_store && policy_.tabulated_curves;
+    }
+
+    void store_log_and_released(Func pair, Func log_helper, Func rel_helper,
+                                Expr branch) override {
+        schedule_.store_frame_pair(pair, log_helper, rel_helper, branch);
+        stored_.insert(pair.name());
     }
 
     std::array<Expr, 3> scattered(Func light, std::array<Expr, 3> strides,
@@ -438,13 +502,26 @@ public:
                             shared_draw);
         }
         Func noise_view = schedule_.store_frame(noise, half, noise_channels);
-        fields.grain = schedule_.gpu_gaussian(
-            noise_view,
-            configuration(FOTUFILM_CONFIG_GRAIN_SIGMA_LAYER),
-            configuration(FOTUFILM_CONFIG_GRAIN_SIGMA_LAYER + 1),
-            configuration(FOTUFILM_CONFIG_GRAIN_SIGMA_LAYER + 2),
-            p.grain_radius_, width, height, half, prefix + "grain_field" + suffix,
-            noise_channels);
+        if (policy_.exact_stages && register_stages() && !half) {
+            std::vector<Func> grain_helpers;
+            fields.grain = schedule_.gpu_gaussian(
+                noise_view,
+                configuration(FOTUFILM_CONFIG_GRAIN_SIGMA_LAYER),
+                configuration(FOTUFILM_CONFIG_GRAIN_SIGMA_LAYER + 1),
+                configuration(FOTUFILM_CONFIG_GRAIN_SIGMA_LAYER + 2),
+                p.grain_radius_, width, height, false, prefix + "grain_field" + suffix,
+                noise_channels, false, Expr(), Expr(), Expr(), &grain_helpers);
+            schedule_.register_stage(fields.grain, noise_channels, std::move(grain_helpers),
+                                     Expr(p.grain_radius_ == 1));
+        } else {
+            fields.grain = schedule_.gpu_gaussian(
+                noise_view,
+                configuration(FOTUFILM_CONFIG_GRAIN_SIGMA_LAYER),
+                configuration(FOTUFILM_CONFIG_GRAIN_SIGMA_LAYER + 1),
+                configuration(FOTUFILM_CONFIG_GRAIN_SIGMA_LAYER + 2),
+                p.grain_radius_, width, height, half, prefix + "grain_field" + suffix,
+                noise_channels);
+        }
         if (use_mottle) {
             Func mottle_noise(prefix + "mottle_noise" + suffix);
             if (!policy_.table_grain) {
@@ -528,6 +605,7 @@ private:
     ImageParam &film_lut_;
     ImageParam &paper_lut_;
     std::set<std::string> stored_;
+    Expr coupler_stride_one_;
 };
 
 

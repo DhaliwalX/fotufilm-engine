@@ -1,4 +1,5 @@
 #include "FotufilmHalide.h"
+#include "FotufilmHalideDevelop.h"
 
 // The schedules below are written against a DeviceAPI rather than against Metal, so the same
 // pipeline serves every GPU the engine reaches: Metal on Apple, Vulkan on Android, WebGPU in the
@@ -703,6 +704,16 @@ extern "C" int32_t fotufilm_halide_metal_decode_rows_realtime(
     });
 }
 
+// Host-queue async scope: the JIT Metal path does not support single-CB batching
+// (Resolve uses the AOT path in FotufilmHalideIOS.cpp).  Provide no-op stubs here
+// so a JIT-only build links cleanly if something calls these symbols.
+extern "C" void    fotufilm_halide_metal_host_queue_begin(void *) {}
+extern "C" int32_t fotufilm_halide_metal_host_queue_active(void) { return 0; }
+extern "C" void   *fotufilm_halide_metal_host_compute_encoder(void) { return nullptr; }
+extern "C" int32_t fotufilm_halide_metal_host_queue_flush_wait(void) { return 1; }
+extern "C" void   *fotufilm_halide_metal_host_queue_end(void) { return nullptr; }
+extern "C" void    fotufilm_halide_metal_set_io_flip(int32_t, int32_t, int32_t) {}
+
 #endif  // __APPLE__
 
 #if defined(FOTUFILM_HALIDE_CUDA)
@@ -969,5 +980,13 @@ extern "C" FOTUFILM_FALLBACK int32_t fotufilm_halide_metal_process_buffers_tail(
     uint64_t, uint64_t, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t,
     const float *, const float *, const float *, const float *, int32_t,
     uint64_t, int32_t, uint32_t) { return -1; }
+// Host-queue async scope stubs: JIT builds have no AOT Metal-queue path; these
+// FOTUFILM_FALLBACK definitions let swift test and JIT host targets link cleanly.
+extern "C" FOTUFILM_FALLBACK void    fotufilm_halide_metal_host_queue_begin(void *) {}
+extern "C" FOTUFILM_FALLBACK int32_t fotufilm_halide_metal_host_queue_active(void) { return 0; }
+extern "C" FOTUFILM_FALLBACK void   *fotufilm_halide_metal_host_compute_encoder(void) { return nullptr; }
+extern "C" FOTUFILM_FALLBACK int32_t fotufilm_halide_metal_host_queue_flush_wait(void) { return 1; }
+extern "C" FOTUFILM_FALLBACK void   *fotufilm_halide_metal_host_queue_end(void) { return nullptr; }
+extern "C" FOTUFILM_FALLBACK void    fotufilm_halide_metal_set_io_flip(int32_t, int32_t, int32_t) {}
 
 #endif

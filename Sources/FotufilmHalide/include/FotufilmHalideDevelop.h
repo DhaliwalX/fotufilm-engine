@@ -36,4 +36,28 @@ static inline int32_t fotufilm_develop_variant(int32_t feature_mask) {
         | ((features & FOTUFILM_FRAME_RECORD_EXPOSURE_IN) ? 65536 : 0)
         | ((features & FOTUFILM_FRAME_LIGHT_OUT) ? 131072 : 0);
 }
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/// Host-queue async scope: bind a caller-owned MTLCommandQueue so that subsequent
+/// Halide Metal calls on this thread encode into ONE command buffer and serial
+/// compute encoder on that queue without CPU stalls.
+void    fotufilm_halide_metal_host_queue_begin(void *mtl_command_queue);
+int32_t fotufilm_halide_metal_host_queue_active(void);
+void   *fotufilm_halide_metal_host_compute_encoder(void);
+int32_t fotufilm_halide_metal_host_queue_flush_wait(void);
+void   *fotufilm_halide_metal_host_queue_end(void);
+
+/// Configures per-thread vertical row-flip for zero-copy bottom-up host MTLBuffers
+/// (e.g. DaVinci Resolve OFX gpuFrames) on decode input and/or frame develop output.
+void  fotufilm_halide_metal_set_io_flip(int32_t flip_decode_input_y,
+                                        int32_t flip_frame_output_y,
+                                        int32_t full_frame_height);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif

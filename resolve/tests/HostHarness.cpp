@@ -42,6 +42,8 @@ OfxPlugin *OfxGetPlugin(int nth);
 #include <objc/message.h>
 #include <objc/runtime.h>
 extern "C" void *MTLCreateSystemDefaultDevice(void);
+extern "C" void *objc_autoreleasePoolPush(void);
+extern "C" void objc_autoreleasePoolPop(void *);
 
 /// Just enough Metal, through the Objective-C runtime, to play a host that renders through the
 /// OFX Metal extension: a queue, and shared buffers whose CPU view the harness fills and reads.
@@ -64,6 +66,18 @@ void *buffer(size_t bytes) {
 }
 float *contents(void *buffer) { return static_cast<float *>(send(buffer, "contents")); }
 void release(void *object) { send(object, "release"); }
+/// Wait for all commands enqueued on the shared Metal queue to complete so CPU reads
+/// of shared-storage buffer contents see the values the GPU wrote.
+void sync() {
+    if (!queue()) return;
+    void *pool = objc_autoreleasePoolPush();
+    // `commandBuffer` returns an autoreleased (+0) MTLCommandBuffer; drain via pool.
+    if (void *cb = send(queue(), "commandBuffer")) {
+        send(cb, "commit");
+        send(cb, "waitUntilCompleted");
+    }
+    objc_autoreleasePoolPop(pool);
+}
 }  // namespace HostMetal
 #endif
 
@@ -857,7 +871,17 @@ int testPlugin() {
           "negotiates Resolve's OFX 1.5 full colour management");
     check(config && std::strcmp(config, kOfxConfigIdentifier) == 0,
           "declares the required native colour config");
-#ifdef __APPLE__
+#if defined(__APPLE__) && defined(__aarch64__)
+    {
+        auto metal = describer.properties->strings.find(kOfxImageEffectPropMetalRenderSupported);
+        const char *hostMetal = std::getenv("FOTUFILM_HOST_METAL");
+        const bool asked = !(hostMetal && std::strcmp(hostMetal, "0") == 0);
+        check(asked ? metal != describer.properties->strings.end() &&
+                          metal->second.size() == 1 && metal->second[0] == "true"
+                    : metal == describer.properties->strings.end(),
+              "offers to take the host's Metal frames by default on Apple silicon; suppressed when FOTUFILM_HOST_METAL=0");
+    }
+#elif defined(__APPLE__)
     {
         auto metal = describer.properties->strings.find(kOfxImageEffectPropMetalRenderSupported);
         const char *hostMetal = std::getenv("FOTUFILM_HOST_METAL");
@@ -865,7 +889,7 @@ int testPlugin() {
         check(asked ? metal != describer.properties->strings.end() &&
                           metal->second.size() == 1 && metal->second[0] == "true"
                     : metal == describer.properties->strings.end(),
-              "offers to take the host's Metal frames only when FOTUFILM_HOST_METAL=1 asks");
+              "keeps Metal host frames opt-in via FOTUFILM_HOST_METAL=1 on Intel Macs");
     }
 #else
     check(describer.properties->strings.count(kOfxImageEffectPropMetalRenderSupported) == 0,
@@ -1698,6 +1722,7 @@ int testPlugin() {
                 propSetPointer(handleOf(renderArgs), kOfxImageEffectPropMetalCommandQueue, 0,
                                HostMetal::queue());
                 const bool rendered = renderNow();
+                HostMetal::sync();
                 developed.assign(HostMetal::contents(out),
                                  HostMetal::contents(out) + output->pixels.size());
                 propSetInt(handleOf(renderArgs), kOfxImageEffectPropMetalEnabled, 0, 0);
@@ -2412,6 +2437,7 @@ int testPlugin() {
             propSetDouble(handleOf(renderArgs), kOfxPropTime, 0, savedTime);
 #ifdef __APPLE__
             if (metalIn) {
+                HostMetal::sync();
                 std::memcpy(output->pixels.data(), HostMetal::contents(metalOut),
                             output->pixels.size() * sizeof(float));
                 propSetInt(handleOf(renderArgs), kOfxImageEffectPropMetalEnabled, 0, 0);

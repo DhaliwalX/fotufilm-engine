@@ -70,15 +70,16 @@ int main(int argc, char **argv) {
         int features;
         bool runtime;
         bool windowed;
-        // Compiled for exactly its stages, none of them gated at run time.
+        // Compiled for its exact stage set (`gated_parity` preserves contraction-matching scalar selects).
         bool exact_stages;
+        bool gated_parity;
     };
 #define FOTUFILM_AOT_GENERATOR_ENTRY(variant_name, variant_mask) \
-    {prefix + #variant_name, (variant_mask), false, false, false},
+    {prefix + #variant_name, (variant_mask), false, false, false, false},
 #define FOTUFILM_AOT_WINDOWED_ENTRY(variant_name, variant_mask) \
-    {prefix + #variant_name "_windowed", (variant_mask), false, true, false},
-#define FOTUFILM_AOT_EXACT_WINDOWED_ENTRY(variant_name, stages_name, variant_mask) \
-    {prefix + #variant_name "_windowed_" #stages_name, (variant_mask), false, true, true},
+    {prefix + #variant_name "_windowed", (variant_mask), false, true, false, false},
+#define FOTUFILM_AOT_EXACT_WINDOWED_ENTRY(variant_name, stages_name, variant_mask, parity_flag) \
+    {prefix + #variant_name "_windowed_" #stages_name, (variant_mask), false, true, true, (parity_flag) != 0},
     // The exact twins come last, so adding one leaves every earlier variant's tag where it was.
     Variant variants[] = {
         FOTUFILM_AOT_VARIANTS(FOTUFILM_AOT_GENERATOR_ENTRY)
@@ -188,10 +189,10 @@ int main(int argc, char **argv) {
         try {
             GpuFramePipeline pipeline(variant.features,
                                         "_v" + std::to_string(index), variant.windowed, configuration,
-                                        variant.exact_stages);
+                                        variant.exact_stages, variant.gated_parity);
             pipeline.compile_aot((output / variant.name).string(), variant.name,
                                  variant.runtime, target);
-        } catch (const Halide::CompileError &error) {
+        } catch (const Halide::Error &error) {
             // Name the variant: eighty compile in a row, and a bare terminate() says only that
             // one of them did not.
             std::cerr << "compiling " << variant.name << " (mask 0x" << std::hex

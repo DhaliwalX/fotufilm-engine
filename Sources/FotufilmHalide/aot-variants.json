@@ -288,7 +288,7 @@
         "mask": "WINDOWED_STAGES | DENSITY_OUT"
       }
     ],
-    "exact_doc": "A twin compiled for one exact stage set, with nothing gated at run time: every stage it carries runs, so its kernels read no bypass arm and store nothing a gate could skip. The shim serves a request from one only when the request's stages are exactly that set, and otherwise from the gated twin.",
+    "exact_doc": "A twin compiled for one exact stage set: stages outside the set are absent rather than Materialised behind bypasses, while `gated_parity` twins retain lightweight scalar selects so Metal's FMA contraction matches the runtime-gated graph bit-for-bit. The shim serves a request from one only when the request's stages are exactly that set, and otherwise from the gated twin.",
     "exact": [
       {
         "variant": "color_float_realtime",
@@ -324,6 +324,42 @@
         "variant": "color_float_realtime_negative",
         "name": "negative",
         "stages": "NEGATIVE"
+      },
+      {
+        "variant": "color_float_realtime",
+        "name": "negative_no_adj",
+        "stages": "(PRINTED_NEGATIVE & ~ADJACENCY)",
+        "gated_parity": true
+      },
+      {
+        "variant": "color_float_realtime",
+        "name": "negative_luma_no_adj",
+        "stages": "(PRINTED_NEGATIVE_LUMA & ~ADJACENCY)",
+        "gated_parity": true
+      },
+      {
+        "variant": "color_float_realtime",
+        "name": "negative_donor_no_adj",
+        "stages": "(PRINTED_NEGATIVE_DONOR & ~ADJACENCY)",
+        "gated_parity": true
+      },
+      {
+        "variant": "color_float_realtime",
+        "name": "negative_screen_no_adj",
+        "stages": "((NEGATIVE & ~ADJACENCY) | MTF_LUMA)",
+        "gated_parity": true
+      },
+      {
+        "variant": "color_float_realtime",
+        "name": "slide_luma_interimage",
+        "stages": "(MTF | MTF_LUMA | HALATION | COUPLERS | GRAIN)",
+        "gated_parity": true
+      },
+      {
+        "variant": "color_float_realtime",
+        "name": "slide_luma_interimage_adj",
+        "stages": "(SLIDE_INTERIMAGE | MTF_LUMA)",
+        "gated_parity": true
       }
     ]
   },

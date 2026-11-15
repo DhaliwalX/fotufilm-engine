@@ -19,13 +19,12 @@ auto gaussian_grid_radius(Integer radius, Integer stride, Maximum maximum) {
 }
 
 constexpr int kTripleBoxPasses = 3;
-// An HD frame develops in one window and a UHD frame in two. Every window recomputes the apron
-// its stages reach, so taller windows recompute less of the frame: measured at UHD on an M4 Pro,
-// 1080-row windows develop a frame about a fifth faster than 256-row ones, for a peak footprint
-// of about 1.6 GB rather than 0.9 GB.
-constexpr int kWindowRows = 1080;
-// Frames shorter than a window develop whole.
-constexpr int kWindowMinimumHeight = kWindowRows;
+// Frames up to UHD (2160 rows) develop in a single window, eliminating inter-window apron
+// recomputation and duplicate stage dispatches across a 4K frame while keeping larger frames
+// bounded to 2160-row strips.
+constexpr int kWindowRows = 2160;
+// Frames shorter than an HD frame develop whole.
+constexpr int kWindowMinimumHeight = 1080;
 // A row-window stage stores its window's rows and the apron its consumers read, recomputing the
 // apron for every window, so a window costs more the further the frame's stages reach. Measured
 // at 4K on an M4 Pro across every film, the windows develop a frame 6-24% faster than the

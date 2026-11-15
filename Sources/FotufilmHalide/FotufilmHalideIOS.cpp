@@ -26,11 +26,13 @@
 #include <HalideRuntimeMetal.h>
 
 #include "FotufilmHalide.h"
+#include "FotufilmHalideDevelop.h"
 #include "FotufilmHalideGeometry.h"
 #include "FotufilmResolvedFrameParams.h"
 #include "Pipeline/FilmTileStore.h"
 
 #include <TargetConditionals.h>
+#include <dispatch/dispatch.h>
 #include <objc/message.h>
 #include <objc/runtime.h>
 #include <pthread.h>
@@ -42,6 +44,7 @@
 #include <cstring>
 #include <new>
 #include <set>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -119,12 +122,10 @@ struct SpectralCache {
 /// render lock. Callers outside Resolve fall back to one state per calling thread.
 struct ExecutionState {
     SpectralCache spectral_cache;
-    Buffer<float> configuration{FOTUFILM_FRAME_CONFIGURATION_COUNT};
     Buffer<float> extended_configuration;
     uint64_t extended_configuration_id = 0;
     int32_t extended_configuration_floats = 0;
     int32_t last_windowed_trace_mask = 0;
-    Buffer<float> measure_configuration{FOTUFILM_FRAME_CONFIGURATION_COUNT};
     Buffer<float> unused_measure_exposure{kLutValueCount};
 
     ExecutionState() {
@@ -179,14 +180,14 @@ FrameFunction select_variant(int32_t feature_mask) {
     return fotufilm::aot::select_variant(kVariants, std::size(kVariants), feature_mask);
 }
 
-namespace {
 /// Pools the device buffers a frame pipeline allocates while it is alive; defined beside the
 /// Metal context below.
 struct FrameScope {
     FrameScope();
     ~FrameScope();
 };
-}
+
+void flush_internal_cb_on_error();
 
 int run_aot(ExecutionState &state, halide_buffer_t *in, halide_buffer_t *out,
             int32_t width, int32_t height, const float *configuration,
@@ -194,6 +195,7 @@ int run_aot(ExecutionState &state, halide_buffer_t *in, halide_buffer_t *out,
             int32_t origin_x = 0, int32_t origin_y = 0,
             int32_t configuration_floats = FOTUFILM_FRAME_CONFIGURATION_COUNT,
             uint64_t configuration_id = 0, bool configuration_stable = false) {
+    FrameScope frame_scope;
     // A FIELDS_IN frame rides its halation grids behind the configuration, so its buffer is
     // frame-sized rather than slider-sized; it is cached by the caller's id so the tiles of one
     // frame upload it once — and read in place when the caller keeps it (`configuration_stable`),
@@ -217,17 +219,18 @@ int run_aot(ExecutionState &state, halide_buffer_t *in, halide_buffer_t *out,
             state.extended_configuration_floats = configuration_floats;
         }
     }
-    const size_t configuration_bytes =
-        FOTUFILM_FRAME_CONFIGURATION_COUNT * sizeof(float);
+    Buffer<float> local_configuration;
     if (!wants_extended) {
-        std::memcpy(state.configuration.data(), configuration, configuration_bytes);
-        state.configuration.set_host_dirty();
+        local_configuration = Buffer<float>(FOTUFILM_FRAME_CONFIGURATION_COUNT);
+        std::memcpy(local_configuration.data(), configuration,
+                    FOTUFILM_FRAME_CONFIGURATION_COUNT * sizeof(float));
+        local_configuration.set_host_dirty();
     }
     const fotufilm::ResolvedFrameParams frame(configuration, width, height, seed,
         (feature_mask & FOTUFILM_FRAME_REVERSAL) != 0, origin_x, origin_y);
 
     auto *cfg = wants_extended ? state.extended_configuration.raw_buffer()
-                               : state.configuration.raw_buffer();
+                               : local_configuration.raw_buffer();
     auto *exposure = state.spectral_cache.exposure.raw_buffer();
 #if FOTUFILM_AOT_HALF_EXPOSURE_LUT
     const bool byte_input = (feature_mask & FOTUFILM_FRAME_FLOAT_IO) == 0;
@@ -299,6 +302,8 @@ int run_aot(ExecutionState &state, halide_buffer_t *in, halide_buffer_t *out,
     // A row-window graph never sees the whole frame, so a request that asks the kernel to measure
     // its own glare stays on the full-frame variant.
     const bool measures = (feature_mask & FOTUFILM_FRAME_FLARE_MEASURE) != 0;
+    const bool fits_window_reach = height <= fotufilm::kWindowMinimumHeight
+        || std::max(image_reach, grain_reach) <= fotufilm::kWindowMaximumReach;
     if (windowed_enabled && supports_windowed_transport && !measures
         && width >= 32 && height >= fotufilm::kWindowMinimumHeight
         && origin_x == 0 && origin_y == 0 && !wants_extended
@@ -306,7 +311,7 @@ int run_aot(ExecutionState &state, halide_buffer_t *in, halide_buffer_t *out,
         && out->dim[0].min == 0 && out->dim[1].min == 0
         && in->dim[0].extent == width && in->dim[1].extent == height
         && out->dim[0].extent == width && out->dim[1].extent == height
-        && std::max(image_reach, grain_reach) <= fotufilm::kWindowMaximumReach) {
+        && fits_window_reach) {
         // A twin compiled for exactly the request's stages runs them with nothing gated, so it
         // serves the request ahead of the gated twin; it can serve no other. One compiled without
         // couplers or a donor applies no coupler warp, where a graph that gates them off still
@@ -317,7 +322,7 @@ int run_aot(ExecutionState &state, halide_buffer_t *in, halide_buffer_t *out,
         for (int i = 0; i < 3 * FOTUFILM_COUPLER_WARP_SAMPLES && !carries_warp; ++i) {
             carries_warp = configuration[FOTUFILM_CONFIG_COUPLER_WARP + i] != 0.0f;
         }
-#define FOTUFILM_PICK_EXACT_WINDOWED(variant_name, stages_name, variant_mask) \
+#define FOTUFILM_PICK_EXACT_WINDOWED(variant_name, stages_name, variant_mask, parity_flag) \
         if (pipeline == fotufilm_halide_ios_##variant_name \
             && wanted_stages == ((variant_mask) & FOTUFILM_VARIANT_STAGE_BITS) \
             && (((variant_mask) & (FOTUFILM_FRAME_COUPLERS | FOTUFILM_FRAME_DONOR_LAYER)) != 0 \
@@ -333,8 +338,9 @@ int run_aot(ExecutionState &state, halide_buffer_t *in, halide_buffer_t *out,
 #undef FOTUFILM_PICK_WINDOWED
         if (exact && pipeline != general_pipeline) pipeline = exact;
     }
-    if (pipeline != general_pipeline && state.last_windowed_trace_mask != feature_mask) {
-        state.last_windowed_trace_mask = feature_mask;
+    const int32_t trace_mask = feature_mask & 0x7fffffff;
+    if (pipeline != general_pipeline && state.last_windowed_trace_mask != trace_mask) {
+        state.last_windowed_trace_mask = trace_mask;
         const char *tracing = std::getenv("FOTUFILM_TRACE_VARIANT");
         if (tracing && std::atoi(tracing)) {
             std::fprintf(stderr, "Fotufilm AOT: %d-row windows%s, spatial reach %lld pixels\n",
@@ -343,8 +349,9 @@ int run_aot(ExecutionState &state, halide_buffer_t *in, halide_buffer_t *out,
         }
     }
 #endif
-    FrameScope frame_scope;
-    return pipeline(FOTUFILM_ARGUMENTS, out);
+    const int result = pipeline(FOTUFILM_ARGUMENTS, out);
+    if (result != 0) flush_internal_cb_on_error();
+    return result;
 #undef FOTUFILM_ARGUMENTS
 }
 
@@ -409,15 +416,33 @@ bool valid_exposure_lut_contracts() {
 }
 
 extern "C" void *MTLCreateSystemDefaultDevice(void);
+extern "C" void *_NSConcreteGlobalBlock[];
+extern "C" void *objc_autoreleasePoolPush(void);
+extern "C" void objc_autoreleasePoolPop(void *);
+
+struct halide_metal_device;
+struct halide_metal_command_queue;
+struct halide_metal_command_buffer;
 
 namespace {
 
-/// How many command buffers the runtime's queue may have in flight. Twin of `kMetalQueueDepth`
-/// in FotufilmHalideMetal.cpp, where the reason is written up: the runtime commits one command
-/// buffer per kernel and never waits, so on an unbounded queue every intermediate of a tile is
-/// allocated before the first is freed, and the tile's footprint is the sum of its stages.
-/// Blocking the host this close behind the device lets the early frees land.
+struct ScopedAutoreleasePool {
+    void *pool;
+    ScopedAutoreleasePool() : pool(objc_autoreleasePoolPush()) {}
+    ~ScopedAutoreleasePool() { objc_autoreleasePoolPop(pool); }
+    ScopedAutoreleasePool(const ScopedAutoreleasePool &) = delete;
+    ScopedAutoreleasePool &operator=(const ScopedAutoreleasePool &) = delete;
+};
+
+/// How many command buffers the runtime's internal queue may have in flight.
+/// On the row-window host, coalescing packs an entire pipeline invocation into a single
+/// command buffer and 64 gives headroom across concurrent worker threads; non-windowed
+/// targets (iOS and Intel Mac) keep the 4-buffer cap.
+#if FOTUFILM_AOT_WINDOWED_HOST
+constexpr unsigned long kMetalQueueDepth = 64;
+#else
 constexpr unsigned long kMetalQueueDepth = 4;
+#endif
 
 // The runtime's own context is a system default device and an unbounded queue; the override
 // below is the documented seam (HalideRuntimeMetal.h) for handing it another. Held from an
@@ -428,41 +453,8 @@ pthread_mutex_t context_mutex = PTHREAD_MUTEX_INITIALIZER;
 halide_metal_device *context_device = nullptr;
 halide_metal_command_queue *context_queue = nullptr;
 
-}
-
-extern "C" int halide_metal_acquire_context(void *, halide_metal_device **device_ret,
-                                            halide_metal_command_queue **queue_ret,
-                                            bool create) {
-    pthread_mutex_lock(&context_mutex);
-    if (!context_device && create) {
-        auto *device = static_cast<halide_metal_device *>(MTLCreateSystemDefaultDevice());
-        halide_metal_command_queue *queue = nullptr;
-        if (device) {
-            queue = ((halide_metal_command_queue *(*)(id, SEL, unsigned long))objc_msgSend)(
-                reinterpret_cast<id>(device),
-                sel_getUid("newCommandQueueWithMaxCommandBufferCount:"), kMetalQueueDepth);
-            if (!queue) {
-                ((void (*)(id, SEL))objc_msgSend)(reinterpret_cast<id>(device),
-                                                  sel_getUid("release"));
-                device = nullptr;
-            }
-        }
-        if (!device) {
-            pthread_mutex_unlock(&context_mutex);
-            std::fprintf(stderr, "Fotufilm Halide iOS error: no Metal device or queue\n");
-            return halide_error_code_generic_error;
-        }
-        context_device = device;
-        context_queue = queue;
-    }
-    *device_ret = context_device;
-    *queue_ret = context_queue;
-    return halide_error_code_success;
-}
-
-extern "C" int halide_metal_release_context(void *) {
-    pthread_mutex_unlock(&context_mutex);
-    return halide_error_code_success;
+id send(id object, const char *selector) {
+    return ((id(*)(id, SEL))objc_msgSend)(object, sel_getUid(selector));
 }
 
 // Device allocations made while a frame pipeline runs are pooled by size. The runtime has no
@@ -472,15 +464,7 @@ extern "C" int halide_metal_release_context(void *) {
 // the runtime lets go returns to the pool only once the last command buffer that could have used
 // it has completed, so neither the host nor a later kernel can reach it while one is still
 // reading. The runtime retains and releases a buffer through its crops too, so the pool counts
-// those itself and treats the buffer as released when the count reaches zero. The runtime's
-// helpers for these are weak, so the definitions below replace them.
-struct halide_metal_command_buffer;
-
-namespace {
-
-id send(id object, const char *selector) {
-    return ((id(*)(id, SEL))objc_msgSend)(object, sel_getUid(selector));
-}
+// those itself and treats the buffer as released when the count reaches zero.
 
 /// How much idle device memory the pool may hold. FOTUFILM_METAL_POOL sets it in megabytes; 0
 /// turns pooling off. The row-window host, whose frames are the large ones, pools by default.
@@ -495,9 +479,13 @@ int pool_megabytes() {
 
 int frame_depth = 0;  // Guarded by context_mutex.
 
+constexpr size_t kExactBelow = size_t(1) << 16;  // 64 KB threshold for intra/inter-CB GPU reuse.
+
 struct PooledBuffer {
-    size_t length;
-    int references;
+    size_t length = 0;
+    int references = 0;
+    bool host_written = false;
+    bool gpu_in_flight = false;
 };
 // A pthread mutex and leaked containers, for the reason context_mutex is one: the runtime still
 // frees buffers from static destructors after `exit` has begun.
@@ -508,20 +496,29 @@ struct PoolLock {
 };
 // Every buffer the pool made and still owns.
 auto &pooled = *new std::unordered_map<void *, PooledBuffer>();
-// Free for reuse.
+// Free for reuse (`status >= 4`).
 auto &idle = *new std::unordered_multimap<size_t, void *>();
 struct Returned {
     void *buffer;
-    id fence;  // Retained; the buffer is idle once this command buffer has completed.
+    id fence;            // Retained (+1); primary fence.
+    id secondary_fence;  // Retained (+1); optional 2nd queue fence when released outside an open CB.
+    id queue;            // Unretained queue token for GPU-only >= 64 KB reuse, or nullptr.
+    bool committed;      // True once `fence` has been committed on `queue`.
 };
 auto &returning = *new std::vector<Returned>();
 size_t idle_bytes = 0;
-id newest_fence = nullptr;  // Retained.
+id newest_internal_fence = nullptr;  // Retained (+1): most recent CB committed on context_queue.
+id newest_host_fence = nullptr;      // Retained (+1): most recent CB committed on a host queue.
+
+inline bool fence_completed(id fence) {
+    constexpr unsigned long kCompleted = 4;  // MTLCommandBufferStatusCompleted; 5 is Error.
+    return !fence ||
+        ((unsigned long (*)(id, SEL))objc_msgSend)(fence, sel_getUid("status")) >= kCompleted;
+}
 
 /// The size a pooled buffer is made at: within 1/16 of the next power of two above the request,
 /// so the row windows of a frame, whose aprons differ by a few rows, share their buffers.
 size_t pooled_length(size_t requested) {
-    constexpr size_t kExactBelow = size_t(1) << 16;
     if (requested < kExactBelow) return requested;
     size_t power = kExactBelow;
     while (power < requested) power <<= 1;
@@ -529,30 +526,69 @@ size_t pooled_length(size_t requested) {
     return (requested + step - 1) / step * step;
 }
 
-/// Moves returned buffers whose fence has completed to the idle set. Holds pool_mutex.
+/// Moves returned buffers whose fence has completed to the idle set, preserving strict FIFO order
+/// for surviving entries. Holds pool_mutex.
 void reclaim_returned() {
-    constexpr unsigned long kCompleted = 4;  // MTLCommandBufferStatusCompleted; 5 is Error.
-    for (size_t index = 0; index < returning.size();) {
-        Returned &entry = returning[index];
-        const unsigned long status = entry.fence
-            ? ((unsigned long (*)(id, SEL))objc_msgSend)(entry.fence, sel_getUid("status"))
-            : kCompleted;
-        if (status < kCompleted) {
-            ++index;
+    size_t write = 0;
+    for (size_t read = 0; read < returning.size(); ++read) {
+        Returned &entry = returning[read];
+        if (!fence_completed(entry.fence) || !fence_completed(entry.secondary_fence)) {
+            if (write != read) {
+                returning[write] = entry;
+            }
+            ++write;
             continue;
         }
         if (entry.fence) send(entry.fence, "release");
-        const size_t length = pooled[entry.buffer].length;
-        if (idle_bytes + length <= size_t(pool_megabytes()) << 20) {
-            idle.emplace(length, entry.buffer);
-            idle_bytes += length;
-        } else {
-            pooled.erase(entry.buffer);
-            send(static_cast<id>(entry.buffer), "release");
+        if (entry.secondary_fence) send(entry.secondary_fence, "release");
+        auto it = pooled.find(entry.buffer);
+        if (it != pooled.end()) {
+            const size_t length = it->second.length;
+            if (idle_bytes + length <= size_t(pool_megabytes()) << 20) {
+                it->second.host_written = false;
+                it->second.gpu_in_flight = false;
+                idle.emplace(length, entry.buffer);
+                idle_bytes += length;
+            } else {
+                pooled.erase(it);
+                send(static_cast<id>(entry.buffer), "release");
+            }
         }
-        entry = returning.back();
-        returning.pop_back();
     }
+    returning.resize(write);
+}
+
+inline void record_pool_fence(id cb, id queue) {
+    if (!cb || pool_megabytes() == 0) return;
+    PoolLock held;
+    send(cb, "retain");
+    id &slot = (queue == reinterpret_cast<id>(context_queue))
+        ? newest_internal_fence
+        : newest_host_fence;
+    if (slot) send(slot, "release");
+    slot = cb;
+    for (auto &entry : returning) {
+        if (entry.fence == cb && entry.secondary_fence == nullptr) {
+            entry.committed = true;
+        }
+    }
+}
+
+inline Returned make_returned_entry(void *object, size_t length, bool host_written,
+                                    id active_cb, id active_queue) {
+    if (active_cb != nullptr) {
+        send(active_cb, "retain");
+        id queue = (length >= kExactBelow && !host_written) ? active_queue : nullptr;
+        return Returned{object, active_cb, nullptr, queue, false};
+    }
+    id primary = newest_internal_fence ? newest_internal_fence : newest_host_fence;
+    id secondary = (newest_internal_fence && newest_host_fence &&
+                    newest_host_fence != newest_internal_fence)
+        ? newest_host_fence
+        : nullptr;
+    if (primary) send(primary, "retain");
+    if (secondary) send(secondary, "retain");
+    return Returned{object, primary, secondary, nullptr, false};
 }
 
 FrameScope::FrameScope() {
@@ -567,45 +603,722 @@ FrameScope::~FrameScope() {
     pthread_mutex_unlock(&context_mutex);
 }
 
+// ---------------------------------------------------------------------------
+// Per-thread command buffer & serial compute encoder coalescing state.
+//
+// Coalesces consecutive compute dispatches into one MTLCommandBuffer and one
+// serial MTLComputeCommandEncoder on both the internal `context_queue` and an
+// external host `MTLCommandQueue` bound via `fotufilm_halide_metal_host_queue_begin`.
+// When `host_queue_async` is true, end-of-call CPU syncs are skipped so an
+// entire OFX gpuFrames scope (copyFrameIn + decode + develop + copyFrameOut)
+// encodes into ONE MTLCommandBuffer on Resolve's metalQueue without CPU stalls.
+// ---------------------------------------------------------------------------
+
+struct HostQueueState {
+    // Caller-supplied queue, retained (+1) for the lifetime of the scope.
+    id host_queue = nullptr;
+    bool host_queue_async = false;
+
+    // Open command buffer (+1 retained) and the queue it was created on.
+    id active_cb = nullptr;
+    id active_queue = nullptr;
+    // Open serial compute encoder (+1 retained) on active_cb, or nullptr.
+    id active_compute_encoder = nullptr;
+    // Open blit encoder (+1 retained) on active_cb, or nullptr.
+    id active_blit_encoder = nullptr;
+    // Whether we have already attached one completion handler to active_cb.
+    bool cb_has_handler = false;
+
+    // Immediately preceding async CB committed on this thread (unretained tokens),
+    // skipped during 2-slot inter-CB reuse so Frame N and Frame N-1 keep disjoint slots.
+    uintptr_t prev_cb_id = 0;
+    id prev_queue = nullptr;
+
+    // Zero-copy vertical row-flip state for bottom-up host MTLBuffers (OFX gpuFrames).
+    int32_t flip_decode_input_y = 0;
+    int32_t flip_frame_output_y = 0;
+    int32_t full_frame_height = 0;
+
+    ~HostQueueState();
+};
+
+thread_local HostQueueState hq;
+
+struct HqCompletionDescriptor {
+    unsigned long reserved;
+    unsigned long block_size;
+};
+
+struct HqCompletionBlock {
+    void *isa;
+    int flags;
+    int reserved;
+    void (*invoke)(HqCompletionBlock *, id);
+    HqCompletionDescriptor *descriptor;
+};
+
+HqCompletionDescriptor hq_completion_descriptor = {0, sizeof(HqCompletionBlock)};
+
+void hq_completion_invoke(HqCompletionBlock *, id cb) {
+    id err = send(cb, "error");
+    if (err) {
+        std::fprintf(stderr, "Fotufilm Halide iOS Metal command buffer error\n");
+    }
 }
+
+// Global block (BLOCK_IS_GLOBAL = 1 << 28) — _Block_copy is a zero-allocation no-op.
+HqCompletionBlock hq_completion_block_global = {
+    _NSConcreteGlobalBlock, (1 << 28), 0,
+    hq_completion_invoke, &hq_completion_descriptor
+};
+
+inline void attach_fallback_handler(id cb) {
+    if (!cb) return;
+    ((void(*)(id, SEL, void *))objc_msgSend)(
+        cb, sel_getUid("addCompletedHandler:"), &hq_completion_block_global);
+}
+
+constexpr int64_t kHostQueueWaitNs = 4LL * NSEC_PER_SEC;
+
+struct DispatchSemaphoreRef {
+    dispatch_semaphore_t sem;
+    DispatchSemaphoreRef() : sem(dispatch_semaphore_create(0)) {}
+    DispatchSemaphoreRef(const DispatchSemaphoreRef &o) : sem(o.sem) {
+        if (sem) dispatch_retain(sem);
+    }
+    DispatchSemaphoreRef &operator=(const DispatchSemaphoreRef &) = delete;
+    ~DispatchSemaphoreRef() {
+        if (sem) dispatch_release(sem);
+    }
+};
+
+// Commits `cb` on an external host queue and waits up to 4 seconds for completion via a
+// refcounted libdispatch semaphore rather than an unbounded `waitUntilCompleted`, so a host
+// holding an uncommitted earlier command buffer on that queue fails cleanly instead of hanging.
+inline bool commit_and_wait_host_cb(id cb, id queue, bool had_handler, bool &timed_out) {
+    timed_out = false;
+    DispatchSemaphoreRef waiter;
+    if (!waiter.sem) {
+        if (!had_handler) attach_fallback_handler(cb);
+        send(cb, "commit");
+        record_pool_fence(cb, queue);
+        return false;
+    }
+    void (^handler)(id) = ^(id finished) {
+        if (!had_handler && send(finished, "error")) {
+            std::fprintf(stderr, "Fotufilm Halide iOS Metal command buffer error\n");
+        }
+        dispatch_semaphore_signal(waiter.sem);
+    };
+    ((void(*)(id, SEL, void (^)(id)))objc_msgSend)(
+        cb, sel_getUid("addCompletedHandler:"), handler);
+    send(cb, "commit");
+    record_pool_fence(cb, queue);
+    const dispatch_time_t deadline = dispatch_time(DISPATCH_TIME_NOW, kHostQueueWaitNs);
+    if (dispatch_semaphore_wait(waiter.sem, deadline) != 0) {
+        timed_out = true;
+        std::fprintf(stderr,
+                     "Fotufilm Halide iOS error: host Metal queue timed out waiting for command buffer\n");
+        return false;
+    }
+    return send(cb, "error") == nullptr;
+}
+
+inline bool coalescing_enabled() {
+    return hq.host_queue_async || (pool_megabytes() > 0 && frame_depth > 0);
+}
+
+HostQueueState::~HostQueueState() {
+    if (active_compute_encoder) {
+        id enc = active_compute_encoder;
+        active_compute_encoder = nullptr;
+        send(enc, "endEncoding");
+        send(enc, "release");
+    }
+    if (active_blit_encoder) {
+        id enc = active_blit_encoder;
+        active_blit_encoder = nullptr;
+        send(enc, "endEncoding");
+        send(enc, "release");
+    }
+    if (active_cb) {
+        id cb = active_cb;
+        id queue = active_queue;
+        active_cb = nullptr;
+        active_queue = nullptr;
+        const bool had_handler = cb_has_handler;
+        cb_has_handler = false;
+        if (!had_handler) {
+            attach_fallback_handler(cb);
+        }
+        send(cb, "commit");
+        record_pool_fence(cb, queue);
+        send(cb, "release");
+    }
+    if (host_queue) {
+        id q = host_queue;
+        host_queue = nullptr;
+        send(q, "release");
+    }
+    prev_cb_id = 0;
+    prev_queue = nullptr;
+    flip_decode_input_y = 0;
+    flip_frame_output_y = 0;
+    full_frame_height = 0;
+    host_queue_async = false;
+}
+
+inline void close_blit_encoder() {
+    if (hq.active_blit_encoder) {
+        id enc = hq.active_blit_encoder;
+        hq.active_blit_encoder = nullptr;
+        send(enc, "endEncoding");
+        send(enc, "release");
+    }
+}
+
+inline void close_compute_encoder() {
+    if (hq.active_compute_encoder) {
+        id enc = hq.active_compute_encoder;
+        hq.active_compute_encoder = nullptr;
+        send(enc, "endEncoding");
+        send(enc, "release");
+    }
+}
+
+inline void close_all_encoders() {
+    close_compute_encoder();
+    close_blit_encoder();
+}
+
+// Ends open encoders, commits active_cb, optionally waits for GPU completion,
+// updates the pool fence, and releases active_cb's +1 ownership. Preserves
+// host_queue / host_queue_async so mid-scope syncs (e.g. FOTUFILM_REALTIME=0
+// flare measurement) can open a fresh CB on the same host_queue afterwards.
+inline bool flush_active_cb(bool wait) {
+    if (!hq.active_cb) return true;
+    close_all_encoders();
+    id cb = hq.active_cb;
+    id queue = hq.active_queue;
+    hq.active_cb = nullptr;
+    hq.active_queue = nullptr;
+    const bool had_handler = hq.cb_has_handler;
+    hq.cb_has_handler = false;
+    bool ok = true;
+    if (wait && (hq.host_queue_async || (hq.host_queue && queue == hq.host_queue))) {
+        bool timed_out = false;
+        ok = commit_and_wait_host_cb(cb, queue, had_handler, timed_out);
+        if (timed_out) {
+            hq.prev_cb_id = reinterpret_cast<uintptr_t>(cb);
+            hq.prev_queue = queue;
+        } else if (hq.prev_queue == queue) {
+            hq.prev_cb_id = 0;
+            hq.prev_queue = nullptr;
+        }
+    } else {
+        if (!had_handler) {
+            attach_fallback_handler(cb);
+        }
+        send(cb, "commit");
+        record_pool_fence(cb, queue);
+        if (wait) {
+            send(cb, "waitUntilCompleted");
+            ok = (send(cb, "error") == nullptr);
+            if (hq.prev_queue == queue) {
+                hq.prev_cb_id = 0;
+                hq.prev_queue = nullptr;
+            }
+        } else {
+            hq.prev_cb_id = reinterpret_cast<uintptr_t>(cb);
+            hq.prev_queue = queue;
+        }
+    }
+    send(cb, "release");
+    return ok;
+}
+
+void flush_internal_cb_on_error() {
+    if (!hq.host_queue_async) {
+        (void)flush_active_cb(true);
+    }
+}
+
+inline id ensure_active_cb(id queue) {
+    if (hq.active_cb && hq.active_queue != queue) {
+        (void)flush_active_cb(false);
+    }
+    if (!hq.active_cb && queue) {
+        ScopedAutoreleasePool pool;
+        id cb = send(queue, "commandBuffer");
+        if (cb) send(cb, "retain");
+        hq.active_cb = cb;
+        hq.active_queue = queue;
+        hq.cb_has_handler = false;
+    }
+    return hq.active_cb;
+}
+
+inline id ensure_compute_encoder(id cb) {
+    close_blit_encoder();
+    if (!hq.active_compute_encoder && cb) {
+        ScopedAutoreleasePool pool;
+        id enc = send(cb, "computeCommandEncoder");
+        if (enc) send(enc, "retain");
+        hq.active_compute_encoder = enc;
+    }
+    return hq.active_compute_encoder;
+}
+
+inline id ensure_blit_encoder(id cb) {
+    close_compute_encoder();
+    if (!hq.active_blit_encoder && cb) {
+        ScopedAutoreleasePool pool;
+        id enc = send(cb, "blitCommandEncoder");
+        if (enc) send(enc, "retain");
+        hq.active_blit_encoder = enc;
+    }
+    return hq.active_blit_encoder;
+}
+
+inline bool is_metal_buffer_managed(id metal_buf) {
+    if (!metal_buf) return false;
+    typedef bool (*rts_method)(id, SEL, SEL);
+    const SEL storage_sel = sel_getUid("storageMode");
+    if (!((rts_method)objc_msgSend)(
+            metal_buf, sel_getUid("respondsToSelector:"), storage_sel)) {
+        return false;
+    }
+    return ((int(*)(id, SEL))objc_msgSend)(metal_buf, storage_sel) == 1;
+}
+
+void copy_strided_chunks(const uint8_t *src, uint8_t *dst,
+                         const uint64_t *extents, const uint64_t *strides,
+                         int first_dim, int dim, size_t chunk_size) {
+    if (dim < first_dim) {
+        std::memcpy(dst, src, chunk_size);
+        return;
+    }
+    const uint64_t count = extents[dim];
+    const uint64_t step = strides[dim];
+    for (uint64_t i = 0; i < count; ++i) {
+        copy_strided_chunks(src + i * step, dst + i * step,
+                            extents, strides, first_dim, dim - 1, chunk_size);
+    }
+}
+
+bool copy_host_to_metal_buffer(const halide_buffer_t *buf, uint8_t *dst) {
+    if (!buf || !buf->host || !dst || buf->dimensions < 0 || buf->dimensions > 16) {
+        return false;
+    }
+    const size_t elem_bytes = buf->type.bytes();
+    if (elem_bytes == 0) return true;
+
+    uint64_t extents[16];
+    uint64_t strides[16];
+    int ndims = 0;
+    for (int i = 0; i < buf->dimensions; ++i) {
+        const int32_t ext = buf->dim[i].extent;
+        const int32_t st = buf->dim[i].stride;
+        if (ext <= 0) return true;
+        if (st < 0) return false;
+        if (ext == 1) continue;
+        const uint64_t stride_bytes = uint64_t(st) * elem_bytes;
+        int insert = ndims;
+        if (stride_bytes != 0) {
+            for (int k = 0; k < ndims; ++k) {
+                if (strides[k] == 0 || stride_bytes < strides[k]) {
+                    insert = k;
+                    break;
+                }
+            }
+        }
+        for (int k = ndims; k > insert; --k) {
+            extents[k] = extents[k - 1];
+            strides[k] = strides[k - 1];
+        }
+        extents[insert] = uint64_t(ext);
+        strides[insert] = stride_bytes;
+        ++ndims;
+    }
+
+    size_t chunk_size = elem_bytes;
+    int first_unfolded = 0;
+    while (first_unfolded < ndims && strides[first_unfolded] == chunk_size) {
+        chunk_size *= size_t(extents[first_unfolded]);
+        ++first_unfolded;
+    }
+
+    if (dst != buf->host) {
+        copy_strided_chunks(buf->host, dst, extents, strides,
+                            first_unfolded, ndims - 1, chunk_size);
+    }
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// Permanent PSO cache: (device, library, name) -> MTLComputePipelineState.
+//
+// Ownership contract (matches Halide's halide_metal_run):
+//   new_compute_pipeline_state_with_function returns +1 (Obj-C "new*" rule).
+//   halide_metal_run calls release_ns_object(pipeline_state) at exit.
+//   The cache holds its own +1 retain; callers receive an additional +1 retain.
+// ---------------------------------------------------------------------------
+
+struct PsoCacheKey {
+    void *device = nullptr;
+    void *library = nullptr;
+    std::string name;
+
+    bool operator==(const PsoCacheKey &o) const {
+        return device == o.device && library == o.library && name == o.name;
+    }
+};
+
+struct PsoCacheKeyHash {
+    size_t operator()(const PsoCacheKey &k) const {
+        size_t h = 14695981039346656037ull;
+        auto mix = [&](size_t v) {
+            for (size_t i = 0; i < sizeof(v); ++i) {
+                h ^= static_cast<uint8_t>(v >> (8 * i));
+                h *= 1099511628211ull;
+            }
+        };
+        mix(reinterpret_cast<size_t>(k.device));
+        mix(reinterpret_cast<size_t>(k.library));
+        for (unsigned char c : k.name) {
+            h = (h ^ c) * 1099511628211ull;
+        }
+        return h;
+    }
+};
+
+pthread_mutex_t pso_mutex = PTHREAD_MUTEX_INITIALIZER;
+struct PsoLock {
+    PsoLock() { pthread_mutex_lock(&pso_mutex); }
+    ~PsoLock() { pthread_mutex_unlock(&pso_mutex); }
+};
+auto &pso_cache = *new std::unordered_map<PsoCacheKey, void *, PsoCacheKeyHash>();
+thread_local PsoCacheKey tls_pso_key;
+thread_local bool tls_skip_decode_report = false;
+
+}  // namespace
+
+extern "C" int halide_metal_acquire_context(void *, halide_metal_device **device_ret,
+                                            halide_metal_command_queue **queue_ret,
+                                            bool create) {
+    pthread_mutex_lock(&context_mutex);
+    if (!context_device && create) {
+        auto *device = static_cast<halide_metal_device *>(MTLCreateSystemDefaultDevice());
+        halide_metal_command_queue *queue = nullptr;
+        if (device) {
+            queue = ((halide_metal_command_queue *(*)(id, SEL, unsigned long))objc_msgSend)(
+                reinterpret_cast<id>(device),
+                sel_getUid("newCommandQueueWithMaxCommandBufferCount:"), kMetalQueueDepth);
+            if (!queue) {
+                send(reinterpret_cast<id>(device), "release");
+                device = nullptr;
+            }
+        }
+        if (!device) {
+            pthread_mutex_unlock(&context_mutex);
+            std::fprintf(stderr, "Fotufilm Halide iOS error: no Metal device or queue\n");
+            return halide_error_code_generic_error;
+        }
+        context_device = device;
+        context_queue = queue;
+    }
+    *device_ret = context_device;
+    *queue_ret = hq.host_queue_async
+        ? reinterpret_cast<halide_metal_command_queue *>(hq.host_queue)
+        : context_queue;
+    return halide_error_code_success;
+}
+
+extern "C" int halide_metal_release_context(void *) {
+    pthread_mutex_unlock(&context_mutex);
+    return halide_error_code_success;
+}
+
+// ---------------------------------------------------------------------------
+// Halide Metal runtime overrides
+// ---------------------------------------------------------------------------
 
 namespace Halide {
 namespace Runtime {
 namespace Internal {
 namespace Metal {
 
-void commit_command_buffer(halide_metal_command_buffer *buffer) {
-    send(reinterpret_cast<id>(buffer), "commit");
-    if (pool_megabytes() == 0) return;
-    // The newest command buffer on the queue, which completes after every earlier one.
-    PoolLock held;
-    send(reinterpret_cast<id>(buffer), "retain");
-    if (newest_fence) send(newest_fence, "release");
-    newest_fence = reinterpret_cast<id>(buffer);
+// Match third_party/Halide/src/runtime/metal.cpp typedefs so C++ name mangling
+// matches the weak symbols in the generated AOT archives identically.
+using mtl_device = ::halide_metal_device;
+using mtl_command_queue = ::halide_metal_command_queue;
+using mtl_command_buffer = ::halide_metal_command_buffer;
+struct mtl_buffer;
+struct mtl_compute_command_encoder;
+struct mtl_blit_command_encoder;
+struct mtl_compute_pipeline_state;
+struct mtl_library;
+struct mtl_function;
+struct command_buffer_completed_handler_block_literal;
+
+mtl_command_buffer *new_command_buffer(
+    mtl_command_queue *queue, const char *, size_t) {
+    id target_queue = hq.host_queue_async
+        ? hq.host_queue
+        : (queue ? reinterpret_cast<id>(queue) : reinterpret_cast<id>(context_queue));
+    if (!coalescing_enabled()) {
+        if (hq.active_cb) {
+            (void)flush_active_cb(false);
+        }
+        return reinterpret_cast<mtl_command_buffer *>(send(target_queue, "commandBuffer"));
+    }
+    return reinterpret_cast<mtl_command_buffer *>(ensure_active_cb(target_queue));
 }
 
-void *new_buffer(halide_metal_device *device, size_t requested) {
+mtl_compute_command_encoder *new_compute_command_encoder(
+    mtl_command_buffer *cb_raw) {
+    id cb = reinterpret_cast<id>(cb_raw);
+    if (cb == hq.active_cb) {
+        return reinterpret_cast<mtl_compute_command_encoder *>(
+            ensure_compute_encoder(cb));
+    }
+    return reinterpret_cast<mtl_compute_command_encoder *>(
+        send(cb, "computeCommandEncoder"));
+}
+
+mtl_blit_command_encoder *new_blit_command_encoder(
+    mtl_command_buffer *cb_raw) {
+    id cb = reinterpret_cast<id>(cb_raw);
+    if (cb == hq.active_cb) {
+        return reinterpret_cast<mtl_blit_command_encoder *>(
+            ensure_blit_encoder(cb));
+    }
+    return reinterpret_cast<mtl_blit_command_encoder *>(
+        send(cb, "blitCommandEncoder"));
+}
+
+void end_encoding(mtl_compute_command_encoder *enc) {
+    if (reinterpret_cast<id>(enc) == hq.active_compute_encoder) {
+        return;
+    }
+    send(reinterpret_cast<id>(enc), "endEncoding");
+}
+
+void end_encoding(mtl_blit_command_encoder *enc) {
+    if (reinterpret_cast<id>(enc) == hq.active_blit_encoder) {
+        return;
+    }
+    send(reinterpret_cast<id>(enc), "endEncoding");
+}
+
+void add_command_buffer_completed_handler(
+    mtl_command_buffer *cb_raw,
+    command_buffer_completed_handler_block_literal *handler) {
+    id cb = reinterpret_cast<id>(cb_raw);
+    if (cb == hq.active_cb) {
+        if (hq.cb_has_handler) return;
+        hq.cb_has_handler = true;
+    }
+    ((void(*)(id, SEL, void *))objc_msgSend)(
+        cb, sel_getUid("addCompletedHandler:"), handler);
+}
+
+void commit_command_buffer(mtl_command_buffer *buffer) {
+    id cb = reinterpret_cast<id>(buffer);
+    if (cb == hq.active_cb) {
+        return;
+    }
+    send(cb, "commit");
+    record_pool_fence(cb, hq.host_queue_async ? hq.host_queue : reinterpret_cast<id>(context_queue));
+}
+
+void wait_until_completed(mtl_command_buffer *buffer) {
+    id cb = reinterpret_cast<id>(buffer);
+    if (!cb) return;
+    if (cb == hq.active_cb) {
+        (void)flush_active_cb(true);
+        return;
+    }
+    send(cb, "waitUntilCompleted");
+}
+
+void dispatch_threadgroups(mtl_compute_command_encoder *encoder,
+                           int blocks_x, int blocks_y, int blocks_z,
+                           int threads_x, int threads_y, int threads_z) {
+    if (tls_skip_decode_report) {
+        constexpr char kChunkPrefix[] = "_kernel_decode_chunk_";
+        constexpr char kReportPrefix[] = "_kernel_decode_report_";
+        if (tls_pso_key.name.compare(0, sizeof(kChunkPrefix) - 1, kChunkPrefix) == 0 ||
+            tls_pso_key.name.compare(0, sizeof(kReportPrefix) - 1, kReportPrefix) == 0) {
+            return;
+        }
+    }
+    struct MtlSize {
+        unsigned long width;
+        unsigned long height;
+        unsigned long depth;
+    };
+    const MtlSize groups{static_cast<unsigned long>(blocks_x),
+                         static_cast<unsigned long>(blocks_y),
+                         static_cast<unsigned long>(blocks_z)};
+    const MtlSize threads{static_cast<unsigned long>(threads_x),
+                          static_cast<unsigned long>(threads_y),
+                          static_cast<unsigned long>(threads_z)};
+    ((void(*)(id, SEL, MtlSize, MtlSize))objc_msgSend)(
+        reinterpret_cast<id>(encoder),
+        sel_getUid("dispatchThreadgroups:threadsPerThreadgroup:"),
+        groups, threads);
+}
+
+mtl_function *new_function_with_name(
+    mtl_library *library, const char *name, size_t name_len) {
+    if (!library || !name) return nullptr;
+    tls_pso_key.library = library;
+    tls_pso_key.name.assign(name, name_len);
+    return reinterpret_cast<mtl_function *>(uintptr_t(1));
+}
+
+mtl_compute_pipeline_state *new_compute_pipeline_state_with_function(
+    mtl_device *device, mtl_function *function) {
+    if (!device || !function) return nullptr;
+    const bool from_sentinel =
+        (function == reinterpret_cast<mtl_function *>(uintptr_t(1)));
+    if (from_sentinel) {
+        tls_pso_key.device = device;
+        PsoLock lock;
+        auto it = pso_cache.find(tls_pso_key);
+        if (it != pso_cache.end()) {
+            send(static_cast<id>(it->second), "retain");
+            return reinterpret_cast<mtl_compute_pipeline_state *>(it->second);
+        }
+    }
+
+    id pso = nullptr;
+    {
+        ScopedAutoreleasePool pool;
+        id real_fn = nullptr;
+        if (from_sentinel) {
+            id str_alloc = send(reinterpret_cast<id>(objc_getClass("NSString")), "alloc");
+            id name_str = ((id(*)(id, SEL, const void *, size_t, unsigned long))objc_msgSend)(
+                str_alloc, sel_getUid("initWithBytes:length:encoding:"),
+                tls_pso_key.name.data(), tls_pso_key.name.size(), 4UL);
+            if (!name_str) return nullptr;
+            real_fn = ((id(*)(id, SEL, id))objc_msgSend)(
+                static_cast<id>(tls_pso_key.library),
+                sel_getUid("newFunctionWithName:"), name_str);
+            send(name_str, "release");
+            if (!real_fn) return nullptr;
+        } else {
+            real_fn = reinterpret_cast<id>(function);
+        }
+
+        id err = nullptr;
+        pso = ((id(*)(id, SEL, id, id *))objc_msgSend)(
+            reinterpret_cast<id>(device),
+            sel_getUid("newComputePipelineStateWithFunction:error:"),
+            real_fn, &err);
+        if (from_sentinel) {
+            send(real_fn, "release");
+        }
+    }
+    if (!pso) return nullptr;
+
+    if (!from_sentinel) {
+        return reinterpret_cast<mtl_compute_pipeline_state *>(pso);
+    }
+
+    // Retain +1 for permanent cache residency (+1 from new* goes to caller).
+    send(pso, "retain");
+    {
+        PsoLock lock;
+        auto [it, inserted] = pso_cache.emplace(tls_pso_key, static_cast<void *>(pso));
+        if (!inserted) {
+            send(pso, "release");
+            send(pso, "release");
+            send(static_cast<id>(it->second), "retain");
+            return reinterpret_cast<mtl_compute_pipeline_state *>(it->second);
+        }
+    }
+    return reinterpret_cast<mtl_compute_pipeline_state *>(pso);
+}
+
+mtl_buffer *new_buffer(mtl_device *device, size_t requested) {
     const bool pooling = pool_megabytes() > 0 && frame_depth > 0;
     const size_t length = pooling ? pooled_length(requested) : requested;
     if (pooling) {
+        if (hq.host_queue_async && !hq.active_cb) {
+            ensure_active_cb(hq.host_queue);
+        }
         PoolLock held;
         reclaim_returned();
+
+        // (a) Intra-CB reuse: within one open command buffer + serial compute encoder,
+        // sequential row windows finish reading/writing temporary GPU buffers (>= 64 KB)
+        // before the next window's dispatches begin (~2.0 GB -> ~220 MB per 4K frame).
+        if (hq.active_cb != nullptr && length >= kExactBelow) {
+            for (size_t i = 0; i < returning.size(); ++i) {
+                Returned &entry = returning[i];
+                if (entry.fence == hq.active_cb && entry.secondary_fence == nullptr &&
+                    entry.queue != nullptr) {
+                    auto pit = pooled.find(entry.buffer);
+                    if (pit != pooled.end() && pit->second.length == length) {
+                        void *buffer = entry.buffer;
+                        send(entry.fence, "release");
+                        returning.erase(returning.begin() + static_cast<std::ptrdiff_t>(i));
+                        pit->second.references = 1;
+                        pit->second.host_written = false;
+                        pit->second.gpu_in_flight = true;
+                        return reinterpret_cast<mtl_buffer *>(buffer);
+                    }
+                }
+            }
+        }
+
+        // (b) Completed idle pool (`status >= 4`).
         auto found = idle.find(length);
         if (found != idle.end()) {
             void *buffer = found->second;
             idle.erase(found);
             idle_bytes -= length;
-            pooled[buffer].references = 1;
-            return buffer;
+            auto &meta = pooled[buffer];
+            meta.references = 1;
+            meta.host_written = false;
+            meta.gpu_in_flight = false;
+            return reinterpret_cast<mtl_buffer *>(buffer);
+        }
+
+        // (c) 2-slot inter-CB same-queue reuse: skips `prev_cb_id` so Frame N and Frame N-1
+        // keep 2 disjoint ~220 MB slots for GPU overlap, while Frame N >= 2 reuses Frame N-2's
+        // committed `options: 0` tracked MTLBuffers on `hq.active_queue` without CPU stalls.
+        if (hq.active_cb != nullptr && hq.active_queue != nullptr && length >= kExactBelow) {
+            for (size_t i = 0; i < returning.size(); ++i) {
+                Returned &entry = returning[i];
+                if (entry.committed && entry.secondary_fence == nullptr &&
+                    entry.queue == hq.active_queue &&
+                    entry.fence != hq.active_cb &&
+                    (hq.prev_queue != hq.active_queue ||
+                     reinterpret_cast<uintptr_t>(entry.fence) != hq.prev_cb_id)) {
+                    auto pit = pooled.find(entry.buffer);
+                    if (pit != pooled.end() && pit->second.length == length) {
+                        void *buffer = entry.buffer;
+                        if (entry.fence) send(entry.fence, "release");
+                        returning.erase(returning.begin() + static_cast<std::ptrdiff_t>(i));
+                        pit->second.references = 1;
+                        pit->second.host_written = false;
+                        pit->second.gpu_in_flight = true;
+                        return reinterpret_cast<mtl_buffer *>(buffer);
+                    }
+                }
+            }
         }
     }
     void *buffer = ((void *(*)(id, SEL, size_t, size_t))objc_msgSend)(
         reinterpret_cast<id>(device), sel_getUid("newBufferWithLength:options:"), length, 0);
     if (buffer && pooling) {
         PoolLock held;
-        pooled[buffer] = PooledBuffer{length, 1};
+        pooled[buffer] = PooledBuffer{length, 1, false, false};
     }
-    return buffer;
+    return reinterpret_cast<mtl_buffer *>(buffer);
 }
 
 }  // namespace Metal
@@ -628,11 +1341,13 @@ void release_ns_object(void *object) {
         auto found = pooled.find(object);
         if (found != pooled.end()) {
             if (--found->second.references > 0) return;
-            // Every command buffer that could have used the buffer is the newest one or was
-            // committed before it, and the queue completes them in order.
-            id fence = newest_fence;
-            if (fence) send(fence, "retain");
-            returning.push_back(Returned{object, fence});
+            // Small (< 64 KB) uniform/LUT buffers and host-copied buffers set `queue = nullptr`
+            // so they NEVER recycle until `[fence status] >= 4` (protecting CPU memcpy).
+            Returned entry = make_returned_entry(
+                object, found->second.length, found->second.host_written,
+                hq.active_cb, hq.active_queue);
+            if (entry.fence) found->second.gpu_in_flight = true;
+            returning.push_back(entry);
             return;
         }
     }
@@ -653,6 +1368,311 @@ extern "C" void fotufilm_halide_metal_release_pool(void) {
     }
     idle.clear();
     idle_bytes = 0;
+}
+
+// ---------------------------------------------------------------------------
+// Halide runtime entry-point overrides: device_sync_internal, device_sync & copy_to_device
+//
+// Note: halide_metal_device_sync_internal is called by halide_metal_copy_to_host,
+// halide_metal_device_sync, halide_metal_device_release, and halide_metal_buffer_copy
+// while `context_mutex` is ALREADY locked — never call halide_metal_acquire_context
+// inside it.
+// ---------------------------------------------------------------------------
+
+extern "C" int halide_metal_device_sync_internal(
+    halide_metal_command_queue *queue, const struct halide_buffer_t *buffer) {
+    id metal_buf = nullptr;
+    if (buffer && buffer->device) {
+        struct device_handle_t { void *buf; uint64_t offset; };
+        auto *h = reinterpret_cast<const device_handle_t *>(buffer->device);
+        metal_buf = reinterpret_cast<id>(h->buf);
+    }
+    const bool is_managed = is_metal_buffer_managed(metal_buf);
+
+    if (hq.active_cb) {
+        if (is_managed && metal_buf) {
+            id blit = ensure_blit_encoder(hq.active_cb);
+            if (blit) {
+                ((void(*)(id, SEL, id))objc_msgSend)(
+                    blit, sel_getUid("synchronizeResource:"), metal_buf);
+            }
+        }
+        return flush_active_cb(true)
+            ? halide_error_code_success
+            : halide_error_code_device_run_failed;
+    }
+
+    id q = hq.host_queue_async
+        ? hq.host_queue
+        : (queue ? reinterpret_cast<id>(queue) : reinterpret_cast<id>(context_queue));
+    if (!q) return halide_error_code_success;
+
+    ScopedAutoreleasePool pool;
+    id sync_cb = send(q, "commandBuffer");
+    if (!sync_cb) return halide_error_code_device_run_failed;
+    if (is_managed && metal_buf) {
+        id blit = send(sync_cb, "blitCommandEncoder");
+        if (blit) {
+            ((void(*)(id, SEL, id))objc_msgSend)(
+                blit, sel_getUid("synchronizeResource:"), metal_buf);
+            send(blit, "endEncoding");
+        }
+    }
+    if (hq.host_queue_async || (hq.host_queue && q == hq.host_queue)) {
+        bool timed_out = false;
+        return commit_and_wait_host_cb(sync_cb, q, /*had_handler=*/false, timed_out)
+            ? halide_error_code_success
+            : halide_error_code_device_run_failed;
+    }
+    attach_fallback_handler(sync_cb);
+    send(sync_cb, "commit");
+    record_pool_fence(sync_cb, q);
+    send(sync_cb, "waitUntilCompleted");
+    return (send(sync_cb, "error") == nullptr)
+        ? halide_error_code_success
+        : halide_error_code_device_run_failed;
+}
+
+extern "C" int halide_metal_device_sync(void *user_context,
+                                        struct halide_buffer_t *buffer) {
+    halide_metal_device *dev = nullptr;
+    halide_metal_command_queue *que = nullptr;
+    int err = halide_metal_acquire_context(user_context, &dev, &que, true);
+    if (err) return err;
+    int sync_err = halide_metal_device_sync_internal(que, buffer);
+    halide_metal_release_context(user_context);
+    return sync_err;
+}
+
+extern "C" int halide_metal_copy_to_device(void *user_context,
+                                           halide_buffer_t *buffer) {
+    halide_metal_device *dev = nullptr;
+    halide_metal_command_queue *que = nullptr;
+    int err = halide_metal_acquire_context(user_context, &dev, &que, true);
+    if (err) return err;
+
+    if (!buffer || !(buffer->host && buffer->device)) {
+        halide_metal_release_context(user_context);
+        return halide_error_code_generic_error;
+    }
+
+    struct device_handle_t { void *buf; uint64_t offset; };
+    auto *handle = reinterpret_cast<device_handle_t *>(buffer->device);
+    id metal_buf = reinterpret_cast<id>(handle->buf);
+
+    // Defense-in-depth against CPU memcpy clobbering a pooled buffer still referenced by
+    // uncommitted/in-flight GPU dispatches (e.g. if an AOT archive ever copies host data into
+    // a >= 64 KB buffer obtained via intra/inter-CB reuse).
+    bool rebind_host_to_contents = false;
+    if (pool_megabytes() > 0 && metal_buf) {
+        bool need_sync_fallback = false;
+        {
+            PoolLock held;
+            auto it = pooled.find(handle->buf);
+            if (it != pooled.end()) {
+                if (it->second.gpu_in_flight) {
+                    if (it->second.references == 1 && handle->offset == 0) {
+                        void *old_buf = handle->buf;
+                        uint8_t *old_contents = reinterpret_cast<uint8_t *>(
+                            ((void *(*)(id, SEL))objc_msgSend)(
+                                reinterpret_cast<id>(old_buf), sel_getUid("contents")));
+                        if (old_contents && buffer->host == old_contents + handle->offset) {
+                            rebind_host_to_contents = true;
+                        }
+                        const size_t length = it->second.length;
+                        const bool old_host_written = it->second.host_written;
+
+                        reclaim_returned();
+                        void *replacement = nullptr;
+                        auto idle_it = idle.find(length);
+                        if (idle_it != idle.end()) {
+                            replacement = idle_it->second;
+                            idle.erase(idle_it);
+                            idle_bytes -= length;
+                        } else {
+                            replacement = ((void *(*)(id, SEL, size_t, size_t))objc_msgSend)(
+                                reinterpret_cast<id>(dev),
+                                sel_getUid("newBufferWithLength:options:"), length, 0);
+                        }
+                        if (!replacement) {
+                            halide_metal_release_context(user_context);
+                            return halide_error_code_out_of_memory;
+                        }
+
+                        Returned old_entry = make_returned_entry(
+                            old_buf, length, old_host_written,
+                            hq.active_cb, hq.active_queue);
+                        pooled[old_buf].references = 0;
+                        returning.push_back(old_entry);
+
+                        pooled[replacement] = PooledBuffer{
+                            length, 1, /*host_written=*/true, /*gpu_in_flight=*/false};
+                        handle->buf = replacement;
+                        metal_buf = reinterpret_cast<id>(replacement);
+                    } else {
+                        need_sync_fallback = true;
+                    }
+                } else {
+                    it->second.host_written = true;
+                }
+            }
+        }
+        if (need_sync_fallback) {
+            int sync_err = halide_metal_device_sync_internal(que, nullptr);
+            if (sync_err) {
+                halide_metal_release_context(user_context);
+                return sync_err;
+            }
+            PoolLock held;
+            auto it = pooled.find(handle->buf);
+            if (it != pooled.end()) {
+                it->second.gpu_in_flight = false;
+                it->second.host_written = true;
+            }
+        }
+    }
+
+    uint8_t *dst_base = reinterpret_cast<uint8_t *>(
+        ((void *(*)(id, SEL))objc_msgSend)(metal_buf, sel_getUid("contents")));
+    if (!dst_base || !copy_host_to_metal_buffer(buffer, dst_base + handle->offset)) {
+        halide_metal_release_context(user_context);
+        return halide_error_code_generic_error;
+    }
+    if (rebind_host_to_contents) {
+        buffer->host = dst_base + handle->offset;
+    }
+
+    int sync_err = halide_error_code_success;
+    if (is_metal_buffer_managed(metal_buf)) {
+        struct NSRange { size_t location; size_t length; };
+        const size_t total_bytes = buffer->size_in_bytes();
+        if (total_bytes > 0) {
+            NSRange r{0, total_bytes};
+            ((void(*)(id, SEL, NSRange))objc_msgSend)(
+                metal_buf, sel_getUid("didModifyRange:"), r);
+        }
+        sync_err = halide_metal_device_sync_internal(que, buffer);
+    }
+    // MTLStorageModeShared: CPU memcpy is coherent on unified/shared memory once
+    // the subsequent command buffer commits — do NOT flush or stall the queue.
+
+    halide_metal_release_context(user_context);
+    return sync_err;
+}
+
+// ---------------------------------------------------------------------------
+// Host-queue async scope public API
+// ---------------------------------------------------------------------------
+
+extern "C" void fotufilm_halide_metal_host_queue_begin(void *mtl_command_queue) {
+    // Flush any open command buffer from a prior call before switching queues.
+    (void)flush_active_cb(!hq.host_queue_async);
+    hq.flip_decode_input_y = 0;
+    hq.flip_frame_output_y = 0;
+    hq.full_frame_height = 0;
+
+    if (hq.host_queue) {
+        send(hq.host_queue, "release");
+        hq.host_queue = nullptr;
+    }
+
+    if (mtl_command_queue) {
+        hq.host_queue = reinterpret_cast<id>(mtl_command_queue);
+        send(hq.host_queue, "retain");
+        hq.host_queue_async = true;
+
+        // Ensure context_device is initialised and open active_cb immediately so
+        // FrameScope pooled buffers inside this scope always see a live active_cb.
+        halide_metal_device *dev = nullptr;
+        halide_metal_command_queue *que = nullptr;
+        if (halide_metal_acquire_context(nullptr, &dev, &que, true) == 0) {
+            halide_metal_release_context(nullptr);
+        }
+        ensure_active_cb(hq.host_queue);
+    } else {
+        hq.host_queue_async = false;
+    }
+}
+
+extern "C" void *fotufilm_halide_metal_host_compute_encoder(void) {
+    if (!hq.host_queue_async || !hq.host_queue) return nullptr;
+    id cb = ensure_active_cb(hq.host_queue);
+    return static_cast<void *>(ensure_compute_encoder(cb));
+}
+
+extern "C" void *fotufilm_halide_metal_host_queue_end(void) {
+    hq.flip_decode_input_y = 0;
+    hq.flip_frame_output_y = 0;
+    hq.full_frame_height = 0;
+    if (!hq.host_queue_async || !hq.active_cb) {
+        if (hq.active_cb) {
+            (void)flush_active_cb(false);
+        } else {
+            close_all_encoders();
+        }
+        if (hq.host_queue) {
+            send(hq.host_queue, "release");
+            hq.host_queue = nullptr;
+        }
+        hq.active_cb = nullptr;
+        hq.active_queue = nullptr;
+        hq.cb_has_handler = false;
+        hq.host_queue_async = false;
+        return nullptr;
+    }
+
+    close_all_encoders();
+    id committed = hq.active_cb;
+    id committed_queue = hq.active_queue;
+    hq.active_cb = nullptr;
+    hq.active_queue = nullptr;
+    const bool had_handler = hq.cb_has_handler;
+    hq.cb_has_handler = false;
+    if (!had_handler) {
+        attach_fallback_handler(committed);
+    }
+
+    // Commit without waiting on CPU, then record as the committed pool fence (+1 retained
+    // by newest_host_fence) and remember `prev_cb_id` for 2-slot inter-CB buffer pipelining.
+    send(committed, "commit");
+    record_pool_fence(committed, committed_queue);
+    hq.prev_cb_id = reinterpret_cast<uintptr_t>(committed);
+    hq.prev_queue = committed_queue;
+
+    if (hq.host_queue) {
+        send(hq.host_queue, "release");
+        hq.host_queue = nullptr;
+    }
+    hq.host_queue_async = false;
+
+    // Transfer ensure_active_cb's +1 retain directly to the caller
+    // (adopted by Swift via Unmanaged<MTLCommandBuffer>.takeRetainedValue()).
+    return static_cast<void *>(committed);
+}
+
+extern "C" int32_t fotufilm_halide_metal_host_queue_active(void) {
+    return hq.host_queue_async ? 1 : 0;
+}
+
+extern "C" int32_t fotufilm_halide_metal_host_queue_flush_wait(void) {
+    hq.flip_decode_input_y = 0;
+    hq.flip_frame_output_y = 0;
+    hq.full_frame_height = 0;
+    const bool ok = flush_active_cb(true);
+    if (hq.host_queue) {
+        send(hq.host_queue, "release");
+        hq.host_queue = nullptr;
+    }
+    hq.host_queue_async = false;
+    return ok ? 1 : 0;
+}
+
+extern "C" void fotufilm_halide_metal_set_io_flip(int32_t flip_decode_input_y,
+                                                  int32_t flip_frame_output_y,
+                                                  int32_t full_frame_height) {
+    hq.flip_decode_input_y = flip_decode_input_y;
+    hq.flip_frame_output_y = flip_frame_output_y;
+    hq.full_frame_height = full_frame_height;
 }
 
 extern "C" void *fotufilm_halide_metal_context_create(void) {
@@ -851,8 +1871,11 @@ int32_t run_tile(
                         feature_mask | FOTUFILM_FRAME_FLOAT_IO, seed,
                         origin_x, origin_y, configuration_floats, fields_id, stable);
         if (!error) {
-            error = output_wrap ? output_buffer.device_sync()
-                                : output_buffer.copy_to_host();
+            if (output_wrap) {
+                if (!hq.host_queue_async) error = output_buffer.device_sync();
+            } else {
+                error = output_buffer.copy_to_host();
+            }
         }
         int detach_error = 0;
         if (input_wrap) {
@@ -998,6 +2021,7 @@ extern "C" int32_t fotufilm_halide_metal_halation_fields(
         for (auto &grid_out : grids) {
             if (!error) error = grid_out.copy_to_host();
         }
+        if (error) flush_internal_cb_on_error();
         return error;
     });
 }
@@ -1042,7 +2066,13 @@ extern "C" int32_t fotufilm_halide_metal_process_buffers(
             const char *env = getenv("FOTUFILM_NOSYNC");
             return env && atoi(env) != 0;
         }();
-        if (!error && !skip_sync) error = output_buffer.device_sync();
+        if (!error && !hq.host_queue_async) {
+            if (skip_sync) {
+                (void)flush_active_cb(false);
+            } else {
+                error = output_buffer.device_sync();
+            }
+        }
         int detach_error = halide_metal_detach_buffer(nullptr, input_buffer.raw_buffer());
         if (!detach_error) detach_error = halide_metal_detach_buffer(
             nullptr, output_buffer.raw_buffer());
@@ -1074,12 +2104,25 @@ extern "C" int32_t fotufilm_halide_metal_process_buffers_float(
         if (!error) error = halide_metal_wrap_buffer(
             nullptr, output_buffer.raw_buffer(), output_mtl_buffer);
         if (error) return error;
+        int32_t call_mask = feature_mask | FOTUFILM_FRAME_FLOAT_IO;
+        if (hq.flip_frame_output_y != 0 && output_buffer.raw_buffer()->device) {
+            struct device_handle_t { void *buf; uint64_t offset; };
+            auto *out_handle = reinterpret_cast<device_handle_t *>(
+                output_buffer.raw_buffer()->device);
+            const int32_t full_h = (hq.full_frame_height >= origin_y + height)
+                ? hq.full_frame_height
+                : (origin_y + height);
+            out_handle->offset =
+                uint64_t(full_h - 1 - origin_y) * uint64_t(width) * 16u;
+            output_buffer.raw_buffer()->dim[1].stride = -4 * width;
+        }
         input_buffer.set_device_dirty();
         error = run_aot(state, input_buffer.raw_buffer(), output_buffer.raw_buffer(),
-                        width, height, configuration,
-                        feature_mask | FOTUFILM_FRAME_FLOAT_IO,
+                        width, height, configuration, call_mask,
                         seed, origin_x, origin_y);
-        if (!error) error = output_buffer.device_sync();
+        // Skip the CPU sync when a host-queue async scope is active: the caller
+        // (OFX gpuFrames) will commit the CB and wait on its own schedule.
+        if (!error && !hq.host_queue_async) error = output_buffer.device_sync();
         int detach_error = halide_metal_detach_buffer(nullptr, input_buffer.raw_buffer());
         if (!detach_error) detach_error = halide_metal_detach_buffer(
             nullptr, output_buffer.raw_buffer());
@@ -1131,18 +2174,18 @@ namespace {
 /// One measure pass over a band, however the band was handed across. `wrap` is a caller-owned
 /// MTLBuffer or 0; `rows_in` is host rows or null; exactly one of the two.
 int32_t run_measure(
-    ExecutionState &state,
+    ExecutionState &,
     Buffer<float> &exposure,
     int32_t (*kernel)(halide_buffer_t *, halide_buffer_t *, halide_buffer_t *,
                       int32_t, int32_t, int32_t, halide_buffer_t *),
     uint64_t wrap, const float *rows_in, float *out, int32_t lanes,
     int32_t width, int32_t rows, int32_t origin_y, int32_t grid_width,
     const float *configuration) {
-    const size_t configuration_bytes =
-        FOTUFILM_FRAME_CONFIGURATION_COUNT * sizeof(float);
-    std::memcpy(state.measure_configuration.data(), configuration,
-                configuration_bytes);
-    state.measure_configuration.set_host_dirty();
+    FrameScope frame_scope;
+    Buffer<float> local_configuration(FOTUFILM_FRAME_CONFIGURATION_COUNT);
+    std::memcpy(local_configuration.data(), configuration,
+                FOTUFILM_FRAME_CONFIGURATION_COUNT * sizeof(float));
+    local_configuration.set_host_dirty();
     Buffer<float> input_buffer = Buffer<float>::make_interleaved(
         wrap ? static_cast<float *>(nullptr) : const_cast<float *>(rows_in),
         width, rows, 4);
@@ -1156,10 +2199,14 @@ int32_t run_measure(
     }
     Buffer<float> out_buffer(out, lanes, rows);
     int error = kernel(input_buffer.raw_buffer(),
-                       state.measure_configuration.raw_buffer(),
+                       local_configuration.raw_buffer(),
                        exposure.raw_buffer(),
                        width, grid_width, origin_y, out_buffer.raw_buffer());
-    if (!error) error = out_buffer.copy_to_host();
+    if (!error) {
+        error = out_buffer.copy_to_host();
+    } else {
+        flush_internal_cb_on_error();
+    }
     if (wrap) {
         const int detach = halide_metal_detach_buffer(
             nullptr, input_buffer.raw_buffer());
@@ -1213,7 +2260,10 @@ extern "C" int32_t fotufilm_halide_metal_measure_flare_rows(
     });
 }
 
+namespace {
+
 using DecodeFunction = int (*)(halide_buffer_t *, halide_buffer_t *, int32_t,
+                               int32_t, int32_t,
                                halide_buffer_t *, halide_buffer_t *);
 
 int32_t run_decode_rows(
@@ -1223,10 +2273,16 @@ int32_t run_decode_rows(
     int32_t width, int32_t rows, const float *parameters) {
     if ((input_mtl_buffer == 0) == (input_rows == nullptr) ||
         (output_mtl_buffer == 0) == (output_rows == nullptr) ||
-        !report_out || !parameters || width <= 0 || rows <= 0) return -1;
+        !parameters || width <= 0 || rows <= 0) return -1;
+    const bool skip_report = hq.host_queue_async || (report_out == nullptr);
+    const int32_t flip_y = (hq.flip_decode_input_y != 0) ? 1 : 0;
+    const int32_t full_height =
+        (flip_y != 0 && hq.full_frame_height > 0) ? hq.full_frame_height : rows;
     return translate_exceptions([&] {
-        Buffer<float> parameter_buffer(const_cast<float *>(parameters),
-                                       FOTUFILM_DECODE_PARAMETER_COUNT);
+        FrameScope frame_scope;
+        Buffer<float> parameter_buffer(FOTUFILM_DECODE_PARAMETER_COUNT);
+        std::memcpy(parameter_buffer.data(), parameters,
+                    FOTUFILM_DECODE_PARAMETER_COUNT * sizeof(float));
         parameter_buffer.set_host_dirty();
         Buffer<float> input_buffer = Buffer<float>::make_interleaved(
             input_mtl_buffer ? static_cast<float *>(nullptr)
@@ -1254,15 +2310,42 @@ int32_t run_decode_rows(
                 return error;
             }
         }
-        Buffer<float> report_buffer(report_out, 2, rows);
+        Buffer<float> report_buffer = skip_report
+            ? Buffer<float>(2, rows)
+            : Buffer<float>(report_out, 2, rows);
+        if (flip_y != 0 && full_height > rows) {
+            input_buffer.raw_buffer()->dim[1].extent = full_height;
+        }
+        struct SkipDecodeReportScope {
+            bool prev;
+            explicit SkipDecodeReportScope(bool v) : prev(tls_skip_decode_report) {
+                tls_skip_decode_report = v;
+            }
+            ~SkipDecodeReportScope() { tls_skip_decode_report = prev; }
+        } report_scope(skip_report);
         error = decode(
             input_buffer.raw_buffer(), parameter_buffer.raw_buffer(), width,
+            flip_y, full_height,
             output_buffer.raw_buffer(), report_buffer.raw_buffer());
-        // The report is always read on the host; the pixels only when the caller did not hand
-        // over a buffer the device already owns.
-        if (!error) error = report_buffer.copy_to_host();
-        if (!error && !output_mtl_buffer) error = output_buffer.copy_to_host();
-        if (!error && output_mtl_buffer) error = output_buffer.device_sync();
+        // When host_queue_async is active (or report_out == nullptr), skip reading back the
+        // report and zero report_out if provided; skip output device_sync when host_queue_async.
+        if (!error) {
+            if (skip_report) {
+                if (report_out) {
+                    std::memset(report_out, 0, sizeof(float) * 2 * size_t(rows));
+                }
+            } else {
+                error = report_buffer.copy_to_host();
+            }
+            if (!error && !output_mtl_buffer) {
+                error = output_buffer.copy_to_host();
+            } else if (!error && output_mtl_buffer && !hq.host_queue_async) {
+                error = output_buffer.device_sync();
+            }
+        }
+        if (error) {
+            flush_internal_cb_on_error();
+        }
         if (input_mtl_buffer) {
             const int detach = halide_metal_detach_buffer(
                 nullptr, input_buffer.raw_buffer());
@@ -1276,6 +2359,8 @@ int32_t run_decode_rows(
         return error;
     });
 }
+
+}  // namespace
 
 extern "C" int32_t fotufilm_halide_metal_decode_rows(
     uint64_t input_mtl_buffer, const float *input_rows,
@@ -1331,7 +2416,7 @@ extern "C" int32_t fotufilm_halide_metal_process_buffers_head(
         error = run_aot(state, input_buffer.raw_buffer(), density_buffer.raw_buffer(),
                         width, height, configuration, head_mask, seed,
                         origin_x, origin_y);
-        if (!error) error = density_buffer.device_sync();
+        if (!error && !hq.host_queue_async) error = density_buffer.device_sync();
         int detach_error = halide_metal_detach_buffer(nullptr, input_buffer.raw_buffer());
         if (!detach_error) detach_error = halide_metal_detach_buffer(
             nullptr, density_buffer.raw_buffer());
@@ -1380,7 +2465,7 @@ extern "C" int32_t fotufilm_halide_metal_process_buffers_tail(
         error = run_aot(state, density_buffer.raw_buffer(), output_buffer.raw_buffer(),
                         width, height, configuration, tail_mask, seed,
                         origin_x, origin_y);
-        if (!error) error = output_buffer.device_sync();
+        if (!error && !hq.host_queue_async) error = output_buffer.device_sync();
         int detach_error = halide_metal_detach_buffer(nullptr, density_buffer.raw_buffer());
         if (!detach_error) detach_error = halide_metal_detach_buffer(
             nullptr, output_buffer.raw_buffer());
@@ -1408,7 +2493,11 @@ extern "C" int32_t fotufilm_negative_scan(const float *in, float *out, int32_t w
     input.set_host_dirty(); params.set_host_dirty();
     int status = backend ? fotufilm_halide_ios_negative_metal(input, params, output)
                          : fotufilm_halide_ios_negative_cpu(input, params, output);
-    if (!status) status = output.copy_to_host();
+    if (!status) {
+        status = output.copy_to_host();
+    } else if (backend) {
+        flush_internal_cb_on_error();
+    }
     return status;
 }
 
@@ -1473,7 +2562,11 @@ extern "C" int32_t fotufilm_transport_component(
     // The sum is read only at the point written, so the pipeline adds into it in place.
     int status = run(input, sum, table, r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8], r[9],
                      r[10], r[11], r[12], sum);
-    if (!status) status = sum.copy_to_host();
+    if (!status) {
+        status = sum.copy_to_host();
+    } else if (backend) {
+        flush_internal_cb_on_error();
+    }
     return status;
 }
 
@@ -1481,20 +2574,30 @@ extern "C" fotufilm_transport_frame *fotufilm_transport_frame_begin(
     const float *scene, const float *configuration, float *sum, int32_t width, int32_t height,
     int32_t channels, int32_t backend) {
     if (backend < 0 || backend > 1) return nullptr;
-    return fotufilm::transport_frame::begin(
+    fotufilm_transport_frame *frame = fotufilm::transport_frame::begin(
         backend ? fotufilm_halide_ios_transport_domain_metal : fotufilm_halide_ios_transport_domain_cpu,
         backend ? fotufilm_halide_ios_transport_scene_metal : fotufilm_halide_ios_transport_scene_cpu,
         backend ? halide_metal_device_interface() : nullptr, scene, configuration, sum, width, height,
         channels);
+    if (backend == 1) {
+        (void)flush_active_cb(true);
+    }
+    return frame;
 }
 
 extern "C" int32_t fotufilm_transport_frame_add(fotufilm_transport_frame *frame,
                                                 const float *configuration,
                                                 const float *exposure_lut, const float *stencils) {
-    return fotufilm::transport_frame::add(frame, configuration, exposure_lut, stencils);
+    const int32_t status = fotufilm::transport_frame::add(
+        frame, configuration, exposure_lut, stencils);
+    (void)flush_active_cb(true);
+    return status;
 }
 
 extern "C" int32_t fotufilm_transport_frame_finish(fotufilm_transport_frame *frame, int32_t deliver) {
+    if (!deliver) {
+        (void)flush_active_cb(true);
+    }
     return fotufilm::transport_frame::finish(frame, deliver);
 }
 
