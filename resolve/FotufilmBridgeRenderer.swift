@@ -41,7 +41,6 @@ final class BridgeDevice {
 /// between the host's buffers and the engine's staging on the GPU, on the host's own queue, so
 /// the frame never visits CPU memory and the copies are ordered after the work that drew it.
 final class BridgeHostFrames {
-    private var mirrors: [MTLBuffer?] = [nil, nil]
     private var repairedFlagBuffer: MTLBuffer?
 
     static func object<T>(_ pointer: UnsafeMutableRawPointer?) -> T? {
@@ -69,20 +68,6 @@ final class BridgeHostFrames {
         -> (scene: UnsafeMutableRawPointer, developed: UnsafeMutableRawPointer)? {
         guard let staging else { return nil }
         return (handle(staging.sceneBuffer), handle(staging.developedBuffer))
-    }
-
-    /// A shared buffer of at least `bytes` this context keeps for the frames that still need the
-    /// CPU, and its CPU view.
-    func mirror(slot: Int, bytes: Int)
-        -> (buffer: UnsafeMutableRawPointer, contents: UnsafeMutableRawPointer)? {
-        guard mirrors.indices.contains(slot), bytes > 0 else { return nil }
-        if mirrors[slot].map({ $0.length < bytes }) ?? true {
-            mirrors[slot] = nil
-            mirrors[slot] = MTLCreateSystemDefaultDevice()?
-                .makeBuffer(length: bytes, options: .storageModeShared)
-        }
-        guard let buffer = mirrors[slot] else { return nil }
-        return (Self.handle(buffer), buffer.contents())
     }
 
     private static let source = """
@@ -125,62 +110,49 @@ final class BridgeHostFrames {
     /// Copies `rows` rows of `width` RGBA-float pixels, pixel (x, row) of each side at
     /// `base + step * row + x`; a negative step walks the rows the other way.
     ///
-    /// When `fotufilm_halide_metal_host_compute_encoder()` returns a non-nil encoder (the host
-    /// Metal scope is open), the kernel is encoded directly on that encoder **without**
-    /// endEncoding / commit / semaphore — the scope will commit it in `fotufilm_bridge_host_metal_end`.
-    ///
-    /// Otherwise, opens its own command buffer on `queue`, commits, and waits (semaphore).
-    /// Returns 1 when copied, 0 when it could not be, -1 on timeout.
-    static func copy(queue queuePointer: UnsafeMutableRawPointer?,
-                     source sourcePointer: UnsafeMutableRawPointer?, sourceBase: Int,
+    /// Encoded on the open host Metal scope's encoder and left for the scope to commit: nothing
+    /// here waits on the host's queue. Returns 1 when encoded and 0 when it could not be,
+    /// including when no scope is open.
+    static func copy(source sourcePointer: UnsafeMutableRawPointer?, sourceBase: Int,
                      sourceStep: Int, destination destinationPointer: UnsafeMutableRawPointer?,
-                     destinationBase: Int, destinationStep: Int, width: Int, rows: Int,
-                     timeout: Double = 4) -> Int32 {
+                     destinationBase: Int, destinationStep: Int, width: Int, rows: Int) -> Int32 {
         guard width > 0, rows > 0,
-              let queue: MTLCommandQueue = object(queuePointer),
               let source: MTLBuffer = object(sourcePointer),
               let destination: MTLBuffer = object(destinationPointer),
-              fits(source, base: sourceBase, step: sourceStep, width: width, rows: rows),
+              let rawEncoder = fotufilm_halide_metal_host_compute_encoder(),
+              let encoder = Unmanaged<AnyObject>.fromOpaque(rawEncoder).takeUnretainedValue()
+                  as? MTLComputeCommandEncoder
+        else { return 0 }
+        return encodeCopy(on: encoder, source: source, sourceBase: sourceBase,
+                          sourceStep: sourceStep, destination: destination,
+                          destinationBase: destinationBase, destinationStep: destinationStep,
+                          width: width, rows: rows) ? 1 : 0
+    }
+
+    fileprivate static func encodeCopy(
+        on encoder: MTLComputeCommandEncoder, source: MTLBuffer, sourceBase: Int,
+        sourceStep: Int, destination: MTLBuffer, destinationBase: Int, destinationStep: Int,
+        width: Int, rows: Int
+    ) -> Bool {
+        guard fits(source, base: sourceBase, step: sourceStep, width: width, rows: rows),
               fits(destination, base: destinationBase, step: destinationStep, width: width,
                    rows: rows),
-              let pipeline = pipeline(queue.device)
-        else { return 0 }
+              let pipeline = pipeline(source.device)
+        else { return false }
         var arguments = (Int32(sourceBase), Int32(sourceStep), Int32(destinationBase),
                          Int32(destinationStep), UInt32(width), UInt32(rows))
         let across = min(width, pipeline.threadExecutionWidth)
-        let threadgroup = MTLSize(width: across,
-                                  height: max(1, min(rows, pipeline.maxTotalThreadsPerThreadgroup / across)),
-                                  depth: 1)
-        // Fast path: encode onto the open host Metal encoder (async scope — no wait needed).
-        if let rawEnc = fotufilm_halide_metal_host_compute_encoder(),
-           let encoder = Unmanaged<AnyObject>.fromOpaque(rawEnc).takeUnretainedValue()
-                            as? MTLComputeCommandEncoder {
-            encoder.setComputePipelineState(pipeline)
-            encoder.setBuffer(source, offset: 0, index: 0)
-            encoder.setBuffer(destination, offset: 0, index: 1)
-            encoder.setBytes(&arguments, length: MemoryLayout.size(ofValue: arguments), index: 2)
-            encoder.dispatchThreads(MTLSize(width: width, height: rows, depth: 1),
-                                    threadsPerThreadgroup: threadgroup)
-            // Do NOT endEncoding / commit / wait — the scope will do that.
-            return 1
-        }
-        // Slow path: own command buffer on the host queue, commit and wait.
-        guard let commands = queue.makeCommandBuffer(),
-              let encoder = commands.makeComputeCommandEncoder()
-        else { return 0 }
+        let threadgroup = MTLSize(
+            width: across,
+            height: max(1, min(rows, pipeline.maxTotalThreadsPerThreadgroup / across)),
+            depth: 1)
         encoder.setComputePipelineState(pipeline)
         encoder.setBuffer(source, offset: 0, index: 0)
         encoder.setBuffer(destination, offset: 0, index: 1)
         encoder.setBytes(&arguments, length: MemoryLayout.size(ofValue: arguments), index: 2)
         encoder.dispatchThreads(MTLSize(width: width, height: rows, depth: 1),
                                 threadsPerThreadgroup: threadgroup)
-        encoder.endEncoding()
-        commands.label = "Fotufilm host frame copy"
-        let done = DispatchSemaphore(value: 0)
-        commands.addCompletedHandler { _ in done.signal() }
-        commands.commit()
-        if done.wait(timeout: .now() + timeout) == .timedOut { return -1 }
-        return commands.status == .completed ? 1 : 0
+        return true
     }
 
     // MARK: - GPU Apple Log / Apple Log 2 Decode
@@ -556,8 +528,12 @@ final class BridgeHostFrames {
         width: Int, rows: Int,
         premultiplied: Bool,
         matrix: [Float],
-        repairedOut: UnsafeMutablePointer<UInt32>?
+        repairedOut: UnsafeMutablePointer<UInt32>?,
+        repairedLater: DecodeReportSink? = nil
     ) -> Int32 {
+        // Whatever happens below, a sink that was handed over is called exactly once.
+        var pendingSink = repairedLater
+        defer { pendingSink?.deliver(peak: 0, repaired: false) }
         guard width > 0, rows > 0, matrix.count == 9,
               let srcBase32 = Int32(exactly: sourceBase),
               let srcStep32 = Int32(exactly: sourceStep),
@@ -604,8 +580,27 @@ final class BridgeHostFrames {
         if let rawEnc = fotufilm_halide_metal_host_compute_encoder(),
            let encoder = Unmanaged<AnyObject>.fromOpaque(rawEnc).takeUnretainedValue()
                             as? MTLComputeCommandEncoder {
-            // Encode onto the open host encoder — no endEncoding / commit / wait.
-            encode(encoder: encoder, repBuf: state.dummyRepaired, trackRepaired: false)
+            // Encode onto the open host encoder — no endEncoding / commit / wait. A repair is
+            // read once the scope's command buffer has run, which is after this call returns.
+            if let sink = pendingSink,
+               let flag = device.makeBuffer(length: 4, options: .storageModeShared) {
+                flag.contents().storeBytes(of: UInt32(0), as: UInt32.self)
+                encode(encoder: encoder, repBuf: flag, trackRepaired: true)
+                let later = Unmanaged.passRetained(AppleLogRepairLater(flag: flag, sink: sink))
+                if fotufilm_halide_metal_host_queue_on_completed({ raw, failed in
+                    guard let raw else { return }
+                    let later = Unmanaged<AppleLogRepairLater>.fromOpaque(raw).takeRetainedValue()
+                    later.sink.deliver(
+                        peak: 0,
+                        repaired: failed == 0 && later.flag.contents().load(as: UInt32.self) != 0)
+                }, later.toOpaque()) == 1 {
+                    pendingSink = nil
+                } else {
+                    later.release()
+                }
+            } else {
+                encode(encoder: encoder, repBuf: state.dummyRepaired, trackRepaired: false)
+            }
             return 1
         }
 
@@ -636,6 +631,201 @@ final class BridgeHostFrames {
         return cb.status == .completed ? 1 : 0
     }
 }
+
+/// Where a decode's report goes when it cannot be read before the call returns.
+struct DecodeReportSink {
+    let function: @convention(c) (UnsafeMutableRawPointer?, Float, Int32) -> Void
+    let context: UnsafeMutableRawPointer?
+
+    func deliver(peak: Float, repaired: Bool) { function(context, peak, repaired ? 1 : 0) }
+}
+
+private final class AppleLogRepairLater {
+    let flag: MTLBuffer
+    let sink: DecodeReportSink
+    init(flag: MTLBuffer, sink: DecodeReportSink) { self.flag = flag; self.sink = sink }
+}
+
+/// A host Metal frame on its way through the CPU: the frames that need resampling, a decode or
+/// an encode the kernels do not carry, strips, Layered Transport, or a measurement read back.
+///
+/// The host's queue cannot be waited on for long from inside its render call — a host can hold a
+/// command buffer on it until the call returns — so the frame's two ends are tied to the queue
+/// rather than to the call. The copy into CPU-visible mirrors is committed at once. When it lands
+/// promptly the frame develops inside the call as a CPU frame does and the copy back is committed
+/// behind it, unwaited. When it does not, the copy back is enqueued — holding its place on the
+/// host's queue ahead of whatever the host commits next — and the develop runs the moment the
+/// copy in completes, on a thread of its own, committing the copy back when it is done.
+final class BridgeMirroredFrame {
+    private let queue: MTLCommandQueue
+    private let output: MTLBuffer
+    private let sourceMirror: MTLBuffer
+    private let outputMirror: MTLBuffer
+    private let outputStride: Int
+    private let outputRows: Int
+    private let landedSignal = DispatchSemaphore(value: 0)
+    private let lock = NSLock()
+    private var landed: Bool?
+    private var whenLanded: ((Bool) -> Void)?
+
+    var sourcePixels: UnsafeMutableRawPointer { sourceMirror.contents() }
+    var outputPixels: UnsafeMutableRawPointer { outputMirror.contents() }
+
+    private static let poolLock = NSLock()
+    nonisolated(unsafe) private static var idle: [MTLBuffer] = []
+
+    /// A shared buffer of at least `bytes`, reused when one of a like size is idle.
+    private static func borrow(_ device: MTLDevice, bytes: Int) -> MTLBuffer? {
+        poolLock.lock()
+        if let index = idle.firstIndex(where: {
+            $0.device === device && $0.length >= bytes && $0.length <= 2 * bytes
+        }) {
+            let buffer = idle.remove(at: index)
+            poolLock.unlock()
+            return buffer
+        }
+        poolLock.unlock()
+        return device.makeBuffer(length: bytes, options: .storageModeShared)
+    }
+
+    /// Keeps a few mirrors for the next frame; called only once nothing on the GPU reads them.
+    private static func recycle(_ buffers: [MTLBuffer]) {
+        poolLock.lock()
+        idle.append(contentsOf: buffers)
+        if idle.count > 4 { idle.removeFirst(idle.count - 4) }
+        poolLock.unlock()
+    }
+
+    static func releaseIdle() {
+        poolLock.lock()
+        idle.removeAll()
+        poolLock.unlock()
+    }
+
+    /// Commits the copy of both host buffers into mirrors: the output too, so whatever the render
+    /// window leaves alone is the host's own. Rows are `stride` pixels apart and copied whole.
+    init?(queue queuePointer: UnsafeMutableRawPointer?,
+          source sourcePointer: UnsafeMutableRawPointer?, sourceStride: Int, sourceRows: Int,
+          output outputPointer: UnsafeMutableRawPointer?, outputStride: Int, outputRows: Int) {
+        guard sourceStride > 0, sourceRows > 0, outputStride > 0, outputRows > 0,
+              let queue: MTLCommandQueue = BridgeHostFrames.object(queuePointer),
+              let source: MTLBuffer = BridgeHostFrames.object(sourcePointer),
+              let output: MTLBuffer = BridgeHostFrames.object(outputPointer),
+              let sourceMirror = Self.borrow(queue.device, bytes: sourceStride * sourceRows * 16),
+              let outputMirror = Self.borrow(queue.device, bytes: outputStride * outputRows * 16),
+              let commands = queue.makeCommandBuffer(),
+              let encoder = commands.makeComputeCommandEncoder()
+        else { return nil }
+        self.queue = queue
+        self.output = output
+        self.sourceMirror = sourceMirror
+        self.outputMirror = outputMirror
+        self.outputStride = outputStride
+        self.outputRows = outputRows
+        let encoded = BridgeHostFrames.encodeCopy(
+                on: encoder, source: source, sourceBase: 0, sourceStep: sourceStride,
+                destination: sourceMirror, destinationBase: 0, destinationStep: sourceStride,
+                width: sourceStride, rows: sourceRows)
+            && BridgeHostFrames.encodeCopy(
+                on: encoder, source: output, sourceBase: 0, sourceStep: outputStride,
+                destination: outputMirror, destinationBase: 0, destinationStep: outputStride,
+                width: outputStride, rows: outputRows)
+        encoder.endEncoding()
+        guard encoded else {
+            // Never committed, so nothing on the GPU reads the mirrors.
+            Self.recycle([sourceMirror, outputMirror])
+            return nil
+        }
+        commands.label = "Fotufilm host frame to CPU"
+        commands.addCompletedHandler { [self] finished in
+            let arrived = finished.status == .completed
+            lock.lock()
+            landed = arrived
+            let continuation = whenLanded
+            whenLanded = nil
+            lock.unlock()
+            landedSignal.signal()
+            continuation?(arrived)
+        }
+        commands.commit()
+    }
+
+    /// 1 once the host's pixels are in the mirrors, 0 while the host's queue has not reached the
+    /// copy after `milliseconds`, and -1 when the GPU failed it.
+    func wait(milliseconds: Int) -> Int32 {
+        if landedSignal.wait(timeout: .now() + .milliseconds(max(0, milliseconds))) == .timedOut {
+            return 0
+        }
+        lock.lock()
+        defer { lock.unlock() }
+        return landed == true ? 1 : -1
+    }
+
+    /// The copy back into the host's buffer, encoded and not yet committed.
+    private func copyBack() -> MTLCommandBuffer? {
+        guard let commands = queue.makeCommandBuffer(),
+              let encoder = commands.makeComputeCommandEncoder()
+        else { return nil }
+        let encoded = BridgeHostFrames.encodeCopy(
+            on: encoder, source: outputMirror, sourceBase: 0, sourceStep: outputStride,
+            destination: output, destinationBase: 0, destinationStep: outputStride,
+            width: outputStride, rows: outputRows)
+        encoder.endEncoding()
+        guard encoded else { return nil }
+        commands.label = "Fotufilm CPU frame to host"
+        let mirrors = [sourceMirror, outputMirror]
+        commands.addCompletedHandler { _ in Self.recycle(mirrors) }
+        return commands
+    }
+
+    /// The frame was developed inside the render call: commits the copy back and does not wait.
+    func finish() -> Bool {
+        guard let commands = copyBack() else { return false }
+        commands.commit()
+        return true
+    }
+
+    /// The host is holding its queue. Reserves the copy back's place on it now and runs `work`
+    /// once the copy in has landed — with false, and a black frame, if the GPU failed it — then
+    /// commits the copy back. Returns false, without calling `work`, when the copy back could
+    /// not be encoded.
+    func `defer`(_ work: @escaping (Bool) -> Void) -> Bool {
+        guard let commands = copyBack() else { return false }
+        commands.enqueue()
+        let run: (Bool) -> Void = { [self] arrived in
+            DispatchQueue.global(qos: .userInitiated).async { [self] in
+                if !arrived {
+                    memset(outputMirror.contents(), 0, outputStride * outputRows * 16)
+                }
+                work(arrived)
+                commands.commit()
+            }
+        }
+        lock.lock()
+        if let landed {
+            lock.unlock()
+            run(landed)
+        } else {
+            whenLanded = run
+            lock.unlock()
+        }
+        return true
+    }
+
+    /// The frame failed before anything was to be copied back. The mirrors return to the pool
+    /// once the copy in, which may still be waiting on the host, is no longer writing them.
+    func cancel() {
+        let mirrors = [sourceMirror, outputMirror]
+        lock.lock()
+        if landed != nil {
+            lock.unlock()
+            Self.recycle(mirrors)
+        } else {
+            whenLanded = { _ in Self.recycle(mirrors) }
+            lock.unlock()
+        }
+    }
+}
 #else
 /// Linux keeps its device state process-wide (`FotufilmHalideLinux.cpp`), so an instance has
 /// nothing of its own to bind.
@@ -650,13 +840,23 @@ final class BridgeHostFrames {
                        buffers: [UnsafeMutableRawPointer?]) -> Bool { false }
     static func staging(_ staging: BridgeStaging?)
         -> (scene: UnsafeMutableRawPointer, developed: UnsafeMutableRawPointer)? { nil }
-    func mirror(slot: Int, bytes: Int)
-        -> (buffer: UnsafeMutableRawPointer, contents: UnsafeMutableRawPointer)? { nil }
-    static func copy(queue: UnsafeMutableRawPointer?, source: UnsafeMutableRawPointer?,
-                     sourceBase: Int, sourceStep: Int,
+    static func copy(source: UnsafeMutableRawPointer?, sourceBase: Int, sourceStep: Int,
                      destination: UnsafeMutableRawPointer?, destinationBase: Int,
-                     destinationStep: Int, width: Int, rows: Int,
-                     timeout: Double = 4) -> Int32 { 0 }
+                     destinationStep: Int, width: Int, rows: Int) -> Int32 { 0 }
+}
+
+/// No Linux host hands over a Metal frame to mirror.
+final class BridgeMirroredFrame {
+    init?(queue: UnsafeMutableRawPointer?,
+          source: UnsafeMutableRawPointer?, sourceStride: Int, sourceRows: Int,
+          output: UnsafeMutableRawPointer?, outputStride: Int, outputRows: Int) { return nil }
+    var sourcePixels: UnsafeMutableRawPointer? { nil }
+    var outputPixels: UnsafeMutableRawPointer? { nil }
+    func wait(milliseconds: Int) -> Int32 { -1 }
+    func finish() -> Bool { false }
+    func `defer`(_ work: @escaping (Bool) -> Void) -> Bool { false }
+    func cancel() {}
+    static func releaseIdle() {}
 }
 
 /// A frame's pair of host buffers, as the Metal staging is a pair of shared ones: the host decodes
@@ -749,6 +949,9 @@ final class BridgeRenderer {
     func carriesOutputTransform(stock: FilmStock, options: FotufilmEngine.Options,
                                 width: Int, height: Int, realtime: Bool,
                                 measuresGlareOnDevice: Bool) -> Bool { false }
+
+    /// No Linux host hands over frames on a queue of its own, so nothing asks in earnest.
+    func developsOnDevice(stock: FilmStock, options: FotufilmEngine.Options) -> Bool { true }
 
     func decodeStaged(_ staging: BridgeStaging, skipReport: Bool = false,
                       width: Int, height: Int,

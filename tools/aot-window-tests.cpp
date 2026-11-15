@@ -1,6 +1,7 @@
-// Render the same synthetic frames with FOTUFILM_AOT_WINDOWED=0 and =1.
-// Compare their dumps to exercise window seams, changing frame data, and the
-// spatial-support fallback through the shipped AOT shim. No GPU API is used here.
+// Render the same synthetic frames with FOTUFILM_AOT_WINDOWED=0 and =1, and with the windows
+// on and FOTUFILM_AOT_EXACT=0. Compare their dumps to exercise window seams, changing frame
+// data, the spatial-support fallback, and the twins compiled for exactly one stage set, through
+// the shipped AOT shim. No GPU API is used here.
 #include "FotufilmHalide.h"
 
 #include <algorithm>
@@ -102,6 +103,24 @@ int main(int argc, char **argv) {
         {"negative-no-couplers", 1920, 1080, 0, 1, 1, 2, 0, false, 0, false,
          FOTUFILM_FRAME_COUPLERS | FOTUFILM_FRAME_COUPLER_DIFFUSION, 1, true},
         {"negative-portrait-monochrome", 1080, 1920, 0, 1, 1, 2, 0, false, 0, true, 0, 1, true},
+        // Requests whose stages are exactly a twin's, as a colour negative with no print detail
+        // makes them. The shim serves these from the twin compiled for exactly those stages
+        // unless FOTUFILM_AOT_EXACT=0 keeps them on the gated twin, so the two can be compared:
+        // a `gated_parity` twin ("parity-") must agree with the gated one to the bit. One frame
+        // of each is taller than a window, so the twin's seams are crossed as well.
+        {"exact-negative", 1920, 1080, 0, 1, 1, 2, 0, false, 0, false,
+         FOTUFILM_FRAME_PRINT_DETAIL},
+        {"exact-negative-seam", 256, 2161, 0, 1, 1, 2, 0, false, 0, false,
+         FOTUFILM_FRAME_PRINT_DETAIL},
+        {"parity-negative-no-adjacency", 1920, 1080, 0, 1, 1, 2, 0, false, 0, false,
+         FOTUFILM_FRAME_PRINT_DETAIL | FOTUFILM_FRAME_ADJACENCY},
+        {"parity-negative-no-adjacency-seam", 256, 2161, 0, 1, 1, 2, 0, false, 0, false,
+         FOTUFILM_FRAME_PRINT_DETAIL | FOTUFILM_FRAME_ADJACENCY},
+        {"parity-negative-no-adjacency-rec709", 1080, 1920, 0, 1, 1, 2, 0, false, 2, false,
+         FOTUFILM_FRAME_PRINT_DETAIL | FOTUFILM_FRAME_ADJACENCY},
+        // Taller than a window at full width, so every stage's apron is read across a seam at
+        // the size the windows exist for.
+        {"uhd-plus-seam", 3840, 2161, 0, 1, 1},
     };
     for (const Case &test : cases) {
         auto c = configuration;

@@ -47,8 +47,24 @@ extern "C" {
 void    fotufilm_halide_metal_host_queue_begin(void *mtl_command_queue);
 int32_t fotufilm_halide_metal_host_queue_active(void);
 void   *fotufilm_halide_metal_host_compute_encoder(void);
-int32_t fotufilm_halide_metal_host_queue_flush_wait(void);
 void   *fotufilm_halide_metal_host_queue_end(void);
+
+/// 1 when something inside the scope opened last on this thread asked for results back on the
+/// CPU and the host's queue did not deliver them in time (FOTUFILM_HOST_QUEUE_PATIENCE_MS, 250
+/// by default): the host is holding its queue across its render call. The wait was given up, so
+/// the frame the scope encoded is not finished and has to be developed outside the call.
+int32_t fotufilm_halide_metal_host_queue_refused(void);
+
+/// Calls `function(context, failed)` once the open scope's command buffer has run on the GPU,
+/// with `failed` non-zero when the GPU reported an error. Returns 0, and never calls
+/// `function`, when no scope is open on this thread.
+int32_t fotufilm_halide_metal_host_queue_on_completed(
+    void (*function)(void *context, int32_t failed), void *context);
+
+/// The next decode on this thread inside a host-queue scope reports through `sink` once its
+/// command buffer has run, rather than not at all. `sink` is always called exactly once.
+void fotufilm_halide_metal_decode_report_later(
+    void (*sink)(void *context, float peak, int32_t repaired), void *context);
 
 /// Configures per-thread vertical row-flip for zero-copy bottom-up host MTLBuffers
 /// (e.g. DaVinci Resolve OFX gpuFrames) on decode input and/or frame develop output.

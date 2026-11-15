@@ -1487,6 +1487,15 @@ public final class HalideMetalFilmRenderer {
         return fotufilm_halide_metal_variant_exists(mask | encodeMask) == 1
     }
 
+    /// Whether `developStaged` develops this frame in the kernels, from device buffers into
+    /// device buffers. Layered Transport does not: it develops its records on the host, reading
+    /// the staged scene and writing the developed frame through their CPU views, so its frame
+    /// cannot be left encoded on a queue for later.
+    public func developsOnDevice(stock: FilmStock, options: FotufilmEngine.Options,
+                                 noFilm: Bool = false) -> Bool {
+        noFilm || options.transportConstruction(for: stock) == nil
+    }
+
     /// Returns false for density output because host colour transforms apply only to light.
     static func encodesOutput(_ mask: Int32) -> Bool {
         mask & FilmEngineFeature.densityOut == 0

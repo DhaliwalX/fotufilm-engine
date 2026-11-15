@@ -22,6 +22,7 @@
 #include "fotufilm_halide_ios_transport_domain_metal.h"
 #include "TransportFrameAot.h"
 #include "FotufilmTransport.h"
+#include <execinfo.h>
 #include <HalideBuffer.h>
 #include <HalideRuntimeMetal.h>
 
@@ -336,6 +337,13 @@ int run_aot(ExecutionState &state, halide_buffer_t *in, halide_buffer_t *out,
             pipeline = fotufilm_halide_ios_##variant_name##_windowed;
         FOTUFILM_AOT_WINDOWED_VARIANTS(FOTUFILM_PICK_WINDOWED)
 #undef FOTUFILM_PICK_WINDOWED
+        // FOTUFILM_AOT_EXACT=0 keeps every request on its gated twin, so a twin compiled for
+        // exactly its stages can be checked against the gated one it stands in for.
+        static const bool exact_enabled = [] {
+            const char *setting = std::getenv("FOTUFILM_AOT_EXACT");
+            return !setting || std::strcmp(setting, "0") != 0;
+        }();
+        if (!exact_enabled) exact = nullptr;
         if (exact && pipeline != general_pipeline) pipeline = exact;
     }
     const int32_t trace_mask = feature_mask & 0x7fffffff;
@@ -639,6 +647,16 @@ struct HostQueueState {
     int32_t flip_frame_output_y = 0;
     int32_t full_frame_height = 0;
 
+    // Something inside the scope asked for results back on the CPU and the host's queue did not
+    // deliver them within `host_queue_patience_ns`. A host can hold a command buffer on its
+    // queue until its render call returns, and nothing ordered behind that runs before then, so
+    // the wait was given up and every later one in the scope is refused outright: the frame
+    // this scope encoded cannot be finished inside the call.
+    bool sync_refused = false;
+    // The command buffer that wait gave up on (+1 retained), committed and still to run. It is
+    // the scope's fence when nothing was encoded after it.
+    id unfinished_cb = nullptr;
+
     ~HostQueueState();
 };
 
@@ -678,50 +696,33 @@ inline void attach_fallback_handler(id cb) {
         cb, sel_getUid("addCompletedHandler:"), &hq_completion_block_global);
 }
 
-constexpr int64_t kHostQueueWaitNs = 4LL * NSEC_PER_SEC;
+// How long a wait inside a host-queue scope gives the host's queue before giving up. A frame
+// that reads a measurement back mid-frame costs a few milliseconds of this on a queue that is
+// merely busy; on one the host is holding it costs all of it, once, and the frame is then
+// finished outside the call. FOTUFILM_HOST_QUEUE_PATIENCE_MS overrides it, here and for the
+// plug-in's own wait on the same queue.
+inline int64_t host_queue_patience_ns() {
+    static const int64_t nanoseconds = [] {
+        const char *setting = std::getenv("FOTUFILM_HOST_QUEUE_PATIENCE_MS");
+        return int64_t(setting ? std::max(0, std::atoi(setting)) : 250) * NSEC_PER_MSEC;
+    }();
+    return nanoseconds;
+}
 
-struct DispatchSemaphoreRef {
-    dispatch_semaphore_t sem;
-    DispatchSemaphoreRef() : sem(dispatch_semaphore_create(0)) {}
-    DispatchSemaphoreRef(const DispatchSemaphoreRef &o) : sem(o.sem) {
-        if (sem) dispatch_retain(sem);
-    }
-    DispatchSemaphoreRef &operator=(const DispatchSemaphoreRef &) = delete;
-    ~DispatchSemaphoreRef() {
-        if (sem) dispatch_release(sem);
-    }
-};
-
-// Commits `cb` on an external host queue and waits up to 4 seconds for completion via a
-// refcounted libdispatch semaphore rather than an unbounded `waitUntilCompleted`, so a host
-// holding an uncommitted earlier command buffer on that queue fails cleanly instead of hanging.
-inline bool commit_and_wait_host_cb(id cb, id queue, bool had_handler, bool &timed_out) {
-    timed_out = false;
-    DispatchSemaphoreRef waiter;
-    if (!waiter.sem) {
-        if (!had_handler) attach_fallback_handler(cb);
-        send(cb, "commit");
-        record_pool_fence(cb, queue);
-        return false;
-    }
-    void (^handler)(id) = ^(id finished) {
-        if (!had_handler && send(finished, "error")) {
-            std::fprintf(stderr, "Fotufilm Halide iOS Metal command buffer error\n");
-        }
-        dispatch_semaphore_signal(waiter.sem);
-    };
-    ((void(*)(id, SEL, void (^)(id)))objc_msgSend)(
-        cb, sel_getUid("addCompletedHandler:"), handler);
-    send(cb, "commit");
-    record_pool_fence(cb, queue);
-    const dispatch_time_t deadline = dispatch_time(DISPATCH_TIME_NOW, kHostQueueWaitNs);
-    if (dispatch_semaphore_wait(waiter.sem, deadline) != 0) {
-        timed_out = true;
+// A CPU wait inside a host-queue scope that the host's queue did not answer in time.
+inline void refuse_host_sync() {
+    if (!hq.sync_refused) {
         std::fprintf(stderr,
-                     "Fotufilm Halide iOS error: host Metal queue timed out waiting for command buffer\n");
-        return false;
+                     "Fotufilm Halide iOS: the host's Metal queue did not return a frame's "
+                     "results within %lld ms; the frame is finished outside the render call\n",
+                     static_cast<long long>(host_queue_patience_ns() / NSEC_PER_MSEC));
+        // FOTUFILM_TRACE_HOST_SYNC names what asked.
+        if (std::getenv("FOTUFILM_TRACE_HOST_SYNC")) {
+            void *frames[48];
+            backtrace_symbols_fd(frames, backtrace(frames, 48), 2);
+        }
     }
-    return send(cb, "error") == nullptr;
+    hq.sync_refused = true;
 }
 
 inline bool coalescing_enabled() {
@@ -754,6 +755,10 @@ HostQueueState::~HostQueueState() {
         send(cb, "commit");
         record_pool_fence(cb, queue);
         send(cb, "release");
+    }
+    if (unfinished_cb) {
+        send(unfinished_cb, "release");
+        unfinished_cb = nullptr;
     }
     if (host_queue) {
         id q = host_queue;
@@ -792,10 +797,55 @@ inline void close_all_encoders() {
 }
 
 // Ends open encoders, commits active_cb, optionally waits for GPU completion,
-// updates the pool fence, and releases active_cb's +1 ownership. Preserves
-// host_queue / host_queue_async so mid-scope syncs (e.g. FOTUFILM_REALTIME=0
-// flare measurement) can open a fresh CB on the same host_queue afterwards.
+// updates the pool fence, and releases active_cb's +1 ownership. A wait asked for
+// inside a host-queue scope is bounded: see `wait_on_host_queue`.
+// A wait inside a host-queue scope: commits what the scope has encoded and gives the host's queue
+// `host_queue_patience_ns` to run it. On a queue the host is holding it gives up, keeps the
+// committed buffer as the scope's fence, and refuses every later wait in the scope at once.
+inline bool wait_on_host_queue() {
+    if (hq.sync_refused) return false;
+    if (!hq.active_cb) return true;
+    close_all_encoders();
+    id cb = hq.active_cb;
+    id queue = hq.active_queue;
+    hq.active_cb = nullptr;
+    hq.active_queue = nullptr;
+    const bool had_handler = hq.cb_has_handler;
+    hq.cb_has_handler = false;
+    // Retained once for the handler, which can run after this wait has given up.
+    dispatch_semaphore_t finished = dispatch_semaphore_create(0);
+    dispatch_retain(finished);
+    void (^handler)(id) = ^(id done) {
+        if (!had_handler && send(done, "error")) {
+            std::fprintf(stderr, "Fotufilm Halide iOS Metal command buffer error\n");
+        }
+        dispatch_semaphore_signal(finished);
+        dispatch_release(finished);
+    };
+    ((void(*)(id, SEL, void (^)(id)))objc_msgSend)(
+        cb, sel_getUid("addCompletedHandler:"), handler);
+    send(cb, "commit");
+    record_pool_fence(cb, queue);
+    const bool arrived = dispatch_semaphore_wait(
+        finished, dispatch_time(DISPATCH_TIME_NOW, host_queue_patience_ns())) == 0;
+    dispatch_release(finished);
+    hq.prev_cb_id = reinterpret_cast<uintptr_t>(cb);
+    hq.prev_queue = queue;
+    if (!arrived) {
+        refuse_host_sync();
+        if (hq.unfinished_cb) send(hq.unfinished_cb, "release");
+        hq.unfinished_cb = cb;
+        return false;
+    }
+    const bool ok = send(cb, "error") == nullptr;
+    hq.prev_cb_id = 0;
+    hq.prev_queue = nullptr;
+    send(cb, "release");
+    return ok;
+}
+
 inline bool flush_active_cb(bool wait) {
+    if (wait && hq.host_queue_async) return wait_on_host_queue();
     if (!hq.active_cb) return true;
     close_all_encoders();
     id cb = hq.active_cb;
@@ -805,33 +855,21 @@ inline bool flush_active_cb(bool wait) {
     const bool had_handler = hq.cb_has_handler;
     hq.cb_has_handler = false;
     bool ok = true;
-    if (wait && (hq.host_queue_async || (hq.host_queue && queue == hq.host_queue))) {
-        bool timed_out = false;
-        ok = commit_and_wait_host_cb(cb, queue, had_handler, timed_out);
-        if (timed_out) {
-            hq.prev_cb_id = reinterpret_cast<uintptr_t>(cb);
-            hq.prev_queue = queue;
-        } else if (hq.prev_queue == queue) {
+    if (!had_handler) {
+        attach_fallback_handler(cb);
+    }
+    send(cb, "commit");
+    record_pool_fence(cb, queue);
+    if (wait) {
+        send(cb, "waitUntilCompleted");
+        ok = (send(cb, "error") == nullptr);
+        if (hq.prev_queue == queue) {
             hq.prev_cb_id = 0;
             hq.prev_queue = nullptr;
         }
     } else {
-        if (!had_handler) {
-            attach_fallback_handler(cb);
-        }
-        send(cb, "commit");
-        record_pool_fence(cb, queue);
-        if (wait) {
-            send(cb, "waitUntilCompleted");
-            ok = (send(cb, "error") == nullptr);
-            if (hq.prev_queue == queue) {
-                hq.prev_cb_id = 0;
-                hq.prev_queue = nullptr;
-            }
-        } else {
-            hq.prev_cb_id = reinterpret_cast<uintptr_t>(cb);
-            hq.prev_queue = queue;
-        }
+        hq.prev_cb_id = reinterpret_cast<uintptr_t>(cb);
+        hq.prev_queue = queue;
     }
     send(cb, "release");
     return ok;
@@ -1000,6 +1038,15 @@ struct PsoLock {
 auto &pso_cache = *new std::unordered_map<PsoCacheKey, void *, PsoCacheKeyHash>();
 thread_local PsoCacheKey tls_pso_key;
 thread_local bool tls_skip_decode_report = false;
+
+// Where the next decode inside a host-queue scope sends its report once its command buffer has
+// run: the report cannot be read back inside the scope, and a frame's peak and repairs are
+// diagnostics that can arrive a frame late.
+struct DecodeReportSink {
+    void (*function)(void *context, float peak, int32_t repaired) = nullptr;
+    void *context = nullptr;
+};
+thread_local DecodeReportSink tls_decode_report_sink;
 
 }  // namespace
 
@@ -1389,6 +1436,18 @@ extern "C" int halide_metal_device_sync_internal(
     }
     const bool is_managed = is_metal_buffer_managed(metal_buf);
 
+    if (hq.host_queue_async) {
+        if (hq.active_cb && is_managed && metal_buf) {
+            id blit = ensure_blit_encoder(hq.active_cb);
+            if (blit) {
+                ((void(*)(id, SEL, id))objc_msgSend)(
+                    blit, sel_getUid("synchronizeResource:"), metal_buf);
+            }
+        }
+        return wait_on_host_queue()
+            ? halide_error_code_success
+            : halide_error_code_device_run_failed;
+    }
     if (hq.active_cb) {
         if (is_managed && metal_buf) {
             id blit = ensure_blit_encoder(hq.active_cb);
@@ -1402,9 +1461,7 @@ extern "C" int halide_metal_device_sync_internal(
             : halide_error_code_device_run_failed;
     }
 
-    id q = hq.host_queue_async
-        ? hq.host_queue
-        : (queue ? reinterpret_cast<id>(queue) : reinterpret_cast<id>(context_queue));
+    id q = queue ? reinterpret_cast<id>(queue) : reinterpret_cast<id>(context_queue);
     if (!q) return halide_error_code_success;
 
     ScopedAutoreleasePool pool;
@@ -1417,12 +1474,6 @@ extern "C" int halide_metal_device_sync_internal(
                 blit, sel_getUid("synchronizeResource:"), metal_buf);
             send(blit, "endEncoding");
         }
-    }
-    if (hq.host_queue_async || (hq.host_queue && q == hq.host_queue)) {
-        bool timed_out = false;
-        return commit_and_wait_host_cb(sync_cb, q, /*had_handler=*/false, timed_out)
-            ? halide_error_code_success
-            : halide_error_code_device_run_failed;
     }
     attach_fallback_handler(sync_cb);
     send(sync_cb, "commit");
@@ -1552,9 +1603,14 @@ extern "C" int halide_metal_copy_to_device(void *user_context,
                 metal_buf, sel_getUid("didModifyRange:"), r);
         }
         sync_err = halide_metal_device_sync_internal(que, buffer);
+    } else if (pool_megabytes() == 0 && !hq.host_queue_async) {
+        // No pool tracks which buffers the GPU still reads, so keep the stock runtime's
+        // order: the copy is followed by a wait for everything already on the queue.
+        sync_err = halide_metal_device_sync_internal(que, buffer);
     }
-    // MTLStorageModeShared: CPU memcpy is coherent on unified/shared memory once
-    // the subsequent command buffer commits — do NOT flush or stall the queue.
+    // With the pool (the row-window host) a shared buffer's CPU copy is coherent once the
+    // next command buffer commits, and the pool keeps in-flight buffers from being written:
+    // nothing is flushed and the queue is not stalled.
 
     halide_metal_release_context(user_context);
     return sync_err;
@@ -1580,6 +1636,11 @@ extern "C" void fotufilm_halide_metal_host_queue_begin(void *mtl_command_queue) 
         hq.host_queue = reinterpret_cast<id>(mtl_command_queue);
         send(hq.host_queue, "retain");
         hq.host_queue_async = true;
+        hq.sync_refused = false;
+        if (hq.unfinished_cb) {
+            send(hq.unfinished_cb, "release");
+            hq.unfinished_cb = nullptr;
+        }
 
         // Ensure context_device is initialised and open active_cb immediately so
         // FrameScope pooled buffers inside this scope always see a live active_cb.
@@ -1601,6 +1662,12 @@ extern "C" void *fotufilm_halide_metal_host_compute_encoder(void) {
 }
 
 extern "C" void *fotufilm_halide_metal_host_queue_end(void) {
+    if (tls_decode_report_sink.function) {
+        // No decode came for the report that was asked for.
+        const DecodeReportSink unused = tls_decode_report_sink;
+        tls_decode_report_sink = DecodeReportSink{};
+        unused.function(unused.context, 0, 0);
+    }
     hq.flip_decode_input_y = 0;
     hq.flip_frame_output_y = 0;
     hq.full_frame_height = 0;
@@ -1618,9 +1685,18 @@ extern "C" void *fotufilm_halide_metal_host_queue_end(void) {
         hq.active_queue = nullptr;
         hq.cb_has_handler = false;
         hq.host_queue_async = false;
-        return nullptr;
+        // A wait that gave up left its command buffer committed and still to run: with nothing
+        // encoded after it, it is what the scope's buffers have to outlast.
+        id unfinished = hq.unfinished_cb;
+        hq.unfinished_cb = nullptr;
+        return static_cast<void *>(unfinished);
     }
 
+    if (hq.unfinished_cb) {
+        // Ordered ahead of the buffer committed below, which is therefore the later fence.
+        send(hq.unfinished_cb, "release");
+        hq.unfinished_cb = nullptr;
+    }
     close_all_encoders();
     id committed = hq.active_cb;
     id committed_queue = hq.active_queue;
@@ -1654,17 +1730,30 @@ extern "C" int32_t fotufilm_halide_metal_host_queue_active(void) {
     return hq.host_queue_async ? 1 : 0;
 }
 
-extern "C" int32_t fotufilm_halide_metal_host_queue_flush_wait(void) {
-    hq.flip_decode_input_y = 0;
-    hq.flip_frame_output_y = 0;
-    hq.full_frame_height = 0;
-    const bool ok = flush_active_cb(true);
-    if (hq.host_queue) {
-        send(hq.host_queue, "release");
-        hq.host_queue = nullptr;
+extern "C" int32_t fotufilm_halide_metal_host_queue_refused(void) {
+    return hq.sync_refused ? 1 : 0;
+}
+
+extern "C" int32_t fotufilm_halide_metal_host_queue_on_completed(
+    void (*function)(void *context, int32_t failed), void *context) {
+    if (!function || !hq.host_queue_async || !hq.host_queue) return 0;
+    id cb = ensure_active_cb(hq.host_queue);
+    if (!cb) return 0;
+    void (^handler)(id) = ^(id finished) {
+        function(context, send(finished, "error") != nullptr ? 1 : 0);
+    };
+    ((void(*)(id, SEL, void (^)(id)))objc_msgSend)(
+        cb, sel_getUid("addCompletedHandler:"), handler);
+    return 1;
+}
+
+extern "C" void fotufilm_halide_metal_decode_report_later(
+    void (*sink)(void *context, float peak, int32_t repaired), void *context) {
+    if (tls_decode_report_sink.function) {
+        // An earlier request no decode ever took up.
+        tls_decode_report_sink.function(tls_decode_report_sink.context, 0, 0);
     }
-    hq.host_queue_async = false;
-    return ok ? 1 : 0;
+    tls_decode_report_sink = DecodeReportSink{sink, context};
 }
 
 extern "C" void fotufilm_halide_metal_set_io_flip(int32_t flip_decode_input_y,
@@ -2020,6 +2109,10 @@ extern "C" int32_t fotufilm_halide_metal_halation_fields(
             grids[2].raw_buffer());
         for (auto &grid_out : grids) {
             if (!error) error = grid_out.copy_to_host();
+            if (!error && hq.host_queue_async && hq.sync_refused) {
+                // Given up on, not read: what is in host memory is not this frame's.
+                error = halide_error_code_device_run_failed;
+            }
         }
         if (error) flush_internal_cb_on_error();
         return error;
@@ -2204,6 +2297,10 @@ int32_t run_measure(
                        width, grid_width, origin_y, out_buffer.raw_buffer());
     if (!error) {
         error = out_buffer.copy_to_host();
+        if (!error && hq.host_queue_async && hq.sync_refused) {
+                // Given up on, not read: what is in host memory is not this frame's.
+                error = halide_error_code_device_run_failed;
+            }
     } else {
         flush_internal_cb_on_error();
     }
@@ -2274,7 +2371,12 @@ int32_t run_decode_rows(
     if ((input_mtl_buffer == 0) == (input_rows == nullptr) ||
         (output_mtl_buffer == 0) == (output_rows == nullptr) ||
         !parameters || width <= 0 || rows <= 0) return -1;
-    const bool skip_report = hq.host_queue_async || (report_out == nullptr);
+    const DecodeReportSink later_sink = tls_decode_report_sink;
+    tls_decode_report_sink = DecodeReportSink{};
+    const bool report_later = hq.host_queue_async && later_sink.function != nullptr;
+    if (later_sink.function && !report_later) later_sink.function(later_sink.context, 0, 0);
+    const bool skip_report =
+        !report_later && (hq.host_queue_async || (report_out == nullptr));
     const int32_t flip_y = (hq.flip_decode_input_y != 0) ? 1 : 0;
     const int32_t full_height =
         (flip_y != 0 && hq.full_frame_height > 0) ? hq.full_frame_height : rows;
@@ -2310,9 +2412,13 @@ int32_t run_decode_rows(
                 return error;
             }
         }
-        Buffer<float> report_buffer = skip_report
-            ? Buffer<float>(2, rows)
-            : Buffer<float>(report_out, 2, rows);
+        // A report read later outlives this call: its buffer is freed by the handler that
+        // reads it, once the command buffer that fills it has run.
+        Buffer<float> *later_report = report_later ? new Buffer<float>(2, rows) : nullptr;
+        Buffer<float> local_report = report_later ? Buffer<float>()
+            : skip_report ? Buffer<float>(2, rows)
+                          : Buffer<float>(report_out, 2, rows);
+        Buffer<float> &report_buffer = later_report ? *later_report : local_report;
         if (flip_y != 0 && full_height > rows) {
             input_buffer.raw_buffer()->dim[1].extent = full_height;
         }
@@ -2329,8 +2435,50 @@ int32_t run_decode_rows(
             output_buffer.raw_buffer(), report_buffer.raw_buffer());
         // When host_queue_async is active (or report_out == nullptr), skip reading back the
         // report and zero report_out if provided; skip output device_sync when host_queue_async.
+        if (later_report) {
+            bool handed_over = false;
+            if (!error && hq.active_cb) {
+                // Copies of this call's own: the block outlives the frame these names live in,
+                // and inside this lambda they are references into it.
+                Buffer<float> *const report = later_report;
+                const DecodeReportSink sink = later_sink;
+                const int32_t report_rows = rows;
+                void (^handler)(id) = ^(id finished) {
+                    float peak = 0;
+                    int32_t repaired = 0;
+                    const halide_buffer_t *raw = report->raw_buffer();
+                    if (send(finished, "error") == nullptr && raw->device) {
+                        struct device_handle_t { void *buf; uint64_t offset; };
+                        auto *handle = reinterpret_cast<const device_handle_t *>(raw->device);
+                        const auto *base = reinterpret_cast<const uint8_t *>(
+                            ((void *(*)(id, SEL))objc_msgSend)(
+                                reinterpret_cast<id>(handle->buf), sel_getUid("contents")));
+                        if (base) {
+                            const float *values =
+                                reinterpret_cast<const float *>(base + handle->offset);
+                            for (int32_t row = 0; row < report_rows; ++row) {
+                                peak = std::max(peak, values[2 * row]);
+                                if (values[2 * row + 1] != 0) repaired = 1;
+                            }
+                        }
+                    }
+                    sink.function(sink.context, peak, repaired);
+                    delete report;
+                };
+                ((void(*)(id, SEL, void (^)(id)))objc_msgSend)(
+                    hq.active_cb, sel_getUid("addCompletedHandler:"), handler);
+                handed_over = true;
+            }
+            if (!handed_over) {
+                later_sink.function(later_sink.context, 0, 0);
+                delete later_report;
+            }
+            if (report_out) std::memset(report_out, 0, sizeof(float) * 2 * size_t(rows));
+        }
         if (!error) {
-            if (skip_report) {
+            if (later_report) {
+                // Read by the handler above.
+            } else if (skip_report) {
                 if (report_out) {
                     std::memset(report_out, 0, sizeof(float) * 2 * size_t(rows));
                 }

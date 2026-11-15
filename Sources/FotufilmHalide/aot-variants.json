@@ -288,7 +288,7 @@
         "mask": "WINDOWED_STAGES | DENSITY_OUT"
       }
     ],
-    "exact_doc": "A twin compiled for one exact stage set: stages outside the set are absent rather than Materialised behind bypasses, while `gated_parity` twins retain lightweight scalar selects so Metal's FMA contraction matches the runtime-gated graph bit-for-bit. The shim serves a request from one only when the request's stages are exactly that set, and otherwise from the gated twin.",
+    "exact_doc": "A twin compiled for one exact stage set: stages outside the set are absent rather than materialised behind bypasses, while `gated_parity` twins retain lightweight scalar selects so that Metal contracts the same expressions as the runtime-gated graph. On UHD frames the twins checked that carry the luminance MTF arm match their gated twins to the bit; `negative_no_adj`, which does not carry it, lands within tens of ULP of its own (43 at most, on Gold 200). FOTUFILM_AOT_EXACT=0 keeps every request on its gated twin, which is how tools/verify-aot-windows.sh compares the two. The shim serves a request from one only when the request's stages are exactly that set, and otherwise from the gated twin.",
     "exact": [
       {
         "variant": "color_float_realtime",

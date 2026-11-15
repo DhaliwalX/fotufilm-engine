@@ -710,8 +710,12 @@ extern "C" int32_t fotufilm_halide_metal_decode_rows_realtime(
 extern "C" void    fotufilm_halide_metal_host_queue_begin(void *) {}
 extern "C" int32_t fotufilm_halide_metal_host_queue_active(void) { return 0; }
 extern "C" void   *fotufilm_halide_metal_host_compute_encoder(void) { return nullptr; }
-extern "C" int32_t fotufilm_halide_metal_host_queue_flush_wait(void) { return 1; }
 extern "C" void   *fotufilm_halide_metal_host_queue_end(void) { return nullptr; }
+extern "C" int32_t fotufilm_halide_metal_host_queue_refused(void) { return 0; }
+extern "C" int32_t fotufilm_halide_metal_host_queue_on_completed(
+    void (*)(void *, int32_t), void *) { return 0; }
+extern "C" void    fotufilm_halide_metal_decode_report_later(
+    void (*sink)(void *, float, int32_t), void *context) { if (sink) sink(context, 0, 0); }
 extern "C" void    fotufilm_halide_metal_set_io_flip(int32_t, int32_t, int32_t) {}
 
 #endif  // __APPLE__
@@ -985,8 +989,12 @@ extern "C" FOTUFILM_FALLBACK int32_t fotufilm_halide_metal_process_buffers_tail(
 extern "C" FOTUFILM_FALLBACK void    fotufilm_halide_metal_host_queue_begin(void *) {}
 extern "C" FOTUFILM_FALLBACK int32_t fotufilm_halide_metal_host_queue_active(void) { return 0; }
 extern "C" FOTUFILM_FALLBACK void   *fotufilm_halide_metal_host_compute_encoder(void) { return nullptr; }
-extern "C" FOTUFILM_FALLBACK int32_t fotufilm_halide_metal_host_queue_flush_wait(void) { return 1; }
 extern "C" FOTUFILM_FALLBACK void   *fotufilm_halide_metal_host_queue_end(void) { return nullptr; }
+extern "C" FOTUFILM_FALLBACK int32_t fotufilm_halide_metal_host_queue_refused(void) { return 0; }
+extern "C" FOTUFILM_FALLBACK int32_t fotufilm_halide_metal_host_queue_on_completed(
+    void (*)(void *, int32_t), void *) { return 0; }
+extern "C" FOTUFILM_FALLBACK void    fotufilm_halide_metal_decode_report_later(
+    void (*sink)(void *, float, int32_t), void *context) { if (sink) sink(context, 0, 0); }
 extern "C" FOTUFILM_FALLBACK void    fotufilm_halide_metal_set_io_flip(int32_t, int32_t, int32_t) {}
 
 #endif
