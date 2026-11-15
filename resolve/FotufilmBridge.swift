@@ -1,9 +1,16 @@
 import Foundation
+#if !os(Linux)
+import Metal
+#endif
 
 import FotufilmHalide
 
 private let cameraInputDecoders = EditorControlCatalogue.pluginCameraInputs.map {
     CameraLogDecoder($0.encoding)
+}
+
+private let cameraInputMatrices: [[Float]] = EditorControlCatalogue.pluginCameraInputs.map {
+    $0.encoding.gamut.toRec2020.map(Float.init)
 }
 
 @_cdecl("fotufilm_bridge_camera_input_count")
@@ -44,6 +51,13 @@ private final class BridgeContext {
     var frameStaging: BridgeStaging?
     var outputQuery: OutputTransformQuery?
     let hostFrames = BridgeHostFrames()
+    /// Non-zero while a host Metal scope is open (the `MTLCommandQueue*` identity cast to `UInt`).
+    var hostQueueID: UInt = 0
+#if !os(Linux)
+    /// Fence attached by `fotufilm_bridge_host_metal_end` for the next `releaseStaging()`.
+    var pendingFenceQueueID: UInt = 0
+    var pendingFence: MTLCommandBuffer?
+#endif
 
     init?(lastError: String) {
         guard let device = BridgeDevice() else { return nil }
@@ -51,11 +65,23 @@ private final class BridgeContext {
         self.lastError = lastError
     }
 
+#if !os(Linux)
+    func releaseStaging() {
+        let f = pendingFence
+        let qID = f != nil ? pendingFenceQueueID : hostQueueID
+        pendingFence = nil
+        pendingFenceQueueID = 0
+        guard let staging = frameStaging else { return }
+        frameStaging = nil
+        BridgeRenderer.shared?.recycleFrameStaging(staging, queueID: qID, fence: f)
+    }
+#else
     func releaseStaging() {
         guard let staging = frameStaging else { return }
         frameStaging = nil
         BridgeRenderer.shared?.recycleFrameStaging(staging)
     }
+#endif
 
     func withDevice<Result>(_ body: () -> Result) -> Result {
         device.run(body)
@@ -783,6 +809,17 @@ func fotufilm_bridge_frame_staging(
     _ input: UnsafeMutablePointer<UnsafeMutablePointer<Float>?>?,
     _ output: UnsafeMutablePointer<UnsafeMutablePointer<Float>?>?
 ) -> Int32 {
+    fotufilm_bridge_frame_staging_for_queue(opaque, width, height, nil, input, output)
+}
+
+@_cdecl("fotufilm_bridge_frame_staging_for_queue")
+func fotufilm_bridge_frame_staging_for_queue(
+    _ opaque: UnsafeMutableRawPointer?,
+    _ width: Int32, _ height: Int32,
+    _ queue: UnsafeMutableRawPointer?,
+    _ input: UnsafeMutablePointer<UnsafeMutablePointer<Float>?>?,
+    _ output: UnsafeMutablePointer<UnsafeMutablePointer<Float>?>?
+) -> Int32 {
     guard let context = context(opaque) else { return 0 }
     context.lock.lock()
     defer { context.lock.unlock() }
@@ -797,7 +834,10 @@ func fotufilm_bridge_frame_staging(
     else { return 0 }
 
     let pixels = Int(width) * Int(height)
-    guard let staging = renderer.borrowFrameStaging(pixels: pixels) else { return 0 }
+    let queueID = queue.map { UInt(bitPattern: $0) } ?? context.hostQueueID
+    guard let staging = renderer.borrowFrameStaging(pixels: pixels,
+                                                     hostQueueID: queueID)
+    else { return 0 }
     context.frameStaging = staging
     input.pointee = staging.scenePixels
     output.pointee = staging.developedPixels
@@ -854,32 +894,273 @@ func fotufilm_bridge_host_metal_staging(
     return 1
 }
 
-@_cdecl("fotufilm_bridge_host_metal_mirror")
-func fotufilm_bridge_host_metal_mirror(
-    _ opaque: UnsafeMutableRawPointer?, _ slot: Int32, _ bytes: Int64,
-    _ buffer: UnsafeMutablePointer<UnsafeMutableRawPointer?>?
-) -> UnsafeMutableRawPointer? {
-    guard let context = context(opaque), let buffer else { return nil }
-    context.lock.lock()
-    defer { context.lock.unlock() }
-    guard let mirror = context.hostFrames.mirror(slot: Int(slot), bytes: Int(bytes))
-    else { return nil }
-    buffer.pointee = mirror.buffer
-    return mirror.contents
-}
-
 @_cdecl("fotufilm_bridge_host_metal_copy")
 func fotufilm_bridge_host_metal_copy(
-    _ queue: UnsafeMutableRawPointer?,
     _ source: UnsafeMutableRawPointer?, _ sourceBase: Int64, _ sourceStep: Int64,
     _ destination: UnsafeMutableRawPointer?, _ destinationBase: Int64,
     _ destinationStep: Int64, _ width: Int32, _ rows: Int32
 ) -> Int32 {
-    BridgeHostFrames.copy(queue: queue, source: source, sourceBase: Int(sourceBase),
+    BridgeHostFrames.copy(source: source, sourceBase: Int(sourceBase),
                           sourceStep: Int(sourceStep), destination: destination,
                           destinationBase: Int(destinationBase),
                           destinationStep: Int(destinationStep), width: Int(width),
                           rows: Int(rows))
+}
+
+@_cdecl("fotufilm_bridge_host_mirror_begin")
+func fotufilm_bridge_host_mirror_begin(
+    _ queue: UnsafeMutableRawPointer?,
+    _ source: UnsafeMutableRawPointer?, _ sourceStride: Int32, _ sourceRows: Int32,
+    _ output: UnsafeMutableRawPointer?, _ outputStride: Int32, _ outputRows: Int32,
+    _ sourcePixels: UnsafeMutablePointer<UnsafeMutablePointer<Float>?>?,
+    _ outputPixels: UnsafeMutablePointer<UnsafeMutablePointer<Float>?>?
+) -> UnsafeMutableRawPointer? {
+    guard let sourcePixels, let outputPixels,
+          let frame = BridgeMirroredFrame(
+            queue: queue, source: source, sourceStride: Int(sourceStride),
+            sourceRows: Int(sourceRows), output: output, outputStride: Int(outputStride),
+            outputRows: Int(outputRows)),
+          let sourceView = frame.sourcePixels as UnsafeMutableRawPointer?,
+          let outputView = frame.outputPixels as UnsafeMutableRawPointer?
+    else { return nil }
+    sourcePixels.pointee = sourceView.assumingMemoryBound(to: Float.self)
+    outputPixels.pointee = outputView.assumingMemoryBound(to: Float.self)
+    return Unmanaged.passRetained(frame).toOpaque()
+}
+
+@_cdecl("fotufilm_bridge_host_mirror_wait")
+func fotufilm_bridge_host_mirror_wait(_ frame: UnsafeMutableRawPointer?,
+                                      _ milliseconds: Int32) -> Int32 {
+    guard let frame else { return -1 }
+    return Unmanaged<BridgeMirroredFrame>.fromOpaque(frame).takeUnretainedValue()
+        .wait(milliseconds: Int(milliseconds))
+}
+
+@_cdecl("fotufilm_bridge_host_mirror_finish")
+func fotufilm_bridge_host_mirror_finish(_ frame: UnsafeMutableRawPointer?) -> Int32 {
+    guard let frame else { return 0 }
+    return Unmanaged<BridgeMirroredFrame>.fromOpaque(frame).takeRetainedValue().finish() ? 1 : 0
+}
+
+@_cdecl("fotufilm_bridge_host_mirror_defer")
+func fotufilm_bridge_host_mirror_defer(
+    _ frame: UnsafeMutableRawPointer?,
+    _ work: (@convention(c) (UnsafeMutableRawPointer?, Int32) -> Void)?,
+    _ workContext: UnsafeMutableRawPointer?
+) -> Int32 {
+    guard let frame else { return 0 }
+    let mirrored = Unmanaged<BridgeMirroredFrame>.fromOpaque(frame).takeRetainedValue()
+    guard let work else {
+        mirrored.cancel()
+        return 0
+    }
+    // A raw pointer is not Sendable; the work it names is the caller's to make safe.
+    let address = workContext.map { UInt(bitPattern: $0) }
+    let deferred = mirrored.defer { arrived in
+        work(address.flatMap { UnsafeMutableRawPointer(bitPattern: $0) }, arrived ? 1 : 0)
+    }
+    if !deferred { mirrored.cancel() }
+    return deferred ? 1 : 0
+}
+
+@_cdecl("fotufilm_bridge_host_mirror_cancel")
+func fotufilm_bridge_host_mirror_cancel(_ frame: UnsafeMutableRawPointer?) {
+    guard let frame else { return }
+    Unmanaged<BridgeMirroredFrame>.fromOpaque(frame).takeRetainedValue().cancel()
+}
+
+/// Whether `fotufilm_bridge_render_staged_to_metal` develops this frame in the kernels, so that
+/// it can be encoded inside a host Metal scope. Layered Transport develops on the host instead.
+@_cdecl("fotufilm_bridge_develops_on_device")
+func fotufilm_bridge_develops_on_device(
+    _ stockIndex: Int32, _ format: Int32, _ paper: Int32,
+    _ parameters: UnsafePointer<Float>?
+) -> Int32 {
+    guard let renderer = BridgeRenderer.shared,
+          let stock = stock(at: stockIndex), stage(of: parameters) != nil else { return 0 }
+    let settings = options(parameters, format: format,
+                           stockIndex: stockIndex, paper: paper, seed: 0)
+    return renderer.developsOnDevice(stock: stock, options: settings) ? 1 : 0
+}
+
+/// Calls `done(context, failed)` once the open host Metal scope's command buffer has run.
+@_cdecl("fotufilm_bridge_host_metal_notify")
+func fotufilm_bridge_host_metal_notify(
+    _ done: (@convention(c) (UnsafeMutableRawPointer?, Int32) -> Void)?,
+    _ doneContext: UnsafeMutableRawPointer?
+) -> Int32 {
+#if !os(Linux)
+    return fotufilm_halide_metal_host_queue_on_completed(done, doneContext)
+#else
+    return 0
+#endif
+}
+
+/// The next kernel decode on this thread inside a host Metal scope reports through `sink` once
+/// its command buffer has run. `sink` is called exactly once.
+@_cdecl("fotufilm_bridge_decode_report_later")
+func fotufilm_bridge_decode_report_later(
+    _ sink: (@convention(c) (UnsafeMutableRawPointer?, Float, Int32) -> Void)?,
+    _ sinkContext: UnsafeMutableRawPointer?
+) {
+#if !os(Linux)
+    fotufilm_halide_metal_decode_report_later(sink, sinkContext)
+#else
+    sink?(sinkContext, 0, 0)
+#endif
+}
+
+/// Begins a single-command-buffer host Metal scope. Records the queue identity on the context
+/// so the staging pool's borrow logic can apply same-queue reuse without waiting.
+@_cdecl("fotufilm_bridge_host_metal_begin")
+func fotufilm_bridge_host_metal_begin(_ opaque: UnsafeMutableRawPointer?,
+                                       _ queue: UnsafeMutableRawPointer?) {
+    guard let context = context(opaque) else { return }
+    let queueID: UInt = queue.map { UInt(bitPattern: $0) } ?? 0
+    context.lock.lock()
+    context.hostQueueID = queueID
+#if !os(Linux)
+    context.pendingFenceQueueID = 0
+    context.pendingFence = nil
+#endif
+    context.lock.unlock()
+#if !os(Linux)
+    fotufilm_halide_metal_host_queue_begin(queue)
+#endif
+}
+
+/// Ends the host Metal scope. Retrieves the asynchronously-committed command buffer from Halide
+/// and attaches it as a fence on the context before `fotufilm_bridge_release_staging` recycles
+/// `frameStaging`, so the pool knows when the GPU has finished reading/writing those buffers.
+@_cdecl("fotufilm_bridge_host_metal_end")
+func fotufilm_bridge_host_metal_end(_ opaque: UnsafeMutableRawPointer?) -> Int32 {
+    guard let context = context(opaque) else { return 0 }
+#if !os(Linux)
+    // Retrieve the +1-retained MTLCommandBuffer Halide committed asynchronously.
+    var fenceCB: MTLCommandBuffer? = nil
+    if let rawCB = fotufilm_halide_metal_host_queue_end() {
+        fenceCB = Unmanaged<AnyObject>.fromOpaque(rawCB).takeRetainedValue() as? MTLCommandBuffer
+    }
+    context.lock.lock()
+    let queueID = context.hostQueueID
+    context.hostQueueID = 0
+    if let fenceCB {
+        context.pendingFenceQueueID = queueID
+        context.pendingFence = fenceCB
+    }
+    let refused = fotufilm_halide_metal_host_queue_refused() != 0
+    if refused {
+        context.lastError = "the host's Metal queue did not return the frame's measurement in time"
+    }
+    context.lock.unlock()
+    return refused ? 0 : 1
+#else
+    context.lock.lock()
+    context.hostQueueID = 0
+    context.lock.unlock()
+    return 1
+#endif
+}
+
+/// Returns 1 on arm64 macOS when `cameraIndex` names an Apple Log or Apple Log 2 camera input
+/// that the 0-ULP GPU Apple Log decode kernel supports, and a Metal device is available.
+@_cdecl("fotufilm_bridge_camera_gpu_decode_supported")
+func fotufilm_bridge_camera_gpu_decode_supported(_ cameraIndex: Int32) -> Int32 {
+#if !os(Linux) && arch(arm64)
+    let idx = Int(cameraIndex)
+    guard cameraInputDecoders.indices.contains(idx),
+          MTLCreateSystemDefaultDevice() != nil else { return 0 }
+    let encoding = EditorControlCatalogue.pluginCameraInputs[idx].encoding
+    return (encoding == .appleLog || encoding == .appleLog2) ? 1 : 0
+#else
+    return 0
+#endif
+}
+
+/// Dispatches the GPU Apple Log decode kernel on the open host Metal compute encoder (or
+/// synchronously on a cached command queue when no host encoder is open).
+@_cdecl("fotufilm_bridge_camera_gpu_decode")
+func fotufilm_bridge_camera_gpu_decode(
+    _ opaque: UnsafeMutableRawPointer?,
+    _ sourceBuffer: UnsafeMutableRawPointer?,
+    _ sourceBase: Int64, _ sourceStep: Int64,
+    _ destinationBuffer: UnsafeMutableRawPointer?,
+    _ destinationBase: Int64, _ destinationStep: Int64,
+    _ width: Int32, _ rows: Int32,
+    _ premultiplied: Int32, _ cameraIndex: Int32,
+    _ repairedOut: UnsafeMutablePointer<UInt32>?,
+    _ repairedLater: (@convention(c) (UnsafeMutableRawPointer?, Float, Int32) -> Void)?,
+    _ laterContext: UnsafeMutableRawPointer?
+) -> Int32 {
+#if !os(Linux) && arch(arm64)
+    let sink = repairedLater.map { DecodeReportSink(function: $0, context: laterContext) }
+    var delivered = false
+    defer { if !delivered { sink?.deliver(peak: 0, repaired: false) } }
+    let idx = Int(cameraIndex)
+    guard cameraInputMatrices.indices.contains(idx),
+          let srcBase = Int(exactly: sourceBase),
+          let srcStep = Int(exactly: sourceStep),
+          let dstBase = Int(exactly: destinationBase),
+          let dstStep = Int(exactly: destinationStep)
+    else { return 0 }
+    let encoding = EditorControlCatalogue.pluginCameraInputs[idx].encoding
+    guard encoding == .appleLog || encoding == .appleLog2 else { return 0 }
+    let ctx = context(opaque)
+    ctx?.lock.lock()
+    defer { ctx?.lock.unlock() }
+    delivered = true
+    return BridgeHostFrames.decodeAppleLog(
+        hostFrames: ctx?.hostFrames,
+        source: sourceBuffer, sourceBase: srcBase, sourceStep: srcStep,
+        destination: destinationBuffer,
+        destinationBase: dstBase, destinationStep: dstStep,
+        width: Int(width), rows: Int(rows),
+        premultiplied: premultiplied != 0,
+        matrix: cameraInputMatrices[idx],
+        repairedOut: repairedOut,
+        repairedLater: sink)
+#else
+    repairedLater?(laterContext, 0, 0)
+    return 0
+#endif
+}
+
+/// GPU Apple Log / Apple Log 2 decode using the context's current frame staging buffers.
+/// Reads from staging.developedBuffer (CPU-filled via copyRows) and writes to staging.sceneBuffer.
+/// Uses a standalone command buffer + waitUntilCompleted (CPU OFX host path, no open encoder).
+@_cdecl("fotufilm_bridge_camera_gpu_decode_staged")
+func fotufilm_bridge_camera_gpu_decode_staged(
+    _ opaque: UnsafeMutableRawPointer?,
+    _ width: Int32, _ height: Int32,
+    _ premultiplied: Int32, _ cameraIndex: Int32,
+    _ repairedOut: UnsafeMutablePointer<UInt32>?
+) -> Int32 {
+#if !os(Linux) && arch(arm64)
+    let idx = Int(cameraIndex)
+    guard let context = context(opaque),
+          width > 0, height > 0,
+          cameraInputMatrices.indices.contains(idx)
+    else { return 0 }
+    let encoding = EditorControlCatalogue.pluginCameraInputs[idx].encoding
+    guard encoding == .appleLog || encoding == .appleLog2 else { return 0 }
+    context.lock.lock()
+    defer { context.lock.unlock() }
+    guard let staging = context.frameStaging,
+          staging.capacityPixels >= Int(width) * Int(height)
+    else { return 0 }
+    return BridgeHostFrames.decodeAppleLog(
+        hostFrames: context.hostFrames,
+        source: BridgeHostFrames.handle(staging.developedBuffer),
+        sourceBase: 0, sourceStep: Int(width),
+        destination: BridgeHostFrames.handle(staging.sceneBuffer),
+        destinationBase: 0, destinationStep: Int(width),
+        width: Int(width), rows: Int(height),
+        premultiplied: premultiplied != 0,
+        matrix: cameraInputMatrices[idx],
+        repairedOut: repairedOut)
+#else
+    return 0
+#endif
 }
 
 @_cdecl("fotufilm_bridge_decode_staged")
@@ -901,15 +1182,64 @@ func fotufilm_bridge_decode_staged(
           let staging = context.frameStaging,
           staging.capacityPixels >= Int(width) * Int(height)
     else { return 0 }
+#if !os(Linux)
+    let skipReport = fotufilm_halide_metal_host_compute_encoder() != nil
+#else
+    let skipReport = false
+#endif
     guard let report = context.withDevice({
         renderer.decodeStaged(
-            staging, width: Int(width), height: Int(height), transform: transform,
+            staging, skipReport: skipReport,
+            width: Int(width), height: Int(height), transform: transform,
             realtime: realtime != 0)
     }) else { return 0 }
 
     peak?.pointee = report.peak
     repaired?.pointee = report.repaired ? 1 : 0
     return 1
+}
+
+@_cdecl("fotufilm_bridge_decode_staged_from_metal")
+func fotufilm_bridge_decode_staged_from_metal(
+    _ opaque: UnsafeMutableRawPointer?,
+    _ sourceBuffer: UnsafeMutableRawPointer?,
+    _ width: Int32, _ height: Int32,
+    _ transformIn: UnsafeRawPointer?,
+    _ peak: UnsafeMutablePointer<Float>?,
+    _ repaired: UnsafeMutablePointer<Int32>?,
+    _ realtime: Int32
+) -> Int32 {
+#if !os(Linux) && arch(arm64)
+    guard let context = context(opaque),
+          width > 0, height > 0,
+          fotufilm_halide_metal_host_compute_encoder() != nil,
+          let mtlSource: MTLBuffer = BridgeHostFrames.object(sourceBuffer),
+          let device = MTLCreateSystemDefaultDevice(),
+          mtlSource.device === device
+    else { return 0 }
+    let pixels = Int(width) * Int(height)
+    guard mtlSource.length >= pixels * 16 else { return 0 }
+    context.lock.lock()
+    defer { context.lock.unlock() }
+
+    guard let renderer = BridgeRenderer.shared,
+          let transform = inputTransform(transformIn),
+          let staging = context.frameStaging,
+          staging.capacityPixels >= pixels
+    else { return 0 }
+    guard let report = context.withDevice({
+        renderer.decodeStaged(
+            staging, from: mtlSource, flipInputY: true, skipReport: true,
+            width: Int(width), height: Int(height), transform: transform,
+            realtime: realtime != 0)
+    }) else { return 0 }
+
+    peak?.pointee = report.peak
+    repaired?.pointee = report.repaired ? 1 : 0
+    return 1
+#else
+    return 0
+#endif
 }
 
 @_cdecl("fotufilm_bridge_decode_rows")
@@ -945,6 +1275,25 @@ func fotufilm_bridge_render_staged(
     _ shouldContinue: (@convention(c) (UnsafeMutableRawPointer?) -> Int32)?,
     _ abortContext: UnsafeMutableRawPointer?
 ) -> Int32 {
+    fotufilm_bridge_render_staged_to_metal(
+        opaque, stockIndex, format, paper, parameters, seed, width, height, frame,
+        interactive, outputTransformIn, nil, nil, shouldContinue, abortContext)
+}
+
+@_cdecl("fotufilm_bridge_render_staged_to_metal")
+func fotufilm_bridge_render_staged_to_metal(
+    _ opaque: UnsafeMutableRawPointer?,
+    _ stockIndex: Int32, _ format: Int32, _ paper: Int32,
+    _ parameters: UnsafePointer<Float>?, _ seed: UInt32,
+    _ width: Int32, _ height: Int32, _ frame: UInt64,
+    _ interactive: Int32,
+    _ outputTransformIn: UnsafeMutableRawPointer?,
+    _ directOutputBuffer: UnsafeMutableRawPointer?,
+    _ wroteDirectOutput: UnsafeMutablePointer<Int32>?,
+    _ shouldContinue: (@convention(c) (UnsafeMutableRawPointer?) -> Int32)?,
+    _ abortContext: UnsafeMutableRawPointer?
+) -> Int32 {
+    wroteDirectOutput?.pointee = 0
     guard let context = context(opaque) else { return 0 }
     context.lock.lock()
     defer { context.lock.unlock() }
@@ -962,8 +1311,9 @@ func fotufilm_bridge_render_staged(
             "no pipeline stage at index \(whole(parameters?[Parameter.stage] ?? 0))"
         return 0
     }
+    let pixels = Int(width) * Int(height)
     guard width > 0, height > 0, let staging = context.frameStaging,
-          staging.capacityPixels >= Int(width) * Int(height) else {
+          staging.capacityPixels >= pixels else {
         context.lastError = "no frame staging claimed for a \(width)x\(height) frame"
         return 0
     }
@@ -980,9 +1330,33 @@ func fotufilm_bridge_render_staged(
     }
     let wanted = outputTransformIn != nil
     var transform = outputTransform(outputTransformIn)
+#if !os(Linux)
+    // Layered Transport reads `staging.scenePixels` and writes `staging.developedPixels` on the
+    // CPU, which a frame encoded on the host's queue has not filled yet and will overwrite. The
+    // host asks `fotufilm_bridge_develops_on_device` first and takes such a frame through CPU
+    // mirrors, so this is reached only by a host that did not ask.
+    let isLayeredTransport = settings.transportConstruction(for: stock) != nil
+    if context.hostQueueID != 0, isLayeredTransport {
+        context.lastError = "Layered Transport develops on the CPU and cannot stay on the "
+            + "host's Metal queue"
+        return 0
+    }
+#endif
+#if !os(Linux) && arch(arm64)
+    let directMtlOut: MTLBuffer? = {
+        guard !isLayeredTransport,
+              fotufilm_halide_metal_host_compute_encoder() != nil,
+              let mtlOut: MTLBuffer = BridgeHostFrames.object(directOutputBuffer),
+              let device = MTLCreateSystemDefaultDevice(),
+              mtlOut.device === device,
+              mtlOut.length >= pixels * 16
+        else { return nil }
+        return mtlOut
+    }()
     let ok = context.withDevice {
         renderer.developStaged(
-            staging, width: Int(width), height: Int(height), stock: stock,
+            staging, outputBuffer: directMtlOut, flipOutputY: directMtlOut != nil,
+            width: Int(width), height: Int(height), stock: stock,
             options: settings,
             outputTransform: &transform,
             frameIndex: parameters?[Parameter.grainFrozen] == 1 ? 0 : frame,
@@ -995,6 +1369,28 @@ func fotufilm_bridge_render_staged(
                 { keepGoing(abortContext) != 0 }
             })
     }
+#else
+    let ok = context.withDevice {
+        renderer.developStaged(
+            staging, width: Int(width), height: Int(height), stock: stock,
+            options: settings,
+            outputTransform: &transform,
+            frameIndex: parameters?[Parameter.grainFrozen] == 1 ? 0 : frame,
+            realtime: fotufilm_bridge_effective_realtime(parameters) != 0,
+            measuresGlareOnDevice: fotufilm_bridge_effective_realtime(parameters) != 0 || interactive != 0,
+            shouldContinue: shouldContinue.map { keepGoing in
+                { keepGoing(abortContext) != 0 }
+            })
+    }
+#endif
+#if !os(Linux)
+    // A metered frame reads its measurement back mid-frame. On a queue the host is holding that
+    // read is given up, and whatever was developed from it since is not the frame.
+    if context.hostQueueID != 0, fotufilm_halide_metal_host_queue_refused() != 0 {
+        context.lastError = "the host's Metal queue did not return the frame's measurement in time"
+        return 0
+    }
+#endif
     // The host reads the frame on what `fotufilm_bridge_encodes_output` told it, so a render that
     // could not keep that promise fails rather than return light the host would write out
     // under the timeline's label. The query mirrors this call's kernel choice — staging held,
@@ -1012,6 +1408,11 @@ func fotufilm_bridge_render_staged(
         context.lastError = "the engine could not develop a \(width)x\(height) frame"
         return 0
     }
+#if !os(Linux) && arch(arm64)
+    if directMtlOut != nil {
+        wroteDirectOutput?.pointee = 1
+    }
+#endif
     return 1
 }
 

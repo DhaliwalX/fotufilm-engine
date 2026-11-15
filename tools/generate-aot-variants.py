@@ -48,6 +48,7 @@ class Table:
             raise ValueError("A bit cannot be both coverable and exact")
         twins = {name: mask for name, mask, _ in self.windowed}
         self.exact_windowed = []
+        self.exact_gated_parity = {}
         for twin in schema["windowed"].get("exact", []):
             if twin["variant"] not in twins:
                 raise ValueError(f"Exact twin {twin['name']} has no windowed twin {twin['variant']}")
@@ -60,6 +61,8 @@ class Table:
             self.exact_windowed.append(
                 (twin["variant"], twin["name"], (twins[twin["variant"]] & ~self.stage_bits) | stages,
                  twin["stages"]))
+            self.exact_gated_parity[(twin["variant"], twin["name"])] = bool(
+                twin.get("gated_parity", False))
         exact_names = [f"{variant}_windowed_{name}" for variant, name, _, _ in self.exact_windowed]
         if len(set(exact_names)) != len(exact_names):
             raise ValueError("Duplicate exact twin names")
@@ -152,7 +155,8 @@ def render_header(table):
         exact = [
             f"    X({variant}, {name}, "
             f"((({table.c_expression(windowed_masks[variant])}) & ~FOTUFILM_VARIANT_STAGE_BITS) "
-            f"| {table.c_expression(stages)}))"
+            f"| {table.c_expression(stages)}), "
+            f"{1 if table.exact_gated_parity.get((variant, name), False) else 0})"
             for variant, name, _, stages in table.exact_windowed]
         out += macro_lines(exact[:-1]) + [exact[-1]]
         out.append("")

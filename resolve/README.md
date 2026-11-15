@@ -230,8 +230,22 @@ choices are saved per node and cannot be animated. Switching modes retains each 
 
 In Timeline Auto, unknown named spaces produce an error and hosts without color tags use
 Rec.709 Gamma 2.4. Fotufilm mode requires explicit supported choices; it never guesses
-a camera format from file metadata. Camera decoding uses the shared core curves on CPU
-in both preview and delivery; the film renderer still follows Render Mode.
+a camera format from file metadata. On Apple silicon Macs, the plugin accepts Resolve's
+Metal frames directly by default (set `FOTUFILM_HOST_METAL=0` to use host-memory frames
+instead; on Intel Macs, set `FOTUFILM_HOST_METAL=1` to opt in); camera log curves decode
+on Metal when rendering at full resolution without resampling, falling back to the shared
+core curves on CPU otherwise, while the film renderer follows Render Mode.
+
+A Metal frame the kernels take whole is encoded on Resolve's queue and left to run; the
+render call does not wait for it. A frame that needs the CPU along the way — an anamorphic
+clip, a camera curve the kernels do not carry, Layered Transport, or a frame whose Auto
+Levels or regional tone is measured — waits on Resolve's queue for at most
+`FOTUFILM_HOST_QUEUE_PATIENCE_MS` milliseconds (250 by default). Resolve can hold its
+queue until the render call returns, as it does when it refreshes the viewer after a
+delivery; such a frame is then developed as soon as the call has returned, ahead of
+anything Resolve queues after it. What a Metal frame's decode finds — input above 1.0
+under a display-referred label, repaired NaN or infinity — and a GPU error on a frame
+already handed back are reported on the node's next frame.
 
 ## Pipeline stages
 
@@ -257,6 +271,13 @@ build/resolve/host-harness build/resolve/Fotufilm.ofx.bundle/Contents/MacOS/Fotu
 
 Use `--parity-dump <path>` to save the shared test frame for comparison with the
 Final Cut test host. These tests do not replace checking the plugin inside Resolve.
+
+`FOTUFILM_BENCHMARK_4K=30` times thirty UHD frames through the plugin
+(`FOTUFILM_BENCHMARK_STOCK` picks the film). With `FOTUFILM_BENCHMARK_METAL=1` the frames
+are handed over as Metal buffers, and each is timed until the GPU has finished it, since
+the render call itself returns as soon as the frame is encoded; the frames are then
+queued back to back with one wait at the end, as a host that does not read each frame
+sees them.
 
 ## Build for distribution
 

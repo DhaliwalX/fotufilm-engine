@@ -38,6 +38,10 @@ public final class FilmFrameStaging {
     fileprivate let output: MTLBuffer
     /// Frames up to this many pixels fit; a larger one needs a new staging.
     public let capacityPixels: Int
+    /// Preserves an un-waited GPU fence across a same-queue borrow in case the caller aborts
+    /// before committing a replacement command buffer. Protected by `stagingLock`.
+    fileprivate var activeQueueID: UInt = 0
+    fileprivate var activeFence: MTLCommandBuffer?
 
     fileprivate init?(device: MTLDevice, pixels: Int) {
         guard pixels > 0,
@@ -1225,7 +1229,10 @@ public final class HalideMetalFilmRenderer {
     /// cleared to nil when the required kernel variant is unavailable.
     @discardableResult
     public func developStaged(
-        _ staging: FilmFrameStaging, width: Int, height: Int,
+        _ staging: FilmFrameStaging,
+        outputBuffer: MTLBuffer? = nil,
+        flipOutputY: Bool = false,
+        width: Int, height: Int,
         stock: FilmStock, options: FotufilmEngine.Options,
         outputTransform: inout FilmOutputTransform?,
         frameIndex: UInt64 = 0,
@@ -1237,10 +1244,14 @@ public final class HalideMetalFilmRenderer {
         shouldContinue: (() -> Bool)? = nil
     ) -> Bool {
         precondition(width > 0 && height > 0)
-        guard staging.capacityPixels >= width * height,
+        let pixels = width * height
+        guard staging.capacityPixels >= pixels,
               Self.developsInOnePass(width: width, height: height) else { return false }
+        if let outputBuffer {
+            guard outputBuffer.length >= pixels * 16 else { return false }
+        }
         if !noFilm, options.transportConstruction(for: stock) != nil {
-            guard shouldContinue?() != false else { return false }
+            guard outputBuffer == nil, shouldContinue?() != false else { return false }
             let source = Array(UnsafeBufferPointer(start: staging.scenePixels, count: width*height*4))
             do {
                 // Encoded as `carriesOutputTransform` promised, as the streaming road encodes.
@@ -1270,6 +1281,7 @@ public final class HalideMetalFilmRenderer {
         // Asked for on the same terms as the measurement above, but answered back rather than
         // silently dropped: a build without the encoding variant this frame needs returns
         // light, and the caller has to know that to read the frame correctly.
+        let wantedOutputTransform = outputTransform != nil
         if let wanted = outputTransform, Self.encodesOutput(invocation.featureMask) {
             let encodeMask = FilmEngineFeature.encodeOut
                 | outputTransferFeature(wanted.transfer, realtime: realtime)
@@ -1283,6 +1295,7 @@ public final class HalideMetalFilmRenderer {
         } else {
             outputTransform = nil
         }
+        let directBuffer = (wantedOutputTransform && outputTransform == nil) ? nil : outputBuffer
 
         let scene = staging.scenePixels
         let inputHandle = staging.inputHandle
@@ -1298,35 +1311,70 @@ public final class HalideMetalFilmRenderer {
         if cancelled() { return false }
         progress?(.developing(index: 0, count: 1))
 
-        let outputHandle = staging.outputHandle
-        return invocation.configuration.withUnsafeBufferPointer { configuration in
-            invocation.withSpectralPointers { exposure, film, paper in
-                fotufilm_halide_metal_process_buffers_float(
-                    inputHandle, outputHandle, Int32(width), Int32(height), 0, 0,
-                    configuration.baseAddress, exposure, film, paper,
-                    Int32(invocation.spectral.exposure.dimension),
-                    invocation.spectralCacheID, invocation.featureMask,
-                    invocation.seed) == 0
+        return withExtendedLifetime(directBuffer) {
+            let outputHandle: UInt64 = directBuffer.map {
+                UInt64(UInt(bitPattern: Unmanaged.passUnretained($0 as AnyObject).toOpaque()))
+            } ?? staging.outputHandle
+            let doFlip = flipOutputY && directBuffer != nil
+            if doFlip {
+                fotufilm_halide_metal_set_io_flip(0, 1, Int32(height))
+            }
+            defer {
+                if doFlip {
+                    fotufilm_halide_metal_set_io_flip(0, 0, 0)
+                }
+            }
+            return invocation.configuration.withUnsafeBufferPointer { configuration in
+                invocation.withSpectralPointers { exposure, film, paper in
+                    fotufilm_halide_metal_process_buffers_float(
+                        inputHandle, outputHandle, Int32(width), Int32(height), 0, 0,
+                        configuration.baseAddress, exposure, film, paper,
+                        Int32(invocation.spectral.exposure.dimension),
+                        invocation.spectralCacheID, invocation.featureMask,
+                        invocation.seed) == 0
+                }
             }
         }
     }
 
-    /// Decodes host pixels from `staging.developedPixels` into scene-linear
-    /// `staging.scenePixels`. The operation order matches the host decode: non-finite repair,
-    /// un-premultiplication, transfer, and matrix. Returns nil when Metal or sufficient staging is
-    /// unavailable, or when the kernel fails.
+    /// Decodes host pixels from `staging.developedPixels` (or directly from `sourceBuffer` when
+    /// provided) into scene-linear `staging.scenePixels`. The operation order matches the host
+    /// decode: non-finite repair, un-premultiplication, transfer, and matrix. Returns nil when
+    /// Metal or sufficient staging is unavailable, or when the kernel fails.
     public func decodeStaged(
-        _ staging: FilmFrameStaging, width: Int, height: Int,
+        _ staging: FilmFrameStaging,
+        from sourceBuffer: MTLBuffer? = nil,
+        flipInputY: Bool = false,
+        skipReport: Bool = false,
+        width: Int, height: Int,
         transform: FilmInputTransform, realtime: Bool = false
     ) -> FilmDecodeReport? {
         precondition(width > 0 && height > 0)
-        guard staging.capacityPixels >= width * height else { return nil }
-        return decoded(width: width, rows: height, transform: transform) { report, parameters in
-            let decode = realtime ? fotufilm_halide_metal_decode_rows_realtime
-                                  : fotufilm_halide_metal_decode_rows
-            return decode(
-                staging.outputHandle, nil, staging.inputHandle, nil, report,
-                Int32(width), Int32(height), parameters)
+        let pixels = width * height
+        guard staging.capacityPixels >= pixels else { return nil }
+        if let sourceBuffer {
+            guard sourceBuffer.length >= pixels * 16 else { return nil }
+        }
+        return withExtendedLifetime(sourceBuffer) {
+            let inputHandle: UInt64 = sourceBuffer.map {
+                UInt64(UInt(bitPattern: Unmanaged.passUnretained($0 as AnyObject).toOpaque()))
+            } ?? staging.outputHandle
+            return decoded(width: width, rows: height, transform: transform,
+                           skipReport: skipReport) { report, parameters in
+                if flipInputY {
+                    fotufilm_halide_metal_set_io_flip(1, 0, Int32(height))
+                }
+                defer {
+                    if flipInputY {
+                        fotufilm_halide_metal_set_io_flip(0, 0, 0)
+                    }
+                }
+                let decode = realtime ? fotufilm_halide_metal_decode_rows_realtime
+                                      : fotufilm_halide_metal_decode_rows
+                return decode(
+                    inputHandle, nil, staging.inputHandle, nil, report,
+                    Int32(width), Int32(height), parameters)
+            }
         }
     }
 
@@ -1351,8 +1399,15 @@ public final class HalideMetalFilmRenderer {
     /// cannot drift into combining the same rows differently.
     private func decoded(
         width: Int, rows: Int, transform: FilmInputTransform,
+        skipReport: Bool = false,
         run: (UnsafeMutablePointer<Float>?, UnsafePointer<Float>?) -> Int32
     ) -> FilmDecodeReport? {
+        if skipReport {
+            let ran = transform.parameters.withUnsafeBufferPointer { parameters in
+                run(nil, parameters.baseAddress) == 0
+            }
+            return ran ? FilmDecodeReport(peak: 0, repaired: false) : nil
+        }
         var report = [Float](repeating: 0, count: 2 * rows)
         let ran = transform.parameters.withUnsafeBufferPointer { parameters in
             report.withUnsafeMutableBufferPointer { report in
@@ -1380,15 +1435,19 @@ public final class HalideMetalFilmRenderer {
     /// Borrows one frame pair from the renderer-wide pool. Each caller owns the returned staging
     /// until it calls `recycleFrameStaging`; concurrent callers therefore receive distinct buffers
     /// while sequential frames avoid allocating and zero-filling hundreds of megabytes each time.
-    public func borrowFrameStaging(pixels: Int) -> FilmFrameStaging? {
-        borrowStaging(pixels: pixels)
+    /// `hostQueueID` is 0 for CPU renders and non-zero (the `MTLCommandQueue` pointer cast to `UInt`)
+    /// for GPU renders so the pool can apply fence-aware reuse logic.
+    public func borrowFrameStaging(pixels: Int, hostQueueID: UInt = 0) -> FilmFrameStaging? {
+        borrowStaging(pixels: pixels, hostQueueID: hostQueueID)
     }
 
     /// Returns staging obtained from `borrowFrameStaging` after its consumer has finished reading
-    /// the developed pixels. The pool retains at most one idle pair; extra concurrent pairs are
-    /// released normally.
-    public func recycleFrameStaging(_ staging: FilmFrameStaging) {
-        Self.returnStaging(staging)
+    /// the developed pixels. Keeps one idle pair for CPU/desktop renders and up to two slots for
+    /// pipelined Metal host-queue renders; extra concurrent pairs are released normally.
+    public func recycleFrameStaging(_ staging: FilmFrameStaging,
+                                    queueID: UInt = 0,
+                                    fence: MTLCommandBuffer? = nil) {
+        Self.returnStaging(staging, queueID: queueID, fence: fence)
     }
 
     /// Whether this build has a kernel that can carry an `outputTransform` for this frame — the
@@ -1426,6 +1485,15 @@ public final class HalideMetalFilmRenderer {
             | (realtime ? FilmEngineFeature.outputLinear : 0)
         if measuresGlareOnDevice { mask |= FilmEngineFeature.flareMeasure }
         return fotufilm_halide_metal_variant_exists(mask | encodeMask) == 1
+    }
+
+    /// Whether `developStaged` develops this frame in the kernels, from device buffers into
+    /// device buffers. Layered Transport does not: it develops its records on the host, reading
+    /// the staged scene and writing the developed frame through their CPU views, so its frame
+    /// cannot be left encoded on a queue for later.
+    public func developsOnDevice(stock: FilmStock, options: FotufilmEngine.Options,
+                                 noFilm: Bool = false) -> Bool {
+        noFilm || options.transportConstruction(for: stock) == nil
     }
 
     /// Returns false for density output because host colour transforms apply only to light.
@@ -1558,6 +1626,8 @@ public final class HalideMetalFilmRenderer {
             return run(0, band(rows)) == 0
         }
 
+        let hostQueueAsync = fotufilm_halide_metal_host_queue_active() != 0
+
         if toneBase, invocation.sceneMeteringActive {
             var walk = ToneBaseWalk(invocation, bandRows: bandRows)
             var row = 0
@@ -1568,6 +1638,8 @@ public final class HalideMetalFilmRenderer {
                                             width: width, handle: deviceBand(row..<upper),
                                             host: nil) {
                     // Measured where the band landed, on the device.
+                } else if hostQueueAsync {
+                    return false
                 } else {
                     walk.add(invocation, rows: row..<upper, bufferRow: row,
                              width: width, handle: 0, host: band(row..<upper))
@@ -1617,6 +1689,9 @@ public final class HalideMetalFilmRenderer {
                             Double(kernelRows[local * 3 + 1]),
                             Double(kernelRows[local * 3 + 2]))
                     }
+                } else if hostQueueAsync {
+                    stopped = true
+                    return
                 } else {
                     let into = UnsafeMutableBufferPointer(
                         start: sums.baseAddress! + row, count: upper - row)
@@ -1669,35 +1744,105 @@ public final class HalideMetalFilmRenderer {
     /// nothing a later render needs is lost, only the time to allocate it again.
     public static func releaseIdleBuffers() {
         stagingLock.lock()
-        idleStaging = nil
+        stagingPool.removeAll()
         stagingLock.unlock()
         tileStagingLock.lock()
         idleTileStaging = nil
         tileStagingLock.unlock()
     }
 
-    /// Borrows a per-render staging pair. A 33 MP staged frame uses about 1 GB, so pooling avoids
-    /// repeated allocation without sharing buffers between concurrent renders.
-    private func borrowStaging(pixels: Int) -> FilmFrameStaging? {
+    /// Borrows a per-render staging pair from the queue-fence-aware pool.
+    /// `hostQueueID` is 0 for CPU/desktop renders (which retain at most 1 idle pair) and non-zero
+    /// for async GPU renders on a host Metal queue (which retain up to 2 pairs for pipelined
+    /// overlap). Never waits on an external host-queue fence: if no completed or same-queue slot
+    /// fits, allocates a fresh pair and lets Metal retain any in-flight buffer until completion.
+    private func borrowStaging(pixels: Int, hostQueueID: UInt = 0) -> FilmFrameStaging? {
         _ = Self.stagingPressure
         Self.stagingLock.lock()
-        if let idle = Self.idleStaging, idle.capacityPixels >= pixels {
-            Self.idleStaging = nil
-            Self.stagingLock.unlock()
-            return idle
+
+        let pool = Self.stagingPool
+        func isIdle(_ fence: MTLCommandBuffer?) -> Bool {
+            guard let fence else { return true }
+            let status = fence.status
+            return status == .completed || status == .error
         }
-        Self.stagingLock.unlock()
-        return makeFrameStaging(pixels: pixels)
+
+        if hostQueueID == 0 {
+            // CPU render: reuse a completed slot with sufficient capacity immediately.
+            if let idx = pool.indices.first(where: { i in
+                pool[i].staging.capacityPixels >= pixels && isIdle(pool[i].fence)
+            }) {
+                let entry = Self.stagingPool.remove(at: idx)
+                Self.stagingLock.unlock()
+                return entry.staging
+            }
+            // Drop any undersized completed slot before allocating a larger replacement; leave
+            // in-flight host-queue entries untouched rather than waiting on a host Metal queue.
+            if let idx = pool.indices.first(where: { isIdle(pool[$0].fence) }) {
+                _ = Self.stagingPool.remove(at: idx)
+            }
+            Self.stagingLock.unlock()
+            return makeFrameStaging(pixels: pixels)
+        } else {
+            // GPU render on host Metal queue: 1) prefer a completed slot with sufficient capacity.
+            if let idx = pool.indices.first(where: { i in
+                pool[i].staging.capacityPixels >= pixels && isIdle(pool[i].fence)
+            }) {
+                let entry = Self.stagingPool.remove(at: idx)
+                Self.stagingLock.unlock()
+                return entry.staging
+            }
+            // 2) Allocate up to 2 slots so pipelined Delivery keeps 2 frames in flight cleanly.
+            if pool.count < 2 {
+                Self.stagingLock.unlock()
+                return makeFrameStaging(pixels: pixels)
+            }
+            // 3) Both slots are in flight. Reuse the oldest slot on our own serial queue without
+            // waiting — Metal's serial MTLCommandQueue orders our new command buffer after it.
+            if let idx = pool.indices.first(where: {
+                pool[$0].queueID == hostQueueID && pool[$0].staging.capacityPixels >= pixels
+            }) {
+                let entry = Self.stagingPool.remove(at: idx)
+                entry.staging.activeQueueID = entry.queueID
+                entry.staging.activeFence = entry.fence
+                Self.stagingLock.unlock()
+                return entry.staging
+            }
+            // 4) Remaining slots are undersized or in flight on another queue: evict one without
+            // calling waitUntilCompleted (Metal retains bound buffers until GPU completion) and
+            // allocate a fresh pair for this queue.
+            let evictIdx = pool.indices.first(where: { pool[$0].queueID == hostQueueID }) ?? 0
+            _ = Self.stagingPool.remove(at: evictIdx)
+            Self.stagingLock.unlock()
+            return makeFrameStaging(pixels: pixels)
+        }
     }
 
-    /// Retains the largest staging allocation. Reusing a 33 MP pair measured 157 ms per render
-    /// versus 485 ms with repeated allocation. `stagingPressure` releases retained memory when needed.
-    private static func returnStaging(_ staging: FilmFrameStaging) {
+    /// Returns staging to the pool, recording the queue identity and async fence. Keeps at most
+    /// 1 slot when only CPU/desktop renders are active, and up to 2 slots when a host Metal queue
+    /// is pipelining frames.
+    private static func returnStaging(_ staging: FilmFrameStaging,
+                                      queueID: UInt = 0,
+                                      fence: MTLCommandBuffer? = nil) {
         stagingLock.lock()
-        if (idleStaging?.capacityPixels ?? 0) <= staging.capacityPixels {
-            idleStaging = staging
+        defer { stagingLock.unlock() }
+        let effectiveQueueID = fence != nil ? queueID : staging.activeQueueID
+        let effectiveFence = fence ?? staging.activeFence
+        staging.activeQueueID = 0
+        staging.activeFence = nil
+        let maxSlots = (effectiveQueueID != 0 || stagingPool.contains(where: { $0.queueID != 0 })) ? 2 : 1
+        while stagingPool.count > maxSlots {
+            _ = stagingPool.removeFirst()
         }
-        stagingLock.unlock()
+        if stagingPool.count < maxSlots {
+            stagingPool.append((staging: staging, queueID: effectiveQueueID, fence: effectiveFence))
+        } else if let idx = stagingPool.indices.min(by: {
+            stagingPool[$0].staging.capacityPixels < stagingPool[$1].staging.capacityPixels
+        }), (maxSlots == 1
+             ? stagingPool[idx].staging.capacityPixels <= staging.capacityPixels
+             : stagingPool[idx].staging.capacityPixels < staging.capacityPixels) {
+            stagingPool[idx] = (staging: staging, queueID: effectiveQueueID, fence: effectiveFence)
+        }
     }
 
     /// Releases only idle staging storage on memory pressure; in-flight buffers remain owned by
@@ -1711,7 +1856,10 @@ public final class HalideMetalFilmRenderer {
     }()
 
     private static let stagingLock = NSLock()
-    nonisolated(unsafe) private static var idleStaging: FilmFrameStaging?
+    /// 2-slot pool: each entry stores the staging, the last queue ID that used it (0 = CPU),
+    /// and the last fence (command buffer committed asynchronously on that queue).
+    nonisolated(unsafe) private static var stagingPool:
+        [(staging: FilmFrameStaging, queueID: UInt, fence: MTLCommandBuffer?)] = []
 
     /// Allocating form of `processLinearFloat(_:into:...)`.
     public func processLinearFloat(

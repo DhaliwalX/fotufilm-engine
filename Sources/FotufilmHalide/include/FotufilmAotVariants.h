@@ -143,18 +143,28 @@
     X(monochrome_float_realtime, FOTUFILM_AOT_WINDOWED_STAGES | FOTUFILM_FRAME_MONOCHROME) \
     X(color_float_realtime_negative, FOTUFILM_AOT_WINDOWED_STAGES | FOTUFILM_FRAME_DENSITY_OUT)
 
-/// A twin compiled for one exact stage set, with nothing gated at run time: every stage it carries
-/// runs, so its kernels read no bypass arm and store nothing a gate could skip. The shim serves a
-/// request from one only when the request's stages are exactly that set, and otherwise from the
-/// gated twin.
+/// A twin compiled for one exact stage set: stages outside the set are absent rather than
+/// materialised behind bypasses, while `gated_parity` twins retain lightweight scalar selects so
+/// that Metal contracts the same expressions as the runtime-gated graph. On UHD frames the twins
+/// checked that carry the luminance MTF arm match their gated twins to the bit; `negative_no_adj`,
+/// which does not carry it, lands within tens of ULP of its own (43 at most, on Gold 200).
+/// FOTUFILM_AOT_EXACT=0 keeps every request on its gated twin, which is how tools/verify-aot-
+/// windows.sh compares the two. The shim serves a request from one only when the request's stages
+/// are exactly that set, and otherwise from the gated twin.
 #define FOTUFILM_AOT_EXACT_WINDOWED_VARIANTS(X) \
-    X(color_float_realtime, negative, (((FOTUFILM_AOT_WINDOWED_STAGES) & ~FOTUFILM_VARIANT_STAGE_BITS) | FOTUFILM_AOT_PRINTED_NEGATIVE)) \
-    X(color_float_realtime, negative_luma, (((FOTUFILM_AOT_WINDOWED_STAGES) & ~FOTUFILM_VARIANT_STAGE_BITS) | FOTUFILM_AOT_PRINTED_NEGATIVE_LUMA)) \
-    X(color_float_realtime, negative_donor, (((FOTUFILM_AOT_WINDOWED_STAGES) & ~FOTUFILM_VARIANT_STAGE_BITS) | FOTUFILM_AOT_PRINTED_NEGATIVE_DONOR)) \
-    X(color_float_realtime, slide_interimage, (((FOTUFILM_AOT_WINDOWED_STAGES) & ~FOTUFILM_VARIANT_STAGE_BITS) | FOTUFILM_AOT_SLIDE_INTERIMAGE)) \
-    X(color_float_realtime, printed_slide, (((FOTUFILM_AOT_WINDOWED_STAGES) & ~FOTUFILM_VARIANT_STAGE_BITS) | FOTUFILM_AOT_PRINTED_SLIDE)) \
-    X(monochrome_float_realtime, printed_slide, (((FOTUFILM_AOT_WINDOWED_STAGES | FOTUFILM_FRAME_MONOCHROME) & ~FOTUFILM_VARIANT_STAGE_BITS) | FOTUFILM_AOT_PRINTED_SLIDE)) \
-    X(color_float_realtime_negative, negative, (((FOTUFILM_AOT_WINDOWED_STAGES | FOTUFILM_FRAME_DENSITY_OUT) & ~FOTUFILM_VARIANT_STAGE_BITS) | FOTUFILM_AOT_NEGATIVE))
+    X(color_float_realtime, negative, (((FOTUFILM_AOT_WINDOWED_STAGES) & ~FOTUFILM_VARIANT_STAGE_BITS) | FOTUFILM_AOT_PRINTED_NEGATIVE), 0) \
+    X(color_float_realtime, negative_luma, (((FOTUFILM_AOT_WINDOWED_STAGES) & ~FOTUFILM_VARIANT_STAGE_BITS) | FOTUFILM_AOT_PRINTED_NEGATIVE_LUMA), 0) \
+    X(color_float_realtime, negative_donor, (((FOTUFILM_AOT_WINDOWED_STAGES) & ~FOTUFILM_VARIANT_STAGE_BITS) | FOTUFILM_AOT_PRINTED_NEGATIVE_DONOR), 0) \
+    X(color_float_realtime, slide_interimage, (((FOTUFILM_AOT_WINDOWED_STAGES) & ~FOTUFILM_VARIANT_STAGE_BITS) | FOTUFILM_AOT_SLIDE_INTERIMAGE), 0) \
+    X(color_float_realtime, printed_slide, (((FOTUFILM_AOT_WINDOWED_STAGES) & ~FOTUFILM_VARIANT_STAGE_BITS) | FOTUFILM_AOT_PRINTED_SLIDE), 0) \
+    X(monochrome_float_realtime, printed_slide, (((FOTUFILM_AOT_WINDOWED_STAGES | FOTUFILM_FRAME_MONOCHROME) & ~FOTUFILM_VARIANT_STAGE_BITS) | FOTUFILM_AOT_PRINTED_SLIDE), 0) \
+    X(color_float_realtime_negative, negative, (((FOTUFILM_AOT_WINDOWED_STAGES | FOTUFILM_FRAME_DENSITY_OUT) & ~FOTUFILM_VARIANT_STAGE_BITS) | FOTUFILM_AOT_NEGATIVE), 0) \
+    X(color_float_realtime, negative_no_adj, (((FOTUFILM_AOT_WINDOWED_STAGES) & ~FOTUFILM_VARIANT_STAGE_BITS) | (FOTUFILM_AOT_PRINTED_NEGATIVE & ~FOTUFILM_FRAME_ADJACENCY)), 1) \
+    X(color_float_realtime, negative_luma_no_adj, (((FOTUFILM_AOT_WINDOWED_STAGES) & ~FOTUFILM_VARIANT_STAGE_BITS) | (FOTUFILM_AOT_PRINTED_NEGATIVE_LUMA & ~FOTUFILM_FRAME_ADJACENCY)), 1) \
+    X(color_float_realtime, negative_donor_no_adj, (((FOTUFILM_AOT_WINDOWED_STAGES) & ~FOTUFILM_VARIANT_STAGE_BITS) | (FOTUFILM_AOT_PRINTED_NEGATIVE_DONOR & ~FOTUFILM_FRAME_ADJACENCY)), 1) \
+    X(color_float_realtime, negative_screen_no_adj, (((FOTUFILM_AOT_WINDOWED_STAGES) & ~FOTUFILM_VARIANT_STAGE_BITS) | ((FOTUFILM_AOT_NEGATIVE & ~FOTUFILM_FRAME_ADJACENCY) | FOTUFILM_FRAME_MTF_LUMA)), 1) \
+    X(color_float_realtime, slide_luma_interimage, (((FOTUFILM_AOT_WINDOWED_STAGES) & ~FOTUFILM_VARIANT_STAGE_BITS) | (FOTUFILM_FRAME_MTF | FOTUFILM_FRAME_MTF_LUMA | FOTUFILM_FRAME_HALATION | FOTUFILM_FRAME_COUPLERS | FOTUFILM_FRAME_GRAIN)), 1) \
+    X(color_float_realtime, slide_luma_interimage_adj, (((FOTUFILM_AOT_WINDOWED_STAGES) & ~FOTUFILM_VARIANT_STAGE_BITS) | (FOTUFILM_AOT_SLIDE_INTERIMAGE | FOTUFILM_FRAME_MTF_LUMA)), 1)
 
 /// A stage bit is covered by any variant that carries it; an exact bit must match. The delivery
 /// encode and its transfer (ENCODE_OUT, OUTPUT_*) and the whole-frame glare measurement

@@ -7,6 +7,8 @@
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
+#include <functional>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -119,6 +121,30 @@ int gDescribedLensFilters = -1, gDescribedDiffusions = -1;
 
 void report(const char *format, ...) __attribute__((format(printf, 1, 2)));
 void initializeEngine();
+
+#ifdef __APPLE__
+/// RAII guard that opens and closes the host Metal async scope around a GPU frame render.
+/// Ensures fotufilm_bridge_host_metal_end is called right after copyFrameOut or on any early exit
+/// before StagingRelease recycles the borrowed staging.
+struct FrameScope {
+    FotufilmBridgeContext bridge;
+    bool active;
+    FrameScope(FotufilmBridgeContext b, void *queue)
+        : bridge(b), active(queue != nullptr) {
+        if (active) fotufilm_bridge_host_metal_begin(bridge, queue);
+    }
+    /// False when something inside the scope asked for results back on the CPU: the request
+    /// was refused rather than waited for on the host's queue, and the frame must be failed.
+    bool finish() {
+        if (!active) return true;
+        active = false;
+        return fotufilm_bridge_host_metal_end(bridge) == 1;
+    }
+    ~FrameScope() { finish(); }
+    FrameScope(const FrameScope &) = delete;
+    FrameScope &operator=(const FrameScope &) = delete;
+};
+#endif
 
 /// Where a frame's time went, printed every `kProfileFrames` frames when FOTUFILM_PROFILE is set
 /// in the environment. Off by default and reading one atomic when off: the point of it is to be
@@ -327,6 +353,15 @@ constexpr const char *kColorSpaceStatusParam = "colorSpaceStatus";
 /// state, refreshed like the colour-space line and persisted like it: not at all.
 constexpr const char *kStageStatusParam = "stageStatus";
 
+/// What is only known about a frame once its command buffer has run on the host's Metal queue,
+/// which is after the render call that encoded it has returned: the decode's peak and repairs,
+/// and whether the GPU failed the frame. The next render of the node reads these and says so.
+struct AsyncNotes {
+    std::atomic<float> peak{0.0f};
+    std::atomic<bool> repaired{false};
+    std::atomic<bool> gpuFailed{false};
+};
+
 /// Everything an instance needs at render time, resolved once at creation.
 struct Instance {
     FotufilmBridgeContext bridge = nullptr;
@@ -376,8 +411,15 @@ struct Instance {
     bool warnedOverRange = false;
     /// A decoder has supplied NaN/inf and the repaired frame has already been reported.
     bool warnedNonFiniteInput = false;
+    /// What a frame left on the host's Metal queue learned after its render call had returned.
+    /// Shared with the handlers that fill it, which can outlive the instance.
+    std::shared_ptr<AsyncNotes> asyncNotes = std::make_shared<AsyncNotes>();
     /// The first frame said which path its pixels took; the rest keep quiet.
     bool reportedFramePath = false;
+    /// Said once: the host held its Metal queue across a render call, so a frame was deferred.
+    bool reportedDeferredFrame = false;
+    /// Frames this node has encoded on the host's Metal queue; paces the decode's late report.
+    unsigned metalFrames = 0;
     /// Likewise for which side of the boundary decoded them.
     bool reportedDecodePath = false;
     /// The render-status combination the host last announced, packed, or -1 before the first
@@ -704,18 +746,26 @@ OfxStatus describe(OfxImageEffectHandle effect) {
     gProperty->propSetInt(properties, kOfxImageEffectPluginPropSingleInstance, 0, 0);
     gProperty->propSetString(properties, kOfxImageEffectPluginRenderThreadSafety, 0,
                              kOfxImageEffectRenderInstanceSafe);
-#ifdef __APPLE__
-    // Take frames as the host's Metal buffers only when FOTUFILM_HOST_METAL=1 is set before the
-    // host starts. The frame then stays on the GPU — copied into the engine's staging and back
-    // out on the host's own queue, rather than downloaded into CPU memory by the host, walked
-    // twice by the plugin and uploaded again — but those copies wait on the host's queue, and
-    // Resolve can hold a command buffer on it until the render returns: its viewer, refreshed
-    // after a delivery, never reached the copy. Until the engine can be ordered on that queue
-    // without waiting, the extension stays an experiment.
+#if defined(__APPLE__) && defined(__aarch64__)
+    // Offer Metal render by default on Apple silicon. A frame the kernels take whole is encoded
+    // on the host's queue and left to run. A frame that needs the CPU — its pixels, or a
+    // measurement read back while it is encoded — gets them only if the host's queue hands
+    // them over promptly; otherwise it is developed after the call, behind a copy back that
+    // already holds its place on the queue. Nothing in a render waits on the host's queue for
+    // longer than `hostQueuePatience`: a host can hold a command buffer on it until the render
+    // returns.
+    // Set FOTUFILM_HOST_METAL=0 to use host-memory frames instead.
+    {
+        const char *hostMetal = std::getenv("FOTUFILM_HOST_METAL");
+        if (!hostMetal || std::strcmp(hostMetal, "0") != 0) {
+            gProperty->propSetString(properties, kOfxImageEffectPropMetalRenderSupported, 0,
+                                     "true");
+        }
+    }
+#elif defined(__APPLE__)
     if (const char *hostMetal = std::getenv("FOTUFILM_HOST_METAL");
         hostMetal && std::strcmp(hostMetal, "1") == 0) {
-        gProperty->propSetString(properties, kOfxImageEffectPropMetalRenderSupported, 0,
-                                 "true");
+        gProperty->propSetString(properties, kOfxImageEffectPropMetalRenderSupported, 0, "true");
     }
 #endif
     // The clip preferences below depend on the span: a Print Only node asks for its input as
@@ -2425,6 +2475,70 @@ bool decodeThroughKernel(const Image &source, float *scene, int width, int heigh
     return true;
 }
 
+int32_t alwaysWantsMore(void *) { return 1; }
+
+/// `render`'s private answers for a Metal frame that has to be developed from CPU pixels: one
+/// that needs the CPU by nature, and one that was being encoded on the host's queue when a
+/// measurement it reads back did not arrive — which says the host is holding its queue.
+constexpr OfxStatus kStatNeedsCpuPixels = -1001;
+constexpr OfxStatus kStatHostQueueHeld = -1002;
+
+/// How long a render waits for the host's Metal queue to hand a frame's pixels to the CPU before
+/// it stops waiting and develops the frame after the call instead. In milliseconds: long enough
+/// for a queue that is merely busy, and short against the seconds a host that is holding its
+/// queue would otherwise cost. FOTUFILM_HOST_QUEUE_PATIENCE_MS overrides it; the engine's shim
+/// reads the same setting, with the same default, for a measurement read back mid-frame.
+int hostQueuePatience() {
+    static const int milliseconds = [] {
+        const char *setting = std::getenv("FOTUFILM_HOST_QUEUE_PATIENCE_MS");
+        return setting ? std::max(0, std::atoi(setting)) : 250;
+    }();
+    return milliseconds;
+}
+
+/// The bridge context and scratch a frame develops with: an instance's own for a frame developed
+/// inside its render call, the process's deferred lane for one developed after it.
+struct Lane {
+    FotufilmBridgeContext bridge;
+    std::vector<float> *frame;
+    std::vector<float> *decodeScratch;
+};
+
+/// Where frames deferred past their render call develop. One for the process: such frames are
+/// the exception — a host holding its Metal queue across the call — and they must not borrow an
+/// instance's context or scratch, which the instance's next render may already be using and
+/// which the instance may not outlive them to lend.
+struct DeferredLane {
+    std::mutex lock;
+    FotufilmBridgeContext bridge = nullptr;
+    std::vector<float> frame, decodeScratch;
+};
+DeferredLane &deferredLane() {
+    static DeferredLane &lane = *new DeferredLane();
+    return lane;
+}
+
+void runDeferredFrame(void *context, int32_t arrived) {
+    auto *job = static_cast<std::function<void(bool)> *>(context);
+    (*job)(arrived != 0);
+    delete job;
+}
+
+/// Handlers for a frame left on the host's Metal queue. Each owns the `shared_ptr` it is handed.
+void decodeReportedLater(void *context, float peak, int32_t repaired) {
+    auto *notes = static_cast<std::shared_ptr<AsyncNotes> *>(context);
+    float seen = (*notes)->peak.load(std::memory_order_relaxed);
+    while (peak > seen &&
+           !(*notes)->peak.compare_exchange_weak(seen, peak, std::memory_order_relaxed)) {}
+    if (repaired) (*notes)->repaired.store(true, std::memory_order_relaxed);
+    delete notes;
+}
+void frameCompletedLater(void *context, int32_t failed) {
+    auto *notes = static_cast<std::shared_ptr<AsyncNotes> *>(context);
+    if (failed) (*notes)->gpuFailed.store(true, std::memory_order_relaxed);
+    delete notes;
+}
+
 OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs) {
     const auto renderBegan = Profile::now();
     Instance *instance = instanceOf(effect);
@@ -2433,6 +2547,14 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs) {
     // engine's staging, and everything below holds raw pointers into them; see the lock's own
     // comment. Per instance, so it costs a second node nothing.
     std::lock_guard<std::mutex> renderHeld(instance->renderLock);
+
+    // A frame left on the host's Metal queue cannot fail its own render call: the call has
+    // returned by the time the GPU runs it. Say so on the next one.
+    if (instance->asyncNotes->gpuFailed.exchange(false, std::memory_order_relaxed)) {
+        post(kOfxMessageError, effect,
+             "Fotufilm: the GPU reported an error on an earlier frame of this node after the "
+             "host had been handed it. That frame was not developed; render it again.");
+    }
 
     OfxTime time = 0;
     gProperty->propGetDouble(inArgs, kOfxPropTime, 0, &time);
@@ -2505,18 +2627,6 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs) {
              "develops on");
         return kOfxStatFailed;
     }
-    // Copies on the host's queue, in pixels; see `fotufilm_bridge_host_metal_copy`.
-    auto hostCopy = [&](void *from, long long fromBase, long long fromStep, void *to,
-                        long long toBase, long long toStep, int across, int rows) {
-        const int32_t copied = fotufilm_bridge_host_metal_copy(
-            metalQueue, from, fromBase, fromStep, to, toBase, toStep, across, rows);
-        if (copied == 1) return true;
-        post(kOfxMessageError, effect, "Fotufilm cannot render: %s",
-             copied < 0 ? "the host's Metal queue did not reach the frame's copy in time"
-                        : "the frame could not be copied between the host's Metal buffers "
-                          "and the engine's");
-        return false;
-    };
     // An image's row stride in pixels, or 0 when its rows are not whole pixels apart.
     auto pixelStride = [](const Image &image) {
         return image.rowBytes > 0 && image.rowBytes % 16 == 0 ? image.rowBytes / 16 : 0;
@@ -2659,8 +2769,6 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs) {
     // 1.0 by construction and would trip this on every frame.
     const bool watchRange = displayReferred && !readsInterchange
         && !instance->warnedOverRange;
-    std::atomic<float> peak{0.0f};
-    std::atomic<bool> repairedInput{false};
 
     // Resolve's render-status properties are useful diagnostics even though realtime arithmetic
     // is now uniform across viewer and delivery frames. The sequence bracket is deliberately not
@@ -2671,50 +2779,51 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs) {
     gProperty->propGetInt(inArgs, kOfxImageEffectPropSequentialRenderStatus, 0,
                           &sequentialStatus);
     gProperty->propGetInt(inArgs, kOfxImageEffectPropRenderQualityDraft, 0, &draftQuality);
-    const double announcedFrames =
-        instance->inSequenceRender
-            ? instance->sequenceRange[1] - instance->sequenceRange[0] + 1
-            : 0;
     double renderScale[2] = {1, 1};
     gProperty->propGetDoubleN(inArgs, kOfxImageEffectPropRenderScale, 2, renderScale);
     // Positive evidence only; silence remains labelled as delivery in diagnostics.
     const bool viewerFrame =
         (interactiveStatus == 1 || draftQuality == 1) && sequentialStatus != 1;
 
-    // The engine lends its own GPU-resident staging for a frame it can develop in one pass.
-    // Decoding straight into that is the same traversal as decoding into a vector of our own, and
-    // it saves the engine copying the whole frame onto the device and the whole result back off
-    // it — at UHD, more time than the film model itself takes.
-    float *stagedInput = nullptr, *stagedOutput = nullptr;
-    const bool staged =
-        fotufilm_bridge_frame_staging(instance->bridge, processWidth, height,
-                                     &stagedInput, &stagedOutput) == 1;
-    // The developed staging remains borrowed until the host has copied it below. It must also be
-    // returned on every early exit after decode, including an abort before the engine runs.
-    struct StagingRelease {
-        FotufilmBridgeContext context;
-        bool active;
-        ~StagingRelease() {
-            if (active) fotufilm_bridge_release_staging(context);
+    const bool inSequenceRender = instance->inSequenceRender;
+    const double announcedFrames =
+        inSequenceRender ? instance->sequenceRange[1] - instance->sequenceRange[0] + 1 : 0;
+
+    // Everything from here on develops the frame from what was read above, and none of it asks
+    // the host anything a render call must be open for — so the same code develops a frame
+    // inside the call and one deferred past it. `hostMetal` says whether `source` and `output`
+    // carry the host's Metal buffers or CPU pixels; `mirrored`, that the CPU pixels are mirrors
+    // of a Metal frame; `deferred`, that the render call has already returned, when the
+    // instance and the host's suites are no longer this frame's to touch.
+    const auto develop = [=](Image source, Image output, const bool hostMetal,
+                             const bool mirrored, const Lane lane,
+                             const bool deferred) -> OfxStatus {
+    std::atomic<float> peak{0.0f};
+    std::atomic<bool> repairedInput{false};
+    // A deferred frame has no host to post to: what it has to say goes to stderr. Every format
+    // passed here is a literal at its call; forwarding it is what the compiler cannot see.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-security"
+    const auto tell = [&](const char *type, const char *format, auto... arguments) {
+        if (deferred) {
+            report(format, arguments...);
+        } else {
+            post(type, effect, format, arguments...);
         }
-    } releaseStaging{instance->bridge, staged};
-    float *scene = stagedInput;
-    if (!staged) {
-        instance->frame.resize(static_cast<size_t>(processWidth) * height * 4);
-        scene = instance->frame.data();
-    }
-
-    const int renderStatus = interactiveStatus * 8 + sequentialStatus * 4 +
-                             draftQuality * 2 + (instance->inSequenceRender ? 1 : 0);
-    if (renderStatus != instance->lastRenderStatus) {
-        instance->lastRenderStatus = renderStatus;
-        report("host says sequence=%d span=%.0f scale=%.4g size=%dx%d interactive=%d "
-               "sequential=%d draft=%d -> %s frame",
-               instance->inSequenceRender ? 1 : 0, announcedFrames, renderScale[0],
-               processWidth, height, interactiveStatus, sequentialStatus, draftQuality,
-               viewerFrame ? "viewer" : "delivered");
-    }
-
+    };
+#pragma GCC diagnostic pop
+    // Copies inside the open host Metal scope, in pixels; see `fotufilm_bridge_host_metal_copy`.
+    auto hostCopy = [&](void *from, long long fromBase, long long fromStep, void *to,
+                        long long toBase, long long toStep, int across, int rows) {
+        if (fotufilm_bridge_host_metal_copy(from, fromBase, fromStep, to, toBase, toStep,
+                                            across, rows) == 1) {
+            return true;
+        }
+        tell(kOfxMessageError,
+             "Fotufilm cannot render: the frame could not be copied between the host's Metal "
+             "buffers and the engine's");
+        return false;
+    };
     // Run pointwise decoding in the kernel for both staged and striped paths so memory-dependent
     // path selection cannot change output. Resampling decodes on the host because it must average
     // linear light. GPU and host transcendental implementations may differ by a few parts in 10^7.
@@ -2732,6 +2841,52 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs) {
         (cameraInput < 0 ||
          fotufilm_bridge_camera_input_transform(cameraInput, &inputTransform) == 1);
 
+    // Apple Log and Apple Log 2 have a division-free, 0 ULP GPU kernel. Enabled only under the
+    // same non-resampling condition as decodesOnDevice: processWidth must equal width.
+    const bool cameraHasGpuDecode =
+        processWidth == width && cameraInput >= 0 &&
+        fotufilm_bridge_camera_gpu_decode_supported(cameraInput) == 1;
+
+    // The engine lends its own GPU-resident staging for a frame it can develop in one pass.
+    // Decoding straight into that is the same traversal as decoding into a vector of our own, and
+    // it saves the engine copying the whole frame onto the device and the whole result back off
+    // it — at UHD, more time than the film model itself takes. Pass the candidate Metal queue so
+    // the 2-slot pool can reuse an in-flight slot on the same serial queue without stalling CPU.
+    void *const stagingQueue =
+        (hostMetal && processWidth == width && pixelStride(source) && pixelStride(output) &&
+         (readsInterchange || decodesOnDevice || cameraHasGpuDecode))
+            ? metalQueue
+            : nullptr;
+    float *stagedInput = nullptr, *stagedOutput = nullptr;
+    const bool staged =
+        fotufilm_bridge_frame_staging_for_queue(lane.bridge, processWidth, height,
+                                               stagingQueue, &stagedInput, &stagedOutput) == 1;
+    // The developed staging remains borrowed until the host has copied it below. It must also be
+    // returned on every early exit after decode, including an abort before the engine runs.
+    struct StagingRelease {
+        FotufilmBridgeContext context;
+        bool active;
+        ~StagingRelease() {
+            if (active) fotufilm_bridge_release_staging(context);
+        }
+    } releaseStaging{lane.bridge, staged};
+    float *scene = stagedInput;
+    if (!staged) {
+        lane.frame->resize(static_cast<size_t>(processWidth) * height * 4);
+        scene = lane.frame->data();
+    }
+
+    const int renderStatus = interactiveStatus * 8 + sequentialStatus * 4 +
+                             draftQuality * 2 + (inSequenceRender ? 1 : 0);
+    if (!deferred && renderStatus != instance->lastRenderStatus) {
+        instance->lastRenderStatus = renderStatus;
+        report("host says sequence=%d span=%.0f scale=%.4g size=%dx%d interactive=%d "
+               "sequential=%d draft=%d -> %s frame",
+               inSequenceRender ? 1 : 0, announcedFrames, renderScale[0],
+               processWidth, height, interactiveStatus, sequentialStatus, draftQuality,
+               viewerFrame ? "viewer" : "delivered");
+    }
+
     // Apply output basis, transfer, and premultiplication in the kernel when possible. Resampling
     // must instead average linear light, and density output cannot use a transfer curve. Query
     // before rendering because striped rows are written as soon as they are developed.
@@ -2747,61 +2902,54 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs) {
                           && fotufilm::deliveryLeavesGamut(outputEncoding);
     const bool encodeInKernel =
         !writesInterchange && processWidth == source.width()
-        && fotufilm_bridge_encodes_output(instance->bridge, stock, format, paper,
+        && fotufilm_bridge_encodes_output(lane.bridge, stock, format, paper,
                                          parameters, processWidth, height,
                                          (staged && viewerFrame) ? 1 : 0) != 0;
 
     // A Metal frame stays on the GPU when nothing between the host's buffer and the engine's
-    // staging is the CPU's to do: it develops in one pass, decodes and encodes in the kernels,
-    // and needs no resampling. Any other Metal frame has its pixels mirrored into CPU-visible
-    // buffers on the host's queue and takes the CPU road through those.
+    // staging is the CPU's to do: it develops in one pass in the kernels, decodes and encodes
+    // in them, and needs no resampling. Any other Metal frame has its pixels mirrored into
+    // CPU-visible buffers on the host's queue and takes the CPU road through those.
     void *stagedScene = nullptr, *stagedDeveloped = nullptr;
     const bool gpuFrames =
         hostMetal && staged && processWidth == width && pixelStride(source) &&
         pixelStride(output) &&
-        (readsInterchange || decodesOnDevice) &&
+        (readsInterchange || decodesOnDevice || cameraHasGpuDecode) &&
         (encodeInKernel || writesInterchange) &&
-        fotufilm_bridge_host_metal_staging(instance->bridge, &stagedScene,
+        fotufilm_bridge_develops_on_device(stock, format, paper, parameters) == 1 &&
+        fotufilm_bridge_host_metal_staging(lane.bridge, &stagedScene,
                                            &stagedDeveloped) == 1;
-    void *mirroredOutput = nullptr;
-    if (hostMetal && !gpuFrames) {
-        void *mirroredSource = nullptr;
-        float *sourcePixels = nullptr, *outputPixels = nullptr;
-        if (pixelStride(source) && pixelStride(output)) {
-            sourcePixels = static_cast<float *>(fotufilm_bridge_host_metal_mirror(
-                instance->bridge, 0, static_cast<int64_t>(source.rowBytes) * height,
-                &mirroredSource));
-            outputPixels = static_cast<float *>(fotufilm_bridge_host_metal_mirror(
-                instance->bridge, 1, static_cast<int64_t>(output.rowBytes) * output.height(),
-                &mirroredOutput));
-        }
-        if (!sourcePixels || !outputPixels) {
-            post(kOfxMessageError, effect,
-                 "Fotufilm cannot render: no CPU-visible copy of the host's Metal frame");
-            return kOfxStatFailed;
-        }
-        // The output too, so whatever the render window leaves alone is the host's own.
-        if (!hostCopy(sourceBuffer, 0, pixelStride(source), mirroredSource, 0,
-                      pixelStride(source), pixelStride(source), height) ||
-            !hostCopy(outputBuffer, 0, pixelStride(output), mirroredOutput, 0,
-                      pixelStride(output), pixelStride(output), output.height())) {
-            return kOfxStatFailed;
-        }
-        source.data = sourcePixels;
-        output.data = outputPixels;
-    }
+    // Any other Metal frame needs its pixels on the CPU. The caller mirrors them and comes back
+    // with a CPU frame; the staging claimed above is returned on the way out.
+    if (hostMetal && !gpuFrames) return kStatNeedsCpuPixels;
     // Once per instance, name the path the host and the engine actually chose — the only way
     // anyone outside this function can know whether either handshake happened.
-    if (!instance->reportedFramePath) {
+    if (!deferred && !instance->reportedFramePath) {
         instance->reportedFramePath = true;
         report("%s host frames, %s%s",
-               !hostMetal ? "CPU" : gpuFrames ? "Metal" : "Metal (mirrored to the CPU)",
+               !hostMetal ? (mirrored ? "Metal (mirrored to the CPU)" : "CPU") : "Metal",
                staged ? "developed in engine staging" : "streamed through the engine",
                processWidth == width ? "" : ", square-pixel normalized");
     }
     // The host's rows run bottom-up; the engine's top-down. Frame row r is the host's row
     // height - 1 - r.
     const long long sourceStride = pixelStride(source);
+    const long long outputStride = pixelStride(output);
+    const int y1 = std::max(renderWindow.y1, std::max(source.bounds.y1, output.bounds.y1));
+    const int y2 = std::min(renderWindow.y2, std::min(source.bounds.y2, output.bounds.y2));
+    const int x1 = std::max(renderWindow.x1, std::max(source.bounds.x1, output.bounds.x1));
+    const int x2 = std::min(renderWindow.x2, std::min(source.bounds.x2, output.bounds.x2));
+    const bool fullWindow =
+        x1 == 0 && y1 == 0 && x2 == width && y2 == height &&
+        source.bounds.x1 == 0 && source.bounds.y1 == 0 &&
+        source.bounds.x2 == width && source.bounds.y2 == height;
+    const bool directSourceDecode =
+        gpuFrames && fullWindow && sourceStride == width;
+    const bool directOutputDevelop =
+        gpuFrames && fullWindow && outputStride == width &&
+        (encodeInKernel || writesInterchange) &&
+        output.bounds.x1 == 0 && output.bounds.y1 == 0 &&
+        output.bounds.x2 == width && output.bounds.y2 == height;
     auto copyFrameIn = [&](void *to) {
         return hostCopy(sourceBuffer, (height - 1) * sourceStride, -sourceStride, to, 0, width,
                         width, height);
@@ -2809,6 +2957,34 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs) {
 
     const auto decodeBegan = Profile::now();
     bool decodedOnDevice = false;
+#ifdef __APPLE__
+    // Open a single host Metal command buffer + compute encoder for the entire gpuFrames render.
+    // The RAII dtor commits the CB asynchronously via fotufilm_bridge_host_metal_end, and the
+    // staging pool records the returned fence so recycling never stalls the GPU unnecessarily.
+    FrameScope metalScope{lane.bridge, gpuFrames ? metalQueue : nullptr};
+    if (gpuFrames) {
+        // The GPU runs this frame after the call returns, so a failure there is told to the
+        // node's next render, and so is what the decode would have reported.
+        auto *completed = new std::shared_ptr<AsyncNotes>(instance->asyncNotes);
+        if (fotufilm_bridge_host_metal_notify(frameCompletedLater, completed) != 1) {
+            delete completed;
+        }
+    }
+#endif
+    // The decode's report costs the frame two more kernels. The range check is asked of every
+    // frame while a display-referred label can still be caught out, as it is on a CPU frame;
+    // the notice that the source held NaN or infinity — repaired in the kernel either way — is
+    // about the clip rather than the frame, so it is asked of a node's first frames and then
+    // one in sixteen.
+    bool reportsLater = false;
+    if (gpuFrames) {
+        const unsigned frame = instance->metalFrames++;
+        reportsLater = watchRange ||
+                       (!instance->warnedNonFiniteInput && (frame < 4 || frame % 16 == 0));
+    }
+    auto laterNotes = [&] {
+        return static_cast<void *>(new std::shared_ptr<AsyncNotes>(instance->asyncNotes));
+    };
     if (readsInterchange) {
         // Nothing to decode: what arrived is the developed negative's densities, and the only
         // thing between the host's image and the engine is the layout — the host's rows are
@@ -2824,36 +3000,85 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs) {
         float devicePeak = 0;
         bool deviceRepaired = false;
         if (staged) {
-            // The staging's output is the scratch: frame-sized, idle until the render fills it,
-            // and overwritten by the render regardless. Decoding the input buffer over itself
-            // instead would leave the peak depending on whether the kernel writing the scene ran
-            // before the kernel reading the host's own numbers.
-            if (gpuFrames) {
-                if (!copyFrameIn(stagedDeveloped)) return kOfxStatFailed;
-            } else {
-                CopyState copyState{&source, stagedOutput, width, 0};
-                forRows(0, height, copyRows, &copyState);
-            }
             int32_t reportedRepair = 0;
-            decodedOnDevice = fotufilm_bridge_decode_staged(
-                instance->bridge, processWidth, height, &inputTransform,
-                &devicePeak, &reportedRepair, fotufilm_bridge_effective_realtime(parameters)) == 1;
+            if (reportsLater) {
+                fotufilm_bridge_decode_report_later(decodeReportedLater, laterNotes());
+            }
+            if (directSourceDecode) {
+                decodedOnDevice = fotufilm_bridge_decode_staged_from_metal(
+                    lane.bridge, sourceBuffer, processWidth, height, &inputTransform,
+                    &devicePeak, &reportedRepair,
+                    fotufilm_bridge_effective_realtime(parameters)) == 1;
+            }
+            if (!decodedOnDevice) {
+                // The staging's output is the scratch: frame-sized, idle until the render fills it,
+                // and overwritten by the render regardless. Decoding the input buffer over itself
+                // instead would leave the peak depending on whether the kernel writing the scene ran
+                // before the kernel reading the host's own numbers.
+                if (gpuFrames) {
+                    if (!copyFrameIn(stagedDeveloped)) return kOfxStatFailed;
+                } else {
+                    CopyState copyState{&source, stagedOutput, width, 0};
+                    forRows(0, height, copyRows, &copyState);
+                }
+                if (reportsLater && directSourceDecode) {
+                    // The first attempt consumed the report's sink without decoding.
+                    fotufilm_bridge_decode_report_later(decodeReportedLater, laterNotes());
+                }
+                decodedOnDevice = fotufilm_bridge_decode_staged(
+                    lane.bridge, processWidth, height, &inputTransform,
+                    &devicePeak, &reportedRepair,
+                    fotufilm_bridge_effective_realtime(parameters)) == 1;
+            }
             deviceRepaired = reportedRepair != 0;
         } else {
             decodedOnDevice = decodeThroughKernel(source, scene, width, height, inputTransform,
-                                                  instance->decodeScratch, devicePeak,
+                                                  *lane.decodeScratch, devicePeak,
                                                   deviceRepaired, fotufilm_bridge_effective_realtime(parameters));
         }
         if (decodedOnDevice) {
             if (watchRange) peak.store(devicePeak, std::memory_order_relaxed);
             if (deviceRepaired) repairedInput.store(true, std::memory_order_relaxed);
         }
+    } else if (cameraHasGpuDecode && gpuFrames && !readsInterchange) {
+        // Fused GPU Apple Log decode directly from Resolve's sourceBuffer into stagedScene on the
+        // open host Metal encoder — eliminates copyFrameIn for Apple Log / Apple Log 2 clips.
+        // sourceBuffer rows are bottom-up; flip with negative step (sourceBase at last row).
+        decodedOnDevice = fotufilm_bridge_camera_gpu_decode(
+            lane.bridge,
+            sourceBuffer, (height - 1) * sourceStride, -sourceStride,
+            stagedScene, 0, width,
+            width, height, premultiplied ? 1 : 0, cameraInput,
+            nullptr,  // Read once the frame's command buffer has run, not inside the call.
+            reportsLater ? decodeReportedLater : nullptr,
+            reportsLater ? laterNotes() : nullptr) == 1;
+        if (!decodedOnDevice) {
+            char message[512] = "";
+            fotufilm_bridge_last_error(lane.bridge, message, sizeof(message));
+            tell(kOfxMessageError,
+                 "Fotufilm could not GPU-decode the Apple Log frame%s%s",
+                 message[0] ? ": " : "", message);
+            return kOfxStatFailed;
+        }
+    } else if (cameraHasGpuDecode && !gpuFrames && staged && !readsInterchange) {
+        // CPU OFX host: copy source rows into stagedOutput (developedBuffer), then decode on
+        // Metal synchronously from staging.developedBuffer -> staging.sceneBuffer.
+        CopyState copyState{&source, stagedOutput, width, 0};
+        forRows(0, height, copyRows, &copyState);
+        uint32_t reportedRepair = 0;
+        decodedOnDevice = fotufilm_bridge_camera_gpu_decode_staged(
+            lane.bridge, processWidth, height,
+            premultiplied ? 1 : 0, cameraInput,
+            &reportedRepair) == 1;
+        if (decodedOnDevice && reportedRepair != 0) {
+            repairedInput.store(true, std::memory_order_relaxed);
+        }
     }
     if (gpuFrames && !decodedOnDevice && !readsInterchange) {
         // The host's threads have no pixels to fall back on: they are in the host's buffer.
         char message[512] = "";
-        fotufilm_bridge_last_error(instance->bridge, message, sizeof(message));
-        post(kOfxMessageError, effect, "Fotufilm could not decode the host's Metal frame%s%s",
+        fotufilm_bridge_last_error(lane.bridge, message, sizeof(message));
+        tell(kOfxMessageError, "Fotufilm could not decode the host's Metal frame%s%s",
              message[0] ? ": " : "", message);
         return kOfxStatFailed;
     }
@@ -2863,11 +3088,12 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs) {
         // transcendentals are libm's rather than Metal's and the frame is a few parts in ten
         // million from the one the device would have made. Worth one message: a node that has
         // silently changed decoders is not the same node it was.
-        if (decodesOnDevice && !instance->warnedHostDecodeFallback) {
+        if (!deferred && (decodesOnDevice || (cameraHasGpuDecode && staged)) &&
+            !instance->warnedHostDecodeFallback) {
             instance->warnedHostDecodeFallback = true;
             char message[512] = "";
-            fotufilm_bridge_last_error(instance->bridge, message, sizeof(message));
-            post(kOfxMessageWarning, effect,
+            fotufilm_bridge_last_error(lane.bridge, message, sizeof(message));
+            tell(kOfxMessageWarning,
                  "Fotufilm's engine could not decode this frame on the GPU%s%s; the host's "
                  "threads are decoding it instead. The picture is correct, but a few parts in "
                  "ten million from the GPU's.", message[0] ? ": " : "", message);
@@ -2878,13 +3104,24 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs) {
         forRows(0, height, decodeRows, &decodeState);
     }
     const auto decodeEnded = Profile::now();
-    if (!instance->reportedDecodePath) {
+    if (!deferred) {
+        // What frames left on the host's Metal queue learned after their calls returned.
+        if (instance->asyncNotes->repaired.exchange(false, std::memory_order_relaxed)) {
+            repairedInput.store(true, std::memory_order_relaxed);
+        }
+        const float latePeak =
+            instance->asyncNotes->peak.exchange(0.0f, std::memory_order_relaxed);
+        if (watchRange && latePeak > peak.load(std::memory_order_relaxed)) {
+            peak.store(latePeak, std::memory_order_relaxed);
+        }
+    }
+    if (!deferred && !instance->reportedDecodePath) {
         instance->reportedDecodePath = true;
         report("decode %s", readsInterchange ? "not needed — the input is a developed negative"
                             : decodedOnDevice ? "in the engine's kernel"
                                               : "on the host's threads");
     }
-    if (repairedInput.load(std::memory_order_relaxed) &&
+    if (!deferred && repairedInput.load(std::memory_order_relaxed) &&
         !instance->warnedNonFiniteInput) {
         instance->warnedNonFiniteInput = true;
         report("Resolve supplied NaN or infinity; Fotufilm repaired invalid RGB to black "
@@ -2892,16 +3129,16 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs) {
                "upstream nodes; changing Fotufilm's colour-space setting will not repair "
                "non-finite pixels");
     }
-    if (watchRange && peak.load(std::memory_order_relaxed) > 1.05f) {
+    if (!deferred && watchRange && peak.load(std::memory_order_relaxed) > 1.05f) {
         instance->warnedOverRange = true;
-        post(kOfxMessageWarning, effect,
+        tell(kOfxMessageWarning,
              "The input reaches %.2f, but it is being decoded as %s — a display-referred "
              "space that ends at 1.0. The colour space setting is probably wrong for this "
              "timeline; set it to the space actually arriving at the node.",
              peak.load(std::memory_order_relaxed), fotufilm::encodingLabel(encoding));
     }
 
-    if (gEffect->abort(effect)) return kOfxStatOK;
+    if (!deferred && gEffect->abort(effect)) return kOfxStatOK;
 
     const fotufilm::OutputTransform curve = fotufilm::outputTransformFor(outputEncoding);
     FotufilmOutputTransform outputTransform{};
@@ -2963,23 +3200,22 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs) {
     const auto engineBegan = Profile::now();
     auto engineEnded = engineBegan;
     if (staged) {
-        developed = fotufilm_bridge_render_staged(
-            instance->bridge, stock, format, paper, parameters,
+        int32_t wroteDirectOutput = 0;
+        developed = fotufilm_bridge_render_staged_to_metal(
+            lane.bridge, stock, format, paper, parameters,
             static_cast<uint32_t>(seed), processWidth, height,
             static_cast<uint64_t>(std::llround(time)), viewerFrame ? 1 : 0,
             encodeInKernel ? &outputTransform : nullptr,
-            hostWantsMore, effect);
+            directOutputDevelop ? outputBuffer : nullptr,
+            &wroteDirectOutput,
+            deferred ? alwaysWantsMore : hostWantsMore, effect);
         engineEnded = Profile::now();
         // A staged frame arrives whole rather than in strips, so it is written as one strip —
-        // on the GPU, for a Metal frame: the part of each row the render window and both images
-        // agree on, as `writeStripRows` writes it verbatim.
+        // on the GPU, for a Metal frame: directly by the develop kernel when the render window and
+        // both images are full-frame tightly packed, or via `hostCopy` for partial RoI / strided
+        // buffers / Layered Transport.
         if (developed > 0 && gpuFrames) {
-            const int y1 = std::max(renderWindow.y1, std::max(source.bounds.y1, output.bounds.y1));
-            const int y2 = std::min(renderWindow.y2, std::min(source.bounds.y2, output.bounds.y2));
-            const int x1 = std::max(renderWindow.x1, std::max(source.bounds.x1, output.bounds.x1));
-            const int x2 = std::min(renderWindow.x2, std::min(source.bounds.x2, output.bounds.x2));
-            const long long outputStride = pixelStride(output);
-            if (y2 > y1 && x2 > x1 &&
+            if (!wroteDirectOutput && y2 > y1 && x2 > x1 &&
                 !hostCopy(stagedDeveloped,
                           static_cast<long long>(source.bounds.y2 - 1 - y1) * width +
                               (x1 - source.bounds.x1),
@@ -2988,31 +3224,123 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs) {
                           outputStride, x2 - x1, y2 - y1)) {
                 return kOfxStatFailed;
             }
+#ifdef __APPLE__
+            if (!metalScope.finish()) return kStatHostQueueHeld;
+#endif
         } else if (developed > 0) {
             writeDevelopedRows(&state, 0, height, stagedOutput);
         }
     } else {
         developed = fotufilm_bridge_render(
-            instance->bridge, stock, format, paper, parameters, static_cast<uint32_t>(seed),
-            instance->frame.data(), processWidth, height,
+            lane.bridge, stock, format, paper, parameters, static_cast<uint32_t>(seed),
+            lane.frame->data(), processWidth, height,
             static_cast<uint64_t>(std::llround(time)),
             writeDevelopedRows, &state,
-            encodeInKernel ? &outputTransform : nullptr, hostWantsMore, effect);
+            encodeInKernel ? &outputTransform : nullptr, deferred ? alwaysWantsMore : hostWantsMore, effect);
         // Streaming interleaves the encode with the develop, so the two cannot be told apart.
         engineEnded = Profile::now();
     }
+#ifdef __APPLE__
+    // A metered frame reads its measurement back while it is being encoded. If the host's queue
+    // did not return it, the host is holding the queue and the frame cannot be finished in this
+    // call: it is developed from mirrors instead, after the call. Nothing of it has reached the
+    // host's output yet — the develop that writes there is encoded after the measurement.
+    if (gpuFrames && developed <= 0 && !metalScope.finish()) return kStatHostQueueHeld;
+#endif
     Profile::frame(renderBegan, decodeBegan, decodeEnded, engineBegan, engineEnded,
                    Profile::now(),
                    processWidth, height, staged, viewerFrame, hostMetal);
     if (developed < 0) return kOfxStatOK;  // The host aborted; it discards the frame.
     if (developed == 0) {
         char message[512] = "";
-        fotufilm_bridge_last_error(instance->bridge, message, sizeof(message));
-        post(kOfxMessageError, effect, "Fotufilm render failed: %s", message);
+        fotufilm_bridge_last_error(lane.bridge, message, sizeof(message));
+        tell(kOfxMessageError, "Fotufilm render failed: %s", message);
         return kOfxStatFailed;
     }
-    if (mirroredOutput && !hostCopy(mirroredOutput, 0, pixelStride(output), outputBuffer, 0,
-                                    pixelStride(output), pixelStride(output), output.height())) {
+    return kOfxStatOK;
+    };
+
+    const Lane lane{instance->bridge, &instance->frame, &instance->decodeScratch};
+    const OfxStatus status = develop(source, output, hostMetal, false, lane, false);
+    if (status != kStatNeedsCpuPixels && status != kStatHostQueueHeld) return status;
+
+    // A Metal frame that needs the CPU. Its pixels are mirrored on the host's queue, which
+    // cannot be waited on for long: a host can hold a command buffer on it until this call
+    // returns, and the copy is ordered behind that.
+    float *sourcePixels = nullptr, *outputPixels = nullptr;
+    const FotufilmMirroredFrame mirror = pixelStride(source) && pixelStride(output)
+        ? fotufilm_bridge_host_mirror_begin(
+              metalQueue, sourceBuffer, pixelStride(source), height,
+              outputBuffer, pixelStride(output), output.height(), &sourcePixels, &outputPixels)
+        : nullptr;
+    if (!mirror) {
+        post(kOfxMessageError, effect,
+             "Fotufilm cannot render: no CPU-visible copy of the host's Metal frame");
+        return kOfxStatFailed;
+    }
+    Image cpuSource = source, cpuOutput = output;
+    cpuSource.data = sourcePixels;
+    cpuOutput.data = outputPixels;
+    // A frame that has already found the queue held does not wait on it a second time.
+    const int32_t arrived = fotufilm_bridge_host_mirror_wait(
+        mirror, status == kStatHostQueueHeld ? 0 : hostQueuePatience());
+    if (arrived < 0) {
+        fotufilm_bridge_host_mirror_cancel(mirror);
+        post(kOfxMessageError, effect,
+             "Fotufilm cannot render: the frame could not be copied between the host's Metal "
+             "buffers and the engine's");
+        return kOfxStatFailed;
+    }
+    if (arrived == 1) {
+        // The usual case: the pixels are here, and the frame develops as a CPU frame does. The
+        // copy back is committed behind it and not waited for.
+        const OfxStatus developed = develop(cpuSource, cpuOutput, false, true, lane, false);
+        if (developed != kOfxStatOK) {
+            fotufilm_bridge_host_mirror_cancel(mirror);
+            return developed;
+        }
+        if (fotufilm_bridge_host_mirror_finish(mirror) != 1) {
+            post(kOfxMessageError, effect,
+                 "Fotufilm cannot render: the developed frame could not be copied back to the "
+                 "host's Metal buffer");
+            return kOfxStatFailed;
+        }
+        return kOfxStatOK;
+    }
+    // The host is holding its queue until this call returns. The copy back takes its place on
+    // the queue now, so whatever the host commits afterwards runs behind it, and the frame
+    // develops as soon as its pixels arrive — in the process's deferred lane, since by then
+    // this instance may be rendering its next frame, or gone.
+    if (!instance->reportedDeferredFrame) {
+        instance->reportedDeferredFrame = true;
+        report("the host is holding its Metal queue across the render call; a frame that needs "
+               "the CPU develops once the call has returned");
+    }
+    auto *job = new std::function<void(bool)>([=](bool landed) {
+        if (!landed) {
+            report("a deferred frame never reached the CPU from the host's Metal queue and was "
+                   "left black");
+            return;
+        }
+        DeferredLane &shared = deferredLane();
+        std::lock_guard<std::mutex> held(shared.lock);
+        if (!shared.bridge) shared.bridge = fotufilm_bridge_context_create();
+        if (!shared.bridge) {
+            report("a deferred frame could not be developed: no engine context");
+            return;
+        }
+        const Lane later{shared.bridge, &shared.frame, &shared.decodeScratch};
+        const OfxStatus developed = develop(cpuSource, cpuOutput, false, true, later, true);
+        if (developed != kOfxStatOK) {
+            report("a frame deferred past its render call could not be developed (status %d); "
+                   "the host keeps the pixels it sent", developed);
+        }
+    });
+    if (fotufilm_bridge_host_mirror_defer(mirror, runDeferredFrame, job) != 1) {
+        delete job;
+        post(kOfxMessageError, effect,
+             "Fotufilm cannot render: the developed frame could not be copied back to the "
+             "host's Metal buffer");
         return kOfxStatFailed;
     }
     return kOfxStatOK;
@@ -3117,6 +3445,15 @@ OfxStatus purgeCaches(OfxImageEffectHandle effect) {
     std::vector<float>().swap(instance->frame);
     std::vector<float>().swap(instance->decodeScratch);
     fotufilm_bridge_release_staging(instance->bridge);
+    {
+        // A deferred frame holds this only while it is developing, never while it waits on the
+        // host, so this cannot wait on the host either.
+        DeferredLane &shared = deferredLane();
+        std::lock_guard<std::mutex> deferredHeld(shared.lock);
+        std::vector<float>().swap(shared.frame);
+        std::vector<float>().swap(shared.decodeScratch);
+        if (shared.bridge) fotufilm_bridge_release_staging(shared.bridge);
+    }
 #if defined(__APPLE__)
     fotufilm_halide_metal_release_pool();
 #endif

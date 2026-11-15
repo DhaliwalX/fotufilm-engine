@@ -57,6 +57,12 @@
 #include "fotufilm_halide_ios_color_float_realtime_windowed_printed_slide.h"
 #include "fotufilm_halide_ios_monochrome_float_realtime_windowed_printed_slide.h"
 #include "fotufilm_halide_ios_color_float_realtime_negative_windowed_negative.h"
+#include "fotufilm_halide_ios_color_float_realtime_windowed_negative_no_adj.h"
+#include "fotufilm_halide_ios_color_float_realtime_windowed_negative_luma_no_adj.h"
+#include "fotufilm_halide_ios_color_float_realtime_windowed_negative_donor_no_adj.h"
+#include "fotufilm_halide_ios_color_float_realtime_windowed_negative_screen_no_adj.h"
+#include "fotufilm_halide_ios_color_float_realtime_windowed_slide_luma_interimage.h"
+#include "fotufilm_halide_ios_color_float_realtime_windowed_slide_luma_interimage_adj.h"
 #endif
 
 #endif

@@ -42,6 +42,8 @@ OfxPlugin *OfxGetPlugin(int nth);
 #include <objc/message.h>
 #include <objc/runtime.h>
 extern "C" void *MTLCreateSystemDefaultDevice(void);
+extern "C" void *objc_autoreleasePoolPush(void);
+extern "C" void objc_autoreleasePoolPop(void *);
 
 /// Just enough Metal, through the Objective-C runtime, to play a host that renders through the
 /// OFX Metal extension: a queue, and shared buffers whose CPU view the harness fills and reads.
@@ -64,6 +66,32 @@ void *buffer(size_t bytes) {
 }
 float *contents(void *buffer) { return static_cast<float *>(send(buffer, "contents")); }
 void release(void *object) { send(object, "release"); }
+/// Wait for all commands enqueued on the shared Metal queue to complete so CPU reads
+/// of shared-storage buffer contents see the values the GPU wrote.
+void sync() {
+    if (!queue()) return;
+    void *pool = objc_autoreleasePoolPush();
+    // `commandBuffer` returns an autoreleased (+0) MTLCommandBuffer; drain via pool.
+    if (void *cb = send(queue(), "commandBuffer")) {
+        send(cb, "commit");
+        send(cb, "waitUntilCompleted");
+    }
+    objc_autoreleasePoolPop(pool);
+}
+/// A command buffer enqueued on the host's queue and not committed, as Resolve holds one across
+/// a render call when it refreshes its viewer after a delivery. Until `letGo` commits it, nothing
+/// committed to the queue after it runs.
+void *hold() {
+    void *pool = objc_autoreleasePoolPush();
+    void *held = send(send(queue(), "commandBuffer"), "retain");
+    send(held, "enqueue");
+    objc_autoreleasePoolPop(pool);
+    return held;
+}
+void letGo(void *held) {
+    send(held, "commit");
+    release(held);
+}
 }  // namespace HostMetal
 #endif
 
@@ -857,7 +885,17 @@ int testPlugin() {
           "negotiates Resolve's OFX 1.5 full colour management");
     check(config && std::strcmp(config, kOfxConfigIdentifier) == 0,
           "declares the required native colour config");
-#ifdef __APPLE__
+#if defined(__APPLE__) && defined(__aarch64__)
+    {
+        auto metal = describer.properties->strings.find(kOfxImageEffectPropMetalRenderSupported);
+        const char *hostMetal = std::getenv("FOTUFILM_HOST_METAL");
+        const bool asked = !(hostMetal && std::strcmp(hostMetal, "0") == 0);
+        check(asked ? metal != describer.properties->strings.end() &&
+                          metal->second.size() == 1 && metal->second[0] == "true"
+                    : metal == describer.properties->strings.end(),
+              "offers to take the host's Metal frames by default on Apple silicon; suppressed when FOTUFILM_HOST_METAL=0");
+    }
+#elif defined(__APPLE__)
     {
         auto metal = describer.properties->strings.find(kOfxImageEffectPropMetalRenderSupported);
         const char *hostMetal = std::getenv("FOTUFILM_HOST_METAL");
@@ -865,7 +903,7 @@ int testPlugin() {
         check(asked ? metal != describer.properties->strings.end() &&
                           metal->second.size() == 1 && metal->second[0] == "true"
                     : metal == describer.properties->strings.end(),
-              "offers to take the host's Metal frames only when FOTUFILM_HOST_METAL=1 asks");
+              "keeps Metal host frames opt-in via FOTUFILM_HOST_METAL=1 on Intel Macs");
     }
 #else
     check(describer.properties->strings.count(kOfxImageEffectPropMetalRenderSupported) == 0,
@@ -1683,34 +1721,35 @@ int testPlugin() {
         // frame has to come back exactly as the CPU host's does: the same kernels develop it, and
         // only where the pixels travel changes — on the GPU for a frame the kernels take whole,
         // through CPU mirrors for one that needs resampling.
+        auto metalRender = [&](std::vector<float> &developed) {
+            const size_t sourceBytes = source->pixels.size() * sizeof(float);
+            const size_t outputBytes = output->pixels.size() * sizeof(float);
+            void *in = HostMetal::buffer(sourceBytes);
+            void *out = HostMetal::buffer(outputBytes);
+            std::memcpy(HostMetal::contents(in), source->pixels.data(), sourceBytes);
+            std::memcpy(HostMetal::contents(out), output->pixels.data(), outputBytes);
+            propSetPointer(handleOf(source->image), kOfxImagePropData, 0, in);
+            propSetPointer(handleOf(output->image), kOfxImagePropData, 0, out);
+            propSetInt(handleOf(renderArgs), kOfxImageEffectPropMetalEnabled, 0, 1);
+            propSetPointer(handleOf(renderArgs), kOfxImageEffectPropMetalCommandQueue, 0,
+                           HostMetal::queue());
+            const bool rendered = renderNow();
+            HostMetal::sync();
+            developed.assign(HostMetal::contents(out),
+                             HostMetal::contents(out) + output->pixels.size());
+            propSetInt(handleOf(renderArgs), kOfxImageEffectPropMetalEnabled, 0, 0);
+            propSetPointer(handleOf(renderArgs), kOfxImageEffectPropMetalCommandQueue, 0,
+                           nullptr);
+            propSetPointer(handleOf(source->image), kOfxImagePropData, 0,
+                           source->pixels.data());
+            propSetPointer(handleOf(output->image), kOfxImagePropData, 0,
+                           output->pixels.data());
+            HostMetal::release(in);
+            HostMetal::release(out);
+            return rendered;
+        };
         if (HostMetal::queue()) {
             std::printf("Metal host frames\n");
-            auto metalRender = [&](std::vector<float> &developed) {
-                const size_t sourceBytes = source->pixels.size() * sizeof(float);
-                const size_t outputBytes = output->pixels.size() * sizeof(float);
-                void *in = HostMetal::buffer(sourceBytes);
-                void *out = HostMetal::buffer(outputBytes);
-                std::memcpy(HostMetal::contents(in), source->pixels.data(), sourceBytes);
-                std::memcpy(HostMetal::contents(out), output->pixels.data(), outputBytes);
-                propSetPointer(handleOf(source->image), kOfxImagePropData, 0, in);
-                propSetPointer(handleOf(output->image), kOfxImagePropData, 0, out);
-                propSetInt(handleOf(renderArgs), kOfxImageEffectPropMetalEnabled, 0, 1);
-                propSetPointer(handleOf(renderArgs), kOfxImageEffectPropMetalCommandQueue, 0,
-                               HostMetal::queue());
-                const bool rendered = renderNow();
-                developed.assign(HostMetal::contents(out),
-                                 HostMetal::contents(out) + output->pixels.size());
-                propSetInt(handleOf(renderArgs), kOfxImageEffectPropMetalEnabled, 0, 0);
-                propSetPointer(handleOf(renderArgs), kOfxImageEffectPropMetalCommandQueue, 0,
-                               nullptr);
-                propSetPointer(handleOf(source->image), kOfxImagePropData, 0,
-                               source->pixels.data());
-                propSetPointer(handleOf(output->image), kOfxImagePropData, 0,
-                               output->pixels.data());
-                HostMetal::release(in);
-                HostMetal::release(out);
-                return rendered;
-            };
             auto matchesCPU = [&](const char *label) {
                 std::fill(output->pixels.begin(), output->pixels.end(), -7.0f);
                 const bool cpuRendered = renderNow();
@@ -1733,6 +1772,253 @@ int testPlugin() {
             propSetDouble(handleOf(source->properties), kOfxImagePropPixelAspectRatio, 0, 2.0);
             matchesCPU("develops a resampled Metal frame through CPU mirrors as the CPU frame");
             propSetDouble(handleOf(source->properties), kOfxImagePropPixelAspectRatio, 0, 1.0);
+
+            // A host can hold a command buffer on its queue until the render call returns:
+            // Resolve does, refreshing its viewer after a delivery. Nothing ordered behind that
+            // buffer runs until the host commits it, so a render that waits on the queue is
+            // waiting for a host that is waiting for the render. Every kind of frame has to come
+            // back from the call promptly, and still be the CPU host's frame once the host lets
+            // its queue go — including the frames that need the CPU, which have nothing to
+            // develop from until then.
+            std::printf("Metal host frames behind a command buffer the host is holding\n");
+            struct InFlight {
+                void *in = nullptr, *out = nullptr;
+                bool rendered = false;
+                double seconds = 0;
+            };
+            auto launch = [&] {
+                InFlight frame;
+                const size_t count = output->pixels.size();
+                frame.in = HostMetal::buffer(source->pixels.size() * sizeof(float));
+                frame.out = HostMetal::buffer(count * sizeof(float));
+                std::memcpy(HostMetal::contents(frame.in), source->pixels.data(),
+                            source->pixels.size() * sizeof(float));
+                std::fill(HostMetal::contents(frame.out), HostMetal::contents(frame.out) + count,
+                          -7.0f);
+                propSetPointer(handleOf(source->image), kOfxImagePropData, 0, frame.in);
+                propSetPointer(handleOf(output->image), kOfxImagePropData, 0, frame.out);
+                propSetInt(handleOf(renderArgs), kOfxImageEffectPropMetalEnabled, 0, 1);
+                propSetPointer(handleOf(renderArgs), kOfxImageEffectPropMetalCommandQueue, 0,
+                               HostMetal::queue());
+                const auto began = std::chrono::steady_clock::now();
+                frame.rendered = renderNow();
+                frame.seconds = std::chrono::duration<double>(
+                    std::chrono::steady_clock::now() - began).count();
+                propSetInt(handleOf(renderArgs), kOfxImageEffectPropMetalEnabled, 0, 0);
+                propSetPointer(handleOf(renderArgs), kOfxImageEffectPropMetalCommandQueue, 0,
+                               nullptr);
+                propSetPointer(handleOf(source->image), kOfxImagePropData, 0,
+                               source->pixels.data());
+                propSetPointer(handleOf(output->image), kOfxImagePropData, 0,
+                               output->pixels.data());
+                return frame;
+            };
+            auto land = [&](InFlight &frame) {
+                std::vector<float> pixels(HostMetal::contents(frame.out),
+                                          HostMetal::contents(frame.out) + output->pixels.size());
+                HostMetal::release(frame.in);
+                HostMetal::release(frame.out);
+                return pixels;
+            };
+            auto cpuFrame = [&] {
+                std::fill(output->pixels.begin(), output->pixels.end(), -7.0f);
+                return renderNow() ? output->pixels : std::vector<float>();
+            };
+            // Far under the seconds a wait on a held queue costs, and far over what a call
+            // that only encodes — or gives the queue a moment and then defers — takes.
+            const double prompt = 2.0;
+            double savedTime = 0;
+            propGetDouble(handleOf(renderArgs), kOfxPropTime, 0, &savedTime);
+            auto heldMatchesCPU = [&](const char *label) {
+                const std::vector<float> cpu = cpuFrame();
+                void *held = HostMetal::hold();
+                InFlight frame = launch();
+                HostMetal::letGo(held);
+                HostMetal::sync();
+                const std::vector<float> metal = land(frame);
+                float worst = 0;
+                for (size_t i = 0; i < cpu.size() && i < metal.size(); ++i) {
+                    worst = std::max(worst, std::fabs(cpu[i] - metal[i]));
+                }
+                std::printf("       returned in %.0f ms, worst %.3g\n", frame.seconds * 1000,
+                            worst);
+                check(frame.rendered && frame.seconds < prompt && !cpu.empty() && metal == cpu,
+                      label);
+            };
+            auto doubleOf = [&](const char *name) {
+                auto found = instance.params.params.find(name);
+                return found == instance.params.params.end() ? 0.0 : found->second->doubleValue;
+            };
+
+            provision(96, 64, 0, 0, true);
+            heldMatchesCPU("returns a whole Metal frame at once and develops it as the CPU frame");
+            provision(64, 48, -7, 5);
+            propSetIntN(handleOf(renderArgs), kOfxImageEffectPropRenderWindow, 4, subwindow);
+            heldMatchesCPU("and an offset frame through a subwindow");
+            provision(1920, 1080, 0, 0, true);
+            heldMatchesCPU("and a frame tall enough for the row-window kernels");
+
+            // Several frames encoded before the GPU has run any of them, each with its own
+            // parameters: what one frame uploads must not be what an earlier one reads.
+            provision(96, 64, 0, 0, true);
+            {
+                const double grainBefore = doubleOf("grain");
+                setParam(instance.params, "grain", 1);
+                std::vector<float> cpu[3];
+                for (int frame = 0; frame < 3; ++frame) {
+                    propSetDouble(handleOf(renderArgs), kOfxPropTime, 0, frame);
+                    cpu[frame] = cpuFrame();
+                }
+                void *held = HostMetal::hold();
+                InFlight flying[3];
+                for (int frame = 0; frame < 3; ++frame) {
+                    propSetDouble(handleOf(renderArgs), kOfxPropTime, 0, frame);
+                    flying[frame] = launch();
+                }
+                HostMetal::letGo(held);
+                HostMetal::sync();
+                bool same = true, quick = true;
+                for (int frame = 0; frame < 3; ++frame) {
+                    quick = quick && flying[frame].rendered && flying[frame].seconds < prompt;
+                    same = land(flying[frame]) == cpu[frame] && !cpu[frame].empty() && same;
+                }
+                check(quick && same, "develops three frames in flight at once, each as its own");
+                propSetDouble(handleOf(renderArgs), kOfxPropTime, 0, savedTime);
+                setParam(instance.params, "grain", grainBefore);
+            }
+            {
+                const double exposureBefore = doubleOf("exposure");
+                const std::vector<float> cpuA = cpuFrame();
+                setParam(instance.params, "exposure", exposureBefore + 1.0);
+                const std::vector<float> cpuB = cpuFrame();
+                setParam(instance.params, "exposure", exposureBefore);
+                void *held = HostMetal::hold();
+                InFlight a = launch();
+                setParam(instance.params, "exposure", exposureBefore + 1.0);
+                InFlight b = launch();
+                setParam(instance.params, "exposure", exposureBefore);
+                HostMetal::letGo(held);
+                HostMetal::sync();
+                const bool quick = a.rendered && b.rendered && a.seconds < prompt &&
+                                   b.seconds < prompt;
+                const bool sameA = land(a) == cpuA, sameB = land(b) == cpuB;
+                check(quick && sameA && sameB && cpuA != cpuB,
+                      "keeps two frames in flight apart when a control moves between them");
+            }
+            {
+                // A colour negative and a reversal film: different kernels and different
+                // tables, at a size the row-window kernels take.
+                provision(1920, 1080, 0, 0, true);
+                const int stockBefore = getInt(instance.params, "stock");
+                auto stockNamed = [&](const char *wanted, int otherwise) {
+                    for (int32_t s = 0; s < fotufilm_bridge_stock_count(); ++s) {
+                        char name[256] = {};
+                        fotufilm_bridge_stock_name(s, name, sizeof(name));
+                        if (std::strstr(name, wanted)) return static_cast<int>(s);
+                    }
+                    return otherwise;
+                };
+                const int first = stockNamed("Portra 400", stockBefore);
+                const int other = stockNamed(
+                    "Ektachrome E100", (first + 1) % fotufilm_bridge_stock_count());
+                setChoice(plugin, instanceHandle, instance.params, "stock", first);
+                const std::vector<float> cpuA = cpuFrame();
+                setChoice(plugin, instanceHandle, instance.params, "stock", other);
+                const std::vector<float> cpuB = cpuFrame();
+                setChoice(plugin, instanceHandle, instance.params, "stock", first);
+                void *held = HostMetal::hold();
+                InFlight a = launch();
+                setChoice(plugin, instanceHandle, instance.params, "stock", other);
+                InFlight b = launch();
+                setChoice(plugin, instanceHandle, instance.params, "stock", stockBefore);
+                HostMetal::letGo(held);
+                HostMetal::sync();
+                std::printf("       returned in %.0f and %.0f ms\n", a.seconds * 1000,
+                            b.seconds * 1000);
+                const bool quick = a.rendered && b.rendered && a.seconds < prompt &&
+                                   b.seconds < prompt;
+                const bool sameA = land(a) == cpuA, sameB = land(b) == cpuB;
+                check(quick && sameA && sameB && cpuA != cpuB,
+                      "and when the film changes between them");
+                provision(96, 64, 0, 0, true);
+            }
+
+            // The frames that need the CPU: there is nothing to develop until the host lets its
+            // queue go, so the call returns with the frame's place on the queue reserved and
+            // the frame develops after it.
+            propSetDouble(handleOf(source->properties), kOfxImagePropPixelAspectRatio, 0, 2.0);
+            heldMatchesCPU("develops a resampled Metal frame after the call, as the CPU frame");
+            propSetDouble(handleOf(source->properties), kOfxImagePropPixelAspectRatio, 0, 1.0);
+            {
+                const double toneBefore = doubleOf("localTone");
+                const double highlightsBefore = doubleOf("highlights");
+                setParam(instance.params, "localTone", 1);
+                setParam(instance.params, "highlights", -0.75);
+                heldMatchesCPU("and a frame whose regional tone is metered");
+                setParam(instance.params, "localTone", toneBefore);
+                setParam(instance.params, "highlights", highlightsBefore);
+            }
+            {
+                // Glare measured on the host. The frame before is brighter, so a measurement
+                // left over from it would develop this one visibly wrong.
+                const int modeBefore = getInt(instance.params, "renderMode");
+                const double flareBefore = doubleOf("flare");
+                setChoice(plugin, instanceHandle, instance.params, "renderMode", 2);
+                setParam(instance.params, "flare", 2.0);
+                std::vector<float> brighter;
+                check(metalRender(brighter), "renders a Reference frame with glare");
+                for (size_t i = 0; i < source->pixels.size(); ++i) {
+                    if (i % 4 != 3) source->pixels[i] *= 0.25f;
+                }
+                heldMatchesCPU("and a darker one after it, measured for itself");
+                setParam(instance.params, "flare", flareBefore);
+                setChoice(plugin, instanceHandle, instance.params, "renderMode", modeBefore);
+                provision(96, 64, 0, 0, true);
+            }
+            {
+                // Layered Transport develops on the host and is not repeatable to the bit even
+                // there, so the frame is checked for arriving whole rather than for equality.
+                const int modelBefore = getInt(instance.params, "halationModel");
+                setChoice(plugin, instanceHandle, instance.params, "halationModel", 1);
+                const bool develops = !cpuFrame().empty();
+                void *held = HostMetal::hold();
+                InFlight frame = launch();
+                HostMetal::letGo(held);
+                HostMetal::sync();
+                const std::vector<float> metal = land(frame);
+                bool whole = !metal.empty();
+                for (float value : metal) {
+                    if (!std::isfinite(value) || value == -7.0f) whole = false;
+                }
+                check(!develops || (frame.rendered && frame.seconds < prompt && whole),
+                      "and a Layered Transport frame");
+                setChoice(plugin, instanceHandle, instance.params, "halationModel", modelBefore);
+            }
+            {
+                int appleLog = -1;
+                for (int32_t c = 0; c < fotufilm_bridge_camera_input_count(); ++c) {
+                    char name[256] = {};
+                    fotufilm_bridge_camera_input_name(c, name, sizeof(name));
+                    if (std::strstr(name, "Apple Log")) { appleLog = c; break; }
+                }
+                if (appleLog >= 0) {
+                    const int managementBefore = getInt(instance.params, "colorManagement");
+                    const int inputBefore = getInt(instance.params, "inputColorSpace");
+                    const int outputBefore = getInt(instance.params, "outputColorSpace");
+                    setChoice(plugin, instanceHandle, instance.params, "colorManagement", 1);
+                    setChoice(plugin, instanceHandle, instance.params, "inputColorSpace",
+                              static_cast<int>(fotufilm::Encoding::Count) + appleLog);
+                    setChoice(plugin, instanceHandle, instance.params, "outputColorSpace",
+                              static_cast<int>(fotufilm::Encoding::DaVinciIntermediate));
+                    heldMatchesCPU("and an Apple Log frame, decoded on the GPU");
+                    setChoice(plugin, instanceHandle, instance.params, "inputColorSpace",
+                              inputBefore);
+                    setChoice(plugin, instanceHandle, instance.params, "outputColorSpace",
+                              outputBefore);
+                    setChoice(plugin, instanceHandle, instance.params, "colorManagement",
+                              managementBefore);
+                }
+            }
         }
 #endif
 
@@ -1858,10 +2144,26 @@ int testPlugin() {
         setParam(instance.params, "colorSpace",
                  static_cast<double>(fotufilm::Encoding::SRGB));
         const int rangeBefore = gMessagesPosted;
-        check(renderNow(), "renders over-range input labelled sRGB");
-        check(gMessagesPosted == rangeBefore + 1 &&
-                  gLastMessageType == kOfxMessageWarning,
-              "and warns that the label must be wrong");
+#ifdef __APPLE__
+        if (HostMetal::queue()) {
+            // A Metal frame is decoded after its render call has returned, so what the decode
+            // saw is told to the node's next render: here one whose own input is in range.
+            std::vector<float> developedOnMetal;
+            check(metalRender(developedOnMetal),
+                  "renders over-range input labelled sRGB as a Metal frame");
+            HostMetal::sync();
+            source->pixels[(5 * 32 + 7) * 4 + 0] = 0.5f;
+            check(renderNow() && gMessagesPosted == rangeBefore + 1 &&
+                      gLastMessageType == kOfxMessageWarning,
+                  "and warns that the label must be wrong, by the node's next render");
+        } else
+#endif
+        {
+            check(renderNow(), "renders over-range input labelled sRGB");
+            check(gMessagesPosted == rangeBefore + 1 &&
+                      gLastMessageType == kOfxMessageWarning,
+                  "and warns that the label must be wrong");
+        }
         check(renderNow() && gMessagesPosted == rangeBefore + 1, "but says it only once");
         setParam(instance.params, "colorSpace",
                  static_cast<double>(fotufilm::Encoding::LinearDisplayP3));
@@ -2403,15 +2705,36 @@ int testPlugin() {
                 propSetDouble(handleOf(renderArgs), kOfxPropTime, 0, frame);
                 const auto began = std::chrono::steady_clock::now();
                 complete = renderNow() && complete;
+#ifdef __APPLE__
+                // A Metal frame's render call returns once the frame is encoded; the frame is
+                // finished when the GPU has run it, which is what a host that reads it waits for.
+                if (metalIn) HostMetal::sync();
+#endif
                 const double elapsed = std::chrono::duration<double>(
                     std::chrono::steady_clock::now() - began).count();
                 total += elapsed;
                 best = std::min(best, elapsed);
                 timings.push_back(elapsed * 1000.0);
             }
+#ifdef __APPLE__
+            if (metalIn) {
+                // And as a host that queues frames without waiting on each sees them: every
+                // frame encoded back to back, one wait at the end.
+                const auto began = std::chrono::steady_clock::now();
+                for (int frame = 0; frame < frames; ++frame) {
+                    propSetDouble(handleOf(renderArgs), kOfxPropTime, 0, frame);
+                    complete = renderNow() && complete;
+                }
+                HostMetal::sync();
+                std::printf("       %d frames queued back to back: %.2f ms a frame\n", frames,
+                            1000.0 * std::chrono::duration<double>(
+                                std::chrono::steady_clock::now() - began).count() / frames);
+            }
+#endif
             propSetDouble(handleOf(renderArgs), kOfxPropTime, 0, savedTime);
 #ifdef __APPLE__
             if (metalIn) {
+                HostMetal::sync();
                 std::memcpy(output->pixels.data(), HostMetal::contents(metalOut),
                             output->pixels.size() * sizeof(float));
                 propSetInt(handleOf(renderArgs), kOfxImageEffectPropMetalEnabled, 0, 0);
