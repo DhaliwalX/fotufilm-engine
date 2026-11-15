@@ -23,6 +23,7 @@
 #include "TransportFrameAot.h"
 #include "FotufilmTransport.h"
 #include <execinfo.h>
+#include <mach/mach_time.h>
 #include <HalideBuffer.h>
 #include <HalideRuntimeMetal.h>
 
@@ -1661,6 +1662,53 @@ extern "C" void *fotufilm_halide_metal_host_compute_encoder(void) {
     return static_cast<void *>(ensure_compute_encoder(cb));
 }
 
+namespace {
+
+// FOTUFILM_PROFILE: what a frame left on the host's queue cost once the GPU ran it. The render
+// call that encoded it returned long before, so the call's own timing says nothing about this.
+bool host_queue_profiled() {
+    static const bool profiled = std::getenv("FOTUFILM_PROFILE") != nullptr;
+    return profiled;
+}
+
+double host_clock_seconds() {
+    static const mach_timebase_info_data_t base = [] {
+        mach_timebase_info_data_t info;
+        mach_timebase_info(&info);
+        return info;
+    }();
+    return double(mach_absolute_time()) * base.numer / base.denom * 1e-9;
+}
+
+void profile_host_command_buffer(id cb) {
+    const double committed = host_clock_seconds();
+    void (^handler)(id) = ^(id done) {
+        static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+        static int count = 0;
+        static double gpu = 0, waited = 0, total = 0, worst = 0;
+        const double started = ((double(*)(id, SEL))objc_msgSend)(done, sel_getUid("GPUStartTime"));
+        const double ended = ((double(*)(id, SEL))objc_msgSend)(done, sel_getUid("GPUEndTime"));
+        pthread_mutex_lock(&lock);
+        gpu += ended - started;
+        waited += started - committed;
+        total += ended - committed;
+        worst = std::max(worst, ended - committed);
+        if (++count == 24) {
+            std::fprintf(stderr,
+                         "[Fotufilm] 24 frames on the host's Metal queue: GPU %.1f ms each, "
+                         "%.1f ms queued before it, %.1f ms from commit to finished (worst %.1f)\n",
+                         gpu / count * 1e3, waited / count * 1e3, total / count * 1e3, worst * 1e3);
+            count = 0;
+            gpu = waited = total = worst = 0;
+        }
+        pthread_mutex_unlock(&lock);
+    };
+    ((void(*)(id, SEL, void (^)(id)))objc_msgSend)(
+        cb, sel_getUid("addCompletedHandler:"), handler);
+}
+
+}  // namespace
+
 extern "C" void *fotufilm_halide_metal_host_queue_end(void) {
     if (tls_decode_report_sink.function) {
         // No decode came for the report that was asked for.
@@ -1708,6 +1756,7 @@ extern "C" void *fotufilm_halide_metal_host_queue_end(void) {
         attach_fallback_handler(committed);
     }
 
+    if (host_queue_profiled()) profile_host_command_buffer(committed);
     // Commit without waiting on CPU, then record as the committed pool fence (+1 retained
     // by newest_host_fence) and remember `prev_cb_id` for 2-slot inter-CB buffer pipelining.
     send(committed, "commit");

@@ -418,6 +418,8 @@ struct Instance {
     bool reportedFramePath = false;
     /// Said once: the host held its Metal queue across a render call, so a frame was deferred.
     bool reportedDeferredFrame = false;
+    /// Frames this node has encoded on the host's Metal queue; paces the decode's late report.
+    unsigned metalFrames = 0;
     /// Likewise for which side of the boundary decoded them.
     bool reportedDecodePath = false;
     /// The render-status combination the host last announced, packed, or -1 before the first
@@ -2969,7 +2971,17 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs) {
         }
     }
 #endif
-    const bool reportsLater = gpuFrames && (watchRange || !instance->warnedNonFiniteInput);
+    // The decode's report costs the frame two more kernels. The range check is asked of every
+    // frame while a display-referred label can still be caught out, as it is on a CPU frame;
+    // the notice that the source held NaN or infinity — repaired in the kernel either way — is
+    // about the clip rather than the frame, so it is asked of a node's first frames and then
+    // one in sixteen.
+    bool reportsLater = false;
+    if (gpuFrames) {
+        const unsigned frame = instance->metalFrames++;
+        reportsLater = watchRange ||
+                       (!instance->warnedNonFiniteInput && (frame < 4 || frame % 16 == 0));
+    }
     auto laterNotes = [&] {
         return static_cast<void *>(new std::shared_ptr<AsyncNotes>(instance->asyncNotes));
     };
